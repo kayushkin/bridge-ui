@@ -1,0 +1,730 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useBridgeConfig } from './context'
+import { connectSSE } from './bridgeSSE'
+import type {
+  FetchFn, BridgeEvent, BridgeSession, SessionUIState, ActivityKind,
+  Message, MessageMeta, ToolEvent, UseBridgeSessionReturn,
+} from './types'
+
+// --- Stream accumulator (batches deltas into rAF flushes) ---
+
+interface StreamBuffer {
+  content: string
+  thinking: string
+  tools: ToolEvent[]
+  meta: Partial<MessageMeta>
+  done: boolean
+}
+
+function emptyBuffer(): StreamBuffer {
+  return { content: '', thinking: '', tools: [], meta: {}, done: false }
+}
+
+// --- Debounce helper ---
+
+function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T & { cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const debounced = ((...args: unknown[]) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => { timer = null; fn(...args) }, ms)
+  }) as T & { cancel: () => void }
+  debounced.cancel = () => { if (timer) { clearTimeout(timer); timer = null } }
+  return debounced
+}
+
+// --- Hook ---
+
+export function useBridgeSession(): UseBridgeSessionReturn {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+
+  const [sessions, setSessions] = useState<BridgeSession[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [connected, setConnected] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [activity, setActivity] = useState<ActivityKind>({ kind: 'idle' })
+
+  const wasInterrupted = useRef(false)
+  const sseAbort = useRef<AbortController | null>(null)
+  const lastEventId = useRef<string | undefined>(undefined)
+  const streamBuffer = useRef<StreamBuffer>(emptyBuffer())
+  const streamMsgId = useRef<string | null>(null)
+  const rafId = useRef<number>(0)
+  const activeSessionRef = useRef<BridgeSession | null>(null)
+  const historyLoadId = useRef(0)
+
+  // --- Session refresh (debounced) ---
+
+  const refreshSessionsImpl = useCallback(async () => {
+    try {
+      const res = await fetchFn(`${basePath}/sessions`)
+      if (res.ok) {
+        const data = await res.json()
+        setSessions(data)
+        setConnected(true)
+      } else {
+        setConnected(false)
+      }
+    } catch {
+      setConnected(false)
+    }
+  }, [fetchFn, basePath])
+
+  const debouncedRefresh = useMemo(
+    () => debounce(refreshSessionsImpl, 500),
+    [refreshSessionsImpl],
+  )
+
+  const refreshSessions = useCallback(() => {
+    debouncedRefresh()
+  }, [debouncedRefresh])
+
+  useEffect(() => { refreshSessionsImpl() }, [refreshSessionsImpl])
+
+  // --- Derived state ---
+
+  const activeSession = sessions.find(s => s.id === activeSessionId) || null
+  activeSessionRef.current = activeSession
+
+  const uiState: SessionUIState = useMemo(() => {
+    if (!activeSession) return 'empty'
+    if (activeSession.state === 'running') return 'running'
+    if (activeSession.state === 'idle' && wasInterrupted.current) return 'paused'
+    if (activeSession.state === 'idle') return 'idle'
+    return activeSession.state as SessionUIState
+  }, [activeSession])
+
+  // --- SSE flush ---
+
+  const flushStream = useCallback(() => {
+    rafId.current = 0
+    const msgId = streamMsgId.current
+    if (!msgId) return
+
+    const buf = streamBuffer.current
+    const snapshot = { ...buf }
+    buf.content = ''
+    buf.thinking = ''
+
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m
+      const updated = { ...m }
+      if (snapshot.content) updated.content = m.content + snapshot.content
+      if (snapshot.thinking) updated.thinking = (m.thinking || '') + snapshot.thinking
+      if (snapshot.tools.length > 0) {
+        const tools = [...(m.meta?.tools || []), ...snapshot.tools]
+        updated.meta = { ...m.meta, tools, toolCalls: tools.length }
+        buf.tools = []
+      }
+      if (Object.keys(snapshot.meta).length > 0) {
+        updated.meta = { ...updated.meta, ...snapshot.meta }
+      }
+      if (snapshot.done) {
+        updated.done = true
+      }
+      return updated
+    }))
+  }, [])
+
+  const scheduleFlush = useCallback(() => {
+    if (!rafId.current) {
+      rafId.current = requestAnimationFrame(flushStream)
+    }
+  }, [flushStream])
+
+  // --- SSE connection ---
+
+  const closeSSE = useCallback(() => {
+    if (sseAbort.current) {
+      sseAbort.current.abort()
+      sseAbort.current = null
+    }
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current)
+      rafId.current = 0
+    }
+  }, [])
+
+  const startSSE = useCallback((sessionId: string) => {
+    closeSSE()
+    const abort = new AbortController()
+    sseAbort.current = abort
+
+    ;(async () => {
+      try {
+        const events = connectSSE(fetchFn, basePath, sessionId, lastEventId.current, abort.signal)
+        for await (const event of events) {
+          if (event.id) lastEventId.current = event.id
+          handleSSEEvent(event, sessionId)
+        }
+      } catch (err) {
+        if (abort.signal.aborted) return
+        if (streamMsgId.current) {
+          streamBuffer.current.done = true
+          scheduleFlush()
+          streamMsgId.current = null
+        }
+        setActivity({ kind: 'idle' })
+      }
+    })()
+
+    function handleSSEEvent(event: BridgeEvent, sessId: string) {
+      const { type, data } = event
+
+      switch (type) {
+        case 'stream': {
+          const delta = (data.stream as Record<string, unknown>)?.delta as Record<string, unknown>
+          if (!delta) return
+          ensureStreamingMsg(sessId, data)
+          if (delta.type === 'text_delta') {
+            streamBuffer.current.content += (delta.text as string) || ''
+            setActivity({ kind: 'streaming' })
+          } else if (delta.type === 'thinking_delta') {
+            streamBuffer.current.thinking += (delta.thinking as string) || ''
+            setActivity({ kind: 'thinking' })
+          }
+          scheduleFlush()
+          break
+        }
+
+        case 'thinking': {
+          const text = (data.thinking as Record<string, unknown>)?.text as string || ''
+          if (!text) return
+          ensureStreamingMsg(sessId, data)
+          streamBuffer.current.thinking += text
+          setActivity({ kind: 'thinking' })
+          scheduleFlush()
+          break
+        }
+
+        case 'tool_call': {
+          const tc = data.tool_call as Record<string, unknown>
+          if (!tc) return
+          ensureStreamingMsg(sessId, data)
+          const name = (tc.name as string) || ''
+          streamBuffer.current.tools.push({
+            tool: name,
+            input: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
+          })
+          setActivity({ kind: 'tool', name })
+          scheduleFlush()
+          break
+        }
+
+        case 'tool_result': {
+          const tr = data.tool_result as Record<string, unknown>
+          if (!tr) return
+          setMessages(prev => {
+            const msgId = streamMsgId.current
+            if (!msgId) return prev
+            return prev.map(m => {
+              if (m.id !== msgId) return m
+              const tools = [...(m.meta?.tools || []), ...streamBuffer.current.tools]
+              streamBuffer.current.tools = []
+              for (let i = tools.length - 1; i >= 0; i--) {
+                if (tools[i].tool === (tr.name as string) && !tools[i].output) {
+                  tools[i] = { ...tools[i], output: tr.output as string, error: tr.is_error as boolean }
+                  break
+                }
+              }
+              return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } }
+            })
+          })
+          setActivity({ kind: 'streaming' })
+          break
+        }
+
+        case 'result': {
+          const result = data.result as Record<string, unknown>
+          if (!result) return
+          if (rafId.current) {
+            cancelAnimationFrame(rafId.current)
+            rafId.current = 0
+          }
+          flushStream()
+
+          const usage = result.usage as Record<string, number> | undefined
+          const cost = result.cost as Record<string, number> | undefined
+          const meta: MessageMeta = {
+            inputTokens: usage?.input_tokens,
+            outputTokens: usage?.output_tokens,
+            cacheReadTokens: usage?.cache_read_tokens,
+            cacheCreationTokens: usage?.cache_write_tokens,
+            cost: cost?.total_usd,
+            durationMs: result.duration_ms as number,
+            numTurns: result.num_turns as number,
+            model: result.model as string,
+          }
+
+          setMessages(prev => {
+            const msgId = streamMsgId.current
+            if (!msgId) return prev
+            return prev.map(m => {
+              if (m.id !== msgId) return m
+              const content = (result.text as string) || m.content
+              return { ...m, content, meta: { ...m.meta, ...meta }, done: true }
+            })
+          })
+          streamMsgId.current = null
+          streamBuffer.current = emptyBuffer()
+          setActivity({ kind: 'idle' })
+          wasInterrupted.current = false
+          refreshSessions()
+          break
+        }
+
+        case 'system': {
+          const sys = data.system as Record<string, unknown>
+          if (sys?.subtype === 'retry') {
+            setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
+          }
+          break
+        }
+
+        case 'error': {
+          const errData = data.error as Record<string, unknown>
+          setError((errData?.message as string) || 'Stream error')
+          if (streamMsgId.current) {
+            streamBuffer.current.done = true
+            scheduleFlush()
+            streamMsgId.current = null
+          }
+          setActivity({ kind: 'idle' })
+          break
+        }
+
+        case 'session_state': {
+          const state = (data.state as Record<string, unknown>)?.state as string
+          if (state === 'idle' && !wasInterrupted.current) {
+            setActivity({ kind: 'idle' })
+            streamMsgId.current = null
+            streamBuffer.current = emptyBuffer()
+          } else if (state === 'running') {
+            wasInterrupted.current = false
+          } else if (state === 'completed') {
+            loadHistory(sessId)
+            setActivity({ kind: 'idle' })
+            streamMsgId.current = null
+            streamBuffer.current = emptyBuffer()
+          }
+          refreshSessions()
+          break
+        }
+
+        case 'close': {
+          streamMsgId.current = null
+          streamBuffer.current = emptyBuffer()
+          setActivity({ kind: 'idle' })
+          closeSSE()
+          refreshSessions()
+          break
+        }
+      }
+    }
+
+    function ensureStreamingMsg(sessId: string, data: Record<string, unknown>) {
+      if (streamMsgId.current) return
+      const id = `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      streamMsgId.current = id
+      streamBuffer.current = emptyBuffer()
+      const newMsg: Message = {
+        id,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        orchestrator: 'bridge',
+        agent: (data.harness as string) || 'claude_code',
+        sessionId: sessId,
+      }
+      setMessages(prev => [...prev, newMsg])
+    }
+  }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions])
+
+  // --- History loading ---
+
+  const loadHistory = useCallback(async (sessionId: string) => {
+    const loadId = ++historyLoadId.current
+    setLoadingHistory(true)
+    try {
+      let msgs: Message[] | null = null
+      const messagesRes = await fetchFn(`${basePath}/sessions/${sessionId}/messages`)
+      if (messagesRes.ok) {
+        msgs = await messagesRes.json()
+      }
+
+      if (!msgs) {
+        msgs = await reconstructFromEvents(fetchFn, basePath, sessionId)
+      }
+
+      if (loadId !== historyLoadId.current) return
+      if (msgs) setMessages(msgs)
+    } catch {
+      // History load failed — not critical
+    } finally {
+      if (loadId === historyLoadId.current) setLoadingHistory(false)
+    }
+  }, [fetchFn, basePath])
+
+  // --- Session selection ---
+
+  const selectSession = useCallback((id: string) => {
+    closeSSE()
+    streamMsgId.current = null
+    streamBuffer.current = emptyBuffer()
+    wasInterrupted.current = false
+    setError(null)
+    setActivity({ kind: 'idle' })
+
+    if (!id) {
+      setActiveSessionId(null)
+      setMessages([])
+      return
+    }
+
+    setActiveSessionId(id)
+    setMessages([])
+    lastEventId.current = undefined
+
+    ;(async () => {
+      await loadHistory(id)
+      const session = sessions.find(s => s.id === id)
+      if (session?.state === 'running') {
+        startSSE(id)
+      }
+      if (session?.state === 'idle') {
+        wasInterrupted.current = false
+      }
+    })()
+  }, [closeSSE, loadHistory, startSSE, sessions])
+
+  useEffect(() => {
+    if (activeSession?.state === 'running' && !sseAbort.current) {
+      startSSE(activeSession.id)
+    }
+  }, [activeSession?.state, activeSession?.id, startSSE])
+
+  // --- Visibility change reconnection ---
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && activeSessionId) {
+        refreshSessionsImpl()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [activeSessionId, refreshSessionsImpl])
+
+  // --- Actions ---
+
+  const createSession = useCallback(async (harness: string, displayName?: string, instanceId?: string): Promise<BridgeSession | null> => {
+    try {
+      const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const body: Record<string, unknown> = {
+        harness,
+        display_name: displayName || '',
+        auto_start: false,
+        client_request_id: clientRequestId,
+      }
+      if (instanceId) body.instance_id = instanceId
+      const res = await fetchFn(`${basePath}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        setError(`Failed to create session: ${res.statusText}`)
+        return null
+      }
+      const sess: BridgeSession = await res.json()
+      await refreshSessionsImpl()
+      selectSession(sess.id)
+      return sess
+    } catch (err) {
+      setError(`Failed to create session: ${err}`)
+      return null
+    }
+  }, [fetchFn, basePath, refreshSessionsImpl, selectSession])
+
+  const send = useCallback(async (text: string) => {
+    if (!activeSessionId || !text.trim()) return
+
+    const userMsg: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+      orchestrator: 'bridge',
+      agent: activeSession?.harness || 'claude_code',
+      sessionId: activeSessionId,
+      done: true,
+    }
+    setMessages(prev => [...prev, userMsg])
+    setError(null)
+    wasInterrupted.current = false
+
+    try {
+      startSSE(activeSessionId)
+
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        setError(`Send failed: ${err}`)
+        return
+      }
+      refreshSessions()
+    } catch (err) {
+      setError(`Send failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId, activeSession, startSSE, refreshSessions])
+
+  const interrupt = useCallback(async () => {
+    if (!activeSessionId) return
+    try {
+      await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' })
+      wasInterrupted.current = true
+      if (streamMsgId.current) {
+        streamBuffer.current.done = true
+        flushStream()
+        streamMsgId.current = null
+      }
+      setActivity({ kind: 'idle' })
+      refreshSessions()
+    } catch (err) {
+      setError(`Interrupt failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId, flushStream, refreshSessions])
+
+  const resume = useCallback(async () => {
+    if (!activeSessionId) return
+    try {
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/resume`, { method: 'POST' })
+      if (!res.ok) {
+        setError(`Resume failed: ${res.statusText}`)
+        return
+      }
+      wasInterrupted.current = false
+      startSSE(activeSessionId)
+      refreshSessions()
+    } catch (err) {
+      setError(`Resume failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions])
+
+  const stopSession = useCallback(async () => {
+    if (!activeSessionId) return
+    try {
+      await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' })
+      closeSSE()
+      if (streamMsgId.current) {
+        streamBuffer.current.done = true
+        flushStream()
+        streamMsgId.current = null
+      }
+      wasInterrupted.current = false
+      setActivity({ kind: 'idle' })
+      refreshSessions()
+    } catch (err) {
+      setError(`Stop failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId, closeSSE, flushStream, refreshSessions])
+
+  const compact = useCallback(async (summary?: string) => {
+    if (!activeSessionId) return
+    try {
+      const body: Record<string, string> = {}
+      if (summary) body.summary = summary
+      await fetchFn(`${basePath}/sessions/${activeSessionId}/compact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch (err) {
+      setError(`Compact failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId])
+
+  const forkSession = useCallback(async (displayName?: string) => {
+    if (!activeSessionId) return
+    try {
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: displayName || '' }),
+      })
+      if (!res.ok) {
+        setError(`Fork failed: ${res.statusText}`)
+        return
+      }
+      const forked: BridgeSession = await res.json()
+      await refreshSessionsImpl()
+      selectSession(forked.id)
+    } catch (err) {
+      setError(`Fork failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId, refreshSessionsImpl, selectSession])
+
+  const sendConfig = useCallback(async (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => {
+    if (!activeSessionId) return
+    try {
+      await fetchFn(`${basePath}/sessions/${activeSessionId}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+    } catch (err) {
+      setError(`Config update failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId])
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    closeSSE()
+    debouncedRefresh.cancel()
+  }, [closeSSE, debouncedRefresh])
+
+  return {
+    sessions,
+    activeSession,
+    messages,
+    uiState,
+    activity,
+    connected,
+    error,
+    loadingHistory,
+    createSession,
+    selectSession,
+    send,
+    interrupt,
+    resume,
+    stop: stopSession,
+    compact,
+    fork: forkSession,
+    sendConfig,
+    refreshSessions,
+  }
+}
+
+// --- Raw event reconstruction fallback ---
+
+async function reconstructFromEvents(fetchFn: FetchFn, basePath: string, sessionId: string): Promise<Message[]> {
+  const res = await fetchFn(`${basePath}/sessions/${sessionId}/history`)
+  if (!res.ok) return []
+  const events: Array<Record<string, unknown>> = await res.json()
+  if (!events.length) return []
+
+  const msgs: Message[] = []
+  let currentAssistant: Message | null = null
+
+  for (const ev of events) {
+    const type = ev.type as string
+
+    if (type === 'user_message') {
+      if (currentAssistant) {
+        currentAssistant.done = true
+        msgs.push(currentAssistant)
+        currentAssistant = null
+      }
+      const result = ev.result as Record<string, unknown> | undefined
+      msgs.push({
+        id: `hist-user-${msgs.length}`,
+        role: 'user',
+        content: (result?.text as string) || '',
+        timestamp: (ev.timestamp as string) || new Date().toISOString(),
+        orchestrator: 'bridge',
+        agent: (ev.harness as string) || 'claude_code',
+        sessionId,
+        done: true,
+      })
+      continue
+    }
+
+    if (!currentAssistant && (type === 'stream' || type === 'thinking' || type === 'tool_call' || type === 'tool_result' || type === 'result')) {
+      currentAssistant = {
+        id: `hist-asst-${msgs.length}`,
+        role: 'assistant',
+        content: '',
+        timestamp: (ev.timestamp as string) || new Date().toISOString(),
+        orchestrator: 'bridge',
+        agent: (ev.harness as string) || 'claude_code',
+        sessionId,
+      }
+    }
+
+    if (type === 'stream' && currentAssistant) {
+      const stream = ev.stream as Record<string, unknown> | undefined
+      const delta = stream?.delta as Record<string, unknown> | undefined
+      if (delta?.type === 'text_delta') {
+        currentAssistant.content += (delta.text as string) || ''
+      }
+      if (delta?.type === 'thinking_delta') {
+        currentAssistant.thinking = (currentAssistant.thinking || '') + ((delta.thinking as string) || '')
+      }
+    }
+
+    if (type === 'thinking' && currentAssistant) {
+      const thinking = ev.thinking as Record<string, unknown> | undefined
+      currentAssistant.thinking = (currentAssistant.thinking || '') + ((thinking?.text as string) || '')
+    }
+
+    if (type === 'tool_call' && currentAssistant) {
+      const tc = ev.tool_call as Record<string, unknown> | undefined
+      if (tc) {
+        const tools: ToolEvent[] = [...(currentAssistant.meta?.tools || []), {
+          tool: (tc.name as string) || '',
+          input: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
+        }]
+        currentAssistant.meta = { ...currentAssistant.meta, tools, toolCalls: tools.length }
+      }
+    }
+
+    if (type === 'tool_result' && currentAssistant) {
+      const tr = ev.tool_result as Record<string, unknown> | undefined
+      if (tr) {
+        const tools = [...(currentAssistant.meta?.tools || [])]
+        for (let i = tools.length - 1; i >= 0; i--) {
+          if (tools[i].tool === (tr.name as string) && !tools[i].output) {
+            tools[i] = { ...tools[i], output: tr.output as string, error: tr.is_error as boolean }
+            break
+          }
+        }
+        currentAssistant.meta = { ...currentAssistant.meta, tools, toolCalls: tools.length }
+      }
+    }
+
+    if (type === 'result' && currentAssistant) {
+      const result = ev.result as Record<string, unknown> | undefined
+      if (result) {
+        const usage = result.usage as Record<string, number> | undefined
+        const cost = result.cost as Record<string, number> | undefined
+        currentAssistant.meta = {
+          ...currentAssistant.meta,
+          inputTokens: usage?.input_tokens,
+          outputTokens: usage?.output_tokens,
+          cacheReadTokens: usage?.cache_read_tokens,
+          cacheCreationTokens: usage?.cache_write_tokens,
+          cost: cost?.total_usd,
+          durationMs: result.duration_ms as number,
+          numTurns: result.num_turns as number,
+          model: result.model as string,
+        }
+        if (result.text) currentAssistant.content = result.text as string
+      }
+      currentAssistant.done = true
+      msgs.push(currentAssistant)
+      currentAssistant = null
+    }
+  }
+
+  if (currentAssistant) {
+    currentAssistant.done = true
+    msgs.push(currentAssistant)
+  }
+
+  return msgs
+}
