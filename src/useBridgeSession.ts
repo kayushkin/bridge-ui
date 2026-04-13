@@ -245,16 +245,38 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           flushStream()
 
           const usage = result.usage as Record<string, number> | undefined
-          const cost = result.cost as Record<string, number> | undefined
+          const cost = result.cost as Record<string, unknown> | undefined
+          const apiCallUsagesRaw = result.api_call_usages as Array<Record<string, number>> | undefined
+          const apiCallUsages = apiCallUsagesRaw?.map(u => ({
+            inputTokens: u.input_tokens,
+            outputTokens: u.output_tokens,
+            cacheReadTokens: u.cache_read_tokens,
+            cacheWriteTokens: u.cache_write_tokens,
+            reasoningTokens: u.reasoning_tokens,
+            model: (u as unknown as Record<string, string>).model,
+            durationMs: u.duration_ms,
+          }))
           const meta: MessageMeta = {
             inputTokens: usage?.input_tokens,
             outputTokens: usage?.output_tokens,
+            totalTokens: usage?.total_tokens,
             cacheReadTokens: usage?.cache_read_tokens,
             cacheCreationTokens: usage?.cache_write_tokens,
-            cost: cost?.total_usd,
+            reasoningTokens: usage?.reasoning_tokens,
+            contextTokens: usage?.context_tokens,
+            contextLimit: usage?.context_limit,
+            cost: cost?.total_usd as number,
+            costInput: cost?.input_usd as number,
+            costOutput: cost?.output_usd as number,
+            costUpstream: cost?.upstream_cost as number,
+            isByok: cost?.is_byok as unknown as boolean,
             durationMs: result.duration_ms as number,
+            durationAPIMs: result.duration_api_ms as number,
             numTurns: result.num_turns as number,
+            apiCalls: result.api_calls as number,
+            apiCallUsages,
             model: result.model as string,
+            isError: result.is_error as boolean,
             rawStats: result as Record<string, unknown>,
           }
 
@@ -718,17 +740,40 @@ async function reconstructFromEvents(fetchFn: FetchFn, basePath: string, session
       const result = ev.result as Record<string, unknown> | undefined
       if (result) {
         const usage = result.usage as Record<string, number> | undefined
-        const cost = result.cost as Record<string, number> | undefined
+        const cost = result.cost as Record<string, unknown> | undefined
+        const apiCallUsagesRaw = result.api_call_usages as Array<Record<string, number>> | undefined
+        const apiCallUsages = apiCallUsagesRaw?.map(u => ({
+          inputTokens: u.input_tokens,
+          outputTokens: u.output_tokens,
+          cacheReadTokens: u.cache_read_tokens,
+          cacheWriteTokens: u.cache_write_tokens,
+          reasoningTokens: u.reasoning_tokens,
+          model: (u as unknown as Record<string, string>).model,
+          durationMs: u.duration_ms,
+        }))
         currentAssistant.meta = {
           ...currentAssistant.meta,
           inputTokens: usage?.input_tokens,
           outputTokens: usage?.output_tokens,
+          totalTokens: usage?.total_tokens,
           cacheReadTokens: usage?.cache_read_tokens,
           cacheCreationTokens: usage?.cache_write_tokens,
-          cost: cost?.total_usd,
+          reasoningTokens: usage?.reasoning_tokens,
+          contextTokens: usage?.context_tokens,
+          contextLimit: usage?.context_limit,
+          cost: cost?.total_usd as number,
+          costInput: cost?.input_usd as number,
+          costOutput: cost?.output_usd as number,
+          costUpstream: cost?.upstream_cost as number,
+          isByok: cost?.is_byok as unknown as boolean,
           durationMs: result.duration_ms as number,
+          durationAPIMs: result.duration_api_ms as number,
           numTurns: result.num_turns as number,
+          apiCalls: result.api_calls as number,
+          apiCallUsages,
           model: result.model as string,
+          isError: result.is_error as boolean,
+          rawStats: result as Record<string, unknown>,
         }
         if (result.text) currentAssistant.content = result.text as string
       }

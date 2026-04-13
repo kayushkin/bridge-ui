@@ -15,17 +15,26 @@ export interface APICallUsage {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  reasoningTokens?: number
+  model?: string
+  durationMs?: number
 }
 
 export interface MessageMeta {
   inputTokens?: number
   outputTokens?: number
+  totalTokens?: number
   cacheReadTokens?: number
   cacheCreationTokens?: number
+  reasoningTokens?: number
   contextTokens?: number
   contextLimit?: number
   toolCalls?: number
   cost?: number
+  costInput?: number
+  costOutput?: number
+  costUpstream?: number
+  isByok?: boolean
   durationMs?: number
   durationAPIMs?: number
   numTurns?: number
@@ -34,6 +43,7 @@ export interface MessageMeta {
   model?: string
   turn?: number
   tools?: ToolEvent[]
+  isError?: boolean
   rawStats?: Record<string, unknown>
 }
 
