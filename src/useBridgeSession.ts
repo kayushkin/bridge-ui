@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
-  FetchFn, BridgeEvent, BridgeSession, SessionUIState, ActivityKind,
+  BridgeEvent, BridgeSession, SessionUIState, ActivityKind,
   Message, MessageMeta, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
 } from './types'
 
@@ -357,20 +357,17 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     const loadId = ++historyLoadId.current
     setLoadingHistory(true)
     try {
-      let msgs: Message[] | null = null
-      const messagesRes = await fetchFn(`${basePath}/sessions/${sessionId}/messages`)
-      if (messagesRes.ok) {
-        msgs = await messagesRes.json()
+      const res = await fetchFn(`${basePath}/sessions/${sessionId}/messages`)
+      if (!res.ok) {
+        setError(`History load failed: ${res.status} ${res.statusText}`)
+        return
       }
-
-      if (!msgs) {
-        msgs = await reconstructFromEvents(fetchFn, basePath, sessionId)
-      }
+      const msgs: Message[] = await res.json()
 
       if (loadId !== historyLoadId.current) return
       if (msgs) setMessages(msgs.map((m, i) => normalizeMessage(m, i, sessionId)))
-    } catch {
-      // History load failed — not critical
+    } catch (err) {
+      setError(`History load failed: ${err}`)
     } finally {
       if (loadId === historyLoadId.current) setLoadingHistory(false)
     }
@@ -637,109 +634,3 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   }
 }
 
-// --- Raw event reconstruction fallback ---
-
-async function reconstructFromEvents(fetchFn: FetchFn, basePath: string, sessionId: string): Promise<Message[]> {
-  const res = await fetchFn(`${basePath}/sessions/${sessionId}/history`)
-  if (!res.ok) return []
-  const events: Array<Record<string, unknown>> = await res.json()
-  if (!events.length) return []
-
-  const msgs: Message[] = []
-  let currentAssistant: Message | null = null
-
-  for (const ev of events) {
-    const type = ev.type as string
-
-    if (type === 'user_message') {
-      if (currentAssistant) {
-        currentAssistant.done = true
-        msgs.push(currentAssistant)
-        currentAssistant = null
-      }
-      const result = ev.result as Record<string, unknown> | undefined
-      msgs.push({
-        id: `hist-user-${msgs.length}`,
-        role: 'user',
-        content: (result?.text as string) || '',
-        timestamp: (ev.timestamp as string) || new Date().toISOString(),
-        sessionId,
-        done: true,
-      })
-      continue
-    }
-
-    if (!currentAssistant && (type === 'stream' || type === 'thinking' || type === 'tool_call' || type === 'tool_result' || type === 'result')) {
-      currentAssistant = {
-        id: `hist-asst-${msgs.length}`,
-        role: 'assistant',
-        content: '',
-        timestamp: (ev.timestamp as string) || new Date().toISOString(),
-        sessionId,
-      }
-    }
-
-    if (type === 'stream' && currentAssistant) {
-      const stream = ev.stream as Record<string, unknown> | undefined
-      const delta = stream?.delta as Record<string, unknown> | undefined
-      if (delta?.type === 'text_delta') {
-        currentAssistant.content += (delta.text as string) || ''
-      }
-      if (delta?.type === 'thinking_delta') {
-        currentAssistant.thinking = (currentAssistant.thinking || '') + ((delta.thinking as string) || '')
-      }
-    }
-
-    if (type === 'thinking' && currentAssistant) {
-      const thinking = ev.thinking as Record<string, unknown> | undefined
-      currentAssistant.thinking = (currentAssistant.thinking || '') + ((thinking?.text as string) || '')
-    }
-
-    if (type === 'tool_call' && currentAssistant) {
-      const tc = ev.tool_call as Record<string, unknown> | undefined
-      if (tc) {
-        const tools: ToolEvent[] = [...(currentAssistant.meta?.tools || []), {
-          tool: (tc.name as string) || '',
-          input: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
-        }]
-        currentAssistant.meta = { ...currentAssistant.meta, tools, toolCalls: tools.length }
-      }
-    }
-
-    if (type === 'tool_result' && currentAssistant) {
-      const tr = ev.tool_result as Record<string, unknown> | undefined
-      if (tr) {
-        const tools = [...(currentAssistant.meta?.tools || [])]
-        for (let i = tools.length - 1; i >= 0; i--) {
-          if (tools[i].tool === (tr.name as string) && !tools[i].output) {
-            tools[i] = { ...tools[i], output: tr.output as string, error: tr.is_error as boolean }
-            break
-          }
-        }
-        currentAssistant.meta = { ...currentAssistant.meta, tools, toolCalls: tools.length }
-      }
-    }
-
-    if (type === 'result' && currentAssistant) {
-      const result = ev.result as Record<string, unknown> | undefined
-      if (result) {
-        currentAssistant.meta = {
-          ...currentAssistant.meta,
-          ...(result as MessageMeta),
-          rawStats: ev as Record<string, unknown>,
-        }
-        if (result.text) currentAssistant.content = result.text as string
-      }
-      currentAssistant.done = true
-      msgs.push(currentAssistant)
-      currentAssistant = null
-    }
-  }
-
-  if (currentAssistant) {
-    currentAssistant.done = true
-    msgs.push(currentAssistant)
-  }
-
-  return msgs
-}
