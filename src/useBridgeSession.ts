@@ -20,6 +20,76 @@ function emptyBuffer(): StreamBuffer {
   return { content: '', thinking: '', tools: [], meta: {}, done: false }
 }
 
+// --- Normalize flat snake_case meta from /messages API into typed MessageMeta ---
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeMeta(raw: any): MessageMeta | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const m = raw as Record<string, unknown>
+  // Already normalized (has camelCase keys)
+  if ('inputTokens' in m || 'outputTokens' in m) return raw as MessageMeta
+
+  const meta: MessageMeta = {
+    inputTokens: m.input_tokens as number,
+    outputTokens: m.output_tokens as number,
+    totalTokens: m.total_tokens as number,
+    cacheReadTokens: m.cache_read_tokens as number,
+    cacheCreationTokens: (m.cache_creation_tokens ?? m.cache_write_tokens) as number,
+    reasoningTokens: m.reasoning_tokens as number,
+    contextTokens: m.context_tokens as number,
+    contextLimit: m.context_limit as number,
+    cost: m.cost as number,
+    costInput: m.cost_input as number,
+    costOutput: m.cost_output as number,
+    costUpstream: m.cost_upstream as number,
+    isByok: m.is_byok as boolean,
+    durationMs: m.duration_ms as number,
+    durationAPIMs: m.duration_api_ms as number,
+    numTurns: m.num_turns as number,
+    apiCalls: m.api_calls as number,
+    model: m.model as string,
+    turn: m.turn as number,
+    toolCalls: m.tool_calls as number,
+    isError: m.is_error as boolean,
+    rawStats: m as Record<string, unknown>,
+  }
+
+  // Per-API-call usages
+  const apiRaw = m.api_call_usages as Array<Record<string, unknown>> | undefined
+  if (apiRaw?.length) {
+    meta.apiCallUsages = apiRaw.map(u => ({
+      inputTokens: (u.input_tokens as number) || 0,
+      outputTokens: (u.output_tokens as number) || 0,
+      cacheReadTokens: (u.cache_read_tokens as number) || 0,
+      cacheWriteTokens: (u.cache_write_tokens as number) || 0,
+      reasoningTokens: u.reasoning_tokens as number,
+      model: u.model as string,
+      durationMs: u.duration_ms as number,
+    }))
+  }
+
+  // Tools
+  const toolsRaw = m.tools as Array<Record<string, unknown>> | undefined
+  if (toolsRaw?.length) {
+    meta.tools = toolsRaw.map(t => ({
+      tool: (t.tool ?? t.name) as string,
+      input: t.input as string,
+      output: t.output as string,
+      error: t.error as boolean,
+    }))
+    meta.toolCalls = meta.tools.length
+  }
+
+  return meta
+}
+
+function normalizeMessage(msg: Message): Message {
+  if (msg.meta) {
+    return { ...msg, meta: normalizeMeta(msg.meta) }
+  }
+  return msg
+}
+
 // --- Debounce helper ---
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T & { cancel: () => void } {
@@ -381,7 +451,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
 
       if (loadId !== historyLoadId.current) return
-      if (msgs) setMessages(msgs)
+      if (msgs) setMessages(msgs.map(normalizeMessage))
     } catch {
       // History load failed — not critical
     } finally {
