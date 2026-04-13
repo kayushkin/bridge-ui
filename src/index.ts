@@ -16,6 +16,7 @@ export type {
   HarnessDefaults,
   BridgePrefs,
   BridgeEvent,
+  CreateSessionOpts,
   UseBridgeSessionReturn,
 } from './types'
 

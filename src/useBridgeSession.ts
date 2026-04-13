@@ -3,7 +3,7 @@ import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
   FetchFn, BridgeEvent, BridgeSession, SessionUIState, ActivityKind,
-  Message, MessageMeta, ToolEvent, UseBridgeSessionReturn,
+  Message, MessageMeta, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
 } from './types'
 
 // --- Stream accumulator (batches deltas into rAF flushes) ---
@@ -419,16 +419,17 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   // --- Actions ---
 
-  const createSession = useCallback(async (harness: string, displayName?: string, instanceId?: string): Promise<BridgeSession | null> => {
+  const createSession = useCallback(async (opts: CreateSessionOpts): Promise<BridgeSession | null> => {
     try {
       const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const body: Record<string, unknown> = {
-        harness,
-        display_name: displayName || '',
+        harness: opts.harness,
+        display_name: opts.displayName,
+        agent_id: opts.agentId,
+        instance_id: opts.instanceId,
         auto_start: false,
         client_request_id: clientRequestId,
       }
-      if (instanceId) body.instance_id = instanceId
       const res = await fetchFn(`${basePath}/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -457,7 +458,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       content: text,
       timestamp: new Date().toISOString(),
       orchestrator: 'bridge',
-      agent: activeSession?.harness || 'claude_code',
+      agent: activeSession?.agent_id ?? '',
       sessionId: activeSessionId,
       done: true,
     }

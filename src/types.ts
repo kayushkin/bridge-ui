@@ -151,6 +151,13 @@ export interface BridgeEvent {
 
 // --- Hook return types ---
 
+export interface CreateSessionOpts {
+  harness: string
+  instanceId: string
+  agentId: string
+  displayName: string
+}
+
 export interface UseBridgeSessionReturn {
   sessions: BridgeSession[]
   activeSession: BridgeSession | null
@@ -160,7 +167,7 @@ export interface UseBridgeSessionReturn {
   connected: boolean
   error: string | null
   loadingHistory: boolean
-  createSession: (harness: string, displayName?: string, instanceId?: string) => Promise<BridgeSession | null>
+  createSession: (opts: CreateSessionOpts) => Promise<BridgeSession | null>
   selectSession: (id: string) => void
   send: (text: string) => void
   interrupt: () => void
