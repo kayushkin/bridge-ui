@@ -21,27 +21,21 @@ function emptyBuffer(): StreamBuffer {
 }
 
 // --- Normalize messages from /messages API ---
-// The API returns MaterializedMessage which has tools at the top level and meta as
-// a raw ResultEvent. Merge everything into meta so the stats dropdown can flatten it all.
+// The server returns MaterializedMessage with tools at the top level and meta as
+// a ResultEvent. Merge top-level tools into meta for uniform access.
 
-function normalizeMessage(m: Message): Message {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const raw = m as any
-  const meta = (m.meta ?? {}) as Record<string, unknown>
-  const result: Message = { ...m }
-
-  // Pull top-level tools (from MaterializedMessage) into meta.tools
-  if (raw.tools?.length && !meta.tools) {
-    meta.tools = raw.tools
-    meta.toolCalls = raw.tools.length
+function normalizeMessage(m: Message, index: number, sessionId: string): Message {
+  const result: Message = {
+    ...m,
+    id: m.id ?? `hist-${index}`,
+    sessionId: m.sessionId ?? sessionId,
   }
 
-  // Ensure rawStats wraps the full meta so stats dropdown flattens everything
-  if (!meta.rawStats) {
-    meta.rawStats = { ...meta }
+  // Pull top-level tools into meta.tools for uniform access
+  if (m.tools?.length) {
+    result.meta = { ...result.meta, tools: m.tools, toolCalls: m.tools.length }
   }
 
-  result.meta = meta as MessageMeta
   return result
 }
 
@@ -201,7 +195,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         case 'stream': {
           const delta = (data.stream as Record<string, unknown>)?.delta as Record<string, unknown>
           if (!delta) return
-          ensureStreamingMsg(sessId, data)
+          ensureStreamingMsg(sessId)
           if (delta.type === 'text_delta') {
             streamBuffer.current.content += (delta.text as string) || ''
             setActivity({ kind: 'streaming' })
@@ -216,7 +210,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         case 'thinking': {
           const text = (data.thinking as Record<string, unknown>)?.text as string || ''
           if (!text) return
-          ensureStreamingMsg(sessId, data)
+          ensureStreamingMsg(sessId)
           streamBuffer.current.thinking += text
           setActivity({ kind: 'thinking' })
           scheduleFlush()
@@ -226,7 +220,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         case 'tool_call': {
           const tc = data.tool_call as Record<string, unknown>
           if (!tc) return
-          ensureStreamingMsg(sessId, data)
+          ensureStreamingMsg(sessId)
           const name = (tc.name as string) || ''
           streamBuffer.current.tools.push({
             tool: name,
@@ -269,10 +263,9 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           }
           flushStream()
 
-          // Pass the entire event through as rawStats — no manual field mapping.
-          // Includes result (usage, cost, timing, api_call_usages, tool_events, etc.),
-          // raw (original harness JSON), and any extensions.
+          // result is a ResultEvent — use it directly as meta.
           const meta: MessageMeta = {
+            ...(result as MessageMeta),
             rawStats: data as Record<string, unknown>,
           }
 
@@ -342,7 +335,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
     }
 
-    function ensureStreamingMsg(sessId: string, data: Record<string, unknown>) {
+    function ensureStreamingMsg(sessId: string) {
       if (streamMsgId.current) return
       const id = `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
       streamMsgId.current = id
@@ -352,8 +345,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         role: 'assistant',
         content: '',
         timestamp: new Date().toISOString(),
-        orchestrator: 'bridge',
-        agent: (data.harness as string) || 'claude_code',
         sessionId: sessId,
       }
       setMessages(prev => [...prev, newMsg])
@@ -377,7 +368,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
 
       if (loadId !== historyLoadId.current) return
-      if (msgs) setMessages(msgs.map(normalizeMessage))
+      if (msgs) setMessages(msgs.map((m, i) => normalizeMessage(m, i, sessionId)))
     } catch {
       // History load failed — not critical
     } finally {
@@ -475,8 +466,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       role: 'user',
       content: text,
       timestamp: new Date().toISOString(),
-      orchestrator: 'bridge',
-      agent: activeSession?.agent_id ?? '',
       sessionId: activeSessionId,
       done: true,
     }
@@ -671,8 +660,6 @@ async function reconstructFromEvents(fetchFn: FetchFn, basePath: string, session
         role: 'user',
         content: (result?.text as string) || '',
         timestamp: (ev.timestamp as string) || new Date().toISOString(),
-        orchestrator: 'bridge',
-        agent: (ev.harness as string) || 'claude_code',
         sessionId,
         done: true,
       })
@@ -685,8 +672,6 @@ async function reconstructFromEvents(fetchFn: FetchFn, basePath: string, session
         role: 'assistant',
         content: '',
         timestamp: (ev.timestamp as string) || new Date().toISOString(),
-        orchestrator: 'bridge',
-        agent: (ev.harness as string) || 'claude_code',
         sessionId,
       }
     }
@@ -735,9 +720,9 @@ async function reconstructFromEvents(fetchFn: FetchFn, basePath: string, session
     if (type === 'result' && currentAssistant) {
       const result = ev.result as Record<string, unknown> | undefined
       if (result) {
-        // Pass the entire event through — no manual field mapping.
         currentAssistant.meta = {
           ...currentAssistant.meta,
+          ...(result as MessageMeta),
           rawStats: ev as Record<string, unknown>,
         }
         if (result.text) currentAssistant.content = result.text as string

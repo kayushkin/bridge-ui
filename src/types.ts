@@ -10,56 +10,61 @@ export interface ToolEvent {
   error?: boolean
 }
 
-export interface APICallUsage {
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-  reasoningTokens?: number
-  model?: string
-  durationMs?: number
+// Mirrors msg.TokenUsage from llm-bridge (snake_case JSON)
+export interface TokenUsage {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cache_read_tokens?: number
+  cache_write_tokens?: number
+  reasoning_tokens?: number
+  context_tokens?: number
+  context_limit?: number
 }
 
+// Mirrors msg.Cost from llm-bridge (snake_case JSON)
+export interface Cost {
+  total_usd: number
+  input_usd?: number
+  output_usd?: number
+  is_byok?: boolean
+  upstream_cost?: number
+}
+
+// Mirrors msg.ResultEvent from llm-bridge — this is what the server sends as "meta".
 export interface MessageMeta {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-  cacheReadTokens?: number
-  cacheCreationTokens?: number
-  reasoningTokens?: number
-  contextTokens?: number
-  contextLimit?: number
-  toolCalls?: number
-  cost?: number
-  costInput?: number
-  costOutput?: number
-  costUpstream?: number
-  isByok?: boolean
-  durationMs?: number
-  durationAPIMs?: number
-  numTurns?: number
-  apiCalls?: number
-  apiCallUsages?: APICallUsage[]
+  text?: string
+  is_error?: boolean
+  usage?: TokenUsage
+  cost?: Cost
+  duration_ms?: number
+  duration_api_ms?: number
+  num_turns?: number
+  api_calls?: number
   model?: string
-  turn?: number
+  api_call_usages?: TokenUsage[]
+  tool_events?: ToolEvent[]
+  // Client-side enrichments
   tools?: ToolEvent[]
-  isError?: boolean
+  toolCalls?: number
   rawStats?: Record<string, unknown>
 }
 
+// Mirrors MaterializedMessage from llm-bridge-server.
 export interface Message {
-  id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: string
-  orchestrator: string
-  agent: string
-  sessionId: string
-  completionId?: string
-  isError?: boolean
-  meta?: MessageMeta
   thinking?: string
+  tools?: ToolEvent[]
+  meta?: MessageMeta
+  raw?: Record<string, unknown>
   done?: boolean
+  // Client-side fields (not from server)
+  id?: string
+  orchestrator?: string
+  agent?: string
+  sessionId?: string
 }
 
 // --- Bridge domain types ---

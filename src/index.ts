@@ -2,7 +2,8 @@
 export type {
   FetchFn,
   ToolEvent,
-  APICallUsage,
+  TokenUsage,
+  Cost,
   MessageMeta,
   Message,
   BridgeSession,
