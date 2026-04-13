@@ -138,6 +138,7 @@ export interface BridgePrefs {
   last_session?: Record<string, string>
   last_instance?: Record<string, string>
   defaults?: Record<string, HarnessDefaults>
+  session_names?: Record<string, string>
 }
 
 // --- SSE types ---

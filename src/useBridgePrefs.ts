@@ -80,6 +80,9 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
       if (partial.defaults) {
         next.defaults = { ...next.defaults, ...partial.defaults }
       }
+      if (partial.session_names) {
+        next.session_names = { ...next.session_names, ...partial.session_names }
+      }
 
       // Persist to localStorage in both modes
       try { localStorage.setItem(storagePrefix, JSON.stringify(next)) } catch { /* ignore */ }
@@ -128,6 +131,14 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     return prefs.last_session?.[harness] ?? null
   }, [prefs.last_session])
 
+  const setSessionName = useCallback((sessionId: string, name: string) => {
+    updatePrefs({ session_names: { [sessionId]: name } })
+  }, [updatePrefs])
+
+  const getSessionName = useCallback((sessionId: string): string | null => {
+    return prefs.session_names?.[sessionId] ?? null
+  }, [prefs.session_names])
+
   return {
     prefs,
     setLastHarness,
@@ -138,5 +149,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     getDefaults,
     getLastInstance,
     getLastSession,
+    setSessionName,
+    getSessionName,
   }
 }

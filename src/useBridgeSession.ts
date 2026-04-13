@@ -255,6 +255,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
             durationMs: result.duration_ms as number,
             numTurns: result.num_turns as number,
             model: result.model as string,
+            rawStats: result as Record<string, unknown>,
           }
 
           setMessages(prev => {
@@ -572,18 +573,14 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const renameSession = useCallback(async (displayName: string) => {
     if (!activeSessionId) return
     try {
-      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}`, {
-        method: 'PATCH',
+      await fetchFn(`${basePath}/sessions/${activeSessionId}/rename`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ display_name: displayName }),
       })
-      if (!res.ok) {
-        setError(`Rename failed: ${res.statusText}`)
-        return
-      }
       await refreshSessionsImpl()
-    } catch (err) {
-      setError(`Rename failed: ${err}`)
+    } catch {
+      // Rename endpoint may not exist — callers can use prefs as fallback
     }
   }, [fetchFn, basePath, activeSessionId, refreshSessionsImpl])
 
