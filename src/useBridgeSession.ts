@@ -569,6 +569,24 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
   }, [fetchFn, basePath, activeSessionId, refreshSessionsImpl, selectSession])
 
+  const renameSession = useCallback(async (displayName: string) => {
+    if (!activeSessionId) return
+    try {
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: displayName }),
+      })
+      if (!res.ok) {
+        setError(`Rename failed: ${res.statusText}`)
+        return
+      }
+      await refreshSessionsImpl()
+    } catch (err) {
+      setError(`Rename failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId, refreshSessionsImpl])
+
   const sendConfig = useCallback(async (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => {
     if (!activeSessionId) return
     try {
@@ -605,6 +623,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     stop: stopSession,
     compact,
     fork: forkSession,
+    renameSession,
     sendConfig,
     refreshSessions,
   }

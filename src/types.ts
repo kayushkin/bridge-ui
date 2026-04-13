@@ -167,6 +167,7 @@ export interface UseBridgeSessionReturn {
   stop: () => void
   compact: (summary?: string) => void
   fork: (displayName?: string) => void
+  renameSession: (displayName: string) => Promise<void>
   sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => void
   refreshSessions: () => void
 }
