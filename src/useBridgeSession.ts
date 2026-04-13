@@ -474,8 +474,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     wasInterrupted.current = false
 
     try {
-      startSSE(activeSessionId)
-
       const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -486,6 +484,11 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         setError(`Send failed: ${err}`)
         return
       }
+
+      // Start SSE after send so the user_message event is stored first.
+      // This prevents ListCurrentTurnEventsWithIDs from replaying the
+      // previous turn's events as the response to the new message.
+      startSSE(activeSessionId)
       refreshSessions()
     } catch (err) {
       setError(`Send failed: ${err}`)
