@@ -20,18 +20,29 @@ function emptyBuffer(): StreamBuffer {
   return { content: '', thinking: '', tools: [], meta: {}, done: false }
 }
 
-// --- Normalize message meta: just pass through as rawStats for the stats dropdown ---
+// --- Normalize messages from /messages API ---
+// The API returns MaterializedMessage which has tools at the top level and meta as
+// a raw ResultEvent. Merge everything into meta so the stats dropdown can flatten it all.
 
 function normalizeMessage(m: Message): Message {
-  if (m.meta) {
-    // Ensure rawStats is set so the stats dropdown can flatten everything.
-    // meta from /messages is already the full ResultEvent; from SSE it's set during event handling.
-    const meta = m.meta as Record<string, unknown>
-    if (!meta.rawStats) {
-      return { ...m, meta: { rawStats: meta } as MessageMeta }
-    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = m as any
+  const meta = (m.meta ?? {}) as Record<string, unknown>
+  const result: Message = { ...m }
+
+  // Pull top-level tools (from MaterializedMessage) into meta.tools
+  if (raw.tools?.length && !meta.tools) {
+    meta.tools = raw.tools
+    meta.toolCalls = raw.tools.length
   }
-  return m
+
+  // Ensure rawStats wraps the full meta so stats dropdown flattens everything
+  if (!meta.rawStats) {
+    meta.rawStats = { ...meta }
+  }
+
+  result.meta = meta as MessageMeta
+  return result
 }
 
 // --- Debounce helper ---
