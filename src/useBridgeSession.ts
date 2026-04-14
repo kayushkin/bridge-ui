@@ -103,7 +103,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   // --- Derived state ---
 
-  const activeSession = sessions.find(s => s.id === activeSessionId) || null
+  const activeSession = sessions.find(s => s.bridge_id === activeSessionId) || null
   activeSessionRef.current = activeSession
 
   const uiState: SessionUIState = useMemo(() => {
@@ -288,15 +288,10 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
         case 'system': {
           const sys = data.system as Record<string, unknown>
-          if (sys?.subtype === 'session_id_changed') {
-            // The harness has generated the canonical session ID.
-            // Update our active session reference from the pending/frontend ID
-            // to the real harness session ID.
-            const newId = data.session_id as string
-            if (newId) {
-              setActiveSessionId(newId)
-              refreshSessionsImpl()
-            }
+          if (sys?.subtype === 'harness_id_set') {
+            // The harness has reported its canonical session ID.
+            // Refresh sessions so the UI picks up the harness_id field.
+            refreshSessionsImpl()
           } else if (sys?.subtype === 'retry') {
             setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
           }
@@ -404,7 +399,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
     ;(async () => {
       await loadHistory(id)
-      const session = sessions.find(s => s.id === id)
+      const session = sessions.find(s => s.bridge_id === id)
       if (session?.state === 'running') {
         startSSE(id)
       }
@@ -416,9 +411,9 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   useEffect(() => {
     if (activeSession?.state === 'running' && !sseAbort.current) {
-      startSSE(activeSession.id)
+      startSSE(activeSession.bridge_id)
     }
-  }, [activeSession?.state, activeSession?.id, startSSE])
+  }, [activeSession?.state, activeSession?.bridge_id, startSSE])
 
   // --- Visibility change reconnection ---
 
@@ -436,14 +431,14 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   const createSession = useCallback(async (opts: CreateSessionOpts): Promise<ManagedSession | null> => {
     try {
-      const clientRequestId = opts.clientRequestId ?? `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const clientId = opts.clientId ?? `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const body: Record<string, unknown> = {
         harness: opts.harness,
         display_name: opts.displayName,
         agent_id: opts.agentId,
         instance_id: opts.instanceId,
         auto_start: false,
-        client_request_id: clientRequestId,
+        client_id: clientId,
       }
       const res = await fetchFn(`${basePath}/sessions`, {
         method: 'POST',
@@ -456,7 +451,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       const sess: ManagedSession = await res.json()
       await refreshSessionsImpl()
-      selectSession(sess.id)
+      selectSession(sess.bridge_id)
       return sess
     } catch (err) {
       setError(`Failed to create session: ${err}`)
@@ -575,7 +570,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           display_name: displayName || '',
-          client_request_id: `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          client_id: `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         }),
       })
       if (!res.ok) {
@@ -584,7 +579,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       const forked: ManagedSession = await res.json()
       await refreshSessionsImpl()
-      selectSession(forked.id)
+      selectSession(forked.bridge_id)
     } catch (err) {
       setError(`Fork failed: ${err}`)
     }
