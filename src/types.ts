@@ -1,8 +1,31 @@
+// --- Canonical types from llm-bridge (single source of truth) ---
+// These are auto-generated from Go types in llm-bridge/msg/.
+// See llm-bridge/ARCHITECTURE.md for the generation workflow.
+
+import type {
+  TokenUsage,
+  Cost,
+  Instance,
+  InstanceCredential,
+  CredentialStatus,
+  InstanceStatus,
+} from '@kayushkin/llm-bridge-types'
+
+// Re-export canonical types for consumers.
+export type { TokenUsage, Cost, InstanceCredential, InstanceStatus }
+
+// Re-export with backward-compatible aliases where names differ.
+export type { Instance as BridgeInstance }
+export type { CredentialStatus as CredentialSlot }
+
+// --- UI-specific types (not in llm-bridge) ---
+
 // Fetch function type — consumers provide their own auth'd fetch
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>
 
-// --- Message types (bridge-relevant subset) ---
-
+// ToolEvent is the UI streaming accumulation type. It differs from the
+// canonical ToolSummary (which uses error: string) because the UI sets
+// error from the tool_result event's is_error boolean during streaming.
 export interface ToolEvent {
   tool: string
   input?: string
@@ -10,28 +33,7 @@ export interface ToolEvent {
   error?: boolean
 }
 
-// Mirrors msg.TokenUsage from llm-bridge (snake_case JSON)
-export interface TokenUsage {
-  input_tokens: number
-  output_tokens: number
-  total_tokens: number
-  cache_read_tokens?: number
-  cache_write_tokens?: number
-  reasoning_tokens?: number
-  context_tokens?: number
-  context_limit?: number
-}
-
-// Mirrors msg.Cost from llm-bridge (snake_case JSON)
-export interface Cost {
-  total_usd: number
-  input_usd?: number
-  output_usd?: number
-  is_byok?: boolean
-  upstream_cost?: number
-}
-
-// Mirrors msg.ResultEvent from llm-bridge — this is what the server sends as "meta".
+// Mirrors msg.ResultEvent from llm-bridge with client-side enrichments.
 export interface MessageMeta {
   text?: string
   is_error?: boolean
@@ -50,7 +52,8 @@ export interface MessageMeta {
   rawStats?: Record<string, unknown>
 }
 
-// Mirrors MaterializedMessage from llm-bridge-server.
+// Materialized message for the UI — flattened from ContentBlock[] to string content.
+// This is NOT the same as llm-bridge msg.Message (which uses ContentBlock[]).
 export interface Message {
   role: 'user' | 'assistant' | 'system'
   content: string
@@ -67,8 +70,8 @@ export interface Message {
   sessionId?: string
 }
 
-// --- Bridge domain types ---
-
+// Server-managed session entity from llm-bridge-server.
+// This is NOT the same as llm-bridge msg.Session (which is richer).
 export interface BridgeSession {
   id: string
   display_name: string
@@ -88,47 +91,6 @@ export type ActivityKind =
   | { kind: 'thinking' }
   | { kind: 'streaming' }
   | { kind: 'tool'; name: string }
-
-export interface BridgeInstance {
-  id: string
-  harness_type: string
-  name: string
-  host: string
-  transport: 'local' | 'ssh'
-  ssh_user: string
-  ssh_key_path: string
-  ssh_port: number
-  working_dir: string
-  max_concurrent_sessions: number
-  enabled: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface CredentialSlot {
-  credential_id: string
-  priority: number
-  max_concurrent: number
-  in_use: number
-  available: number
-  enabled: boolean
-}
-
-export interface InstanceStatus {
-  instance: BridgeInstance
-  active_sessions: number
-  credentials: CredentialSlot[]
-  reachable: boolean
-  last_checked: string
-}
-
-export interface InstanceCredential {
-  instance_id: string
-  credential_id: string
-  priority: number
-  max_concurrent: number
-  enabled: boolean
-}
 
 export interface HarnessInfo {
   name: string

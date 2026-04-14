@@ -1,18 +1,22 @@
-// Types
+// Types — canonical (from llm-bridge)
+export type {
+  TokenUsage,
+  Cost,
+  InstanceCredential,
+  InstanceStatus,
+  BridgeInstance,
+  CredentialSlot,
+} from './types'
+
+// Types — UI-specific
 export type {
   FetchFn,
   ToolEvent,
-  TokenUsage,
-  Cost,
   MessageMeta,
   Message,
   BridgeSession,
   SessionUIState,
   ActivityKind,
-  BridgeInstance,
-  CredentialSlot,
-  InstanceStatus,
-  InstanceCredential,
   HarnessInfo,
   HarnessDefaults,
   BridgePrefs,

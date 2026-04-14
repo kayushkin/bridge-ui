@@ -9,6 +9,9 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
+  "dependencies": {
+    "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts"
+  },
   "peerDependencies": {
     "react": ">=18"
   },
