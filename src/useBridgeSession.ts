@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
-  BridgeEvent, BridgeSession, SessionUIState, ActivityKind,
+  BridgeEvent, ManagedSession, SessionUIState, ActivityKind,
   Message, MessageMeta, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
 } from './types'
 
@@ -56,7 +56,7 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
 export function useBridgeSession(): UseBridgeSessionReturn {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
 
-  const [sessions, setSessions] = useState<BridgeSession[]>([])
+  const [sessions, setSessions] = useState<ManagedSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [connected, setConnected] = useState(false)
@@ -70,7 +70,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const streamBuffer = useRef<StreamBuffer>(emptyBuffer())
   const streamMsgId = useRef<string | null>(null)
   const rafId = useRef<number>(0)
-  const activeSessionRef = useRef<BridgeSession | null>(null)
+  const activeSessionRef = useRef<ManagedSession | null>(null)
   const historyLoadId = useRef(0)
 
   // --- Session refresh (debounced) ---
@@ -425,7 +425,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   // --- Actions ---
 
-  const createSession = useCallback(async (opts: CreateSessionOpts): Promise<BridgeSession | null> => {
+  const createSession = useCallback(async (opts: CreateSessionOpts): Promise<ManagedSession | null> => {
     try {
       const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const body: Record<string, unknown> = {
@@ -445,7 +445,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         setError(`Failed to create session: ${res.statusText}`)
         return null
       }
-      const sess: BridgeSession = await res.json()
+      const sess: ManagedSession = await res.json()
       await refreshSessionsImpl()
       selectSession(sess.id)
       return sess
@@ -570,7 +570,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         setError(`Fork failed: ${res.statusText}`)
         return
       }
-      const forked: BridgeSession = await res.json()
+      const forked: ManagedSession = await res.json()
       await refreshSessionsImpl()
       selectSession(forked.id)
     } catch (err) {

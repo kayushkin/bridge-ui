@@ -9,14 +9,34 @@ import type {
   InstanceCredential,
   CredentialStatus,
   InstanceStatus,
+  ManagedSession,
+  HarnessInfo,
+  HarnessDefaults,
+  BridgePrefs,
+  MaterializedMessage,
+  MaterializedTool,
+  ResultEvent,
 } from '@kayushkin/llm-bridge-types'
 
 // Re-export canonical types for consumers.
-export type { TokenUsage, Cost, InstanceCredential, InstanceStatus }
+export type {
+  TokenUsage,
+  Cost,
+  InstanceCredential,
+  InstanceStatus,
+  ManagedSession,
+  HarnessInfo,
+  HarnessDefaults,
+  BridgePrefs,
+  MaterializedMessage,
+  MaterializedTool,
+  ResultEvent,
+}
 
 // Re-export with backward-compatible aliases where names differ.
 export type { Instance as BridgeInstance }
 export type { CredentialStatus as CredentialSlot }
+export type { ManagedSession as BridgeSession }
 
 // --- UI-specific types (not in llm-bridge) ---
 
@@ -24,8 +44,8 @@ export type { CredentialStatus as CredentialSlot }
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>
 
 // ToolEvent is the UI streaming accumulation type. It differs from the
-// canonical ToolSummary (which uses error: string) because the UI sets
-// error from the tool_result event's is_error boolean during streaming.
+// canonical MaterializedTool (which has tool_id and input as object) because
+// the streaming path creates these with input already stringified.
 export interface ToolEvent {
   tool: string
   input?: string
@@ -33,7 +53,9 @@ export interface ToolEvent {
   error?: boolean
 }
 
-// Mirrors msg.ResultEvent from llm-bridge with client-side enrichments.
+// MessageMeta extends the canonical ResultEvent with client-side enrichments.
+// The server sends ResultEvent as the "meta" field on materialized messages;
+// the UI adds tools[], toolCalls, and rawStats during streaming.
 export interface MessageMeta {
   text?: string
   is_error?: boolean
@@ -52,8 +74,9 @@ export interface MessageMeta {
   rawStats?: Record<string, unknown>
 }
 
-// Materialized message for the UI — flattened from ContentBlock[] to string content.
-// This is NOT the same as llm-bridge msg.Message (which uses ContentBlock[]).
+// Message is the UI's working message type. It extends the server's
+// MaterializedMessage with client-side tracking fields (id, sessionId, etc.).
+// The server returns MaterializedMessage; the UI normalizes to this shape.
 export interface Message {
   role: 'user' | 'assistant' | 'system'
   content: string
@@ -70,20 +93,6 @@ export interface Message {
   sessionId?: string
 }
 
-// Server-managed session entity from llm-bridge-server.
-// This is NOT the same as llm-bridge msg.Session (which is richer).
-export interface BridgeSession {
-  id: string
-  display_name: string
-  harness: string
-  instance_id: string
-  state: string
-  agent_id: string
-  client_request_id: string
-  created_at: string
-  updated_at: string
-}
-
 export type SessionUIState = 'empty' | 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'aborted'
 
 export type ActivityKind =
@@ -91,32 +100,6 @@ export type ActivityKind =
   | { kind: 'thinking' }
   | { kind: 'streaming' }
   | { kind: 'tool'; name: string }
-
-export interface HarnessInfo {
-  name: string
-  label: string
-  emoji: string
-  image?: string
-  available: boolean
-  capabilities: string[]
-  supported_providers?: string[]
-}
-
-export interface HarnessDefaults {
-  model?: string
-  effort?: string
-  max_budget?: number
-  disabled_tools?: string[]
-}
-
-export interface BridgePrefs {
-  last_harness?: string
-  last_instance_id?: string
-  last_session?: Record<string, string>
-  last_instance?: Record<string, string>
-  defaults?: Record<string, HarnessDefaults>
-  session_names?: Record<string, string>
-}
 
 // --- SSE types ---
 
@@ -136,15 +119,15 @@ export interface CreateSessionOpts {
 }
 
 export interface UseBridgeSessionReturn {
-  sessions: BridgeSession[]
-  activeSession: BridgeSession | null
+  sessions: ManagedSession[]
+  activeSession: ManagedSession | null
   messages: Message[]
   uiState: SessionUIState
   activity: ActivityKind
   connected: boolean
   error: string | null
   loadingHistory: boolean
-  createSession: (opts: CreateSessionOpts) => Promise<BridgeSession | null>
+  createSession: (opts: CreateSessionOpts) => Promise<ManagedSession | null>
   selectSession: (id: string) => void
   send: (text: string) => void
   interrupt: () => void

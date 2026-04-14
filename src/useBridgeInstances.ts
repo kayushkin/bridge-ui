@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
-import type { BridgeInstance, InstanceStatus, InstanceCredential } from './types'
+import type { InstanceStatus, InstanceCredential } from './types'
+import type { Instance } from '@kayushkin/llm-bridge-types'
 
 export function useBridgeInstances() {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
 
-  const [instances, setInstances] = useState<BridgeInstance[]>([])
+  const [instances, setInstances] = useState<Instance[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,11 +39,11 @@ export function useBridgeInstances() {
     return () => clearInterval(interval)
   }, [fetchInstances])
 
-  const instancesByHarness = useCallback((harness: string): BridgeInstance[] => {
+  const instancesByHarness = useCallback((harness: string): Instance[] => {
     return instances.filter(i => i.harness_type === harness && i.enabled)
   }, [instances])
 
-  const createInstance = useCallback(async (data: Partial<BridgeInstance>): Promise<BridgeInstance | null> => {
+  const createInstance = useCallback(async (data: Partial<Instance>): Promise<Instance | null> => {
     try {
       const res = await fetchFn(`${basePath}/instances`, {
         method: 'POST',
@@ -50,13 +51,13 @@ export function useBridgeInstances() {
         body: JSON.stringify(data),
       })
       if (!res.ok) return null
-      const inst: BridgeInstance = await res.json()
+      const inst: Instance = await res.json()
       await fetchInstances()
       return inst
     } catch { return null }
   }, [fetchFn, basePath, fetchInstances])
 
-  const updateInstance = useCallback(async (id: string, data: Partial<BridgeInstance>): Promise<boolean> => {
+  const updateInstance = useCallback(async (id: string, data: Partial<Instance>): Promise<boolean> => {
     try {
       const res = await fetchFn(`${basePath}/instances/${id}`, {
         method: 'PUT',
@@ -113,7 +114,7 @@ export function useBridgeInstances() {
   }, [fetchFn, basePath])
 
   const instanceMap = useMemo(() => {
-    const map = new Map<string, BridgeInstance>()
+    const map = new Map<string, Instance>()
     for (const inst of instances) map.set(inst.id, inst)
     return map
   }, [instances])
