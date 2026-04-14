@@ -288,7 +288,16 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
         case 'system': {
           const sys = data.system as Record<string, unknown>
-          if (sys?.subtype === 'retry') {
+          if (sys?.subtype === 'session_id_changed') {
+            // The harness has generated the canonical session ID.
+            // Update our active session reference from the pending/frontend ID
+            // to the real harness session ID.
+            const newId = data.session_id as string
+            if (newId) {
+              setActiveSessionId(newId)
+              refreshSessionsImpl()
+            }
+          } else if (sys?.subtype === 'retry') {
             setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
           }
           break
@@ -427,7 +436,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   const createSession = useCallback(async (opts: CreateSessionOpts): Promise<ManagedSession | null> => {
     try {
-      const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const clientRequestId = opts.clientRequestId ?? `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const body: Record<string, unknown> = {
         harness: opts.harness,
         display_name: opts.displayName,

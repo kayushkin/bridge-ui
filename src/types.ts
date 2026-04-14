@@ -121,6 +121,7 @@ export interface CreateSessionOpts {
   instanceId: string
   agentId: string
   displayName: string
+  clientRequestId?: string
 }
 
 export interface UseBridgeSessionReturn {
