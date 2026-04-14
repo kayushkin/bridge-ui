@@ -573,7 +573,10 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/fork`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: displayName || '' }),
+        body: JSON.stringify({
+          display_name: displayName || '',
+          client_request_id: `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        }),
       })
       if (!res.ok) {
         setError(`Fork failed: ${res.statusText}`)
