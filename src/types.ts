@@ -12,7 +12,6 @@ import type {
   Cost,
   Instance,
   InstanceCredential,
-  CredentialStatus,
   InstanceStatus,
   ManagedSession,
   HarnessInfo,
@@ -40,7 +39,6 @@ export type {
 
 // Re-export with backward-compatible aliases where names differ.
 export type { Instance as BridgeInstance }
-export type { CredentialStatus as CredentialSlot }
 export type { ManagedSession as BridgeSession }
 
 // --- UI-specific types (not in llm-bridge) ---
