@@ -69,6 +69,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const lastEventId = useRef<string | undefined>(undefined)
   const streamBuffer = useRef<StreamBuffer>(emptyBuffer())
   const streamMsgId = useRef<string | null>(null)
+  const lastStreamMsgId = useRef<string | null>(null)  // survives session_state/close clearing streamMsgId
   const rafId = useRef<number>(0)
   const activeSessionRef = useRef<ManagedSession | null>(null)
   const historyLoadId = useRef(0)
@@ -277,8 +278,10 @@ export function useBridgeSession(): UseBridgeSessionReturn {
             rawStats: data as Record<string, unknown>,
           }
 
+          // Use lastStreamMsgId as fallback — session_state/close may have
+          // already cleared streamMsgId before result arrives.
+          const msgId = streamMsgId.current || lastStreamMsgId.current
           setMessages(prev => {
-            const msgId = streamMsgId.current
             if (!msgId) return prev
             return prev.map(m => {
               if (m.id !== msgId) return m
@@ -357,6 +360,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       if (streamMsgId.current) return
       const id = `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
       streamMsgId.current = id
+      lastStreamMsgId.current = id
       streamBuffer.current = emptyBuffer()
       const newMsg: Message = {
         id,
