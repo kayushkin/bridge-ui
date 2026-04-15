@@ -106,6 +106,14 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const activeSession = sessions.find(s => s.bridge_id === activeSessionId) || null
   activeSessionRef.current = activeSession
 
+  // Immediately patch a session's state in the local array so uiState
+  // recomputes without waiting for the debounced server refresh.
+  const patchSessionState = useCallback((sessionId: string, state: string) => {
+    setSessions(prev => prev.map(s =>
+      s.bridge_id === sessionId ? { ...s, state } : s,
+    ))
+  }, [])
+
   const uiState: SessionUIState = useMemo(() => {
     if (!activeSession) return 'empty'
     if (activeSession.state === 'running') return 'running'
@@ -282,6 +290,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           streamBuffer.current = emptyBuffer()
           setActivity({ kind: 'idle' })
           wasInterrupted.current = false
+          patchSessionState(sessId, 'completed')
           refreshSessions()
           break
         }
@@ -307,6 +316,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
             streamMsgId.current = null
           }
           setActivity({ kind: 'idle' })
+          patchSessionState(sessId, 'error')
           break
         }
 
@@ -319,11 +329,14 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           } else if (state === 'running') {
             wasInterrupted.current = false
           } else if (state === 'completed') {
-            loadHistory(sessId)
+            // Don't reload history here — messages are already in the UI
+            // from streaming. Calling loadHistory would replace them with
+            // whatever log-store has materialized, which may be empty.
             setActivity({ kind: 'idle' })
             streamMsgId.current = null
             streamBuffer.current = emptyBuffer()
           }
+          if (state) patchSessionState(sessId, state)
           refreshSessions()
           break
         }
@@ -332,6 +345,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           streamMsgId.current = null
           streamBuffer.current = emptyBuffer()
           setActivity({ kind: 'idle' })
+          patchSessionState(sessId, 'completed')
           closeSSE()
           refreshSessions()
           break
@@ -353,7 +367,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       setMessages(prev => [...prev, newMsg])
     }
-  }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions])
+  }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions, patchSessionState])
 
   // --- History loading ---
 
