@@ -486,9 +486,11 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         return
       }
 
-      // Start SSE after send so the user_message event is stored first.
-      // This prevents ListCurrentTurnEventsWithIDs from replaying the
-      // previous turn's events as the response to the new message.
+      // Reset lastEventId so SSE connects without Last-Event-ID.
+      // This makes the server use ListCurrentTurnEventsWithIDs (turn-aware
+      // replay) instead of ListEventsSinceID (which replays everything
+      // including user_message events from the previous turn boundary).
+      lastEventId.current = undefined
       startSSE(activeSessionId)
       refreshSessions()
     } catch (err) {
