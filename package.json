@@ -1,10 +1,20 @@
 {
   "name": "@kayushkin/bridge-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./styles.css"
+  },
+  "files": [
+    "dist",
+    "styles.css"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
@@ -13,11 +23,16 @@
     "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts"
   },
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-router-dom": ">=6"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
     "typescript": "~5.9.3"
   }
 }
