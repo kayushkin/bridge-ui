@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FetchFn, BridgePrefs, HarnessDefaults } from './types'
 
 interface BridgePrefsOptions {
@@ -139,7 +139,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     return prefs.session_names?.[sessionId] ?? null
   }, [prefs.session_names])
 
-  return {
+  return useMemo(() => ({
     prefs,
     setLastHarness,
     setLastInstanceId,
@@ -151,5 +151,17 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     getLastSession,
     setSessionName,
     getSessionName,
-  }
+  }), [
+    prefs,
+    setLastHarness,
+    setLastInstanceId,
+    setLastSession,
+    setLastInstance,
+    setHarnessDefaults,
+    getDefaults,
+    getLastInstance,
+    getLastSession,
+    setSessionName,
+    getSessionName,
+  ])
 }

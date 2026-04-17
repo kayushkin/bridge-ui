@@ -638,7 +638,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     debouncedRefresh.cancel()
   }, [closeSSE, debouncedRefresh])
 
-  return {
+  return useMemo(() => ({
     sessions,
     activeSession,
     messages,
@@ -658,6 +658,26 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     renameSession,
     sendConfig,
     refreshSessions,
-  }
+  }), [
+    sessions,
+    activeSession,
+    messages,
+    uiState,
+    activity,
+    connected,
+    error,
+    loadingHistory,
+    createSession,
+    selectSession,
+    send,
+    interrupt,
+    resume,
+    stopSession,
+    compact,
+    forkSession,
+    renameSession,
+    sendConfig,
+    refreshSessions,
+  ])
 }
 

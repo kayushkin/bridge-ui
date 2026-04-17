@@ -119,7 +119,7 @@ export function useBridgeInstances() {
     return map
   }, [instances])
 
-  return {
+  return useMemo(() => ({
     instances,
     loading,
     error,
@@ -133,5 +133,19 @@ export function useBridgeInstances() {
     bindCredential,
     unbindCredential,
     refresh: fetchInstances,
-  }
+  }), [
+    instances,
+    loading,
+    error,
+    instancesByHarness,
+    instanceMap,
+    createInstance,
+    updateInstance,
+    deleteInstance,
+    getStatus,
+    getCredentials,
+    bindCredential,
+    unbindCredential,
+    fetchInstances,
+  ])
 }

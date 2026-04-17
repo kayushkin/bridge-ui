@@ -1,7 +1,6 @@
-import type { TokenUsage, Cost, Instance, InstanceCredential, CredentialStatus, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent } from '@kayushkin/llm-bridge-types';
+import type { TokenUsage, Cost, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent } from '@kayushkin/llm-bridge-types';
 export type { TokenUsage, Cost, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, };
 export type { Instance as BridgeInstance };
-export type { CredentialStatus as CredentialSlot };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 export interface ToolEvent {

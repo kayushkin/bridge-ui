@@ -12,7 +12,6 @@ export type {
   MaterializedTool,
   ResultEvent,
   BridgeInstance,
-  CredentialSlot,
   BridgeSession,
 } from './types'
 

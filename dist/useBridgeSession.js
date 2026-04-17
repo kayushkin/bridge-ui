@@ -48,6 +48,7 @@ export function useBridgeSession() {
     const lastEventId = useRef(undefined);
     const streamBuffer = useRef(emptyBuffer());
     const streamMsgId = useRef(null);
+    const lastStreamMsgId = useRef(null); // survives session_state/close clearing streamMsgId
     const rafId = useRef(0);
     const activeSessionRef = useRef(null);
     const historyLoadId = useRef(0);
@@ -76,6 +77,11 @@ export function useBridgeSession() {
     // --- Derived state ---
     const activeSession = sessions.find(s => s.bridge_id === activeSessionId) || null;
     activeSessionRef.current = activeSession;
+    // Immediately patch a session's state in the local array so uiState
+    // recomputes without waiting for the debounced server refresh.
+    const patchSessionState = useCallback((sessionId, state) => {
+        setSessions(prev => prev.map(s => s.bridge_id === sessionId ? { ...s, state } : s));
+    }, []);
     const uiState = useMemo(() => {
         if (!activeSession)
             return 'empty';
@@ -241,8 +247,10 @@ export function useBridgeSession() {
                         ...result,
                         rawStats: data,
                     };
+                    // Use lastStreamMsgId as fallback — session_state/close may have
+                    // already cleared streamMsgId before result arrives.
+                    const msgId = streamMsgId.current || lastStreamMsgId.current;
                     setMessages(prev => {
-                        const msgId = streamMsgId.current;
                         if (!msgId)
                             return prev;
                         return prev.map(m => {
@@ -256,6 +264,7 @@ export function useBridgeSession() {
                     streamBuffer.current = emptyBuffer();
                     setActivity({ kind: 'idle' });
                     wasInterrupted.current = false;
+                    patchSessionState(sessId, 'completed');
                     refreshSessions();
                     break;
                 }
@@ -280,6 +289,7 @@ export function useBridgeSession() {
                         streamMsgId.current = null;
                     }
                     setActivity({ kind: 'idle' });
+                    patchSessionState(sessId, 'error');
                     break;
                 }
                 case 'session_state': {
@@ -293,11 +303,15 @@ export function useBridgeSession() {
                         wasInterrupted.current = false;
                     }
                     else if (state === 'completed') {
-                        loadHistory(sessId);
+                        // Don't reload history here — messages are already in the UI
+                        // from streaming. Calling loadHistory would replace them with
+                        // whatever log-store has materialized, which may be empty.
                         setActivity({ kind: 'idle' });
                         streamMsgId.current = null;
                         streamBuffer.current = emptyBuffer();
                     }
+                    if (state)
+                        patchSessionState(sessId, state);
                     refreshSessions();
                     break;
                 }
@@ -305,6 +319,7 @@ export function useBridgeSession() {
                     streamMsgId.current = null;
                     streamBuffer.current = emptyBuffer();
                     setActivity({ kind: 'idle' });
+                    patchSessionState(sessId, 'completed');
                     closeSSE();
                     refreshSessions();
                     break;
@@ -316,6 +331,7 @@ export function useBridgeSession() {
                 return;
             const id = `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
             streamMsgId.current = id;
+            lastStreamMsgId.current = id;
             streamBuffer.current = emptyBuffer();
             const newMsg = {
                 id,
@@ -326,7 +342,7 @@ export function useBridgeSession() {
             };
             setMessages(prev => [...prev, newMsg]);
         }
-    }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions]);
+    }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions, patchSessionState]);
     // --- History loading ---
     const loadHistory = useCallback(async (sessionId) => {
         const loadId = ++historyLoadId.current;
@@ -590,7 +606,7 @@ export function useBridgeSession() {
         closeSSE();
         debouncedRefresh.cancel();
     }, [closeSSE, debouncedRefresh]);
-    return {
+    return useMemo(() => ({
         sessions,
         activeSession,
         messages,
@@ -610,6 +626,26 @@ export function useBridgeSession() {
         renameSession,
         sendConfig,
         refreshSessions,
-    };
+    }), [
+        sessions,
+        activeSession,
+        messages,
+        uiState,
+        activity,
+        connected,
+        error,
+        loadingHistory,
+        createSession,
+        selectSession,
+        send,
+        interrupt,
+        resume,
+        stopSession,
+        compact,
+        forkSession,
+        renameSession,
+        sendConfig,
+        refreshSessions,
+    ]);
 }
 //# sourceMappingURL=useBridgeSession.js.map

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 const LS_MIGRATED_SUFFIX = '-migrated';
 export function useBridgePrefs(options = {}) {
     const { fetch: fetchFn, endpoint, storagePrefix = 'bridge-prefs' } = options;
@@ -122,7 +122,7 @@ export function useBridgePrefs(options = {}) {
     const getSessionName = useCallback((sessionId) => {
         return prefs.session_names?.[sessionId] ?? null;
     }, [prefs.session_names]);
-    return {
+    return useMemo(() => ({
         prefs,
         setLastHarness,
         setLastInstanceId,
@@ -134,6 +134,18 @@ export function useBridgePrefs(options = {}) {
         getLastSession,
         setSessionName,
         getSessionName,
-    };
+    }), [
+        prefs,
+        setLastHarness,
+        setLastInstanceId,
+        setLastSession,
+        setLastInstance,
+        setHarnessDefaults,
+        getDefaults,
+        getLastInstance,
+        getLastSession,
+        setSessionName,
+        getSessionName,
+    ]);
 }
 //# sourceMappingURL=useBridgePrefs.js.map
