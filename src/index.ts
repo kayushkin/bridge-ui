@@ -56,3 +56,7 @@ export { BridgeSettings } from './components/BridgeSettings'
 export { BridgeAuth } from './components/BridgeAuth'
 export { BridgeUsage } from './components/BridgeUsage'
 export { BridgeConformance } from './components/BridgeConformance'
+
+// Tool renderers — register custom ones via registerToolRenderer
+export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools'
+export type { ToolRendererProps } from './components/tools'

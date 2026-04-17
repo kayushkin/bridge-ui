@@ -6,6 +6,7 @@ import { useBridgePrefs } from '../useBridgePrefs'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
+import { ToolItem } from './tools'
 import type { HarnessInfo, Message, MessageMeta } from '../types'
 
 interface StoreModel {
@@ -117,28 +118,6 @@ function MessageStats({ meta }: { meta: MessageMeta }) {
               <span className="bc-stats-value">{val}</span>
             </div>
           ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ── Tool Item ── */
-function ToolItem({ tool, running }: { tool: { tool: string; input?: string; output?: string; error?: boolean }; running: boolean }) {
-  const [expanded, setExpanded] = useState(false)
-  const label = tool.tool.replace(/_/g, ' ')
-  return (
-    <div className={`bc-tool-item ${tool.error ? 'bc-tool-item-error' : ''} ${running ? 'bc-tool-item-running' : ''}`}>
-      <div className="bc-tool-item-header" onClick={() => setExpanded(v => !v)}>
-        <span className="bc-tool-item-name">{label}</span>
-        {running && <span className="bc-tool-spinner" />}
-        {tool.error && !running && <span className="bc-tool-error-badge">error</span>}
-        {tool.output && !running && <span className="bc-tool-done-badge">done</span>}
-      </div>
-      {expanded && (
-        <div className="bc-tool-item-detail">
-          {tool.input && <div className="bc-tool-item-io"><span className="bc-tool-io-label">in</span><span className="bc-tool-io-text">{tool.input.slice(0, 500)}</span></div>}
-          {tool.output && <div className="bc-tool-item-io"><span className="bc-tool-io-label">out</span><span className="bc-tool-io-text">{tool.output.slice(0, 800)}</span></div>}
         </div>
       )}
     </div>
