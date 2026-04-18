@@ -2,16 +2,8 @@ import type { ToolRendererProps } from './types'
 import { registerToolRenderer } from './registry'
 
 function BashRenderer({ tool, running }: ToolRendererProps) {
-  let command = ''
-
-  if (tool.input) {
-    try {
-      const parsed = JSON.parse(tool.input)
-      command = parsed.command ?? parsed.cmd ?? ''
-    } catch {
-      command = tool.input
-    }
-  }
+  const input = tool.input ?? {}
+  const command = (input.command ?? input.cmd ?? '') as string
 
   return (
     <div className={`bc-tool-item ${tool.error ? 'bc-tool-item-error' : ''} ${running ? 'bc-tool-item-running' : ''}`}>

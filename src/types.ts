@@ -20,6 +20,9 @@ import type {
   MaterializedMessage,
   MaterializedTool,
   ResultEvent,
+  SessionInfo,
+  ToolInfo,
+  MCPServerInfo,
 } from '@kayushkin/llm-bridge-types'
 
 // Re-export canonical types for consumers.
@@ -35,6 +38,9 @@ export type {
   MaterializedMessage,
   MaterializedTool,
   ResultEvent,
+  SessionInfo,
+  ToolInfo,
+  MCPServerInfo,
 }
 
 // Re-export with backward-compatible aliases where names differ.
@@ -46,12 +52,12 @@ export type { ManagedSession as BridgeSession }
 // Fetch function type — consumers provide their own auth'd fetch
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>
 
-// ToolEvent is the UI streaming accumulation type. It differs from the
-// canonical MaterializedTool (which has tool_id and input as object) because
-// the streaming path creates these with input already stringified.
+// ToolEvent matches the canonical MaterializedTool shape (input as object,
+// not stringified). The streaming and history paths both deliver tools in
+// this form so renderers can read fields directly.
 export interface ToolEvent {
   tool: string
-  input?: string
+  input?: Record<string, unknown>
   output?: string
   error?: boolean
 }
@@ -139,7 +145,7 @@ export interface UseBridgeSessionReturn {
   stop: () => void
   compact: (summary?: string) => void
   fork: (displayName?: string) => void
-  renameSession: (displayName: string) => Promise<void>
+  renameSession: (bridgeID: string, displayName: string) => Promise<void>
   sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => void
   refreshSessions: () => void
 }

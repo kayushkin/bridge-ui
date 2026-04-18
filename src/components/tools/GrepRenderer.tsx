@@ -2,16 +2,9 @@ import type { ToolRendererProps } from './types'
 import { registerToolRenderer } from './registry'
 
 function GrepRenderer({ tool, running }: ToolRendererProps) {
-  let pattern = ''
-  let path = ''
-
-  if (tool.input) {
-    try {
-      const parsed = JSON.parse(tool.input)
-      pattern = parsed.pattern ?? parsed.query ?? ''
-      path = parsed.path ?? parsed.dir ?? ''
-    } catch { /* ignore */ }
-  }
+  const input = tool.input ?? {}
+  const pattern = (input.pattern ?? input.query ?? '') as string
+  const path = (input.path ?? input.dir ?? '') as string
 
   return (
     <div className={`bc-tool-item ${tool.error ? 'bc-tool-item-error' : ''} ${running ? 'bc-tool-item-running' : ''}`}>

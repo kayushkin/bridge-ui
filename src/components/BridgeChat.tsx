@@ -4,10 +4,11 @@ import { useBridgeConfig } from '../context'
 import { useBridgeSession } from '../useBridgeSession'
 import { useBridgePrefs } from '../useBridgePrefs'
 import { useBridgeInstances } from '../useBridgeInstances'
+import { useBridgeFolders, type UseBridgeFoldersReturn } from '../useBridgeFolders'
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
-import { ToolItem } from './tools'
-import type { HarnessInfo, Message, MessageMeta } from '../types'
+import { ToolItem, ToolsSection } from './tools'
+import type { HarnessInfo, Message, MessageMeta, SessionInfo } from '../types'
 
 interface StoreModel {
   id: string
@@ -143,7 +144,7 @@ function Thread({ messages, loading, uiState, activity, error, agent }: {
     <div className="bc-thread">
       {error && <div className="bridge-error">{error}</div>}
       {messages.map((m, i) => {
-        const tools = (m.meta?.tools || []) as Array<{ tool: string; input?: string; output?: string; error?: boolean }>
+        const tools = m.meta?.tools || []
         const isStreaming = m.role === 'assistant' && !m.done
         return (
           <div key={m.id || i} className={`bc-msg bc-msg-${m.role}`}>
@@ -158,18 +159,14 @@ function Thread({ messages, loading, uiState, activity, error, agent }: {
                 </div>
                 <div className="bc-msg-split-tools">
                   <div className="bc-split-tools-header">Tools</div>
-                  {tools.map((t, ti) => <ToolItem key={ti} tool={t} running={!t.output && !t.error} />)}
+                  {tools.map((t, ti) => <ToolItem key={ti} tool={t} running={!t.output && !t.error} turnDone={false} />)}
                 </div>
               </div>
             ) : (
               <>
                 <div className="bc-msg-content">{m.content}</div>
                 {tools.length > 0 && (
-                  <div className="bc-msg-tools">
-                    {tools.map((t, ti) => (
-                      <ToolItem key={ti} tool={t} running={false} />
-                    ))}
-                  </div>
+                  <ToolsSection tools={tools} turnDone={!!m.done} />
                 )}
               </>
             )}
@@ -390,18 +387,145 @@ function HarnessTabBar({ instances, harnesses, sessions, selectedInstance, onSel
 }
 
 /* ── Inline Session List ── */
-function SessionList({ sessions, activeSession, onSelect, onNewSession, connected, getDisplayName, onRename }: {
-  sessions: Array<{ bridge_id: string; agent_id?: string; display_name: string; harness: string; state: string; updated_at: string }>
+
+const COLLAPSED_KEY = 'bridge-folder-collapsed'
+
+function loadCollapsed(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '{}') } catch { return {} }
+}
+function saveCollapsed(next: Record<string, boolean>) {
+  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+}
+
+interface SidebarSession {
+  bridge_id: string
+  agent_id?: string
+  display_name: string
+  harness: string
+  state: string
+  updated_at: string
+  folder_name?: string
+}
+
+interface CtxMenuState {
+  type: 'session' | 'folder'
+  id: string
+  x: number
+  y: number
+}
+
+function SessionList({ sessions, activeSession, onSelect, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange }: {
+  sessions: SidebarSession[]
   activeSession: string
   onSelect: (id: string) => void
   onNewSession: () => void
   connected: boolean
-  getDisplayName: (session: { bridge_id: string; agent_id?: string; display_name: string; harness: string }) => string
+  getDisplayName: (session: SidebarSession) => string
   onRename: (id: string, name: string) => void
+  folders: UseBridgeFoldersReturn
+  onAfterFolderChange: () => void
 }) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed)
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null)
+  const [showNewFolder, setShowNewFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const newFolderRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => { setCtxMenu(null); setShowNewFolder(false) }
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [ctxMenu])
+
+  useEffect(() => {
+    if (showNewFolder) newFolderRef.current?.focus()
+  }, [showNewFolder])
+
   const sorted = useMemo(() =>
     [...sessions].sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [sessions]
+  )
+
+  const { unfiled, grouped } = useMemo(() => {
+    const known = new Set(folders.folderOrder)
+    const buckets = new Map<string, SidebarSession[]>()
+    for (const f of folders.folderOrder) buckets.set(f, [])
+    const unfiled: SidebarSession[] = []
+    for (const s of sorted) {
+      const fn = s.folder_name ?? ''
+      if (fn && known.has(fn)) buckets.get(fn)!.push(s)
+      else unfiled.push(s)
+    }
+    const grouped = folders.folderOrder.map(name => ({ name, sessions: buckets.get(name)! }))
+    return { unfiled, grouped }
+  }, [sorted, folders.folderOrder])
+
+  const toggleFolder = (name: string) => {
+    setCollapsed(prev => {
+      const next = { ...prev, [name]: !prev[name] }
+      saveCollapsed(next)
+      return next
+    })
+  }
+
+  const openSessionMenu = (e: React.MouseEvent, sessionId: string) => {
+    e.preventDefault(); e.stopPropagation()
+    setCtxMenu({ type: 'session', id: sessionId, x: e.clientX, y: e.clientY })
+    setShowNewFolder(false)
+  }
+
+  const openFolderMenu = (e: React.MouseEvent, name: string) => {
+    e.preventDefault(); e.stopPropagation()
+    setCtxMenu({ type: 'folder', id: name, x: e.clientX, y: e.clientY })
+    setShowNewFolder(false)
+  }
+
+  const moveToFolder = async (sessionId: string, folder: string) => {
+    setCtxMenu(null); setShowNewFolder(false)
+    await folders.setSessionFolder(sessionId, folder)
+    onAfterFolderChange()
+  }
+
+  const handleCreateFolder = async () => {
+    const name = newFolderName.trim()
+    if (!name) return
+    const targetSession = ctxMenu?.type === 'session' ? ctxMenu.id : null
+    setCtxMenu(null); setShowNewFolder(false); setNewFolderName('')
+    await folders.createFolder(name)
+    if (targetSession) {
+      await folders.setSessionFolder(targetSession, name)
+      onAfterFolderChange()
+    }
+  }
+
+  const handleDeleteFolder = async (name: string) => {
+    setCtxMenu(null)
+    await folders.deleteFolder(name)
+    onAfterFolderChange()
+  }
+
+  const renderSession = (s: SidebarSession) => (
+    <button
+      key={s.bridge_id}
+      className={`bc-session-item ${s.bridge_id === activeSession ? 'bc-session-item-active' : ''}`}
+      onClick={() => onSelect(s.bridge_id)}
+      onContextMenu={e => openSessionMenu(e, s.bridge_id)}
+    >
+      <span className={`bc-sdot bc-sdot-${s.state}`} />
+      <EditableName
+        value={getDisplayName(s)}
+        onSave={name => onRename(s.bridge_id, name)}
+        className="bc-session-label"
+      />
+      <span
+        className="bc-session-menu-btn"
+        role="button"
+        tabIndex={0}
+        onClick={e => openSessionMenu(e, s.bridge_id)}
+        title="Move to folder"
+      >⋯</span>
+    </button>
   )
 
   return (
@@ -412,20 +536,197 @@ function SessionList({ sessions, activeSession, onSelect, onNewSession, connecte
       {sorted.length === 0 && (
         <div className="bc-session-list-empty">{connected ? 'No sessions yet' : 'Connecting...'}</div>
       )}
-      {sorted.map(s => (
-        <button
-          key={s.bridge_id}
-          className={`bc-session-item ${s.bridge_id === activeSession ? 'bc-session-item-active' : ''}`}
-          onClick={() => onSelect(s.bridge_id)}
+
+      {unfiled.map(renderSession)}
+
+      {grouped.map(({ name, sessions: entries }) => {
+        const isCollapsed = collapsed[name] ?? false
+        const hasActive = entries.some(s => s.bridge_id === activeSession)
+        return (
+          <div key={name}>
+            <button
+              className={`bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`}
+              onClick={() => toggleFolder(name)}
+              onContextMenu={e => openFolderMenu(e, name)}
+            >
+              <span className="bc-folder-chevron">{isCollapsed ? '▸' : '▾'}</span>
+              <span className="bc-folder-icon">📁</span>
+              <span className="bc-folder-name">{name}</span>
+              <span className="bc-folder-count">{entries.length}</span>
+            </button>
+            {!isCollapsed && entries.map(renderSession)}
+          </div>
+        )
+      })}
+
+      {ctxMenu && (
+        <div
+          className="bc-ctx-menu"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          onClick={e => e.stopPropagation()}
         >
-          <span className={`bc-sdot bc-sdot-${s.state}`} />
-          <EditableName
-            value={getDisplayName(s)}
-            onSave={name => onRename(s.bridge_id, name)}
-            className="bc-session-label"
-          />
-        </button>
-      ))}
+          {ctxMenu.type === 'session' && (
+            <>
+              <div className="bc-ctx-menu-label">Move to folder</div>
+              {(() => {
+                const sess = sessions.find(s => s.bridge_id === ctxMenu.id)
+                const current = sess?.folder_name ?? ''
+                return (
+                  <>
+                    {current && (
+                      <button className="bc-ctx-menu-item" onClick={() => moveToFolder(ctxMenu.id, '')}>
+                        ↩ Remove from folder
+                      </button>
+                    )}
+                    {folders.folderOrder.map(f => (
+                      <button
+                        key={f}
+                        className={`bc-ctx-menu-item ${current === f ? 'bc-ctx-menu-item-active' : ''}`}
+                        onClick={() => moveToFolder(ctxMenu.id, f)}
+                      >📁 {f}</button>
+                    ))}
+                  </>
+                )
+              })()}
+              {showNewFolder ? (
+                <div className="bc-ctx-new-folder">
+                  <input
+                    ref={newFolderRef}
+                    className="bc-ctx-new-folder-input"
+                    value={newFolderName}
+                    onChange={e => setNewFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleCreateFolder()
+                      if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderName('') }
+                    }}
+                    placeholder="Folder name"
+                  />
+                  <button className="bc-ctx-new-folder-btn" onClick={handleCreateFolder}>✓</button>
+                </div>
+              ) : (
+                <button className="bc-ctx-menu-item" onClick={() => setShowNewFolder(true)}>
+                  + New folder
+                </button>
+              )}
+            </>
+          )}
+          {ctxMenu.type === 'folder' && (
+            <button className="bc-ctx-menu-item bc-ctx-menu-item-danger" onClick={() => handleDeleteFolder(ctxMenu.id)}>
+              Delete folder "{ctxMenu.id}"
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── System Prompt Modal ── */
+function SystemPromptModal({ info, onClose }: {
+  info: SessionInfo
+  onClose: () => void
+}) {
+  const hasPrompt = !!info.system_prompt || !!info.append_system_prompt
+  return (
+    <div className="bc-modal-overlay" onClick={onClose}>
+      <div className="bc-modal" onClick={e => e.stopPropagation()}>
+        <div className="bc-modal-header">
+          <h3>System Prompt</h3>
+          <button className="bc-modal-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="bc-modal-body">
+          {info.working_dir && (
+            <div className="bc-info-row"><span className="bc-info-label">Working directory</span><code>{info.working_dir}</code></div>
+          )}
+          {info.model && (
+            <div className="bc-info-row"><span className="bc-info-label">Model</span><code>{info.model}</code></div>
+          )}
+          {info.permission_mode && (
+            <div className="bc-info-row"><span className="bc-info-label">Permission mode</span><code>{info.permission_mode}</code></div>
+          )}
+          {info.system_prompt && (
+            <>
+              <div className="bc-info-label">System prompt (replaces default)</div>
+              <pre className="bc-prompt-block">{info.system_prompt}</pre>
+            </>
+          )}
+          {info.append_system_prompt && (
+            <>
+              <div className="bc-info-label">Appended to default system prompt</div>
+              <pre className="bc-prompt-block">{info.append_system_prompt}</pre>
+            </>
+          )}
+          {!hasPrompt && (
+            <div className="bc-info-empty">
+              No custom system prompt was set at session start. The agent is running with its default prompt plus any CLAUDE.md files it discovers in the working directory.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Tools Panel ── */
+function ToolsPanel({ info }: { info: SessionInfo }) {
+  const tools = info.tools ?? []
+  const slashCommands = info.slash_commands ?? []
+  const agents = info.agents ?? []
+  const skills = info.skills ?? []
+  const mcpServers = info.mcp_servers ?? []
+
+  if (tools.length === 0 && slashCommands.length === 0 && agents.length === 0 && skills.length === 0 && mcpServers.length === 0) {
+    return <div className="bc-tools-panel"><div className="bc-info-empty">No tools reported yet. The harness will emit this after its first init.</div></div>
+  }
+
+  return (
+    <div className="bc-tools-panel">
+      {tools.length > 0 && (
+        <div className="bc-tools-section">
+          <div className="bc-tools-section-header">Tools ({tools.length})</div>
+          <div className="bc-tools-grid">
+            {tools.map(t => (
+              <span key={t.name} className="bc-tool-chip" title={t.description || undefined}>{t.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {slashCommands.length > 0 && (
+        <div className="bc-tools-section">
+          <div className="bc-tools-section-header">Slash commands ({slashCommands.length})</div>
+          <div className="bc-tools-grid">
+            {slashCommands.map(c => <span key={c} className="bc-tool-chip">/{c}</span>)}
+          </div>
+        </div>
+      )}
+      {agents.length > 0 && (
+        <div className="bc-tools-section">
+          <div className="bc-tools-section-header">Sub-agents ({agents.length})</div>
+          <div className="bc-tools-grid">
+            {agents.map(a => <span key={a} className="bc-tool-chip">{a}</span>)}
+          </div>
+        </div>
+      )}
+      {skills.length > 0 && (
+        <div className="bc-tools-section">
+          <div className="bc-tools-section-header">Skills ({skills.length})</div>
+          <div className="bc-tools-grid">
+            {skills.map(s => <span key={s} className="bc-tool-chip">{s}</span>)}
+          </div>
+        </div>
+      )}
+      {mcpServers.length > 0 && (
+        <div className="bc-tools-section">
+          <div className="bc-tools-section-header">MCP servers ({mcpServers.length})</div>
+          <div className="bc-tools-grid">
+            {mcpServers.map(m => (
+              <span key={m.name} className="bc-tool-chip" title={m.status || undefined}>
+                {m.name}{m.status ? ` · ${m.status}` : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -475,12 +776,15 @@ export function BridgeChat() {
   const bridge = useBridgeSession()
   const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` })
   const instances = useBridgeInstances()
+  const folders = useBridgeFolders()
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [selectedInstance, setSelectedInstance] = useState('')
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
   const [configModel, setConfigModel] = useState('')
   const [configEffort, setConfigEffort] = useState('')
   const [showNewInstance, setShowNewInstance] = useState(false)
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false)
+  const [showTools, setShowTools] = useState(false)
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const pendingConfigRef = useRef<{ model?: string; effort?: string } | null>(null)
 
@@ -531,24 +835,20 @@ export function BridgeChat() {
       return
     }
     const agent = sess.agent_id ? sess.agent_id : generateDefaultAgent(sess.harness)
-    const customName = bridgePrefs.getSessionName(sess.bridge_id)
-    const displayName = customName || sess.display_name || agent
     setActiveChat({
       frontendId: sess.client_id || `fe_${sess.bridge_id}`,
       sessionId: sess.bridge_id,
       harness: sess.harness,
       agent,
-      displayName,
+      displayName: sess.display_name || agent,
     })
-  }, [bridge.activeSession, bridgePrefs])
+  }, [bridge.activeSession])
 
-  const getDisplayName = useCallback((session: { bridge_id: string; agent_id?: string; display_name: string; harness: string }): string => {
-    const customName = bridgePrefs.getSessionName(session.bridge_id)
-    if (customName) return customName
+  const getDisplayName = useCallback((session: { agent_id?: string; display_name: string; harness: string }): string => {
     if (session.display_name) return session.display_name
     if (session.agent_id) return session.agent_id
     return generateDefaultAgent(session.harness)
-  }, [bridgePrefs])
+  }, [])
 
   const selectInstance = useCallback((instanceId: string) => {
     setSelectedInstance(instanceId)
@@ -567,21 +867,20 @@ export function BridgeChat() {
     if (!selectedInstance || !selectedHarness) return
     const frontendId = generateFrontendId()
     const agentId = generateDefaultAgent(selectedHarness)
-    const instanceName = instances.instanceMap.get(selectedInstance)?.name ?? agentId
 
     setActiveChat({
       frontendId,
       sessionId: null,
       harness: selectedHarness,
       agent: agentId,
-      displayName: instanceName,
+      displayName: agentId,
     })
 
     const sess = await bridge.createSession({
       harness: selectedHarness,
       instanceId: selectedInstance,
       agentId,
-      displayName: instanceName,
+      displayName: '',
       clientId: frontendId,
     })
     if (sess) {
@@ -598,7 +897,7 @@ export function BridgeChat() {
     } else {
       setActiveChat(null)
     }
-  }, [bridge, bridgePrefs, selectedInstance, selectedHarness, instances.instanceMap])
+  }, [bridge, bridgePrefs, selectedInstance, selectedHarness])
 
   const harnessAvailable = useMemo(() => {
     if (!selectedHarness) return false
@@ -643,8 +942,8 @@ export function BridgeChat() {
   }, [bridge, bridgePrefs, selectedHarness])
 
   const handleRenameSession = useCallback((id: string, name: string) => {
-    bridgePrefs.setSessionName(id, name)
-  }, [bridgePrefs])
+    bridge.renameSession(id, name)
+  }, [bridge])
 
   const handleCreateInstance = useCallback(async (data: { name: string; harness_type: string; host: string; transport: 'local' | 'ssh'; working_dir: string; max_concurrent_sessions: number }) => {
     const inst = await instances.createInstance(data)
@@ -676,6 +975,8 @@ export function BridgeChat() {
           connected={bridge.connected && harnessAvailable}
           getDisplayName={getDisplayName}
           onRename={handleRenameSession}
+          folders={folders}
+          onAfterFolderChange={bridge.refreshSessions}
         />
         <div className="bc-chat-area">
           <SessionHeader
@@ -719,9 +1020,26 @@ export function BridgeChat() {
                 {capabilities.has('fork') && (
                   <button className="bc-ctrl-btn" onClick={handleFork} title="Fork session">Fork</button>
                 )}
+                {capabilities.has('system_prompt') && (
+                  <button
+                    className="bc-ctrl-btn"
+                    onClick={() => setShowSystemPrompt(true)}
+                    disabled={!bridge.activeSession.info}
+                    title={bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts'}
+                  >System Prompt</button>
+                )}
+                {capabilities.has('tools') && (
+                  <button
+                    className={`bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`}
+                    onClick={() => setShowTools(s => !s)}
+                    disabled={!bridge.activeSession.info}
+                    title={bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts'}
+                  >Tools{bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''}</button>
+                )}
               </>
             )}
           </div>
+          {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
           <Composer
             connected={bridge.connected && !!bridge.activeSession}
             streaming={bridge.uiState === 'running'}
@@ -737,6 +1055,12 @@ export function BridgeChat() {
           harnesses={harnesses}
           onCreate={handleCreateInstance}
           onCancel={() => setShowNewInstance(false)}
+        />
+      )}
+      {showSystemPrompt && bridge.activeSession?.info && (
+        <SystemPromptModal
+          info={bridge.activeSession.info}
+          onClose={() => setShowSystemPrompt(false)}
         />
       )}
     </div>

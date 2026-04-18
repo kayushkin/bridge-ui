@@ -43,6 +43,8 @@ export { connectSSE } from './bridgeSSE'
 export { useBridgeSession } from './useBridgeSession'
 export { useBridgeInstances } from './useBridgeInstances'
 export { useBridgePrefs } from './useBridgePrefs'
+export { useBridgeFolders } from './useBridgeFolders'
+export type { UseBridgeFoldersReturn } from './useBridgeFolders'
 
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo } from './utils'

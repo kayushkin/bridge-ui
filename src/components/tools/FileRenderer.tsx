@@ -2,16 +2,9 @@ import type { ToolRendererProps } from './types'
 import { registerToolRenderer } from './registry'
 
 function FileRenderer({ tool, running }: ToolRendererProps) {
-  let path = ''
-  let content = ''
-
-  if (tool.input) {
-    try {
-      const parsed = JSON.parse(tool.input)
-      path = parsed.path ?? parsed.file_path ?? parsed.file ?? ''
-      content = parsed.content ?? parsed.new_string ?? parsed.new_text ?? ''
-    } catch { /* ignore */ }
-  }
+  const input = tool.input ?? {}
+  const path = (input.path ?? input.file_path ?? input.file ?? '') as string
+  const content = (input.content ?? input.new_string ?? input.new_text ?? '') as string
 
   const label = tool.tool.replace(/_/g, ' ')
   const filename = path ? path.split('/').pop() : ''

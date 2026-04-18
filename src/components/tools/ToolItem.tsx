@@ -1,8 +1,22 @@
+import { useEffect, useRef, useState } from 'react'
 import type { ToolEvent } from '../../types'
 import { getToolRenderer } from './registry'
 import DefaultRenderer from './DefaultRenderer'
 
-export default function ToolItem({ tool, running }: { tool: ToolEvent; running: boolean }) {
+export default function ToolItem({ tool, running, turnDone = false }: { tool: ToolEvent; running: boolean; turnDone?: boolean }) {
   const Renderer = getToolRenderer(tool.tool) ?? DefaultRenderer
-  return <Renderer tool={tool} running={running} />
+  const [collapsed, setCollapsed] = useState(turnDone)
+  const prevTurnDone = useRef(turnDone)
+
+  useEffect(() => {
+    if (turnDone && !prevTurnDone.current) setCollapsed(true)
+    prevTurnDone.current = turnDone
+  }, [turnDone])
+
+  const cls = `bc-tool-wrap bc-tool-collapsible${collapsed ? ' bc-tool-collapsed' : ''}`
+  return (
+    <div className={cls} onClick={() => setCollapsed(c => !c)}>
+      <Renderer tool={tool} running={running} />
+    </div>
+  )
 }

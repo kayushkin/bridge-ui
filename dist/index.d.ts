@@ -1,11 +1,24 @@
 export type { TokenUsage, Cost, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, BridgeInstance, BridgeSession, } from './types';
 export type { FetchFn, ToolEvent, MessageMeta, Message, SessionUIState, ActivityKind, BridgeEvent, CreateSessionOpts, UseBridgeSessionReturn, } from './types';
 export { HARNESS_LABEL, HARNESS_EMOJI, TRANSPORT_LABEL } from './constants';
-export { BridgeContext, useBridgeConfig } from './context';
-export type { BridgeConfig } from './context';
+export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context';
+export type { BridgeConfig, BridgeRoutes } from './context';
 export { BridgeProvider } from './provider';
 export { connectSSE } from './bridgeSSE';
 export { useBridgeSession } from './useBridgeSession';
 export { useBridgeInstances } from './useBridgeInstances';
 export { useBridgePrefs } from './useBridgePrefs';
+export { useBridgeFolders } from './useBridgeFolders';
+export type { UseBridgeFoldersReturn } from './useBridgeFolders';
+export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
+export { BridgeLayout } from './components/BridgeLayout';
+export { BridgeChat } from './components/BridgeChat';
+export { BridgeSessions } from './components/BridgeSessions';
+export { BridgeInstances } from './components/BridgeInstances';
+export { BridgeSettings } from './components/BridgeSettings';
+export { BridgeAuth } from './components/BridgeAuth';
+export { BridgeUsage } from './components/BridgeUsage';
+export { BridgeConformance } from './components/BridgeConformance';
+export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
+export type { ToolRendererProps } from './components/tools';
 //# sourceMappingURL=index.d.ts.map

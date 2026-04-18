@@ -13,7 +13,6 @@ function normalizeMessage(m, index, sessionId) {
         id: m.id ?? `hist-${index}`,
         sessionId: m.sessionId ?? sessionId,
     };
-    // Pull top-level tools into meta.tools for uniform access
     if (m.tools?.length) {
         result.meta = { ...result.meta, tools: m.tools, toolCalls: m.tools.length };
     }
@@ -202,7 +201,7 @@ export function useBridgeSession() {
                     const name = tc.name || '';
                     streamBuffer.current.tools.push({
                         tool: name,
-                        input: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input),
+                        input: tc.input,
                     });
                     setActivity({ kind: 'tool', name });
                     scheduleFlush();
@@ -278,6 +277,13 @@ export function useBridgeSession() {
                     else if (sys?.subtype === 'retry') {
                         setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`);
                     }
+                    break;
+                }
+                case 'session_info': {
+                    // Harness reported its effective system prompt + available tools.
+                    // The server has persisted it on the session row — reload so the
+                    // UI sees session.info populated.
+                    refreshSessionsImpl();
                     break;
                 }
                 case 'error': {
@@ -572,21 +578,18 @@ export function useBridgeSession() {
             setError(`Fork failed: ${err}`);
         }
     }, [fetchFn, basePath, activeSessionId, refreshSessionsImpl, selectSession]);
-    const renameSession = useCallback(async (displayName) => {
-        if (!activeSessionId)
+    const renameSession = useCallback(async (bridgeID, displayName) => {
+        const res = await fetchFn(`${basePath}/sessions/${bridgeID}/rename`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ display_name: displayName }),
+        });
+        if (!res.ok) {
+            setError(`Rename failed: ${res.statusText}`);
             return;
-        try {
-            await fetchFn(`${basePath}/sessions/${activeSessionId}/rename`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ display_name: displayName }),
-            });
-            await refreshSessionsImpl();
         }
-        catch {
-            // Rename endpoint may not exist — callers can use prefs as fallback
-        }
-    }, [fetchFn, basePath, activeSessionId, refreshSessionsImpl]);
+        await refreshSessionsImpl();
+    }, [fetchFn, basePath, refreshSessionsImpl]);
     const sendConfig = useCallback(async (config) => {
         if (!activeSessionId)
             return;

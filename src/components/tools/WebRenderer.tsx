@@ -2,16 +2,9 @@ import type { ToolRendererProps } from './types'
 import { registerToolRenderer } from './registry'
 
 function WebRenderer({ tool, running }: ToolRendererProps) {
-  let query = ''
-  let url = ''
-
-  if (tool.input) {
-    try {
-      const parsed = JSON.parse(tool.input)
-      query = parsed.query ?? parsed.search ?? ''
-      url = parsed.url ?? ''
-    } catch { /* ignore */ }
-  }
+  const input = tool.input ?? {}
+  const query = (input.query ?? input.search ?? '') as string
+  const url = (input.url ?? '') as string
 
   const isSearch = tool.tool === 'WebSearch' || tool.tool === 'web_search'
 

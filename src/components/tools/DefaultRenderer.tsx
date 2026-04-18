@@ -1,14 +1,9 @@
 import type { ToolRendererProps } from './types'
 
-function formatDetail(input?: string): string {
+function formatDetail(input?: Record<string, unknown>): string {
   if (!input) return ''
-  try {
-    const parsed = JSON.parse(input)
-    const keys = Object.keys(parsed).slice(0, 2)
-    return keys.map(k => `${k}=${JSON.stringify(parsed[k]).slice(0, 30)}`).join(', ')
-  } catch {
-    return input.slice(0, 50)
-  }
+  const keys = Object.keys(input).slice(0, 2)
+  return keys.map(k => `${k}=${JSON.stringify(input[k]).slice(0, 30)}`).join(', ')
 }
 
 export default function DefaultRenderer({ tool, running }: ToolRendererProps) {

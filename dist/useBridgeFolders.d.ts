@@ -1,0 +1,10 @@
+export interface UseBridgeFoldersReturn {
+    folderOrder: string[];
+    refresh: () => Promise<void>;
+    createFolder: (name: string) => Promise<void>;
+    deleteFolder: (name: string) => Promise<void>;
+    renameFolder: (oldName: string, newName: string) => Promise<void>;
+    setSessionFolder: (sessionId: string, folder: string) => Promise<void>;
+}
+export declare function useBridgeFolders(): UseBridgeFoldersReturn;
+//# sourceMappingURL=useBridgeFolders.d.ts.map

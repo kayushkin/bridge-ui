@@ -1,11 +1,11 @@
-import type { TokenUsage, Cost, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent } from '@kayushkin/llm-bridge-types';
-export type { TokenUsage, Cost, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, };
+import type { TokenUsage, Cost, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo } from '@kayushkin/llm-bridge-types';
+export type { TokenUsage, Cost, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 export interface ToolEvent {
     tool: string;
-    input?: string;
+    input?: Record<string, unknown>;
     output?: string;
     error?: boolean;
 }
@@ -79,7 +79,7 @@ export interface UseBridgeSessionReturn {
     stop: () => void;
     compact: (summary?: string) => void;
     fork: (displayName?: string) => void;
-    renameSession: (displayName: string) => Promise<void>;
+    renameSession: (bridgeID: string, displayName: string) => Promise<void>;
     sendConfig: (config: {
         model?: string;
         effort?: string;

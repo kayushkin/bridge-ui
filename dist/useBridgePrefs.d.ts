@@ -17,8 +17,6 @@ export declare function useBridgePrefs(options?: BridgePrefsOptions): {
     getDefaults: (harness: string) => HarnessDefaults;
     getLastInstance: (harness: string) => string | null;
     getLastSession: (harness: string) => string | null;
-    setSessionName: (sessionId: string, name: string) => void;
-    getSessionName: (sessionId: string) => string | null;
 };
 export {};
 //# sourceMappingURL=useBridgePrefs.d.ts.map
