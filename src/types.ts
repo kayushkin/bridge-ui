@@ -95,8 +95,12 @@ export interface Message {
   meta?: MessageMeta
   raw?: Record<string, unknown>
   done?: boolean
-  // Client-side fields (not from server)
+  // id is the canonical bridge-server MessageID (msg_<ULID>) once known.
+  // Before /send returns, optimistic user messages key off clientId instead.
   id?: string
+  clientId?: string         // optimistic-only id, replaced by canonical id on /send response
+  harnessMessageId?: string // harness-native id, mirrors the server's harness_message_id
+  lastEventRowId?: number   // highest SSE RowID applied to this message — dedupes replays
   orchestrator?: string
   agent?: string
   sessionId?: string

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
 import { connectSSE } from './bridgeSSE';
-function emptyBuffer() {
-    return { content: '', thinking: '', tools: [], meta: {}, done: false };
-}
 // --- Normalize messages from /messages API ---
 // The server returns MaterializedMessage with tools at the top level and meta as
 // a ResultEvent. Merge top-level tools into meta for uniform access.
@@ -11,12 +8,98 @@ function normalizeMessage(m, index, sessionId) {
     const result = {
         ...m,
         id: m.id ?? `hist-${index}`,
+        harnessMessageId: m.harnessMessageId ?? m.harness_message_id,
         sessionId: m.sessionId ?? sessionId,
     };
     if (m.tools?.length) {
         result.meta = { ...result.meta, tools: m.tools, toolCalls: m.tools.length };
     }
     return result;
+}
+function applyEvent(prev, ev, sessionId) {
+    const msgId = ev.data.message_id;
+    if (!msgId)
+        return prev; // bookkeeping event (system, session_state, …) — no bubble
+    const rowId = ev.id ? Number(ev.id) : 0;
+    const idx = prev.findIndex(m => m.id === msgId);
+    if (idx === -1) {
+        const role = ev.type === 'user_message' ? 'user' : 'assistant';
+        const fresh = {
+            id: msgId,
+            harnessMessageId: ev.data.harness_message_id,
+            role,
+            content: '',
+            timestamp: ev.data.timestamp || new Date().toISOString(),
+            sessionId,
+            lastEventRowId: rowId,
+        };
+        return [...prev, applyDelta(fresh, ev)];
+    }
+    const existing = prev[idx];
+    if (rowId && existing.lastEventRowId && rowId <= existing.lastEventRowId) {
+        return prev; // already applied — replay no-op
+    }
+    const updated = {
+        ...applyDelta(existing, ev),
+        lastEventRowId: rowId || existing.lastEventRowId,
+        harnessMessageId: existing.harnessMessageId ?? ev.data.harness_message_id,
+    };
+    const next = prev.slice();
+    next[idx] = updated;
+    return next;
+}
+function applyDelta(m, ev) {
+    switch (ev.type) {
+        case 'user_message': {
+            const result = ev.data.result;
+            return { ...m, content: result?.text ?? m.content, done: true };
+        }
+        case 'stream': {
+            const stream = ev.data.stream;
+            const d = stream?.delta;
+            if (d?.type === 'text_delta')
+                return { ...m, content: m.content + (d.text || '') };
+            if (d?.type === 'thinking_delta')
+                return { ...m, thinking: (m.thinking || '') + (d.thinking || '') };
+            return m;
+        }
+        case 'thinking': {
+            const t = ev.data.thinking;
+            return { ...m, thinking: (m.thinking || '') + (t?.text || '') };
+        }
+        case 'tool_call': {
+            const tc = ev.data.tool_call;
+            if (!tc)
+                return m;
+            const tools = [...(m.meta?.tools || []), { tool: tc.name || '', input: tc.input }];
+            return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } };
+        }
+        case 'tool_result': {
+            const tr = ev.data.tool_result;
+            if (!tr)
+                return m;
+            const tools = (m.meta?.tools || []).slice();
+            // Match by name (since tool_id isn't preserved on the client tools[] yet)
+            // and prefer the most recent un-resolved tool with that name.
+            for (let i = tools.length - 1; i >= 0; i--) {
+                if (tools[i].tool === tr.name && !tools[i].output) {
+                    tools[i] = { ...tools[i], output: tr.output, error: tr.is_error };
+                    break;
+                }
+            }
+            return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } };
+        }
+        case 'result': {
+            const result = ev.data.result;
+            const meta = { ...(result || {}), rawStats: ev.data };
+            return { ...m, content: result?.text || m.content, meta: { ...m.meta, ...meta }, done: true };
+        }
+        case 'error': {
+            return { ...m, done: true };
+        }
+        default:
+            return m;
+    }
 }
 // --- Debounce helper ---
 function debounce(fn, ms) {
@@ -45,10 +128,6 @@ export function useBridgeSession() {
     const wasInterrupted = useRef(false);
     const sseAbort = useRef(null);
     const lastEventId = useRef(undefined);
-    const streamBuffer = useRef(emptyBuffer());
-    const streamMsgId = useRef(null);
-    const lastStreamMsgId = useRef(null); // survives session_state/close clearing streamMsgId
-    const rafId = useRef(0);
     const activeSessionRef = useRef(null);
     const historyLoadId = useRef(0);
     // --- Session refresh (debounced) ---
@@ -92,52 +171,11 @@ export function useBridgeSession() {
             return 'idle';
         return activeSession.state;
     }, [activeSession]);
-    // --- SSE flush ---
-    const flushStream = useCallback(() => {
-        rafId.current = 0;
-        const msgId = streamMsgId.current;
-        if (!msgId)
-            return;
-        const buf = streamBuffer.current;
-        const snapshot = { ...buf };
-        buf.content = '';
-        buf.thinking = '';
-        setMessages(prev => prev.map(m => {
-            if (m.id !== msgId)
-                return m;
-            const updated = { ...m };
-            if (snapshot.content)
-                updated.content = m.content + snapshot.content;
-            if (snapshot.thinking)
-                updated.thinking = (m.thinking || '') + snapshot.thinking;
-            if (snapshot.tools.length > 0) {
-                const tools = [...(m.meta?.tools || []), ...snapshot.tools];
-                updated.meta = { ...m.meta, tools, toolCalls: tools.length };
-                buf.tools = [];
-            }
-            if (Object.keys(snapshot.meta).length > 0) {
-                updated.meta = { ...updated.meta, ...snapshot.meta };
-            }
-            if (snapshot.done) {
-                updated.done = true;
-            }
-            return updated;
-        }));
-    }, []);
-    const scheduleFlush = useCallback(() => {
-        if (!rafId.current) {
-            rafId.current = requestAnimationFrame(flushStream);
-        }
-    }, [flushStream]);
     // --- SSE connection ---
     const closeSSE = useCallback(() => {
         if (sseAbort.current) {
             sseAbort.current.abort();
             sseAbort.current = null;
-        }
-        if (rafId.current) {
-            cancelAnimationFrame(rafId.current);
-            rafId.current = 0;
         }
     }, []);
     const startSSE = useCallback((sessionId) => {
@@ -153,202 +191,84 @@ export function useBridgeSession() {
                     handleSSEEvent(event, sessionId);
                 }
             }
-            catch (err) {
+            catch {
                 if (abort.signal.aborted)
                     return;
-                if (streamMsgId.current) {
-                    streamBuffer.current.done = true;
-                    scheduleFlush();
-                    streamMsgId.current = null;
-                }
                 setActivity({ kind: 'idle' });
             }
         })();
         function handleSSEEvent(event, sessId) {
             const { type, data } = event;
+            // Apply the event to the message store. A no-op for bookkeeping events
+            // (system, session_state, session_info) which carry no message_id.
+            setMessages(prev => applyEvent(prev, event, sessId));
+            // Activity / sidebar / error side effects.
             switch (type) {
                 case 'stream': {
                     const delta = data.stream?.delta;
-                    if (!delta)
-                        return;
-                    ensureStreamingMsg(sessId);
-                    if (delta.type === 'text_delta') {
-                        streamBuffer.current.content += delta.text || '';
-                        setActivity({ kind: 'streaming' });
-                    }
-                    else if (delta.type === 'thinking_delta') {
-                        streamBuffer.current.thinking += delta.thinking || '';
+                    if (delta?.type === 'thinking_delta')
                         setActivity({ kind: 'thinking' });
-                    }
-                    scheduleFlush();
+                    else
+                        setActivity({ kind: 'streaming' });
                     break;
                 }
-                case 'thinking': {
-                    const text = data.thinking?.text || '';
-                    if (!text)
-                        return;
-                    ensureStreamingMsg(sessId);
-                    streamBuffer.current.thinking += text;
+                case 'thinking':
                     setActivity({ kind: 'thinking' });
-                    scheduleFlush();
                     break;
-                }
                 case 'tool_call': {
                     const tc = data.tool_call;
-                    if (!tc)
-                        return;
-                    ensureStreamingMsg(sessId);
-                    const name = tc.name || '';
-                    streamBuffer.current.tools.push({
-                        tool: name,
-                        input: tc.input,
-                    });
-                    setActivity({ kind: 'tool', name });
-                    scheduleFlush();
+                    setActivity({ kind: 'tool', name: tc?.name || '' });
                     break;
                 }
-                case 'tool_result': {
-                    const tr = data.tool_result;
-                    if (!tr)
-                        return;
-                    setMessages(prev => {
-                        const msgId = streamMsgId.current;
-                        if (!msgId)
-                            return prev;
-                        return prev.map(m => {
-                            if (m.id !== msgId)
-                                return m;
-                            const tools = [...(m.meta?.tools || []), ...streamBuffer.current.tools];
-                            streamBuffer.current.tools = [];
-                            for (let i = tools.length - 1; i >= 0; i--) {
-                                if (tools[i].tool === tr.name && !tools[i].output) {
-                                    tools[i] = { ...tools[i], output: tr.output, error: tr.is_error };
-                                    break;
-                                }
-                            }
-                            return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } };
-                        });
-                    });
+                case 'tool_result':
                     setActivity({ kind: 'streaming' });
                     break;
-                }
-                case 'result': {
-                    const result = data.result;
-                    if (!result)
-                        return;
-                    if (rafId.current) {
-                        cancelAnimationFrame(rafId.current);
-                        rafId.current = 0;
-                    }
-                    flushStream();
-                    // result is a ResultEvent — use it directly as meta.
-                    const meta = {
-                        ...result,
-                        rawStats: data,
-                    };
-                    // Use lastStreamMsgId as fallback — session_state/close may have
-                    // already cleared streamMsgId before result arrives.
-                    const msgId = streamMsgId.current || lastStreamMsgId.current;
-                    setMessages(prev => {
-                        if (!msgId)
-                            return prev;
-                        return prev.map(m => {
-                            if (m.id !== msgId)
-                                return m;
-                            const content = result.text || m.content;
-                            return { ...m, content, meta: { ...m.meta, ...meta }, done: true };
-                        });
-                    });
-                    streamMsgId.current = null;
-                    streamBuffer.current = emptyBuffer();
+                case 'result':
                     setActivity({ kind: 'idle' });
                     wasInterrupted.current = false;
                     patchSessionState(sessId, 'completed');
                     refreshSessions();
                     break;
-                }
                 case 'system': {
                     const sys = data.system;
-                    if (sys?.subtype === 'harness_id_set') {
-                        // The harness has reported its canonical session ID.
-                        // Refresh sessions so the UI picks up the harness_id field.
+                    if (sys?.subtype === 'harness_id_set')
                         refreshSessionsImpl();
-                    }
-                    else if (sys?.subtype === 'retry') {
+                    else if (sys?.subtype === 'retry')
                         setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`);
-                    }
                     break;
                 }
-                case 'session_info': {
-                    // Harness reported its effective system prompt + available tools.
-                    // The server has persisted it on the session row — reload so the
-                    // UI sees session.info populated.
+                case 'session_info':
                     refreshSessionsImpl();
                     break;
-                }
                 case 'error': {
                     const errData = data.error;
                     setError(errData?.message || 'Stream error');
-                    if (streamMsgId.current) {
-                        streamBuffer.current.done = true;
-                        scheduleFlush();
-                        streamMsgId.current = null;
-                    }
                     setActivity({ kind: 'idle' });
                     patchSessionState(sessId, 'error');
                     break;
                 }
                 case 'session_state': {
                     const state = data.state?.state;
-                    if (state === 'idle' && !wasInterrupted.current) {
+                    if (state === 'idle' && !wasInterrupted.current)
                         setActivity({ kind: 'idle' });
-                        streamMsgId.current = null;
-                        streamBuffer.current = emptyBuffer();
-                    }
-                    else if (state === 'running') {
+                    else if (state === 'running')
                         wasInterrupted.current = false;
-                    }
-                    else if (state === 'completed') {
-                        // Don't reload history here — messages are already in the UI
-                        // from streaming. Calling loadHistory would replace them with
-                        // whatever log-store has materialized, which may be empty.
+                    else if (state === 'completed')
                         setActivity({ kind: 'idle' });
-                        streamMsgId.current = null;
-                        streamBuffer.current = emptyBuffer();
-                    }
                     if (state)
                         patchSessionState(sessId, state);
                     refreshSessions();
                     break;
                 }
-                case 'close': {
-                    streamMsgId.current = null;
-                    streamBuffer.current = emptyBuffer();
+                case 'close':
                     setActivity({ kind: 'idle' });
                     patchSessionState(sessId, 'completed');
                     closeSSE();
                     refreshSessions();
                     break;
-                }
             }
         }
-        function ensureStreamingMsg(sessId) {
-            if (streamMsgId.current)
-                return;
-            const id = `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-            streamMsgId.current = id;
-            lastStreamMsgId.current = id;
-            streamBuffer.current = emptyBuffer();
-            const newMsg = {
-                id,
-                role: 'assistant',
-                content: '',
-                timestamp: new Date().toISOString(),
-                sessionId: sessId,
-            };
-            setMessages(prev => [...prev, newMsg]);
-        }
-    }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions, patchSessionState]);
+    }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState]);
     // --- History loading ---
     const loadHistory = useCallback(async (sessionId) => {
         const loadId = ++historyLoadId.current;
@@ -376,8 +296,6 @@ export function useBridgeSession() {
     // --- Session selection ---
     const selectSession = useCallback((id) => {
         closeSSE();
-        streamMsgId.current = null;
-        streamBuffer.current = emptyBuffer();
         wasInterrupted.current = false;
         setError(null);
         setActivity({ kind: 'idle' });
@@ -449,15 +367,20 @@ export function useBridgeSession() {
     const send = useCallback(async (text) => {
         if (!activeSessionId || !text.trim())
             return;
-        const userMsg = {
-            id: `user-${Date.now()}`,
+        // Optimistic user message keyed by clientId. The /send response returns
+        // the canonical bridge MessageID; we patch the message in-place so when
+        // the user_message event later arrives via SSE it lands on the same row.
+        const clientId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const optimistic = {
+            id: clientId,
+            clientId,
             role: 'user',
             content: text,
             timestamp: new Date().toISOString(),
             sessionId: activeSessionId,
             done: true,
         };
-        setMessages(prev => [...prev, userMsg]);
+        setMessages(prev => [...prev, optimistic]);
         setError(null);
         wasInterrupted.current = false;
         try {
@@ -471,6 +394,10 @@ export function useBridgeSession() {
                 setError(`Send failed: ${err}`);
                 return;
             }
+            const body = await res.json().catch(() => ({}));
+            if (body.message_id) {
+                setMessages(prev => prev.map(m => m.clientId === clientId ? { ...m, id: body.message_id, clientId: undefined } : m));
+            }
             // Reset lastEventId so SSE connects without Last-Event-ID.
             // This makes the server use ListCurrentTurnEventsWithIDs (turn-aware
             // replay) instead of ListEventsSinceID (which replays everything
@@ -482,25 +409,29 @@ export function useBridgeSession() {
         catch (err) {
             setError(`Send failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, activeSession, startSSE, refreshSessions]);
+    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions]);
     const interrupt = useCallback(async () => {
         if (!activeSessionId)
             return;
         try {
             await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' });
             wasInterrupted.current = true;
-            if (streamMsgId.current) {
-                streamBuffer.current.done = true;
-                flushStream();
-                streamMsgId.current = null;
-            }
+            // Mark the open assistant message done so the typing indicator clears.
+            setMessages(prev => {
+                const idx = prev.length - 1;
+                if (idx < 0 || prev[idx].role !== 'assistant' || prev[idx].done)
+                    return prev;
+                const next = prev.slice();
+                next[idx] = { ...next[idx], done: true };
+                return next;
+            });
             setActivity({ kind: 'idle' });
             refreshSessions();
         }
         catch (err) {
             setError(`Interrupt failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, flushStream, refreshSessions]);
+    }, [fetchFn, basePath, activeSessionId, refreshSessions]);
     const resume = useCallback(async () => {
         if (!activeSessionId)
             return;
@@ -524,11 +455,14 @@ export function useBridgeSession() {
         try {
             await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' });
             closeSSE();
-            if (streamMsgId.current) {
-                streamBuffer.current.done = true;
-                flushStream();
-                streamMsgId.current = null;
-            }
+            setMessages(prev => {
+                const idx = prev.length - 1;
+                if (idx < 0 || prev[idx].role !== 'assistant' || prev[idx].done)
+                    return prev;
+                const next = prev.slice();
+                next[idx] = { ...next[idx], done: true };
+                return next;
+            });
             wasInterrupted.current = false;
             setActivity({ kind: 'idle' });
             refreshSessions();
@@ -536,7 +470,7 @@ export function useBridgeSession() {
         catch (err) {
             setError(`Stop failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, closeSSE, flushStream, refreshSessions]);
+    }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions]);
     const compact = useCallback(async (summary) => {
         if (!activeSessionId)
             return;

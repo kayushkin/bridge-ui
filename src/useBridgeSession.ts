@@ -3,31 +3,18 @@ import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
   BridgeEvent, ManagedSession, SessionUIState, ActivityKind,
-  Message, MessageMeta, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
+  Message, MessageMeta, CreateSessionOpts, UseBridgeSessionReturn,
 } from './types'
-
-// --- Stream accumulator (batches deltas into rAF flushes) ---
-
-interface StreamBuffer {
-  content: string
-  thinking: string
-  tools: ToolEvent[]
-  meta: Partial<MessageMeta>
-  done: boolean
-}
-
-function emptyBuffer(): StreamBuffer {
-  return { content: '', thinking: '', tools: [], meta: {}, done: false }
-}
 
 // --- Normalize messages from /messages API ---
 // The server returns MaterializedMessage with tools at the top level and meta as
 // a ResultEvent. Merge top-level tools into meta for uniform access.
 
-function normalizeMessage(m: Message, index: number, sessionId: string): Message {
+function normalizeMessage(m: Message & { harness_message_id?: string }, index: number, sessionId: string): Message {
   const result: Message = {
     ...m,
     id: m.id ?? `hist-${index}`,
+    harnessMessageId: m.harnessMessageId ?? m.harness_message_id,
     sessionId: m.sessionId ?? sessionId,
   }
 
@@ -36,6 +23,110 @@ function normalizeMessage(m: Message, index: number, sessionId: string): Message
   }
 
   return result
+}
+
+// --- Event-driven message reducer ---
+//
+// Every chat event from the server carries a canonical `message_id` (ULID,
+// minted by the bridge-server's harness manager). The reducer keys off that
+// id: events with a known id update the existing message; events with a new
+// id create one. Dedup uses the event's SSE RowID — replays after reconnect
+// are idempotent because we never re-apply a row we've already seen.
+
+interface EventEnvelope {
+  id?: string                          // SSE id = event RowID
+  type: string
+  data: Record<string, unknown> & {
+    message_id?: string
+    harness_message_id?: string
+    bridge_id?: string
+    timestamp?: string
+  }
+}
+
+function applyEvent(prev: Message[], ev: EventEnvelope, sessionId: string): Message[] {
+  const msgId = ev.data.message_id
+  if (!msgId) return prev   // bookkeeping event (system, session_state, …) — no bubble
+
+  const rowId = ev.id ? Number(ev.id) : 0
+  const idx = prev.findIndex(m => m.id === msgId)
+
+  if (idx === -1) {
+    const role = ev.type === 'user_message' ? 'user' : 'assistant'
+    const fresh: Message = {
+      id: msgId,
+      harnessMessageId: ev.data.harness_message_id,
+      role,
+      content: '',
+      timestamp: ev.data.timestamp || new Date().toISOString(),
+      sessionId,
+      lastEventRowId: rowId,
+    }
+    return [...prev, applyDelta(fresh, ev)]
+  }
+
+  const existing = prev[idx]
+  if (rowId && existing.lastEventRowId && rowId <= existing.lastEventRowId) {
+    return prev   // already applied — replay no-op
+  }
+  const updated: Message = {
+    ...applyDelta(existing, ev),
+    lastEventRowId: rowId || existing.lastEventRowId,
+    harnessMessageId: existing.harnessMessageId ?? ev.data.harness_message_id,
+  }
+  const next = prev.slice()
+  next[idx] = updated
+  return next
+}
+
+function applyDelta(m: Message, ev: EventEnvelope): Message {
+  switch (ev.type) {
+    case 'user_message': {
+      const result = ev.data.result as { text?: string } | undefined
+      return { ...m, content: result?.text ?? m.content, done: true }
+    }
+    case 'stream': {
+      const stream = ev.data.stream as { delta?: { type: string; text?: string; thinking?: string } } | undefined
+      const d = stream?.delta
+      if (d?.type === 'text_delta') return { ...m, content: m.content + (d.text || '') }
+      if (d?.type === 'thinking_delta') return { ...m, thinking: (m.thinking || '') + (d.thinking || '') }
+      return m
+    }
+    case 'thinking': {
+      const t = ev.data.thinking as { text?: string } | undefined
+      return { ...m, thinking: (m.thinking || '') + (t?.text || '') }
+    }
+    case 'tool_call': {
+      const tc = ev.data.tool_call as { tool_id?: string; name?: string; input?: Record<string, unknown> } | undefined
+      if (!tc) return m
+      const tools = [...(m.meta?.tools || []), { tool: tc.name || '', input: tc.input }]
+      return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } }
+    }
+    case 'tool_result': {
+      const tr = ev.data.tool_result as { tool_id?: string; name?: string; output?: string; is_error?: boolean } | undefined
+      if (!tr) return m
+      const tools = (m.meta?.tools || []).slice()
+      // Match by name (since tool_id isn't preserved on the client tools[] yet)
+      // and prefer the most recent un-resolved tool with that name.
+      for (let i = tools.length - 1; i >= 0; i--) {
+        if (tools[i].tool === tr.name && !tools[i].output) {
+          tools[i] = { ...tools[i], output: tr.output, error: tr.is_error }
+          break
+        }
+      }
+      return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } }
+    }
+    case 'result': {
+      const result = ev.data.result as MessageMeta & { text?: string } | undefined
+      const meta: MessageMeta = { ...(result || {}), rawStats: ev.data as Record<string, unknown> }
+      return { ...m, content: result?.text || m.content, meta: { ...m.meta, ...meta }, done: true }
+    }
+    case 'error': {
+      return { ...m, done: true }
+    }
+    default:
+      return m
+  }
 }
 
 // --- Debounce helper ---
@@ -66,10 +157,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const wasInterrupted = useRef(false)
   const sseAbort = useRef<AbortController | null>(null)
   const lastEventId = useRef<string | undefined>(undefined)
-  const streamBuffer = useRef<StreamBuffer>(emptyBuffer())
-  const streamMsgId = useRef<string | null>(null)
-  const lastStreamMsgId = useRef<string | null>(null)  // survives session_state/close clearing streamMsgId
-  const rafId = useRef<number>(0)
   const activeSessionRef = useRef<ManagedSession | null>(null)
   const historyLoadId = useRef(0)
 
@@ -122,54 +209,12 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     return activeSession.state as SessionUIState
   }, [activeSession])
 
-  // --- SSE flush ---
-
-  const flushStream = useCallback(() => {
-    rafId.current = 0
-    const msgId = streamMsgId.current
-    if (!msgId) return
-
-    const buf = streamBuffer.current
-    const snapshot = { ...buf }
-    buf.content = ''
-    buf.thinking = ''
-
-    setMessages(prev => prev.map(m => {
-      if (m.id !== msgId) return m
-      const updated = { ...m }
-      if (snapshot.content) updated.content = m.content + snapshot.content
-      if (snapshot.thinking) updated.thinking = (m.thinking || '') + snapshot.thinking
-      if (snapshot.tools.length > 0) {
-        const tools = [...(m.meta?.tools || []), ...snapshot.tools]
-        updated.meta = { ...m.meta, tools, toolCalls: tools.length }
-        buf.tools = []
-      }
-      if (Object.keys(snapshot.meta).length > 0) {
-        updated.meta = { ...updated.meta, ...snapshot.meta }
-      }
-      if (snapshot.done) {
-        updated.done = true
-      }
-      return updated
-    }))
-  }, [])
-
-  const scheduleFlush = useCallback(() => {
-    if (!rafId.current) {
-      rafId.current = requestAnimationFrame(flushStream)
-    }
-  }, [flushStream])
-
   // --- SSE connection ---
 
   const closeSSE = useCallback(() => {
     if (sseAbort.current) {
       sseAbort.current.abort()
       sseAbort.current = null
-    }
-    if (rafId.current) {
-      cancelAnimationFrame(rafId.current)
-      rafId.current = 0
     }
   }, [])
 
@@ -185,13 +230,8 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           if (event.id) lastEventId.current = event.id
           handleSSEEvent(event, sessionId)
         }
-      } catch (err) {
+      } catch {
         if (abort.signal.aborted) return
-        if (streamMsgId.current) {
-          streamBuffer.current.done = true
-          scheduleFlush()
-          streamMsgId.current = null
-        }
         setActivity({ kind: 'idle' })
       }
     })()
@@ -199,186 +239,69 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     function handleSSEEvent(event: BridgeEvent, sessId: string) {
       const { type, data } = event
 
+      // Apply the event to the message store. A no-op for bookkeeping events
+      // (system, session_state, session_info) which carry no message_id.
+      setMessages(prev => applyEvent(prev, event as EventEnvelope, sessId))
+
+      // Activity / sidebar / error side effects.
       switch (type) {
         case 'stream': {
-          const delta = (data.stream as Record<string, unknown>)?.delta as Record<string, unknown>
-          if (!delta) return
-          ensureStreamingMsg(sessId)
-          if (delta.type === 'text_delta') {
-            streamBuffer.current.content += (delta.text as string) || ''
-            setActivity({ kind: 'streaming' })
-          } else if (delta.type === 'thinking_delta') {
-            streamBuffer.current.thinking += (delta.thinking as string) || ''
-            setActivity({ kind: 'thinking' })
-          }
-          scheduleFlush()
+          const delta = (data.stream as { delta?: { type?: string } } | undefined)?.delta
+          if (delta?.type === 'thinking_delta') setActivity({ kind: 'thinking' })
+          else setActivity({ kind: 'streaming' })
           break
         }
-
-        case 'thinking': {
-          const text = (data.thinking as Record<string, unknown>)?.text as string || ''
-          if (!text) return
-          ensureStreamingMsg(sessId)
-          streamBuffer.current.thinking += text
+        case 'thinking':
           setActivity({ kind: 'thinking' })
-          scheduleFlush()
           break
-        }
-
         case 'tool_call': {
-          const tc = data.tool_call as Record<string, unknown>
-          if (!tc) return
-          ensureStreamingMsg(sessId)
-          const name = (tc.name as string) || ''
-          streamBuffer.current.tools.push({
-            tool: name,
-            input: tc.input as Record<string, unknown> | undefined,
-          })
-          setActivity({ kind: 'tool', name })
-          scheduleFlush()
+          const tc = data.tool_call as { name?: string } | undefined
+          setActivity({ kind: 'tool', name: tc?.name || '' })
           break
         }
-
-        case 'tool_result': {
-          const tr = data.tool_result as Record<string, unknown>
-          if (!tr) return
-          setMessages(prev => {
-            const msgId = streamMsgId.current
-            if (!msgId) return prev
-            return prev.map(m => {
-              if (m.id !== msgId) return m
-              const tools = [...(m.meta?.tools || []), ...streamBuffer.current.tools]
-              streamBuffer.current.tools = []
-              for (let i = tools.length - 1; i >= 0; i--) {
-                if (tools[i].tool === (tr.name as string) && !tools[i].output) {
-                  tools[i] = { ...tools[i], output: tr.output as string, error: tr.is_error as boolean }
-                  break
-                }
-              }
-              return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } }
-            })
-          })
+        case 'tool_result':
           setActivity({ kind: 'streaming' })
           break
-        }
-
-        case 'result': {
-          const result = data.result as Record<string, unknown>
-          if (!result) return
-          if (rafId.current) {
-            cancelAnimationFrame(rafId.current)
-            rafId.current = 0
-          }
-          flushStream()
-
-          // result is a ResultEvent — use it directly as meta.
-          const meta: MessageMeta = {
-            ...(result as MessageMeta),
-            rawStats: data as Record<string, unknown>,
-          }
-
-          // Use lastStreamMsgId as fallback — session_state/close may have
-          // already cleared streamMsgId before result arrives.
-          const msgId = streamMsgId.current || lastStreamMsgId.current
-          setMessages(prev => {
-            if (!msgId) return prev
-            return prev.map(m => {
-              if (m.id !== msgId) return m
-              const content = (result.text as string) || m.content
-              return { ...m, content, meta: { ...m.meta, ...meta }, done: true }
-            })
-          })
-          streamMsgId.current = null
-          streamBuffer.current = emptyBuffer()
+        case 'result':
           setActivity({ kind: 'idle' })
           wasInterrupted.current = false
           patchSessionState(sessId, 'completed')
           refreshSessions()
           break
-        }
-
         case 'system': {
-          const sys = data.system as Record<string, unknown>
-          if (sys?.subtype === 'harness_id_set') {
-            // The harness has reported its canonical session ID.
-            // Refresh sessions so the UI picks up the harness_id field.
-            refreshSessionsImpl()
-          } else if (sys?.subtype === 'retry') {
-            setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
-          }
+          const sys = data.system as { subtype?: string; attempt?: number; max_retries?: number } | undefined
+          if (sys?.subtype === 'harness_id_set') refreshSessionsImpl()
+          else if (sys?.subtype === 'retry') setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
           break
         }
-
-        case 'session_info': {
-          // Harness reported its effective system prompt + available tools.
-          // The server has persisted it on the session row — reload so the
-          // UI sees session.info populated.
+        case 'session_info':
           refreshSessionsImpl()
           break
-        }
-
         case 'error': {
-          const errData = data.error as Record<string, unknown>
-          setError((errData?.message as string) || 'Stream error')
-          if (streamMsgId.current) {
-            streamBuffer.current.done = true
-            scheduleFlush()
-            streamMsgId.current = null
-          }
+          const errData = data.error as { message?: string } | undefined
+          setError(errData?.message || 'Stream error')
           setActivity({ kind: 'idle' })
           patchSessionState(sessId, 'error')
           break
         }
-
         case 'session_state': {
-          const state = (data.state as Record<string, unknown>)?.state as string
-          if (state === 'idle' && !wasInterrupted.current) {
-            setActivity({ kind: 'idle' })
-            streamMsgId.current = null
-            streamBuffer.current = emptyBuffer()
-          } else if (state === 'running') {
-            wasInterrupted.current = false
-          } else if (state === 'completed') {
-            // Don't reload history here — messages are already in the UI
-            // from streaming. Calling loadHistory would replace them with
-            // whatever log-store has materialized, which may be empty.
-            setActivity({ kind: 'idle' })
-            streamMsgId.current = null
-            streamBuffer.current = emptyBuffer()
-          }
+          const state = (data.state as { state?: string } | undefined)?.state
+          if (state === 'idle' && !wasInterrupted.current) setActivity({ kind: 'idle' })
+          else if (state === 'running') wasInterrupted.current = false
+          else if (state === 'completed') setActivity({ kind: 'idle' })
           if (state) patchSessionState(sessId, state)
           refreshSessions()
           break
         }
-
-        case 'close': {
-          streamMsgId.current = null
-          streamBuffer.current = emptyBuffer()
+        case 'close':
           setActivity({ kind: 'idle' })
           patchSessionState(sessId, 'completed')
           closeSSE()
           refreshSessions()
           break
-        }
       }
     }
-
-    function ensureStreamingMsg(sessId: string) {
-      if (streamMsgId.current) return
-      const id = `bridge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-      streamMsgId.current = id
-      lastStreamMsgId.current = id
-      streamBuffer.current = emptyBuffer()
-      const newMsg: Message = {
-        id,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString(),
-        sessionId: sessId,
-      }
-      setMessages(prev => [...prev, newMsg])
-    }
-  }, [fetchFn, basePath, closeSSE, scheduleFlush, flushStream, refreshSessions, patchSessionState])
+  }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState])
 
   // --- History loading ---
 
@@ -406,8 +329,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   const selectSession = useCallback((id: string) => {
     closeSSE()
-    streamMsgId.current = null
-    streamBuffer.current = emptyBuffer()
     wasInterrupted.current = false
     setError(null)
     setActivity({ kind: 'idle' })
@@ -487,15 +408,20 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const send = useCallback(async (text: string) => {
     if (!activeSessionId || !text.trim()) return
 
-    const userMsg: Message = {
-      id: `user-${Date.now()}`,
+    // Optimistic user message keyed by clientId. The /send response returns
+    // the canonical bridge MessageID; we patch the message in-place so when
+    // the user_message event later arrives via SSE it lands on the same row.
+    const clientId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const optimistic: Message = {
+      id: clientId,
+      clientId,
       role: 'user',
       content: text,
       timestamp: new Date().toISOString(),
       sessionId: activeSessionId,
       done: true,
     }
-    setMessages(prev => [...prev, userMsg])
+    setMessages(prev => [...prev, optimistic])
     setError(null)
     wasInterrupted.current = false
 
@@ -510,6 +436,12 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         setError(`Send failed: ${err}`)
         return
       }
+      const body = await res.json().catch(() => ({})) as { message_id?: string }
+      if (body.message_id) {
+        setMessages(prev => prev.map(m =>
+          m.clientId === clientId ? { ...m, id: body.message_id!, clientId: undefined } : m,
+        ))
+      }
 
       // Reset lastEventId so SSE connects without Last-Event-ID.
       // This makes the server use ListCurrentTurnEventsWithIDs (turn-aware
@@ -521,24 +453,27 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     } catch (err) {
       setError(`Send failed: ${err}`)
     }
-  }, [fetchFn, basePath, activeSessionId, activeSession, startSSE, refreshSessions])
+  }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions])
 
   const interrupt = useCallback(async () => {
     if (!activeSessionId) return
     try {
       await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' })
       wasInterrupted.current = true
-      if (streamMsgId.current) {
-        streamBuffer.current.done = true
-        flushStream()
-        streamMsgId.current = null
-      }
+      // Mark the open assistant message done so the typing indicator clears.
+      setMessages(prev => {
+        const idx = prev.length - 1
+        if (idx < 0 || prev[idx].role !== 'assistant' || prev[idx].done) return prev
+        const next = prev.slice()
+        next[idx] = { ...next[idx], done: true }
+        return next
+      })
       setActivity({ kind: 'idle' })
       refreshSessions()
     } catch (err) {
       setError(`Interrupt failed: ${err}`)
     }
-  }, [fetchFn, basePath, activeSessionId, flushStream, refreshSessions])
+  }, [fetchFn, basePath, activeSessionId, refreshSessions])
 
   const resume = useCallback(async () => {
     if (!activeSessionId) return
@@ -561,18 +496,20 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     try {
       await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' })
       closeSSE()
-      if (streamMsgId.current) {
-        streamBuffer.current.done = true
-        flushStream()
-        streamMsgId.current = null
-      }
+      setMessages(prev => {
+        const idx = prev.length - 1
+        if (idx < 0 || prev[idx].role !== 'assistant' || prev[idx].done) return prev
+        const next = prev.slice()
+        next[idx] = { ...next[idx], done: true }
+        return next
+      })
       wasInterrupted.current = false
       setActivity({ kind: 'idle' })
       refreshSessions()
     } catch (err) {
       setError(`Stop failed: ${err}`)
     }
-  }, [fetchFn, basePath, activeSessionId, closeSSE, flushStream, refreshSessions])
+  }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions])
 
   const compact = useCallback(async (summary?: string) => {
     if (!activeSessionId) return

@@ -35,6 +35,9 @@ export interface Message {
     raw?: Record<string, unknown>;
     done?: boolean;
     id?: string;
+    clientId?: string;
+    harnessMessageId?: string;
+    lastEventRowId?: number;
     orchestrator?: string;
     agent?: string;
     sessionId?: string;
