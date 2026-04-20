@@ -36,6 +36,19 @@ function generateDefaultAgent(harness: string): string {
   return `${harness}-agent`
 }
 
+/* ── Collapse state persistence ── */
+const COLLAPSE_KEY = 'bridge-ui-collapse'
+interface CollapseState { harnessBar: boolean; sessionList: boolean }
+function loadCollapseState(): CollapseState {
+  try {
+    const s = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}')
+    return { harnessBar: !!s.harnessBar, sessionList: !!s.sessionList }
+  } catch { return { harnessBar: false, sessionList: false } }
+}
+function saveCollapseState(s: CollapseState) {
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+
 /* ── Inline Editable Name ── */
 function EditableName({ value, onSave, className }: {
   value: string
@@ -236,13 +249,17 @@ function Composer({ connected, streaming, paused, onSend, onStop, onResume }: {
 }
 
 /* ── Inline Session Header ── */
-function SessionHeader({ chat, uiState, activity, messages, instance, onRename }: {
+function SessionHeader({ chat, uiState, activity, messages, instance, onRename, onPrev, onNext, hasPrev, hasNext }: {
   chat: ChatSession | null
   uiState: string
   activity: { kind: string; name?: string }
   messages: Message[]
   instance: { name: string; transport: string } | null
   onRename: (name: string) => void
+  onPrev: () => void
+  onNext: () => void
+  hasPrev: boolean
+  hasNext: boolean
 }) {
   if (!chat || uiState === 'empty') return null
 
@@ -259,6 +276,10 @@ function SessionHeader({ chat, uiState, activity, messages, instance, onRename }
   return (
     <div className="bc-header">
       <div className="bc-header-row">
+        <div className="bc-nav-arrows">
+          <button className="bc-nav-arrow" onClick={onPrev} disabled={!hasPrev} title="Previous session" aria-label="Previous session">‹</button>
+          <button className="bc-nav-arrow" onClick={onNext} disabled={!hasNext} title="Next session" aria-label="Next session">›</button>
+        </div>
         <span className={`bc-state-badge bc-state-${uiState}`}>
           {uiState === 'running' && <span className="bc-pulse" />}
           {uiState.charAt(0).toUpperCase() + uiState.slice(1)}
@@ -288,7 +309,7 @@ function SessionHeader({ chat, uiState, activity, messages, instance, onRename }
 }
 
 /* ── Inline HarnessTabBar ── */
-function HarnessTabBar({ instances, harnesses, sessions, selectedInstance, onSelect, onNewInstance, basePath, instancesPath }: {
+function HarnessTabBar({ instances, harnesses, sessions, selectedInstance, onSelect, onNewInstance, basePath, instancesPath, onToggleCollapse }: {
   instances: Array<{ id: string; name: string; harness_type: string; host: string; transport: string; enabled: boolean }>
   harnesses: HarnessInfo[]
   sessions: Array<{ instance_id?: string; state: string }>
@@ -297,6 +318,7 @@ function HarnessTabBar({ instances, harnesses, sessions, selectedInstance, onSel
   onNewInstance: () => void
   basePath: string
   instancesPath: string
+  onToggleCollapse: () => void
 }) {
   const harnessMap = useMemo(() => {
     const map = new Map<string, HarnessInfo>()
@@ -328,6 +350,7 @@ function HarnessTabBar({ instances, harnesses, sessions, selectedInstance, onSel
   if (groups.length === 0) {
     return (
       <div className="htb-wrapper">
+        <button className="htb-collapse-btn" onClick={onToggleCollapse} title="Collapse harness bar" aria-label="Collapse harness bar">▴</button>
         <div className="htb-empty">No harness instances configured. <Link to={instancesPath}>Add an instance</Link> to get started.</div>
         <button className="htb-new-instance" onClick={onNewInstance} title="Add new instance">+</button>
       </div>
@@ -336,6 +359,7 @@ function HarnessTabBar({ instances, harnesses, sessions, selectedInstance, onSel
 
   return (
     <div className="htb-wrapper">
+      <button className="htb-collapse-btn" onClick={onToggleCollapse} title="Collapse harness bar" aria-label="Collapse harness bar">▴</button>
       <div className="htb-tabs">
         {groups.map(([harnessType, groupInstances], gi) => {
           const info = harnessMap.get(harnessType)
@@ -414,7 +438,7 @@ interface CtxMenuState {
   y: number
 }
 
-function SessionList({ sessions, activeSession, onSelect, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange }: {
+function SessionList({ sessions, activeSession, onSelect, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: SidebarSession[]
   activeSession: string
   onSelect: (id: string) => void
@@ -424,6 +448,7 @@ function SessionList({ sessions, activeSession, onSelect, onNewSession, connecte
   onRename: (id: string, name: string) => void
   folders: UseBridgeFoldersReturn
   onAfterFolderChange: () => void
+  onToggleCollapse: () => void
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed)
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null)
@@ -532,6 +557,7 @@ function SessionList({ sessions, activeSession, onSelect, onNewSession, connecte
     <div className="bc-session-list">
       <div className="bc-new-session">
         <button className="bc-new-session-btn" onClick={onNewSession} disabled={!connected}>+ New Session</button>
+        <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
       {sorted.length === 0 && (
         <div className="bc-session-list-empty">{connected ? 'No sessions yet' : 'Connecting...'}</div>
@@ -786,7 +812,15 @@ export function BridgeChat() {
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
   const [showTools, setShowTools] = useState(false)
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
+  const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
   const pendingConfigRef = useRef<{ model?: string; effort?: string } | null>(null)
+
+  const toggleHarnessBar = useCallback(() => {
+    setCollapseState(s => { const next = { ...s, harnessBar: !s.harnessBar }; saveCollapseState(next); return next })
+  }, [])
+  const toggleSessionList = useCallback(() => {
+    setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next })
+  }, [])
 
   useEffect(() => {
     apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data: StoreModel[]) => {
@@ -909,6 +943,28 @@ export function BridgeChat() {
     [bridge.sessions, selectedInstance]
   )
 
+  const navOrder = useMemo(() =>
+    [...filteredSessions].sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    [filteredSessions]
+  )
+  const navIndex = useMemo(() => {
+    const id = bridge.activeSession?.bridge_id
+    if (!id) return -1
+    return navOrder.findIndex(s => s.bridge_id === id)
+  }, [navOrder, bridge.activeSession])
+  const handlePrevSession = useCallback(() => {
+    if (navIndex <= 0) return
+    const target = navOrder[navIndex - 1]
+    bridge.selectSession(target.bridge_id)
+    if (selectedInstance) bridgePrefs.setLastSession(selectedInstance, target.bridge_id)
+  }, [navIndex, navOrder, bridge, bridgePrefs, selectedInstance])
+  const handleNextSession = useCallback(() => {
+    if (navIndex < 0 || navIndex >= navOrder.length - 1) return
+    const target = navOrder[navIndex + 1]
+    bridge.selectSession(target.bridge_id)
+    if (selectedInstance) bridgePrefs.setLastSession(selectedInstance, target.bridge_id)
+  }, [navIndex, navOrder, bridge, bridgePrefs, selectedInstance])
+
   const activeInstance = useMemo(() => {
     if (!bridge.activeSession?.instance_id) return null
     return instances.instanceMap.get(bridge.activeSession.instance_id) ?? null
@@ -954,30 +1010,53 @@ export function BridgeChat() {
     setShowNewInstance(false)
   }, [instances, bridgePrefs])
 
+  const currentInstanceName = useMemo(() => {
+    if (!selectedInstance) return ''
+    return instances.instanceMap.get(selectedInstance)?.name ?? ''
+  }, [selectedInstance, instances.instanceMap])
+
   return (
-    <div className="bc-container">
-      <HarnessTabBar
-        instances={instances.instances}
-        harnesses={harnesses}
-        sessions={bridge.sessions}
-        selectedInstance={selectedInstance}
-        onSelect={selectInstance}
-        onNewInstance={() => setShowNewInstance(true)}
-        basePath={basePath}
-        instancesPath={routes.instances}
-      />
-      <div className="bc-main">
-        <SessionList
-          sessions={filteredSessions}
-          activeSession={bridge.activeSession?.bridge_id ?? ''}
-          onSelect={handleSelectSession}
-          onNewSession={handleCreate}
-          connected={bridge.connected && harnessAvailable}
-          getDisplayName={getDisplayName}
-          onRename={handleRenameSession}
-          folders={folders}
-          onAfterFolderChange={bridge.refreshSessions}
+    <div className={`bc-container ${collapseState.harnessBar ? 'bc-harness-collapsed' : ''} ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`}>
+      {collapseState.harnessBar ? (
+        <div className="htb-wrapper htb-wrapper-collapsed">
+          <button className="htb-expand-btn" onClick={toggleHarnessBar} title="Expand harness bar" aria-label="Expand harness bar">
+            <span className="htb-expand-chevron">▾</span>
+            <span className="htb-expand-label">Harness: {currentInstanceName || 'none selected'}</span>
+          </button>
+        </div>
+      ) : (
+        <HarnessTabBar
+          instances={instances.instances}
+          harnesses={harnesses}
+          sessions={bridge.sessions}
+          selectedInstance={selectedInstance}
+          onSelect={selectInstance}
+          onNewInstance={() => setShowNewInstance(true)}
+          basePath={basePath}
+          instancesPath={routes.instances}
+          onToggleCollapse={toggleHarnessBar}
         />
+      )}
+      <div className="bc-main">
+        {collapseState.sessionList ? (
+          <button className="bc-sidebar-strip" onClick={toggleSessionList} title="Show sessions" aria-label="Show sessions">
+            <span className="bc-sidebar-strip-chevron">▸</span>
+            <span className="bc-sidebar-strip-label">Sessions</span>
+          </button>
+        ) : (
+          <SessionList
+            sessions={filteredSessions}
+            activeSession={bridge.activeSession?.bridge_id ?? ''}
+            onSelect={handleSelectSession}
+            onNewSession={handleCreate}
+            connected={bridge.connected && harnessAvailable}
+            getDisplayName={getDisplayName}
+            onRename={handleRenameSession}
+            folders={folders}
+            onAfterFolderChange={bridge.refreshSessions}
+            onToggleCollapse={toggleSessionList}
+          />
+        )}
         <div className="bc-chat-area">
           <SessionHeader
             chat={activeChat}
@@ -986,6 +1065,10 @@ export function BridgeChat() {
             messages={bridge.messages}
             instance={activeInstance}
             onRename={name => activeChat?.sessionId && handleRenameSession(activeChat.sessionId, name)}
+            onPrev={handlePrevSession}
+            onNext={handleNextSession}
+            hasPrev={navIndex > 0}
+            hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
           />
           <Thread
             messages={bridge.messages}

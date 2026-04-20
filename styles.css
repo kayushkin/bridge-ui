@@ -1148,3 +1148,144 @@
   border-radius: 3px;
   font-size: 0.9em;
 }
+
+/* ===== Collapse controls ===== */
+.htb-collapse-btn,
+.bc-sidebar-collapse-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  transition: border-color 0.15s, color 0.15s;
+}
+.htb-collapse-btn { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.htb-collapse-btn:hover,
+.bc-sidebar-collapse-btn:hover { border-color: var(--accent); color: var(--accent); }
+.htb-wrapper { position: relative; }
+
+.htb-wrapper-collapsed {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.htb-expand-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  background: var(--bg-surface);
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85em;
+  text-align: left;
+  transition: color 0.15s, background 0.15s;
+}
+.htb-expand-btn:hover { color: var(--text); background: rgba(99, 102, 241, 0.06); }
+.htb-expand-chevron { color: var(--text-dim); font-size: 0.9em; }
+.htb-expand-label { font-weight: 500; }
+
+.bc-new-session { display: flex; align-items: center; gap: 6px; }
+.bc-new-session .bc-new-session-btn { flex: 1; }
+
+.bc-sidebar-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 28px;
+  flex-shrink: 0;
+  padding: 10px 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.bc-sidebar-strip:hover { color: var(--accent); background: rgba(99, 102, 241, 0.06); }
+.bc-sidebar-strip-chevron { font-size: 1em; }
+.bc-sidebar-strip-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.75em;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ===== Session nav arrows ===== */
+.bc-nav-arrows { display: inline-flex; gap: 2px; }
+.bc-nav-arrow {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+.bc-nav-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.bc-nav-arrow:disabled { opacity: 0.3; cursor: default; }
+
+/* ===== Mobile responsive ===== */
+@media (max-width: 768px) {
+  .bridge-nav { padding: 0 8px; overflow-x: auto; }
+  .bridge-tab { padding: 10px 10px; white-space: nowrap; }
+  .bridge-content { padding: 12px; }
+
+  .bc-main { flex-direction: column; }
+
+  .bc-session-list {
+    width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .bc-sidebar-strip {
+    flex-direction: row;
+    width: 100%;
+    height: 36px;
+    padding: 0 14px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .bc-sidebar-strip-label {
+    writing-mode: horizontal-tb;
+    transform: none;
+  }
+
+  .htb-tabs { padding: 8px; gap: 4px; }
+  .htb-tab { min-width: 0; }
+  .htb-tab-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .htb-collapse-btn { top: 4px; right: 4px; }
+
+  .bc-header { padding: 8px 10px; }
+  .bc-header-row { flex-wrap: wrap; row-gap: 6px; }
+  .bc-instance-badge { display: none; }
+
+  .bc-thread { padding: 10px; gap: 10px; }
+
+  .bc-msg-split { flex-direction: column; }
+  .bc-msg-split-tools { flex: 1; max-width: none; border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }
+
+  .bc-controls-bar { flex-wrap: wrap; }
+  .bc-composer { padding: 8px; }
+  .bc-composer-input { font-size: 1em; }
+}
