@@ -763,6 +763,32 @@
 .bu-instance-label { padding: 1px 6px; border-radius: 4px; background: #1a1a2a; font-size: 0.9em; }
 .bu-session-model { color: var(--text-dim); min-width: 80px; }
 
+/* BridgeUsage — subscription limits */
+.bu-limits-section { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+.bu-limits-provider {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px;
+}
+.bu-limits-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bu-limits-title { font-size: 0.9em; font-weight: 600; }
+.bu-limits-tier {
+  font-size: 0.7em; color: var(--text-dim);
+  padding: 2px 8px; border-radius: 6px; background: var(--border);
+  text-transform: capitalize;
+}
+.bu-limits-stale {
+  font-size: 0.7em; color: #f59e0b;
+  padding: 2px 8px; border-radius: 6px; background: #3a2a0a;
+}
+.bu-limits-grid { display: flex; gap: 16px; flex-wrap: wrap; }
+.bu-limit-item { flex: 1; min-width: 140px; }
+.bu-limit-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.bu-limit-label { font-size: 0.75em; color: var(--text-muted); }
+.bu-limit-pct { font-size: 0.85em; font-weight: 600; }
+.bu-limit-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.bu-limit-fill { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; }
+.bu-limit-reset { display: block; font-size: 0.65em; color: var(--text-dim); margin-top: 3px; }
+
 /* ===== BridgeSettings ===== */
 .bset-container { max-width: 800px; }
 .bset-title { font-size: 1.3em; font-weight: 600; margin-bottom: 4px; }
