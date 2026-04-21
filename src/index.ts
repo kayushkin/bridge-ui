@@ -2,6 +2,7 @@
 export type {
   TokenUsage,
   Cost,
+  Event,
   InstanceCredential,
   InstanceStatus,
   ManagedSession,
@@ -26,6 +27,7 @@ export type {
   SessionUIState,
   ActivityKind,
   BridgeEvent,
+  EventData,
   CreateSessionOpts,
   UseBridgeSessionReturn,
 } from './types'

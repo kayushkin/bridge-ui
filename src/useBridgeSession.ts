@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
-  BridgeEvent, ManagedSession, SessionUIState, ActivityKind,
+  BridgeEvent, EventData, ManagedSession, SessionUIState, ActivityKind,
   LogRow, LogRowActor, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
-  SessionInfo, TokenUsage, MessageMeta,
+  SessionInfo, MessageMeta,
 } from './types'
 
 // --- Event envelope ---
@@ -14,30 +14,16 @@ import type {
 // log-store); live events arrive in the SSE BridgeEvent envelope where the
 // stored event is under `data` and the SSE `id:` line carries the row id.
 
-interface EventEnvelope {
-  id?: string                           // SSE `id:` line, stringified row id
-  type: string
-  data: Record<string, unknown> & {
-    event_id?: number
-    message_id?: string
-    harness_message_id?: string
-    client_request_id?: string
-    bridge_id?: string
-    timestamp?: string
-    [key: string]: unknown
-  }
-}
-
-function wrapHistoryEvent(ev: Record<string, unknown>): EventEnvelope {
+function wrapHistoryEvent(ev: EventData): BridgeEvent {
   const id = typeof ev.event_id === 'number' ? String(ev.event_id) : undefined
   return {
     id,
-    type: String(ev.type ?? 'message'),
-    data: ev as EventEnvelope['data'],
+    type: ev.type || 'message',
+    data: ev,
   }
 }
 
-function eventIdOf(ev: EventEnvelope): number {
+function eventIdOf(ev: BridgeEvent): number {
   if (typeof ev.data.event_id === 'number') return ev.data.event_id
   if (ev.id) return Number(ev.id) || 0
   return 0
@@ -63,69 +49,57 @@ function actorFor(eventType: string): LogRowActor {
   }
 }
 
-function freshRow(ev: EventEnvelope): LogRow {
+function freshRow(ev: BridgeEvent): LogRow {
   const msgId = ev.data.message_id
   const evId = eventIdOf(ev)
   return {
     key: msgId || `evt_${evId}`,
     clientId: undefined,
     clientRequestId: ev.data.client_request_id,
+    turnId: ev.data.turn_id,
     messageId: msgId,
     harnessMessageId: ev.data.harness_message_id,
     eventIds: [],
     actor: actorFor(ev.type),
     eventType: ev.type,
     subtype: subtypeOf(ev),
-    timestamp: String(ev.data.timestamp || new Date().toISOString()),
+    timestamp: ev.data.timestamp || new Date().toISOString(),
     events: [],
   }
 }
 
-function subtypeOf(ev: EventEnvelope): string | undefined {
-  if (ev.type === 'system') {
-    const sys = ev.data.system as { subtype?: string } | undefined
-    return sys?.subtype
-  }
-  if (ev.type === 'thinking') {
-    const t = ev.data.thinking as { subtype?: string } | undefined
-    return t?.subtype
-  }
+function subtypeOf(ev: BridgeEvent): string | undefined {
+  if (ev.type === 'system') return ev.data.system?.subtype
+  if (ev.type === 'thinking') return ev.data.thinking?.subtype
   return undefined
 }
 
-function applyDelta(row: LogRow, ev: EventEnvelope): LogRow {
-  const events = [...row.events, ev.data]
+function applyDelta(row: LogRow, ev: BridgeEvent): LogRow {
+  const events = [...row.events, ev.data as unknown as Record<string, unknown>]
   const base: LogRow = { ...row, events }
 
   switch (ev.type) {
     case 'user_message': {
-      const result = ev.data.result as { text?: string } | undefined
-      return { ...base, text: result?.text ?? row.text, done: true }
+      return { ...base, text: ev.data.result?.text ?? row.text, done: true }
     }
     case 'stream': {
-      const stream = ev.data.stream as {
-        delta?: { type: string; text?: string; thinking?: string }
-        usage?: TokenUsage
-      } | undefined
-      const d = stream?.delta
+      const d = ev.data.stream?.delta
       let next = base
       if (d?.type === 'text_delta') next = { ...next, text: (row.text || '') + (d.text || '') }
       else if (d?.type === 'thinking_delta') next = { ...next, thinking: (row.thinking || '') + (d.thinking || '') }
-      if (stream?.usage) next = { ...next, usage: stream.usage }
       return next
     }
     case 'thinking': {
-      const t = ev.data.thinking as { text?: string } | undefined
-      return { ...base, thinking: (row.thinking || '') + (t?.text || '') }
+      return { ...base, thinking: (row.thinking || '') + (ev.data.thinking?.text || '') }
     }
     case 'tool_call': {
-      const tc = ev.data.tool_call as { tool_id?: string; name?: string; input?: Record<string, unknown> } | undefined
+      const tc = ev.data.tool_call
       if (!tc) return base
       const tools = [...(row.tools || []), { tool: tc.name || '', input: tc.input } satisfies ToolEvent]
       return { ...base, tools }
     }
     case 'tool_result': {
-      const tr = ev.data.tool_result as { tool_id?: string; name?: string; output?: string; is_error?: boolean } | undefined
+      const tr = ev.data.tool_result
       if (!tr) return base
       const tools = (row.tools || []).slice()
       for (let i = tools.length - 1; i >= 0; i--) {
@@ -137,8 +111,8 @@ function applyDelta(row: LogRow, ev: EventEnvelope): LogRow {
       return { ...base, tools }
     }
     case 'result': {
-      const result = ev.data.result as (MessageMeta & { text?: string; usage?: TokenUsage }) | undefined
-      const meta: MessageMeta = { ...(result || {}), rawStats: ev.data as Record<string, unknown> }
+      const result = ev.data.result
+      const meta: MessageMeta = { ...(result || {}), rawStats: ev.data as unknown as Record<string, unknown> }
       return {
         ...base,
         text: result?.text || row.text,
@@ -148,11 +122,10 @@ function applyDelta(row: LogRow, ev: EventEnvelope): LogRow {
       }
     }
     case 'error': {
-      const err = ev.data.error as { message?: string } | undefined
-      return { ...base, errorMessage: err?.message || 'error', done: true }
+      return { ...base, errorMessage: ev.data.error?.message || 'error', done: true }
     }
     case 'system': {
-      const sys = ev.data.system as { subtype?: string; message?: string; [k: string]: unknown } | undefined
+      const sys = ev.data.system
       if (!sys) return base
       const { subtype, message, ...rest } = sys
       void subtype
@@ -164,7 +137,7 @@ function applyDelta(row: LogRow, ev: EventEnvelope): LogRow {
       }
     }
     case 'session_state': {
-      const st = ev.data.state as { state?: string; previous?: string; reason?: string } | undefined
+      const st = ev.data.state
       if (!st) return base
       return {
         ...base,
@@ -181,7 +154,7 @@ function applyDelta(row: LogRow, ev: EventEnvelope): LogRow {
   }
 }
 
-function applyEventToRows(rows: LogRow[], ev: EventEnvelope): LogRow[] {
+function applyEventToRows(rows: LogRow[], ev: BridgeEvent): LogRow[] {
   const evId = eventIdOf(ev)
   const msgId = ev.data.message_id
 
@@ -202,6 +175,9 @@ function applyEventToRows(rows: LogRow[], ev: EventEnvelope): LogRow[] {
     }
     if (!existing.clientRequestId && ev.data.client_request_id) {
       updated.clientRequestId = ev.data.client_request_id
+    }
+    if (!existing.turnId && ev.data.turn_id) {
+      updated.turnId = ev.data.turn_id
     }
     const next = rows.slice()
     next[idx] = updated
@@ -325,12 +301,11 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       const { type, data } = event
       const sessId = sessionId
 
-      setLogRows(prev => applyEventToRows(prev, event as EventEnvelope))
+      setLogRows(prev => applyEventToRows(prev, event))
 
       switch (type) {
         case 'stream': {
-          const delta = (data.stream as { delta?: { type?: string } } | undefined)?.delta
-          if (delta?.type === 'thinking_delta') setActivity({ kind: 'thinking' })
+          if (data.stream?.delta?.type === 'thinking_delta') setActivity({ kind: 'thinking' })
           else setActivity({ kind: 'streaming' })
           break
         }
@@ -338,8 +313,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           setActivity({ kind: 'thinking' })
           break
         case 'tool_call': {
-          const tc = data.tool_call as { name?: string } | undefined
-          setActivity({ kind: 'tool', name: tc?.name || '' })
+          setActivity({ kind: 'tool', name: data.tool_call?.name || '' })
           break
         }
         case 'tool_result':
@@ -352,7 +326,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           refreshSessions()
           break
         case 'system': {
-          const sys = data.system as { subtype?: string; attempt?: number; max_retries?: number } | undefined
+          const sys = data.system
           if (sys?.subtype === 'harness_id_set') refreshSessionsImpl()
           else if (sys?.subtype === 'retry') setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
           break
@@ -361,14 +335,13 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           refreshSessionsImpl()
           break
         case 'error': {
-          const errData = data.error as { message?: string } | undefined
-          setError(errData?.message || 'Stream error')
+          setError(data.error?.message || 'Stream error')
           setActivity({ kind: 'idle' })
           patchSessionState(sessId, 'error')
           break
         }
         case 'session_state': {
-          const state = (data.state as { state?: string } | undefined)?.state
+          const state = data.state?.state
           if (state === 'idle' && !wasInterrupted.current) setActivity({ kind: 'idle' })
           else if (state === 'running') wasInterrupted.current = false
           else if (state === 'completed') setActivity({ kind: 'idle' })
@@ -401,7 +374,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         setError(`History load failed: ${res.status} ${res.statusText}`)
         return
       }
-      const raws: Array<Record<string, unknown>> = await res.json()
+      const raws: EventData[] = await res.json()
 
       if (loadId !== historyLoadId.current) return
 

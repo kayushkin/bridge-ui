@@ -209,6 +209,7 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
         <span className="bc-row-ids">
           {row.clientId && <code title="client id" className="bc-row-id bc-row-id-cli">cli:{idTail(row.clientId)}</code>}
           {row.clientRequestId && <code title="caller's per-turn request id" className="bc-row-id bc-row-id-req">req:{idTail(row.clientRequestId)}</code>}
+          {row.turnId && <code title="bridge-server turn_id" className="bc-row-id bc-row-id-turn">turn:{idTail(row.turnId)}</code>}
           {row.messageId && <code title="bridge-server message_id" className="bc-row-id bc-row-id-srv">srv:{idTail(row.messageId)}</code>}
           {row.harnessMessageId && <code title="harness completion id" className="bc-row-id bc-row-id-hid">hid:{idTail(row.harnessMessageId)}</code>}
         </span>
@@ -262,6 +263,82 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Turn grouping ──
+ *
+ * Rows that share a bridge-server turn_id (user_message → result/error and
+ * every event in between) collapse into one TurnGroup. Rows without a turn_id
+ * (session_info, session_state between turns, stray system events) render
+ * standalone. Filtering runs first, then grouping — so hiding a type only
+ * affects what's inside the group, not the group boundary.
+ */
+type TurnBlock =
+  | { kind: 'turn'; turnId: string; rows: LogRow[] }
+  | { kind: 'standalone'; row: LogRow }
+
+function groupRowsByTurn(rows: LogRow[]): TurnBlock[] {
+  const out: TurnBlock[] = []
+  let current: { kind: 'turn'; turnId: string; rows: LogRow[] } | null = null
+  for (const r of rows) {
+    if (r.turnId) {
+      if (current && current.turnId === r.turnId) {
+        current.rows.push(r)
+      } else {
+        if (current) out.push(current)
+        current = { kind: 'turn', turnId: r.turnId, rows: [r] }
+      }
+    } else {
+      if (current) { out.push(current); current = null }
+      out.push({ kind: 'standalone', row: r })
+    }
+  }
+  if (current) out.push(current)
+  return out
+}
+
+function turnSummary(rows: LogRow[]): { userText?: string; toolCount: number; done: boolean; errored: boolean; totalUsage?: TokenUsage } {
+  let userText: string | undefined
+  let toolCount = 0
+  let done = false
+  let errored = false
+  let totalUsage: TokenUsage | undefined
+  for (const r of rows) {
+    if (r.actor === 'user' && !userText && r.text) userText = r.text
+    if (r.tools) toolCount += r.tools.length
+    if (r.eventType === 'result' && r.done) { done = true; totalUsage = r.usage ?? r.meta?.usage ?? totalUsage }
+    if (r.errorMessage) { errored = true; done = true }
+  }
+  return { userText, toolCount, done, errored, totalUsage }
+}
+
+function TurnGroupView({ turnId, rows, agent }: { turnId: string; rows: LogRow[]; agent: string }) {
+  const [collapsed, setCollapsed] = useState(false)
+  const summary = useMemo(() => turnSummary(rows), [rows])
+  const snippet = summary.userText
+    ? (summary.userText.length > 80 ? summary.userText.slice(0, 80) + '…' : summary.userText)
+    : '(no user text)'
+
+  return (
+    <div className={`bc-turn${summary.errored ? ' bc-turn-error' : summary.done ? ' bc-turn-done' : ' bc-turn-live'}`}>
+      <div className="bc-turn-header" onClick={() => setCollapsed(c => !c)}>
+        <span className="bc-turn-chevron">{collapsed ? '▸' : '▾'}</span>
+        <span className="bc-turn-label">Turn</span>
+        <code className="bc-row-id bc-row-id-turn" title="bridge-server turn_id">turn:{idTail(turnId)}</code>
+        <span className="bc-turn-snippet">{snippet}</span>
+        <span className="bc-turn-spacer" />
+        <span className="bc-turn-count">{rows.length} event{rows.length === 1 ? '' : 's'}</span>
+        {summary.toolCount > 0 && <span className="bc-turn-tools">{summary.toolCount} tool{summary.toolCount === 1 ? '' : 's'}</span>}
+        {summary.totalUsage && <UsageLine usage={summary.totalUsage} />}
+        {!summary.done && <span className="bc-turn-running"><span className="bc-pulse" /> running</span>}
+      </div>
+      {!collapsed && (
+        <div className="bc-turn-body">
+          {rows.map(row => <LogRowView key={row.key} row={row} agent={agent} />)}
         </div>
       )}
     </div>
@@ -343,6 +420,8 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
     return rows.filter(r => typesInRow(r).some(t => !hidden.has(t)))
   }, [rows, hidden])
 
+  const blocks = useMemo(() => groupRowsByTurn(visibleRows), [visibleRows])
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [visibleRows])
 
   const toggleType = useCallback((t: string) => {
@@ -361,7 +440,10 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
     <div className="bc-thread">
       <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
       {error && <div className="bridge-error">{error}</div>}
-      {visibleRows.map(row => <LogRowView key={row.key} row={row} agent={agent} />)}
+      {blocks.map((b, i) => b.kind === 'turn'
+        ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} />
+        : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} />
+      )}
       {uiState === 'running' && (
         <div className="bc-activity">
           <span className="bc-activity-dot" />

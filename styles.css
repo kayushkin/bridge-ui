@@ -260,6 +260,57 @@
 .bc-split-tools-header { font-size: 0.7em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .bc-typing { color: var(--text-dim); }
 
+/* ── TurnGroup (outer collapsible shell for one full turn) ── */
+.bc-turn {
+  align-self: stretch;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, #f472b6 40%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, #f472b6 4%, var(--bg));
+}
+.bc-turn-live { border-color: color-mix(in srgb, #f472b6 70%, var(--border)); }
+.bc-turn-error { border-color: color-mix(in srgb, #ef4444 60%, var(--border)); background: color-mix(in srgb, #ef4444 4%, var(--bg)); }
+.bc-turn-done { opacity: 0.98; }
+
+.bc-turn-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 6px 10px;
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, #f472b6 6%, var(--bg-surface));
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+}
+.bc-turn-header:hover { background: color-mix(in srgb, #f472b6 12%, var(--bg-surface)); }
+.bc-turn-chevron { color: #f472b6; font-weight: 700; }
+.bc-turn-label { color: var(--text); font-weight: 700; letter-spacing: 0.3px; }
+.bc-turn-snippet {
+  color: var(--text);
+  font-family: inherit;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+}
+.bc-turn-spacer { flex: 1; }
+.bc-turn-count, .bc-turn-tools { color: var(--text-dim); font-size: 0.7rem; }
+.bc-turn-running { display: inline-flex; align-items: center; gap: 0.3rem; color: #f472b6; font-size: 0.7rem; }
+
+.bc-turn-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 0 0 6px 6px;
+}
+
 /* ── LogRow (uniform event log) ── */
 .bc-row {
   align-self: stretch;
@@ -301,6 +352,7 @@
 }
 .bc-row-id-cli { color: #c084fc; }
 .bc-row-id-req { color: #34d399; }
+.bc-row-id-turn { color: #f472b6; }
 .bc-row-id-srv { color: #60a5fa; }
 .bc-row-id-hid { color: #f59e0b; }
 

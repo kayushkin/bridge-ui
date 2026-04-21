@@ -10,6 +10,7 @@
 import type {
   TokenUsage,
   Cost,
+  Event,
   Instance,
   InstanceCredential,
   InstanceStatus,
@@ -29,6 +30,7 @@ import type {
 export type {
   TokenUsage,
   Cost,
+  Event,
   InstanceCredential,
   InstanceStatus,
   ManagedSession,
@@ -65,19 +67,7 @@ export interface ToolEvent {
 // MessageMeta extends the canonical ResultEvent with client-side enrichments.
 // The server sends ResultEvent as the "meta" field on materialized messages;
 // the UI adds tools[], toolCalls, and rawStats during streaming.
-export interface MessageMeta {
-  text?: string
-  is_error?: boolean
-  usage?: TokenUsage
-  cost?: Cost
-  duration_ms?: number
-  duration_api_ms?: number
-  num_turns?: number
-  api_calls?: number
-  model?: string
-  api_call_usages?: TokenUsage[]
-  tool_events?: ToolEvent[]
-  // Client-side enrichments
+export type MessageMeta = Partial<ResultEvent> & {
   tools?: ToolEvent[]
   toolCalls?: number
   rawStats?: Record<string, unknown>
@@ -121,6 +111,7 @@ export interface LogRow {
   // Displayed IDs.
   clientId?: string
   clientRequestId?: string    // caller's per-turn id, stamped on every event in the turn
+  turnId?: string             // bridge-minted per-turn id, covers user_message → result
   messageId?: string          // canonical bridge-server MessageID (msg_<ULID>)
   harnessMessageId?: string   // harness-native completion id (Anthropic msg_…)
 
@@ -161,10 +152,14 @@ export type ActivityKind =
 
 // --- SSE types ---
 
+// EventData is the canonical bridge Event, extended with event_id which
+// log-store injects when replaying history (not present on live SSE events).
+export type EventData = Event & { event_id?: number }
+
 export interface BridgeEvent {
-  id?: string
-  type: string
-  data: Record<string, unknown>
+  id?: string                   // SSE `id:` line, stringified row id
+  type: string                  // SSE `event:` line; mirrors data.type for live events
+  data: EventData
 }
 
 // --- Hook return types ---
