@@ -106,6 +106,50 @@ export interface Message {
   sessionId?: string
 }
 
+// LogRow is the flat event-log view of a session. One row per server event,
+// with rows that share a bridge message_id coalesced together (stream deltas
+// accumulate text, tool_call/tool_result merge, result adds stats). Rows
+// without a message_id (system, session_state, session_info) stand alone.
+//
+// See useBridgeSession's reducer for the coalesce rules.
+export type LogRowActor = 'user' | 'assistant' | 'system'
+
+export interface LogRow {
+  // Stable React key: messageId when coalescing, otherwise "evt_<eventId>".
+  key: string
+
+  // Displayed IDs.
+  clientId?: string
+  messageId?: string          // canonical bridge-server MessageID (msg_<ULID>)
+  harnessMessageId?: string   // harness-native completion id (Anthropic msg_…)
+
+  // Internal — tracks which event rows contributed, used to dedup SSE replay.
+  eventIds: number[]
+
+  // Header metadata.
+  actor: LogRowActor
+  eventType: string           // type of the first event for this row
+  subtype?: string            // populated for system/thinking events
+  timestamp: string
+
+  // Coalesced body payloads.
+  text?: string               // user text OR streamed text_delta OR result text
+  thinking?: string           // accumulated thinking text
+  tools?: ToolEvent[]         // tool_call + tool_result pairs
+  usage?: TokenUsage          // per-completion or per-turn token usage
+  meta?: MessageMeta          // full result payload (tokens, cost, duration…)
+  systemMessage?: string      // SystemEvent.Message
+  systemFields?: Record<string, unknown>  // typed SystemEvent fields (attempt, etc.)
+  stateTransition?: { from?: string; to: string; reason?: string }
+  sessionInfo?: SessionInfo
+  errorMessage?: string
+
+  // Raw events that composed this row (for "show raw" expand).
+  events: Array<Record<string, unknown>>
+
+  done?: boolean              // terminal row (result, error, user_message)
+}
+
 export type SessionUIState = 'empty' | 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'aborted'
 
 export type ActivityKind =
@@ -135,7 +179,7 @@ export interface CreateSessionOpts {
 export interface UseBridgeSessionReturn {
   sessions: ManagedSession[]
   activeSession: ManagedSession | null
-  messages: Message[]
+  logRows: LogRow[]
   uiState: SessionUIState
   activity: ActivityKind
   connected: boolean

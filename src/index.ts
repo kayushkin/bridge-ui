@@ -21,6 +21,8 @@ export type {
   ToolEvent,
   MessageMeta,
   Message,
+  LogRow,
+  LogRowActor,
   SessionUIState,
   ActivityKind,
   BridgeEvent,

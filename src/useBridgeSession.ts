@@ -3,130 +3,212 @@ import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
   BridgeEvent, ManagedSession, SessionUIState, ActivityKind,
-  Message, MessageMeta, CreateSessionOpts, UseBridgeSessionReturn,
+  LogRow, LogRowActor, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
+  SessionInfo, TokenUsage, MessageMeta,
 } from './types'
 
-// --- Normalize messages from /messages API ---
-// The server returns MaterializedMessage with tools at the top level and meta as
-// a ResultEvent. Merge top-level tools into meta for uniform access.
-
-function normalizeMessage(m: Message & { harness_message_id?: string }, index: number, sessionId: string): Message {
-  const result: Message = {
-    ...m,
-    id: m.id ?? `hist-${index}`,
-    harnessMessageId: m.harnessMessageId ?? m.harness_message_id,
-    sessionId: m.sessionId ?? sessionId,
-  }
-
-  if (m.tools?.length) {
-    result.meta = { ...result.meta, tools: m.tools, toolCalls: m.tools.length }
-  }
-
-  return result
-}
-
-// --- Event-driven message reducer ---
+// --- Event envelope ---
 //
-// Every chat event from the server carries a canonical `message_id` (ULID,
-// minted by the bridge-server's harness manager). The reducer keys off that
-// id: events with a known id update the existing message; events with a new
-// id create one. Dedup uses the event's SSE RowID — replays after reconnect
-// are idempotent because we never re-apply a row we've already seen.
+// Unified shape for both live SSE events and history-replayed events. History
+// events arrive as bare `msg.Event` objects (with `event_id` injected by
+// log-store); live events arrive in the SSE BridgeEvent envelope where the
+// stored event is under `data` and the SSE `id:` line carries the row id.
 
 interface EventEnvelope {
-  id?: string                          // SSE id = event RowID
+  id?: string                           // SSE `id:` line, stringified row id
   type: string
   data: Record<string, unknown> & {
+    event_id?: number
     message_id?: string
     harness_message_id?: string
     bridge_id?: string
     timestamp?: string
+    [key: string]: unknown
   }
 }
 
-function applyEvent(prev: Message[], ev: EventEnvelope, sessionId: string): Message[] {
+function wrapHistoryEvent(ev: Record<string, unknown>): EventEnvelope {
+  const id = typeof ev.event_id === 'number' ? String(ev.event_id) : undefined
+  return {
+    id,
+    type: String(ev.type ?? 'message'),
+    data: ev as EventEnvelope['data'],
+  }
+}
+
+function eventIdOf(ev: EventEnvelope): number {
+  if (typeof ev.data.event_id === 'number') return ev.data.event_id
+  if (ev.id) return Number(ev.id) || 0
+  return 0
+}
+
+// --- LogRow reducer ---
+//
+// Rule: events with a bridge message_id coalesce into one row (stream deltas
+// accumulate, tool_call + tool_result merge, result finalizes). Events with
+// no message_id (system, session_state, session_info) stand alone, keyed by
+// their event_id. Dedup is per-event_id.
+
+function actorFor(eventType: string): LogRowActor {
+  switch (eventType) {
+    case 'user_message':
+      return 'user'
+    case 'system':
+    case 'session_state':
+    case 'session_info':
+      return 'system'
+    default:
+      return 'assistant'
+  }
+}
+
+function freshRow(ev: EventEnvelope): LogRow {
   const msgId = ev.data.message_id
-  if (!msgId) return prev   // bookkeeping event (system, session_state, …) — no bubble
-
-  const rowId = ev.id ? Number(ev.id) : 0
-  const idx = prev.findIndex(m => m.id === msgId)
-
-  if (idx === -1) {
-    const role = ev.type === 'user_message' ? 'user' : 'assistant'
-    const fresh: Message = {
-      id: msgId,
-      harnessMessageId: ev.data.harness_message_id,
-      role,
-      content: '',
-      timestamp: ev.data.timestamp || new Date().toISOString(),
-      sessionId,
-      lastEventRowId: rowId,
-    }
-    return [...prev, applyDelta(fresh, ev)]
+  const evId = eventIdOf(ev)
+  return {
+    key: msgId || `evt_${evId}`,
+    clientId: undefined,
+    messageId: msgId,
+    harnessMessageId: ev.data.harness_message_id,
+    eventIds: [],
+    actor: actorFor(ev.type),
+    eventType: ev.type,
+    subtype: subtypeOf(ev),
+    timestamp: String(ev.data.timestamp || new Date().toISOString()),
+    events: [],
   }
-
-  const existing = prev[idx]
-  if (rowId && existing.lastEventRowId && rowId <= existing.lastEventRowId) {
-    return prev   // already applied — replay no-op
-  }
-  const updated: Message = {
-    ...applyDelta(existing, ev),
-    lastEventRowId: rowId || existing.lastEventRowId,
-    harnessMessageId: existing.harnessMessageId ?? ev.data.harness_message_id,
-  }
-  const next = prev.slice()
-  next[idx] = updated
-  return next
 }
 
-function applyDelta(m: Message, ev: EventEnvelope): Message {
+function subtypeOf(ev: EventEnvelope): string | undefined {
+  if (ev.type === 'system') {
+    const sys = ev.data.system as { subtype?: string } | undefined
+    return sys?.subtype
+  }
+  if (ev.type === 'thinking') {
+    const t = ev.data.thinking as { subtype?: string } | undefined
+    return t?.subtype
+  }
+  return undefined
+}
+
+function applyDelta(row: LogRow, ev: EventEnvelope): LogRow {
+  const events = [...row.events, ev.data]
+  const base: LogRow = { ...row, events }
+
   switch (ev.type) {
     case 'user_message': {
       const result = ev.data.result as { text?: string } | undefined
-      return { ...m, content: result?.text ?? m.content, done: true }
+      return { ...base, text: result?.text ?? row.text, done: true }
     }
     case 'stream': {
-      const stream = ev.data.stream as { delta?: { type: string; text?: string; thinking?: string } } | undefined
+      const stream = ev.data.stream as {
+        delta?: { type: string; text?: string; thinking?: string }
+        usage?: TokenUsage
+      } | undefined
       const d = stream?.delta
-      if (d?.type === 'text_delta') return { ...m, content: m.content + (d.text || '') }
-      if (d?.type === 'thinking_delta') return { ...m, thinking: (m.thinking || '') + (d.thinking || '') }
-      return m
+      let next = base
+      if (d?.type === 'text_delta') next = { ...next, text: (row.text || '') + (d.text || '') }
+      else if (d?.type === 'thinking_delta') next = { ...next, thinking: (row.thinking || '') + (d.thinking || '') }
+      if (stream?.usage) next = { ...next, usage: stream.usage }
+      return next
     }
     case 'thinking': {
       const t = ev.data.thinking as { text?: string } | undefined
-      return { ...m, thinking: (m.thinking || '') + (t?.text || '') }
+      return { ...base, thinking: (row.thinking || '') + (t?.text || '') }
     }
     case 'tool_call': {
       const tc = ev.data.tool_call as { tool_id?: string; name?: string; input?: Record<string, unknown> } | undefined
-      if (!tc) return m
-      const tools = [...(m.meta?.tools || []), { tool: tc.name || '', input: tc.input }]
-      return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } }
+      if (!tc) return base
+      const tools = [...(row.tools || []), { tool: tc.name || '', input: tc.input } satisfies ToolEvent]
+      return { ...base, tools }
     }
     case 'tool_result': {
       const tr = ev.data.tool_result as { tool_id?: string; name?: string; output?: string; is_error?: boolean } | undefined
-      if (!tr) return m
-      const tools = (m.meta?.tools || []).slice()
-      // Match by name (since tool_id isn't preserved on the client tools[] yet)
-      // and prefer the most recent un-resolved tool with that name.
+      if (!tr) return base
+      const tools = (row.tools || []).slice()
       for (let i = tools.length - 1; i >= 0; i--) {
         if (tools[i].tool === tr.name && !tools[i].output) {
           tools[i] = { ...tools[i], output: tr.output, error: tr.is_error }
           break
         }
       }
-      return { ...m, meta: { ...m.meta, tools, toolCalls: tools.length } }
+      return { ...base, tools }
     }
     case 'result': {
-      const result = ev.data.result as MessageMeta & { text?: string } | undefined
+      const result = ev.data.result as (MessageMeta & { text?: string; usage?: TokenUsage }) | undefined
       const meta: MessageMeta = { ...(result || {}), rawStats: ev.data as Record<string, unknown> }
-      return { ...m, content: result?.text || m.content, meta: { ...m.meta, ...meta }, done: true }
+      return {
+        ...base,
+        text: result?.text || row.text,
+        usage: result?.usage ?? row.usage,
+        meta: { ...row.meta, ...meta },
+        done: true,
+      }
     }
     case 'error': {
-      return { ...m, done: true }
+      const err = ev.data.error as { message?: string } | undefined
+      return { ...base, errorMessage: err?.message || 'error', done: true }
+    }
+    case 'system': {
+      const sys = ev.data.system as { subtype?: string; message?: string; [k: string]: unknown } | undefined
+      if (!sys) return base
+      const { subtype, message, ...rest } = sys
+      void subtype
+      return {
+        ...base,
+        systemMessage: message,
+        systemFields: Object.keys(rest).length > 0 ? rest : undefined,
+        done: true,
+      }
+    }
+    case 'session_state': {
+      const st = ev.data.state as { state?: string; previous?: string; reason?: string } | undefined
+      if (!st) return base
+      return {
+        ...base,
+        stateTransition: { to: st.state || '', from: st.previous, reason: st.reason },
+        done: true,
+      }
+    }
+    case 'session_info': {
+      const info = ev.data.info as SessionInfo | undefined
+      return { ...base, sessionInfo: info, done: true }
     }
     default:
-      return m
+      return base
   }
+}
+
+function applyEventToRows(rows: LogRow[], ev: EventEnvelope): LogRow[] {
+  const evId = eventIdOf(ev)
+  const msgId = ev.data.message_id
+
+  if (msgId) {
+    const idx = rows.findIndex(r => r.messageId === msgId)
+    if (idx === -1) {
+      const fresh = freshRow(ev)
+      const updated = applyDelta(fresh, ev)
+      updated.eventIds = evId ? [evId] : []
+      return [...rows, updated]
+    }
+    const existing = rows[idx]
+    if (evId && existing.eventIds.includes(evId)) return rows
+    const updated = applyDelta(existing, ev)
+    updated.eventIds = evId ? [...existing.eventIds, evId] : existing.eventIds
+    if (!existing.harnessMessageId && ev.data.harness_message_id) {
+      updated.harnessMessageId = ev.data.harness_message_id
+    }
+    const next = rows.slice()
+    next[idx] = updated
+    return next
+  }
+
+  // Standalone row, keyed by event_id. Dedup against its own eventIds[0].
+  if (evId && rows.some(r => r.eventIds[0] === evId)) return rows
+  const fresh = freshRow(ev)
+  const updated = applyDelta(fresh, ev)
+  updated.eventIds = evId ? [evId] : []
+  return [...rows, updated]
 }
 
 // --- Debounce helper ---
@@ -148,7 +230,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   const [sessions, setSessions] = useState<ManagedSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [logRows, setLogRows] = useState<LogRow[]>([])
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -193,8 +275,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const activeSession = sessions.find(s => s.bridge_id === activeSessionId) || null
   activeSessionRef.current = activeSession
 
-  // Immediately patch a session's state in the local array so uiState
-  // recomputes without waiting for the debounced server refresh.
   const patchSessionState = useCallback((sessionId: string, state: string) => {
     setSessions(prev => prev.map(s =>
       s.bridge_id === sessionId ? { ...s, state } : s,
@@ -228,7 +308,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         const events = connectSSE(fetchFn, basePath, sessionId, lastEventId.current, abort.signal)
         for await (const event of events) {
           if (event.id) lastEventId.current = event.id
-          handleSSEEvent(event, sessionId)
+          handleSSEEvent(event)
         }
       } catch {
         if (abort.signal.aborted) return
@@ -236,14 +316,12 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
     })()
 
-    function handleSSEEvent(event: BridgeEvent, sessId: string) {
+    function handleSSEEvent(event: BridgeEvent) {
       const { type, data } = event
+      const sessId = sessionId
 
-      // Apply the event to the message store. A no-op for bookkeeping events
-      // (system, session_state, session_info) which carry no message_id.
-      setMessages(prev => applyEvent(prev, event as EventEnvelope, sessId))
+      setLogRows(prev => applyEventToRows(prev, event as EventEnvelope))
 
-      // Activity / sidebar / error side effects.
       switch (type) {
         case 'stream': {
           const delta = (data.stream as { delta?: { type?: string } } | undefined)?.delta
@@ -304,20 +382,34 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState])
 
   // --- History loading ---
+  //
+  // Fetch raw events from /history (each event JSON has event_id injected by
+  // log-store), replay through the reducer to build logRows, and capture the
+  // max event_id so SSE reconnect resumes cleanly.
 
   const loadHistory = useCallback(async (sessionId: string) => {
     const loadId = ++historyLoadId.current
     setLoadingHistory(true)
     try {
-      const res = await fetchFn(`${basePath}/sessions/${sessionId}/messages`)
+      const res = await fetchFn(`${basePath}/sessions/${sessionId}/history`)
       if (!res.ok) {
         setError(`History load failed: ${res.status} ${res.statusText}`)
         return
       }
-      const msgs: Message[] = await res.json()
+      const raws: Array<Record<string, unknown>> = await res.json()
 
       if (loadId !== historyLoadId.current) return
-      if (msgs) setMessages(msgs.map((m, i) => normalizeMessage(m, i, sessionId)))
+
+      let rows: LogRow[] = []
+      let maxEventId = 0
+      for (const raw of raws || []) {
+        const ev = wrapHistoryEvent(raw)
+        rows = applyEventToRows(rows, ev)
+        const id = eventIdOf(ev)
+        if (id > maxEventId) maxEventId = id
+      }
+      setLogRows(rows)
+      lastEventId.current = maxEventId > 0 ? String(maxEventId) : undefined
     } catch (err) {
       setError(`History load failed: ${err}`)
     } finally {
@@ -335,12 +427,12 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
     if (!id) {
       setActiveSessionId(null)
-      setMessages([])
+      setLogRows([])
       return
     }
 
     setActiveSessionId(id)
-    setMessages([])
+    setLogRows([])
     lastEventId.current = undefined
 
     ;(async () => {
@@ -408,20 +500,22 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const send = useCallback(async (text: string) => {
     if (!activeSessionId || !text.trim()) return
 
-    // Optimistic user message keyed by clientId. The /send response returns
-    // the canonical bridge MessageID; we patch the message in-place so when
-    // the user_message event later arrives via SSE it lands on the same row.
+    // Optimistic user row keyed by clientId. When /send returns with the
+    // canonical bridge MessageID we patch it onto the row; the subsequent
+    // user_message SSE event then coalesces into the same row.
     const clientId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const optimistic: Message = {
-      id: clientId,
+    const optimistic: LogRow = {
+      key: clientId,
       clientId,
-      role: 'user',
-      content: text,
+      eventIds: [],
+      actor: 'user',
+      eventType: 'user_message',
       timestamp: new Date().toISOString(),
-      sessionId: activeSessionId,
+      text,
+      events: [],
       done: true,
     }
-    setMessages(prev => [...prev, optimistic])
+    setLogRows(prev => [...prev, optimistic])
     setError(null)
     wasInterrupted.current = false
 
@@ -438,15 +532,11 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       const body = await res.json().catch(() => ({})) as { message_id?: string }
       if (body.message_id) {
-        setMessages(prev => prev.map(m =>
-          m.clientId === clientId ? { ...m, id: body.message_id!, clientId: undefined } : m,
+        setLogRows(prev => prev.map(r =>
+          r.clientId === clientId ? { ...r, messageId: body.message_id, key: body.message_id! } : r,
         ))
       }
 
-      // Reset lastEventId so SSE connects without Last-Event-ID.
-      // This makes the server use ListCurrentTurnEventsWithIDs (turn-aware
-      // replay) instead of ListEventsSinceID (which replays everything
-      // including user_message events from the previous turn boundary).
       lastEventId.current = undefined
       startSSE(activeSessionId)
       refreshSessions()
@@ -455,25 +545,31 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
   }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions])
 
+  const markLastAssistantDone = useCallback(() => {
+    setLogRows(prev => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].actor === 'assistant' && !prev[i].done) {
+          const next = prev.slice()
+          next[i] = { ...next[i], done: true }
+          return next
+        }
+      }
+      return prev
+    })
+  }, [])
+
   const interrupt = useCallback(async () => {
     if (!activeSessionId) return
     try {
       await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' })
       wasInterrupted.current = true
-      // Mark the open assistant message done so the typing indicator clears.
-      setMessages(prev => {
-        const idx = prev.length - 1
-        if (idx < 0 || prev[idx].role !== 'assistant' || prev[idx].done) return prev
-        const next = prev.slice()
-        next[idx] = { ...next[idx], done: true }
-        return next
-      })
+      markLastAssistantDone()
       setActivity({ kind: 'idle' })
       refreshSessions()
     } catch (err) {
       setError(`Interrupt failed: ${err}`)
     }
-  }, [fetchFn, basePath, activeSessionId, refreshSessions])
+  }, [fetchFn, basePath, activeSessionId, refreshSessions, markLastAssistantDone])
 
   const resume = useCallback(async () => {
     if (!activeSessionId) return
@@ -496,20 +592,14 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     try {
       await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' })
       closeSSE()
-      setMessages(prev => {
-        const idx = prev.length - 1
-        if (idx < 0 || prev[idx].role !== 'assistant' || prev[idx].done) return prev
-        const next = prev.slice()
-        next[idx] = { ...next[idx], done: true }
-        return next
-      })
+      markLastAssistantDone()
       wasInterrupted.current = false
       setActivity({ kind: 'idle' })
       refreshSessions()
     } catch (err) {
       setError(`Stop failed: ${err}`)
     }
-  }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions])
+  }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions, markLastAssistantDone])
 
   const compact = useCallback(async (summary?: string) => {
     if (!activeSessionId) return
@@ -575,7 +665,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
   }, [fetchFn, basePath, activeSessionId])
 
-  // Cleanup on unmount
   useEffect(() => () => {
     closeSSE()
     debouncedRefresh.cancel()
@@ -584,7 +673,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   return useMemo(() => ({
     sessions,
     activeSession,
-    messages,
+    logRows,
     uiState,
     activity,
     connected,
@@ -604,7 +693,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   }), [
     sessions,
     activeSession,
-    messages,
+    logRows,
     uiState,
     activity,
     connected,
@@ -623,4 +712,3 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     refreshSessions,
   ])
 }
-

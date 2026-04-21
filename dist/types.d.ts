@@ -42,6 +42,34 @@ export interface Message {
     agent?: string;
     sessionId?: string;
 }
+export type LogRowActor = 'user' | 'assistant' | 'system';
+export interface LogRow {
+    key: string;
+    clientId?: string;
+    messageId?: string;
+    harnessMessageId?: string;
+    eventIds: number[];
+    actor: LogRowActor;
+    eventType: string;
+    subtype?: string;
+    timestamp: string;
+    text?: string;
+    thinking?: string;
+    tools?: ToolEvent[];
+    usage?: TokenUsage;
+    meta?: MessageMeta;
+    systemMessage?: string;
+    systemFields?: Record<string, unknown>;
+    stateTransition?: {
+        from?: string;
+        to: string;
+        reason?: string;
+    };
+    sessionInfo?: SessionInfo;
+    errorMessage?: string;
+    events: Array<Record<string, unknown>>;
+    done?: boolean;
+}
 export type SessionUIState = 'empty' | 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'aborted';
 export type ActivityKind = {
     kind: 'idle';
@@ -68,7 +96,7 @@ export interface CreateSessionOpts {
 export interface UseBridgeSessionReturn {
     sessions: ManagedSession[];
     activeSession: ManagedSession | null;
-    messages: Message[];
+    logRows: LogRow[];
     uiState: SessionUIState;
     activity: ActivityKind;
     connected: boolean;

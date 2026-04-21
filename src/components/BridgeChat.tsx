@@ -7,8 +7,8 @@ import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeFolders, type UseBridgeFoldersReturn } from '../useBridgeFolders'
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
-import { ToolItem, ToolsSection } from './tools'
-import type { HarnessInfo, Message, MessageMeta, SessionInfo } from '../types'
+import { ToolsSection } from './tools'
+import type { HarnessInfo, LogRow, MessageMeta, SessionInfo, TokenUsage } from '../types'
 
 interface StoreModel {
   id: string
@@ -138,9 +138,122 @@ function MessageStats({ meta }: { meta: MessageMeta }) {
   )
 }
 
+/* ── Log row thresholds ──
+ * Rows whose primary payload is bigger than these get collapsed by default;
+ * the user can expand. "Raw events" is always collapsed initially.
+ */
+const COLLAPSE_TEXT_CHARS = 5000
+const COLLAPSE_TOOL_INPUT_CHARS = 500
+const COLLAPSE_TOOL_OUTPUT_CHARS = 1000
+
+function shouldAutoCollapse(row: LogRow): boolean {
+  if ((row.text?.length ?? 0) > COLLAPSE_TEXT_CHARS) return true
+  if ((row.thinking?.length ?? 0) > COLLAPSE_TEXT_CHARS) return true
+  for (const t of row.tools || []) {
+    if ((t.output?.length ?? 0) > COLLAPSE_TOOL_OUTPUT_CHARS) return true
+    if (JSON.stringify(t.input || {}).length > COLLAPSE_TOOL_INPUT_CHARS) return true
+  }
+  return false
+}
+
+function formatHMS(ts: string): string {
+  try {
+    const d = new Date(ts)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    const ss = String(d.getSeconds()).padStart(2, '0')
+    return `${hh}:${mm}:${ss}`
+  } catch { return ts }
+}
+
+function idTail(id: string, n = 10): string {
+  return id.length > n ? `…${id.slice(-n)}` : id
+}
+
+function UsageLine({ usage }: { usage: TokenUsage }) {
+  const parts: string[] = []
+  if (usage.input_tokens) parts.push(`in ${formatTokens(usage.input_tokens)}`)
+  if (usage.output_tokens) parts.push(`out ${formatTokens(usage.output_tokens)}`)
+  if (usage.cache_read_tokens) parts.push(`cache-read ${formatTokens(usage.cache_read_tokens)}`)
+  if (usage.cache_write_tokens) parts.push(`cache-write ${formatTokens(usage.cache_write_tokens)}`)
+  if (parts.length === 0) return null
+  return <div className="bc-row-usage">{parts.join(' · ')}</div>
+}
+
+/* ── Inline LogRow ── */
+function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
+  const [showRaw, setShowRaw] = useState(false)
+  const [collapsed, setCollapsed] = useState<boolean>(() => shouldAutoCollapse(row))
+
+  const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent
+  const typeLabel = row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType
+  const hasBody = row.text || row.thinking || (row.tools && row.tools.length > 0)
+    || row.usage || row.meta || row.systemMessage || row.systemFields
+    || row.stateTransition || row.sessionInfo || row.errorMessage
+
+  return (
+    <div className={`bc-row bc-row-${row.actor}`}>
+      <div className="bc-row-header" onClick={() => hasBody && setCollapsed(c => !c)}>
+        <span className="bc-row-ts">{formatHMS(row.timestamp)}</span>
+        <span className="bc-row-type">{typeLabel}</span>
+        <span className="bc-row-actor">{actorLabel}</span>
+        <span className="bc-row-ids">
+          {row.clientId && <code title="client id" className="bc-row-id bc-row-id-cli">cli:{idTail(row.clientId)}</code>}
+          {row.messageId && <code title="bridge-server message_id" className="bc-row-id bc-row-id-srv">srv:{idTail(row.messageId)}</code>}
+          {row.harnessMessageId && <code title="harness completion id" className="bc-row-id bc-row-id-hid">hid:{idTail(row.harnessMessageId)}</code>}
+        </span>
+        {hasBody && <span className="bc-row-collapse">{collapsed ? '▸' : '▾'}</span>}
+      </div>
+      {!collapsed && hasBody && (
+        <div className="bc-row-body">
+          {row.text && <div className="bc-row-text">{row.text}</div>}
+          {row.thinking && (
+            <details className="bc-row-thinking" open>
+              <summary>thinking</summary>
+              <div className="bc-row-thinking-text">{row.thinking}</div>
+            </details>
+          )}
+          {row.tools && row.tools.length > 0 && (
+            <ToolsSection tools={row.tools} turnDone={!!row.done} />
+          )}
+          {row.usage && <UsageLine usage={row.usage} />}
+          {row.meta && <MessageStats meta={row.meta} />}
+          {row.systemMessage && <div className="bc-row-system">{row.systemMessage}</div>}
+          {row.systemFields && (
+            <pre className="bc-row-json">{JSON.stringify(row.systemFields, null, 2)}</pre>
+          )}
+          {row.stateTransition && (
+            <div className="bc-row-state">
+              {row.stateTransition.from ?? '—'} → <strong>{row.stateTransition.to}</strong>
+              {row.stateTransition.reason ? ` (${row.stateTransition.reason})` : ''}
+            </div>
+          )}
+          {row.sessionInfo && (
+            <details className="bc-row-info">
+              <summary>session info</summary>
+              <pre className="bc-row-json">{JSON.stringify(row.sessionInfo, null, 2)}</pre>
+            </details>
+          )}
+          {row.errorMessage && <div className="bc-row-error">{row.errorMessage}</div>}
+        </div>
+      )}
+      {row.events && row.events.length > 0 && (
+        <div className="bc-row-raw-wrap">
+          <button className="bc-row-raw-toggle" onClick={() => setShowRaw(s => !s)}>
+            {showRaw ? 'hide raw' : `raw (${row.events.length})`}
+          </button>
+          {showRaw && (
+            <pre className="bc-row-json">{JSON.stringify(row.events, null, 2)}</pre>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Inline Thread ── */
-function Thread({ messages, loading, uiState, activity, error, agent }: {
-  messages: Message[]
+function Thread({ rows, loading, uiState, activity, error, agent }: {
+  rows: LogRow[]
   loading: boolean
   uiState: string
   activity: { kind: string; name?: string }
@@ -148,47 +261,15 @@ function Thread({ messages, loading, uiState, activity, error, agent }: {
   agent: string
 }) {
   const endRef = useRef<HTMLDivElement>(null)
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [rows])
 
   if (loading) return <div className="bc-thread"><div className="bc-loading">Loading history...</div></div>
-  if (messages.length === 0 && !error) return <div className="bc-thread"><div className="bc-empty">Send a message to start</div></div>
+  if (rows.length === 0 && !error) return <div className="bc-thread"><div className="bc-empty">Send a message to start</div></div>
 
   return (
     <div className="bc-thread">
       {error && <div className="bridge-error">{error}</div>}
-      {messages.map((m, i) => {
-        const tools = m.meta?.tools || []
-        const isStreaming = m.role === 'assistant' && !m.done
-        return (
-          <div key={m.id || i} className={`bc-msg bc-msg-${m.role}`}>
-            <div className="bc-msg-role">
-              {m.role === 'user' ? 'You' : agent}
-            </div>
-            {m.thinking && <div className="bc-msg-thinking">{m.thinking}</div>}
-            {isStreaming && tools.length > 0 ? (
-              <div className="bc-msg-split">
-                <div className="bc-msg-split-text">
-                  {m.content ? <div className="bc-msg-content">{m.content}</div> : <span className="bc-typing">...</span>}
-                </div>
-                <div className="bc-msg-split-tools">
-                  <div className="bc-split-tools-header">Tools</div>
-                  {tools.map((t, ti) => <ToolItem key={ti} tool={t} running={!t.output && !t.error} turnDone={false} />)}
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="bc-msg-content">{m.content}</div>
-                {tools.length > 0 && (
-                  <ToolsSection tools={tools} turnDone={!!m.done} />
-                )}
-              </>
-            )}
-            {m.meta && m.role === 'assistant' && m.done && (
-              <MessageStats meta={m.meta} />
-            )}
-          </div>
-        )
-      })}
+      {rows.map(row => <LogRowView key={row.key} row={row} agent={agent} />)}
       {uiState === 'running' && (
         <div className="bc-activity">
           <span className="bc-activity-dot" />
@@ -249,11 +330,11 @@ function Composer({ connected, streaming, paused, onSend, onStop, onResume }: {
 }
 
 /* ── Inline Session Header ── */
-function SessionHeader({ chat, uiState, activity, messages, instance, onRename, onPrev, onNext, hasPrev, hasNext }: {
+function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext }: {
   chat: ChatSession | null
   uiState: string
   activity: { kind: string; name?: string }
-  messages: Message[]
+  rows: LogRow[]
   instance: { name: string; transport: string } | null
   onRename: (name: string) => void
   onPrev: () => void
@@ -263,11 +344,11 @@ function SessionHeader({ chat, uiState, activity, messages, instance, onRename, 
 }) {
   if (!chat || uiState === 'empty') return null
 
-  const completed = messages.filter(m => m.role === 'assistant' && m.done && m.meta)
+  const completed = rows.filter(r => r.actor === 'assistant' && r.done && r.meta)
   const last = completed[completed.length - 1]
   const meta = last?.meta
   let totalCost = 0
-  for (const m of completed) totalCost += m.meta?.cost?.total_usd ?? 0
+  for (const r of completed) totalCost += r.meta?.cost?.total_usd ?? 0
 
   const contextTokens = meta?.usage?.context_tokens ?? 0
   const contextLimit = meta?.usage?.context_limit ?? 200_000
@@ -1062,7 +1143,7 @@ export function BridgeChat() {
             chat={activeChat}
             uiState={bridge.uiState}
             activity={bridge.activity}
-            messages={bridge.messages}
+            rows={bridge.logRows}
             instance={activeInstance}
             onRename={name => activeChat?.sessionId && handleRenameSession(activeChat.sessionId, name)}
             onPrev={handlePrevSession}
@@ -1071,7 +1152,7 @@ export function BridgeChat() {
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
           />
           <Thread
-            messages={bridge.messages}
+            rows={bridge.logRows}
             loading={bridge.loadingHistory}
             uiState={bridge.uiState}
             activity={bridge.activity}
