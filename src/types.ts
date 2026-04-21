@@ -57,7 +57,12 @@ export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>
 // ToolEvent matches the canonical MaterializedTool shape (input as object,
 // not stringified). The streaming and history paths both deliver tools in
 // this form so renderers can read fields directly.
+//
+// tool_id is the harness-native tool_use id (e.g. Anthropic's toolu_…) — the
+// same id that task_progress SystemEvents carry, so consumers can correlate
+// a tool invocation to its narration bubbles.
 export interface ToolEvent {
+  tool_id: string
   tool: string
   input?: Record<string, unknown>
   output?: string
@@ -114,6 +119,7 @@ export interface LogRow {
   turnId?: string             // bridge-minted per-turn id, covers user_message → result
   messageId?: string          // canonical bridge-server MessageID (msg_<ULID>)
   harnessMessageId?: string   // harness-native completion id (Anthropic msg_…)
+  toolUseId?: string          // harness-native tool_use id (toolu_…) on SystemEvent rows that narrate a tool call
 
   // Internal — tracks which event rows contributed, used to dedup SSE replay.
   eventIds: number[]

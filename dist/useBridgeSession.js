@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
 import { connectSSE } from './bridgeSSE';
+// --- Event envelope ---
+//
+// Unified shape for both live SSE events and history-replayed events. History
+// events arrive as bare `msg.Event` objects (with `event_id` injected by
+// log-store); live events arrive in the SSE BridgeEvent envelope where the
+// stored event is under `data` and the SSE `id:` line carries the row id.
 function wrapHistoryEvent(ev) {
     const id = typeof ev.event_id === 'number' ? String(ev.event_id) : undefined;
     return {
         id,
-        type: String(ev.type ?? 'message'),
+        type: ev.type || 'message',
         data: ev,
     };
 }
@@ -41,25 +47,22 @@ function freshRow(ev) {
         key: msgId || `evt_${evId}`,
         clientId: undefined,
         clientRequestId: ev.data.client_request_id,
+        turnId: ev.data.turn_id,
         messageId: msgId,
         harnessMessageId: ev.data.harness_message_id,
         eventIds: [],
         actor: actorFor(ev.type),
         eventType: ev.type,
         subtype: subtypeOf(ev),
-        timestamp: String(ev.data.timestamp || new Date().toISOString()),
+        timestamp: ev.data.timestamp || new Date().toISOString(),
         events: [],
     };
 }
 function subtypeOf(ev) {
-    if (ev.type === 'system') {
-        const sys = ev.data.system;
-        return sys?.subtype;
-    }
-    if (ev.type === 'thinking') {
-        const t = ev.data.thinking;
-        return t?.subtype;
-    }
+    if (ev.type === 'system')
+        return ev.data.system?.subtype;
+    if (ev.type === 'thinking')
+        return ev.data.thinking?.subtype;
     return undefined;
 }
 function applyDelta(row, ev) {
@@ -67,30 +70,25 @@ function applyDelta(row, ev) {
     const base = { ...row, events };
     switch (ev.type) {
         case 'user_message': {
-            const result = ev.data.result;
-            return { ...base, text: result?.text ?? row.text, done: true };
+            return { ...base, text: ev.data.result?.text ?? row.text, done: true };
         }
         case 'stream': {
-            const stream = ev.data.stream;
-            const d = stream?.delta;
+            const d = ev.data.stream?.delta;
             let next = base;
             if (d?.type === 'text_delta')
                 next = { ...next, text: (row.text || '') + (d.text || '') };
             else if (d?.type === 'thinking_delta')
                 next = { ...next, thinking: (row.thinking || '') + (d.thinking || '') };
-            if (stream?.usage)
-                next = { ...next, usage: stream.usage };
             return next;
         }
         case 'thinking': {
-            const t = ev.data.thinking;
-            return { ...base, thinking: (row.thinking || '') + (t?.text || '') };
+            return { ...base, thinking: (row.thinking || '') + (ev.data.thinking?.text || '') };
         }
         case 'tool_call': {
             const tc = ev.data.tool_call;
             if (!tc)
                 return base;
-            const tools = [...(row.tools || []), { tool: tc.name || '', input: tc.input }];
+            const tools = [...(row.tools || []), { tool_id: tc.tool_id || '', tool: tc.name || '', input: tc.input }];
             return { ...base, tools };
         }
         case 'tool_result': {
@@ -98,11 +96,18 @@ function applyDelta(row, ev) {
             if (!tr)
                 return base;
             const tools = (row.tools || []).slice();
-            for (let i = tools.length - 1; i >= 0; i--) {
-                if (tools[i].tool === tr.name && !tools[i].output) {
-                    tools[i] = { ...tools[i], output: tr.output, error: tr.is_error };
-                    break;
+            // Match by tool_id (canonical pairing) and fall back to name for pre-id events.
+            let idx = tr.tool_id ? tools.findIndex(t => t.tool_id === tr.tool_id) : -1;
+            if (idx === -1) {
+                for (let i = tools.length - 1; i >= 0; i--) {
+                    if (tools[i].tool === tr.name && !tools[i].output) {
+                        idx = i;
+                        break;
+                    }
                 }
+            }
+            if (idx !== -1) {
+                tools[idx] = { ...tools[idx], output: tr.output, error: tr.is_error };
             }
             return { ...base, tools };
         }
@@ -118,8 +123,7 @@ function applyDelta(row, ev) {
             };
         }
         case 'error': {
-            const err = ev.data.error;
-            return { ...base, errorMessage: err?.message || 'error', done: true };
+            return { ...base, errorMessage: ev.data.error?.message || 'error', done: true };
         }
         case 'system': {
             const sys = ev.data.system;
@@ -129,6 +133,7 @@ function applyDelta(row, ev) {
             void subtype;
             return {
                 ...base,
+                toolUseId: sys.tool_use_id || row.toolUseId,
                 systemMessage: message,
                 systemFields: Object.keys(rest).length > 0 ? rest : undefined,
                 done: true,
@@ -173,6 +178,9 @@ function applyEventToRows(rows, ev) {
         }
         if (!existing.clientRequestId && ev.data.client_request_id) {
             updated.clientRequestId = ev.data.client_request_id;
+        }
+        if (!existing.turnId && ev.data.turn_id) {
+            updated.turnId = ev.data.turn_id;
         }
         const next = rows.slice();
         next[idx] = updated;
@@ -286,8 +294,7 @@ export function useBridgeSession() {
             setLogRows(prev => applyEventToRows(prev, event));
             switch (type) {
                 case 'stream': {
-                    const delta = data.stream?.delta;
-                    if (delta?.type === 'thinking_delta')
+                    if (data.stream?.delta?.type === 'thinking_delta')
                         setActivity({ kind: 'thinking' });
                     else
                         setActivity({ kind: 'streaming' });
@@ -297,8 +304,7 @@ export function useBridgeSession() {
                     setActivity({ kind: 'thinking' });
                     break;
                 case 'tool_call': {
-                    const tc = data.tool_call;
-                    setActivity({ kind: 'tool', name: tc?.name || '' });
+                    setActivity({ kind: 'tool', name: data.tool_call?.name || '' });
                     break;
                 }
                 case 'tool_result':
@@ -322,8 +328,7 @@ export function useBridgeSession() {
                     refreshSessionsImpl();
                     break;
                 case 'error': {
-                    const errData = data.error;
-                    setError(errData?.message || 'Stream error');
+                    setError(data.error?.message || 'Stream error');
                     setActivity({ kind: 'idle' });
                     patchSessionState(sessId, 'error');
                     break;

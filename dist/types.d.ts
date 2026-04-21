@@ -1,30 +1,20 @@
-import type { TokenUsage, Cost, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo } from '@kayushkin/llm-bridge-types';
-export type { TokenUsage, Cost, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, };
+import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo } from '@kayushkin/llm-bridge-types';
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 export interface ToolEvent {
+    tool_id: string;
     tool: string;
     input?: Record<string, unknown>;
     output?: string;
     error?: boolean;
 }
-export interface MessageMeta {
-    text?: string;
-    is_error?: boolean;
-    usage?: TokenUsage;
-    cost?: Cost;
-    duration_ms?: number;
-    duration_api_ms?: number;
-    num_turns?: number;
-    api_calls?: number;
-    model?: string;
-    api_call_usages?: TokenUsage[];
-    tool_events?: ToolEvent[];
+export type MessageMeta = Partial<ResultEvent> & {
     tools?: ToolEvent[];
     toolCalls?: number;
     rawStats?: Record<string, unknown>;
-}
+};
 export interface Message {
     role: 'user' | 'assistant' | 'system';
     content: string;
@@ -47,8 +37,10 @@ export interface LogRow {
     key: string;
     clientId?: string;
     clientRequestId?: string;
+    turnId?: string;
     messageId?: string;
     harnessMessageId?: string;
+    toolUseId?: string;
     eventIds: number[];
     actor: LogRowActor;
     eventType: string;
@@ -82,10 +74,13 @@ export type ActivityKind = {
     kind: 'tool';
     name: string;
 };
+export type EventData = Event & {
+    event_id?: number;
+};
 export interface BridgeEvent {
     id?: string;
     type: string;
-    data: Record<string, unknown>;
+    data: EventData;
 }
 export interface CreateSessionOpts {
     harness: string;

@@ -95,18 +95,22 @@ function applyDelta(row: LogRow, ev: BridgeEvent): LogRow {
     case 'tool_call': {
       const tc = ev.data.tool_call
       if (!tc) return base
-      const tools = [...(row.tools || []), { tool: tc.name || '', input: tc.input } satisfies ToolEvent]
+      const tools = [...(row.tools || []), { tool_id: tc.tool_id || '', tool: tc.name || '', input: tc.input } satisfies ToolEvent]
       return { ...base, tools }
     }
     case 'tool_result': {
       const tr = ev.data.tool_result
       if (!tr) return base
       const tools = (row.tools || []).slice()
-      for (let i = tools.length - 1; i >= 0; i--) {
-        if (tools[i].tool === tr.name && !tools[i].output) {
-          tools[i] = { ...tools[i], output: tr.output, error: tr.is_error }
-          break
+      // Match by tool_id (canonical pairing) and fall back to name for pre-id events.
+      let idx = tr.tool_id ? tools.findIndex(t => t.tool_id === tr.tool_id) : -1
+      if (idx === -1) {
+        for (let i = tools.length - 1; i >= 0; i--) {
+          if (tools[i].tool === tr.name && !tools[i].output) { idx = i; break }
         }
+      }
+      if (idx !== -1) {
+        tools[idx] = { ...tools[idx], output: tr.output, error: tr.is_error }
       }
       return { ...base, tools }
     }
@@ -131,6 +135,7 @@ function applyDelta(row: LogRow, ev: BridgeEvent): LogRow {
       void subtype
       return {
         ...base,
+        toolUseId: sys.tool_use_id || row.toolUseId,
         systemMessage: message,
         systemFields: Object.keys(rest).length > 0 ? rest : undefined,
         done: true,

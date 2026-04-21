@@ -212,6 +212,7 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
           {row.turnId && <code title="bridge-server turn_id" className="bc-row-id bc-row-id-turn">turn:{idTail(row.turnId)}</code>}
           {row.messageId && <code title="bridge-server message_id" className="bc-row-id bc-row-id-srv">srv:{idTail(row.messageId)}</code>}
           {row.harnessMessageId && <code title="harness completion id" className="bc-row-id bc-row-id-hid">hid:{idTail(row.harnessMessageId)}</code>}
+          {row.toolUseId && <code title="harness tool_use id" className="bc-row-id bc-row-id-tu">tu:{idTail(row.toolUseId)}</code>}
         </span>
         {canExpand && <span className="bc-row-collapse">{collapsed ? '▸' : '▾'}</span>}
       </div>

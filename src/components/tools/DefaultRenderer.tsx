@@ -13,6 +13,9 @@ export default function DefaultRenderer({ tool, running }: ToolRendererProps) {
     <div className={`bc-tool-item ${tool.error ? 'bc-tool-item-error' : ''} ${running ? 'bc-tool-item-running' : ''}`}>
       <div className="bc-tool-header">
         <span className="bc-tool-name">{tool.tool}</span>
+        {tool.tool_id && (
+          <code className="bc-row-id bc-row-id-tu" title="harness tool_use id">tu:{tool.tool_id.slice(-10)}</code>
+        )}
         {detail && <span className="bc-tool-detail">{detail}</span>}
         {running && <span className="bc-tool-spinner">⟳</span>}
         {tool.error && !running && <span className="bc-tool-error-badge">error</span>}
