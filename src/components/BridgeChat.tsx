@@ -182,18 +182,27 @@ function UsageLine({ usage }: { usage: TokenUsage }) {
 
 /* ── Inline LogRow ── */
 function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
-  const [showRaw, setShowRaw] = useState(false)
-  const [collapsed, setCollapsed] = useState<boolean>(() => shouldAutoCollapse(row))
-
   const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent
   const typeLabel = row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType
-  const hasBody = row.text || row.thinking || (row.tools && row.tools.length > 0)
+  const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
     || row.usage || row.meta || row.systemMessage || row.systemFields
-    || row.stateTransition || row.sessionInfo || row.errorMessage
+    || row.stateTransition || row.sessionInfo || row.errorMessage)
+  const hasRaw = !!(row.events && row.events.length > 0)
+  const canExpand = hasStructuredBody || hasRaw
+
+  // Auto-collapse rules: hide raw-only rows by default so the log stays
+  // compact, and collapse structured rows whose body would overflow.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (!hasStructuredBody && hasRaw) return true
+    return shouldAutoCollapse(row)
+  })
+  // When a row has no structured body, expanding it auto-reveals raw —
+  // otherwise the user would have to click twice to see anything.
+  const [showRaw, setShowRaw] = useState<boolean>(() => !hasStructuredBody && hasRaw)
 
   return (
     <div className={`bc-row bc-row-${row.actor}`}>
-      <div className="bc-row-header" onClick={() => hasBody && setCollapsed(c => !c)}>
+      <div className="bc-row-header" onClick={() => canExpand && setCollapsed(c => !c)}>
         <span className="bc-row-ts">{formatHMS(row.timestamp)}</span>
         <span className="bc-row-type">{typeLabel}</span>
         <span className="bc-row-actor">{actorLabel}</span>
@@ -202,9 +211,9 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
           {row.messageId && <code title="bridge-server message_id" className="bc-row-id bc-row-id-srv">srv:{idTail(row.messageId)}</code>}
           {row.harnessMessageId && <code title="harness completion id" className="bc-row-id bc-row-id-hid">hid:{idTail(row.harnessMessageId)}</code>}
         </span>
-        {hasBody && <span className="bc-row-collapse">{collapsed ? '▸' : '▾'}</span>}
+        {canExpand && <span className="bc-row-collapse">{collapsed ? '▸' : '▾'}</span>}
       </div>
-      {!collapsed && hasBody && (
+      {!collapsed && (
         <div className="bc-row-body">
           {row.text && <div className="bc-row-text">{row.text}</div>}
           {row.thinking && (
@@ -235,15 +244,15 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
             </details>
           )}
           {row.errorMessage && <div className="bc-row-error">{row.errorMessage}</div>}
-        </div>
-      )}
-      {row.events && row.events.length > 0 && (
-        <div className="bc-row-raw-wrap">
-          <button className="bc-row-raw-toggle" onClick={() => setShowRaw(s => !s)}>
-            {showRaw ? 'hide raw' : `raw (${row.events.length})`}
-          </button>
-          {showRaw && (
-            <pre className="bc-row-json">{JSON.stringify(row.events, null, 2)}</pre>
+          {hasRaw && (
+            <div className="bc-row-raw-wrap">
+              <button className="bc-row-raw-toggle" onClick={e => { e.stopPropagation(); setShowRaw(s => !s) }}>
+                {showRaw ? 'hide raw' : `raw (${row.events.length})`}
+              </button>
+              {showRaw && (
+                <pre className="bc-row-json">{JSON.stringify(row.events, null, 2)}</pre>
+              )}
+            </div>
           )}
         </div>
       )}
