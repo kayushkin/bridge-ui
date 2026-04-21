@@ -46,6 +46,7 @@ export type LogRowActor = 'user' | 'assistant' | 'system';
 export interface LogRow {
     key: string;
     clientId?: string;
+    clientRequestId?: string;
     messageId?: string;
     harnessMessageId?: string;
     eventIds: number[];

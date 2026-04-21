@@ -94,25 +94,21 @@ function MessageStats({ meta }) {
     const rows = flattenToRows(meta);
     return (_jsxs("div", { className: "bc-stats-wrapper", children: [_jsxs("button", { className: "bc-stats-toggle", onClick: () => setOpen(v => !v), children: [open ? '\u25BE' : '\u25B8', " Stats (", rows.length, ")"] }), open && (_jsx("div", { className: "bc-stats-dropdown", children: rows.map(([label, val], i) => (_jsxs("div", { className: "bc-stats-row", children: [_jsx("span", { className: "bc-stats-label", children: label }), _jsx("span", { className: "bc-stats-value", children: val })] }, `${label}-${i}`))) }))] }));
 }
-/* ── Log row thresholds ──
- * Rows whose primary payload is bigger than these get collapsed by default;
- * the user can expand. "Raw events" is always collapsed initially.
- */
-const COLLAPSE_TEXT_CHARS = 5000;
-const COLLAPSE_TOOL_INPUT_CHARS = 500;
-const COLLAPSE_TOOL_OUTPUT_CHARS = 1000;
-function shouldAutoCollapse(row) {
-    if ((row.text?.length ?? 0) > COLLAPSE_TEXT_CHARS)
-        return true;
-    if ((row.thinking?.length ?? 0) > COLLAPSE_TEXT_CHARS)
-        return true;
-    for (const t of row.tools || []) {
-        if ((t.output?.length ?? 0) > COLLAPSE_TOOL_OUTPUT_CHARS)
-            return true;
-        if (JSON.stringify(t.input || {}).length > COLLAPSE_TOOL_INPUT_CHARS)
-            return true;
+function isResultRow(row) {
+    return !!row.meta || row.eventType === 'result';
+}
+function groupEventsByType(events) {
+    const order = [];
+    const buckets = {};
+    for (const e of events) {
+        const t = String(e.type ?? 'unknown') || 'unknown';
+        if (!(t in buckets)) {
+            buckets[t] = [];
+            order.push(t);
+        }
+        buckets[t].push(e);
     }
-    return false;
+    return order.map(t => ({ type: t, events: buckets[t] }));
 }
 function formatHMS(ts) {
     try {
@@ -146,33 +142,95 @@ function UsageLine({ usage }) {
 /* ── Inline LogRow ── */
 function LogRowView({ row, agent }) {
     const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent;
-    const typeLabel = row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType;
+    const eventTypes = Array.from(new Set(row.events.map(e => String(e.type ?? '')).filter(Boolean)));
+    const typeLabel = eventTypes.length > 1
+        ? eventTypes.join('+')
+        : row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType;
     const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
         || row.usage || row.meta || row.systemMessage || row.systemFields
         || row.stateTransition || row.sessionInfo || row.errorMessage);
     const hasRaw = !!(row.events && row.events.length > 0);
     const canExpand = hasStructuredBody || hasRaw;
-    // Auto-collapse rules: hide raw-only rows by default so the log stays
-    // compact, and collapse structured rows whose body would overflow.
-    const [collapsed, setCollapsed] = useState(() => {
-        if (!hasStructuredBody && hasRaw)
-            return true;
-        return shouldAutoCollapse(row);
-    });
+    // Only the result row is expanded by default; everything else collapses
+    // so the log stays compact.
+    const [collapsed, setCollapsed] = useState(() => !isResultRow(row));
     // When a row has no structured body, expanding it auto-reveals raw —
     // otherwise the user would have to click twice to see anything.
     const [showRaw, setShowRaw] = useState(() => !hasStructuredBody && hasRaw);
-    return (_jsxs("div", { className: `bc-row bc-row-${row.actor}`, children: [_jsxs("div", { className: "bc-row-header", onClick: () => canExpand && setCollapsed(c => !c), children: [_jsx("span", { className: "bc-row-ts", children: formatHMS(row.timestamp) }), _jsx("span", { className: "bc-row-type", children: typeLabel }), _jsx("span", { className: "bc-row-actor", children: actorLabel }), _jsxs("span", { className: "bc-row-ids", children: [row.clientId && _jsxs("code", { title: "client id", className: "bc-row-id bc-row-id-cli", children: ["cli:", idTail(row.clientId)] }), row.messageId && _jsxs("code", { title: "bridge-server message_id", className: "bc-row-id bc-row-id-srv", children: ["srv:", idTail(row.messageId)] }), row.harnessMessageId && _jsxs("code", { title: "harness completion id", className: "bc-row-id bc-row-id-hid", children: ["hid:", idTail(row.harnessMessageId)] })] }), canExpand && _jsx("span", { className: "bc-row-collapse", children: collapsed ? '▸' : '▾' })] }), !collapsed && (_jsxs("div", { className: "bc-row-body", children: [row.text && _jsx("div", { className: "bc-row-text", children: row.text }), row.thinking && (_jsxs("details", { className: "bc-row-thinking", open: true, children: [_jsx("summary", { children: "thinking" }), _jsx("div", { className: "bc-row-thinking-text", children: row.thinking })] })), row.tools && row.tools.length > 0 && (_jsx(ToolsSection, { tools: row.tools, turnDone: !!row.done })), row.usage && _jsx(UsageLine, { usage: row.usage }), row.meta && _jsx(MessageStats, { meta: row.meta }), row.systemMessage && _jsx("div", { className: "bc-row-system", children: row.systemMessage }), row.systemFields && (_jsx("pre", { className: "bc-row-json", children: JSON.stringify(row.systemFields, null, 2) })), row.stateTransition && (_jsxs("div", { className: "bc-row-state", children: [row.stateTransition.from ?? '—', " \u2192 ", _jsx("strong", { children: row.stateTransition.to }), row.stateTransition.reason ? ` (${row.stateTransition.reason})` : ''] })), row.sessionInfo && (_jsxs("details", { className: "bc-row-info", children: [_jsx("summary", { children: "session info" }), _jsx("pre", { className: "bc-row-json", children: JSON.stringify(row.sessionInfo, null, 2) })] })), row.errorMessage && _jsx("div", { className: "bc-row-error", children: row.errorMessage }), hasRaw && (_jsxs("div", { className: "bc-row-raw-wrap", children: [_jsx("button", { className: "bc-row-raw-toggle", onClick: e => { e.stopPropagation(); setShowRaw(s => !s); }, children: showRaw ? 'hide raw' : `raw (${row.events.length})` }), showRaw && (_jsx("pre", { className: "bc-row-json", children: JSON.stringify(row.events, null, 2) }))] }))] }))] }));
+    return (_jsxs("div", { className: `bc-row bc-row-${row.actor}`, children: [_jsxs("div", { className: "bc-row-header", onClick: () => canExpand && setCollapsed(c => !c), children: [_jsx("span", { className: "bc-row-ts", children: formatHMS(row.timestamp) }), _jsx("span", { className: "bc-row-type", children: typeLabel }), _jsx("span", { className: "bc-row-actor", children: actorLabel }), _jsxs("span", { className: "bc-row-ids", children: [row.clientId && _jsxs("code", { title: "client id", className: "bc-row-id bc-row-id-cli", children: ["cli:", idTail(row.clientId)] }), row.clientRequestId && _jsxs("code", { title: "caller's per-turn request id", className: "bc-row-id bc-row-id-req", children: ["req:", idTail(row.clientRequestId)] }), row.messageId && _jsxs("code", { title: "bridge-server message_id", className: "bc-row-id bc-row-id-srv", children: ["srv:", idTail(row.messageId)] }), row.harnessMessageId && _jsxs("code", { title: "harness completion id", className: "bc-row-id bc-row-id-hid", children: ["hid:", idTail(row.harnessMessageId)] })] }), canExpand && _jsx("span", { className: "bc-row-collapse", children: collapsed ? '▸' : '▾' })] }), !collapsed && (_jsxs("div", { className: "bc-row-body", children: [row.text && _jsx("div", { className: "bc-row-text", children: row.text }), row.thinking && (_jsxs("details", { className: "bc-row-thinking", children: [_jsx("summary", { children: "thinking" }), _jsx("div", { className: "bc-row-thinking-text", children: row.thinking })] })), row.tools && row.tools.length > 0 && (_jsx(ToolsSection, { tools: row.tools, turnDone: !!row.done })), row.usage && _jsx(UsageLine, { usage: row.usage }), row.meta && _jsx(MessageStats, { meta: row.meta }), row.systemMessage && _jsx("div", { className: "bc-row-system", children: row.systemMessage }), row.systemFields && (_jsx("pre", { className: "bc-row-json", children: JSON.stringify(row.systemFields, null, 2) })), row.stateTransition && (_jsxs("div", { className: "bc-row-state", children: [row.stateTransition.from ?? '—', " \u2192 ", _jsx("strong", { children: row.stateTransition.to }), row.stateTransition.reason ? ` (${row.stateTransition.reason})` : ''] })), row.sessionInfo && (_jsxs("details", { className: "bc-row-info", children: [_jsx("summary", { children: "session info" }), _jsx("pre", { className: "bc-row-json", children: JSON.stringify(row.sessionInfo, null, 2) })] })), row.errorMessage && _jsx("div", { className: "bc-row-error", children: row.errorMessage }), hasRaw && (_jsxs("div", { className: "bc-row-raw-wrap", children: [_jsx("button", { className: "bc-row-raw-toggle", onClick: e => { e.stopPropagation(); setShowRaw(s => !s); }, children: showRaw ? 'hide raw' : `raw (${row.events.length})` }), showRaw && (_jsx("div", { className: "bc-row-raw-groups", children: groupEventsByType(row.events).map(g => (_jsxs("details", { className: "bc-row-raw-group", children: [_jsxs("summary", { children: [g.type, " (", g.events.length, ")"] }), _jsx("pre", { className: "bc-row-json", children: JSON.stringify(g.events, null, 2) })] }, g.type))) }))] }))] }))] }));
+}
+/* ── Type filter ── */
+const FILTER_KEY = 'bridge-ui-type-filter';
+function loadHiddenTypes() {
+    try {
+        const raw = localStorage.getItem(FILTER_KEY);
+        if (!raw)
+            return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    }
+    catch {
+        return new Set();
+    }
+}
+function saveHiddenTypes(s) {
+    try {
+        localStorage.setItem(FILTER_KEY, JSON.stringify([...s]));
+    }
+    catch { /* ignore */ }
+}
+function typesInRow(row) {
+    const set = new Set();
+    for (const e of row.events) {
+        const t = e.type;
+        if (typeof t === 'string' && t)
+            set.add(t);
+    }
+    if (set.size === 0 && row.eventType)
+        set.add(row.eventType);
+    return [...set];
+}
+function FilterBar({ types, hidden, onToggle }) {
+    if (types.length === 0)
+        return null;
+    return (_jsxs("div", { className: "bc-filter-bar", children: [_jsx("span", { className: "bc-filter-label", children: "show:" }), types.map(t => {
+                const on = !hidden.has(t);
+                return (_jsx("button", { type: "button", className: `bc-filter-chip${on ? ' bc-filter-chip-on' : ''}`, onClick: () => onToggle(t), children: t }, t));
+            })] }));
 }
 /* ── Inline Thread ── */
 function Thread({ rows, loading, uiState, activity, error, agent }) {
     const endRef = useRef(null);
-    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [rows]);
+    const [hidden, setHidden] = useState(() => loadHiddenTypes());
+    const allTypes = useMemo(() => {
+        const set = new Set();
+        for (const r of rows)
+            for (const t of typesInRow(r))
+                set.add(t);
+        return [...set].sort();
+    }, [rows]);
+    const visibleRows = useMemo(() => {
+        if (hidden.size === 0)
+            return rows;
+        return rows.filter(r => typesInRow(r).some(t => !hidden.has(t)));
+    }, [rows, hidden]);
+    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [visibleRows]);
+    const toggleType = useCallback((t) => {
+        setHidden(prev => {
+            const next = new Set(prev);
+            if (next.has(t))
+                next.delete(t);
+            else
+                next.add(t);
+            saveHiddenTypes(next);
+            return next;
+        });
+    }, []);
     if (loading)
         return _jsx("div", { className: "bc-thread", children: _jsx("div", { className: "bc-loading", children: "Loading history..." }) });
     if (rows.length === 0 && !error)
         return _jsx("div", { className: "bc-thread", children: _jsx("div", { className: "bc-empty", children: "Send a message to start" }) });
-    return (_jsxs("div", { className: "bc-thread", children: [error && _jsx("div", { className: "bridge-error", children: error }), rows.map(row => _jsx(LogRowView, { row: row, agent: agent }, row.key)), uiState === 'running' && (_jsxs("div", { className: "bc-activity", children: [_jsx("span", { className: "bc-activity-dot" }), activity.kind === 'tool' ? `Running: ${activity.name}` : activity.kind === 'thinking' ? 'Thinking...' : 'Streaming...'] })), _jsx("div", { ref: endRef })] }));
+    return (_jsxs("div", { className: "bc-thread", children: [_jsx(FilterBar, { types: allTypes, hidden: hidden, onToggle: toggleType }), error && _jsx("div", { className: "bridge-error", children: error }), visibleRows.map(row => _jsx(LogRowView, { row: row, agent: agent }, row.key)), uiState === 'running' && (_jsxs("div", { className: "bc-activity", children: [_jsx("span", { className: "bc-activity-dot" }), activity.kind === 'tool' ? `Running: ${activity.name}` : activity.kind === 'thinking' ? 'Thinking...' : 'Streaming...'] })), _jsx("div", { ref: endRef })] }));
 }
 /* ── Inline Composer ── */
 function Composer({ connected, streaming, paused, onSend, onStop, onResume }) {

@@ -138,22 +138,19 @@ function MessageStats({ meta }: { meta: MessageMeta }) {
   )
 }
 
-/* ── Log row thresholds ──
- * Rows whose primary payload is bigger than these get collapsed by default;
- * the user can expand. "Raw events" is always collapsed initially.
- */
-const COLLAPSE_TEXT_CHARS = 5000
-const COLLAPSE_TOOL_INPUT_CHARS = 500
-const COLLAPSE_TOOL_OUTPUT_CHARS = 1000
+function isResultRow(row: LogRow): boolean {
+  return !!row.meta || row.eventType === 'result'
+}
 
-function shouldAutoCollapse(row: LogRow): boolean {
-  if ((row.text?.length ?? 0) > COLLAPSE_TEXT_CHARS) return true
-  if ((row.thinking?.length ?? 0) > COLLAPSE_TEXT_CHARS) return true
-  for (const t of row.tools || []) {
-    if ((t.output?.length ?? 0) > COLLAPSE_TOOL_OUTPUT_CHARS) return true
-    if (JSON.stringify(t.input || {}).length > COLLAPSE_TOOL_INPUT_CHARS) return true
+function groupEventsByType(events: Array<Record<string, unknown>>): Array<{ type: string; events: Array<Record<string, unknown>> }> {
+  const order: string[] = []
+  const buckets: Record<string, Array<Record<string, unknown>>> = {}
+  for (const e of events) {
+    const t = String((e as { type?: unknown }).type ?? 'unknown') || 'unknown'
+    if (!(t in buckets)) { buckets[t] = []; order.push(t) }
+    buckets[t].push(e)
   }
-  return false
+  return order.map(t => ({ type: t, events: buckets[t] }))
 }
 
 function formatHMS(ts: string): string {
@@ -183,19 +180,21 @@ function UsageLine({ usage }: { usage: TokenUsage }) {
 /* ── Inline LogRow ── */
 function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
   const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent
-  const typeLabel = row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType
+  const eventTypes = Array.from(new Set(
+    row.events.map(e => String((e as { type?: unknown }).type ?? '')).filter(Boolean),
+  ))
+  const typeLabel = eventTypes.length > 1
+    ? eventTypes.join('+')
+    : row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType
   const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
     || row.usage || row.meta || row.systemMessage || row.systemFields
     || row.stateTransition || row.sessionInfo || row.errorMessage)
   const hasRaw = !!(row.events && row.events.length > 0)
   const canExpand = hasStructuredBody || hasRaw
 
-  // Auto-collapse rules: hide raw-only rows by default so the log stays
-  // compact, and collapse structured rows whose body would overflow.
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (!hasStructuredBody && hasRaw) return true
-    return shouldAutoCollapse(row)
-  })
+  // Only the result row is expanded by default; everything else collapses
+  // so the log stays compact.
+  const [collapsed, setCollapsed] = useState<boolean>(() => !isResultRow(row))
   // When a row has no structured body, expanding it auto-reveals raw —
   // otherwise the user would have to click twice to see anything.
   const [showRaw, setShowRaw] = useState<boolean>(() => !hasStructuredBody && hasRaw)
@@ -208,6 +207,7 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
         <span className="bc-row-actor">{actorLabel}</span>
         <span className="bc-row-ids">
           {row.clientId && <code title="client id" className="bc-row-id bc-row-id-cli">cli:{idTail(row.clientId)}</code>}
+          {row.clientRequestId && <code title="caller's per-turn request id" className="bc-row-id bc-row-id-req">req:{idTail(row.clientRequestId)}</code>}
           {row.messageId && <code title="bridge-server message_id" className="bc-row-id bc-row-id-srv">srv:{idTail(row.messageId)}</code>}
           {row.harnessMessageId && <code title="harness completion id" className="bc-row-id bc-row-id-hid">hid:{idTail(row.harnessMessageId)}</code>}
         </span>
@@ -217,7 +217,7 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
         <div className="bc-row-body">
           {row.text && <div className="bc-row-text">{row.text}</div>}
           {row.thinking && (
-            <details className="bc-row-thinking" open>
+            <details className="bc-row-thinking">
               <summary>thinking</summary>
               <div className="bc-row-thinking-text">{row.thinking}</div>
             </details>
@@ -250,12 +250,71 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
                 {showRaw ? 'hide raw' : `raw (${row.events.length})`}
               </button>
               {showRaw && (
-                <pre className="bc-row-json">{JSON.stringify(row.events, null, 2)}</pre>
+                <div className="bc-row-raw-groups">
+                  {groupEventsByType(row.events).map(g => (
+                    <details key={g.type} className="bc-row-raw-group">
+                      <summary>{g.type} ({g.events.length})</summary>
+                      <pre className="bc-row-json">{JSON.stringify(g.events, null, 2)}</pre>
+                    </details>
+                  ))}
+                </div>
               )}
             </div>
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Type filter ── */
+const FILTER_KEY = 'bridge-ui-type-filter'
+
+function loadHiddenTypes(): Set<string> {
+  try {
+    const raw = localStorage.getItem(FILTER_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return new Set(Array.isArray(arr) ? arr.map(String) : [])
+  } catch { return new Set() }
+}
+
+function saveHiddenTypes(s: Set<string>) {
+  try { localStorage.setItem(FILTER_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
+}
+
+function typesInRow(row: LogRow): string[] {
+  const set = new Set<string>()
+  for (const e of row.events) {
+    const t = (e as { type?: unknown }).type
+    if (typeof t === 'string' && t) set.add(t)
+  }
+  if (set.size === 0 && row.eventType) set.add(row.eventType)
+  return [...set]
+}
+
+function FilterBar({ types, hidden, onToggle }: {
+  types: string[]
+  hidden: Set<string>
+  onToggle: (t: string) => void
+}) {
+  if (types.length === 0) return null
+  return (
+    <div className="bc-filter-bar">
+      <span className="bc-filter-label">show:</span>
+      {types.map(t => {
+        const on = !hidden.has(t)
+        return (
+          <button
+            key={t}
+            type="button"
+            className={`bc-filter-chip${on ? ' bc-filter-chip-on' : ''}`}
+            onClick={() => onToggle(t)}
+          >
+            {t}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -270,15 +329,38 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
   agent: string
 }) {
   const endRef = useRef<HTMLDivElement>(null)
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [rows])
+  const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
+
+  const allTypes = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of rows) for (const t of typesInRow(r)) set.add(t)
+    return [...set].sort()
+  }, [rows])
+
+  const visibleRows = useMemo(() => {
+    if (hidden.size === 0) return rows
+    return rows.filter(r => typesInRow(r).some(t => !hidden.has(t)))
+  }, [rows, hidden])
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [visibleRows])
+
+  const toggleType = useCallback((t: string) => {
+    setHidden(prev => {
+      const next = new Set(prev)
+      if (next.has(t)) next.delete(t); else next.add(t)
+      saveHiddenTypes(next)
+      return next
+    })
+  }, [])
 
   if (loading) return <div className="bc-thread"><div className="bc-loading">Loading history...</div></div>
   if (rows.length === 0 && !error) return <div className="bc-thread"><div className="bc-empty">Send a message to start</div></div>
 
   return (
     <div className="bc-thread">
+      <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
       {error && <div className="bridge-error">{error}</div>}
-      {rows.map(row => <LogRowView key={row.key} row={row} agent={agent} />)}
+      {visibleRows.map(row => <LogRowView key={row.key} row={row} agent={agent} />)}
       {uiState === 'running' && (
         <div className="bc-activity">
           <span className="bc-activity-dot" />

@@ -300,8 +300,38 @@
   color: var(--text-dim);
 }
 .bc-row-id-cli { color: #c084fc; }
+.bc-row-id-req { color: #34d399; }
 .bc-row-id-srv { color: #60a5fa; }
 .bc-row-id-hid { color: #f59e0b; }
+
+.bc-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface) 50%, var(--bg));
+  align-items: center;
+  font-size: 0.75rem;
+}
+.bc-filter-label { color: var(--text-dim); margin-right: 0.3rem; }
+.bc-filter-chip {
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0.55;
+}
+.bc-filter-chip-on {
+  color: var(--text);
+  border-color: var(--accent);
+  opacity: 1;
+}
+.bc-filter-chip:hover { background: color-mix(in srgb, var(--bg-surface) 40%, var(--bg)); }
 .bc-row-collapse { color: var(--text-dim); padding-left: 0.3rem; }
 
 .bc-row-body { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -336,6 +366,10 @@
   padding: 2px 0;
 }
 .bc-row-raw-toggle:hover { color: var(--text); }
+.bc-row-raw-groups { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.bc-row-raw-group summary { cursor: pointer; font-family: monospace; font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 0; }
+.bc-row-raw-group summary:hover { color: var(--text); }
+.bc-row-raw-group[open] summary { color: var(--text); }
 
 /* Tool item — registry-driven renderers dispatch by tool name */
 .bc-tool-item {

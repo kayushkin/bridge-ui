@@ -3,7 +3,7 @@ import type { ToolEvent } from '../../types'
 import ToolItem from './ToolItem'
 
 export default function ToolsSection({ tools, turnDone }: { tools: ToolEvent[]; turnDone: boolean }) {
-  const [collapsed, setCollapsed] = useState(turnDone)
+  const [collapsed, setCollapsed] = useState(true)
   const prevTurnDone = useRef(turnDone)
 
   useEffect(() => {

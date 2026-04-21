@@ -21,6 +21,7 @@ interface EventEnvelope {
     event_id?: number
     message_id?: string
     harness_message_id?: string
+    client_request_id?: string
     bridge_id?: string
     timestamp?: string
     [key: string]: unknown
@@ -68,6 +69,7 @@ function freshRow(ev: EventEnvelope): LogRow {
   return {
     key: msgId || `evt_${evId}`,
     clientId: undefined,
+    clientRequestId: ev.data.client_request_id,
     messageId: msgId,
     harnessMessageId: ev.data.harness_message_id,
     eventIds: [],
@@ -197,6 +199,9 @@ function applyEventToRows(rows: LogRow[], ev: EventEnvelope): LogRow[] {
     updated.eventIds = evId ? [...existing.eventIds, evId] : existing.eventIds
     if (!existing.harnessMessageId && ev.data.harness_message_id) {
       updated.harnessMessageId = ev.data.harness_message_id
+    }
+    if (!existing.clientRequestId && ev.data.client_request_id) {
+      updated.clientRequestId = ev.data.client_request_id
     }
     const next = rows.slice()
     next[idx] = updated

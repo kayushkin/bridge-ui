@@ -4,7 +4,7 @@ import { getToolRenderer } from './registry';
 import DefaultRenderer from './DefaultRenderer';
 export default function ToolItem({ tool, running, turnDone = false }) {
     const Renderer = getToolRenderer(tool.tool) ?? DefaultRenderer;
-    const [collapsed, setCollapsed] = useState(turnDone);
+    const [collapsed, setCollapsed] = useState(true);
     const prevTurnDone = useRef(turnDone);
     useEffect(() => {
         if (turnDone && !prevTurnDone.current)

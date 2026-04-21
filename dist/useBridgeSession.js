@@ -40,6 +40,7 @@ function freshRow(ev) {
     return {
         key: msgId || `evt_${evId}`,
         clientId: undefined,
+        clientRequestId: ev.data.client_request_id,
         messageId: msgId,
         harnessMessageId: ev.data.harness_message_id,
         eventIds: [],
@@ -169,6 +170,9 @@ function applyEventToRows(rows, ev) {
         updated.eventIds = evId ? [...existing.eventIds, evId] : existing.eventIds;
         if (!existing.harnessMessageId && ev.data.harness_message_id) {
             updated.harnessMessageId = ev.data.harness_message_id;
+        }
+        if (!existing.clientRequestId && ev.data.client_request_id) {
+            updated.clientRequestId = ev.data.client_request_id;
         }
         const next = rows.slice();
         next[idx] = updated;

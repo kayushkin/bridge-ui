@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from 'react';
 import ToolItem from './ToolItem';
 export default function ToolsSection({ tools, turnDone }) {
-    const [collapsed, setCollapsed] = useState(turnDone);
+    const [collapsed, setCollapsed] = useState(true);
     const prevTurnDone = useRef(turnDone);
     useEffect(() => {
         if (turnDone && !prevTurnDone.current)

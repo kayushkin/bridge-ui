@@ -120,6 +120,7 @@ export interface LogRow {
 
   // Displayed IDs.
   clientId?: string
+  clientRequestId?: string    // caller's per-turn id, stamped on every event in the turn
   messageId?: string          // canonical bridge-server MessageID (msg_<ULID>)
   harnessMessageId?: string   // harness-native completion id (Anthropic msg_…)
 
