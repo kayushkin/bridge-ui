@@ -138,7 +138,8 @@ function MessageStats({ meta }: { meta: MessageMeta }) {
   )
 }
 
-function isResultRow(row: LogRow): boolean {
+function shouldExpandByDefault(row: LogRow): boolean {
+  if (row.actor === 'user') return true
   return !!row.meta || row.eventType === 'result'
 }
 
@@ -192,9 +193,9 @@ function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
   const hasRaw = !!(row.events && row.events.length > 0)
   const canExpand = hasStructuredBody || hasRaw
 
-  // Only the result row is expanded by default; everything else collapses
-  // so the log stays compact.
-  const [collapsed, setCollapsed] = useState<boolean>(() => !isResultRow(row))
+  // User messages and the result row are expanded by default; everything
+  // else collapses so the log stays compact.
+  const [collapsed, setCollapsed] = useState<boolean>(() => !shouldExpandByDefault(row))
   // When a row has no structured body, expanding it auto-reveals raw —
   // otherwise the user would have to click twice to see anything.
   const [showRaw, setShowRaw] = useState<boolean>(() => !hasStructuredBody && hasRaw)

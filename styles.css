@@ -310,9 +310,13 @@
   gap: 0.3rem;
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-surface) 50%, var(--bg));
+  background: var(--bg);
   align-items: center;
   font-size: 0.75rem;
+  position: sticky;
+  top: 0;
+  margin: -16px -16px 0;
+  z-index: 5;
 }
 .bc-filter-label { color: var(--text-dim); margin-right: 0.3rem; }
 .bc-filter-chip {
@@ -1392,6 +1396,7 @@
   .bc-instance-badge { display: none; }
 
   .bc-thread { padding: 10px; gap: 10px; }
+  .bc-filter-bar { margin: -10px -10px 0; }
 
   .bc-msg-split { flex-direction: column; }
   .bc-msg-split-tools { flex: 1; max-width: none; border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }

@@ -94,7 +94,9 @@ function MessageStats({ meta }) {
     const rows = flattenToRows(meta);
     return (_jsxs("div", { className: "bc-stats-wrapper", children: [_jsxs("button", { className: "bc-stats-toggle", onClick: () => setOpen(v => !v), children: [open ? '\u25BE' : '\u25B8', " Stats (", rows.length, ")"] }), open && (_jsx("div", { className: "bc-stats-dropdown", children: rows.map(([label, val], i) => (_jsxs("div", { className: "bc-stats-row", children: [_jsx("span", { className: "bc-stats-label", children: label }), _jsx("span", { className: "bc-stats-value", children: val })] }, `${label}-${i}`))) }))] }));
 }
-function isResultRow(row) {
+function shouldExpandByDefault(row) {
+    if (row.actor === 'user')
+        return true;
     return !!row.meta || row.eventType === 'result';
 }
 function groupEventsByType(events) {
@@ -151,9 +153,9 @@ function LogRowView({ row, agent }) {
         || row.stateTransition || row.sessionInfo || row.errorMessage);
     const hasRaw = !!(row.events && row.events.length > 0);
     const canExpand = hasStructuredBody || hasRaw;
-    // Only the result row is expanded by default; everything else collapses
-    // so the log stays compact.
-    const [collapsed, setCollapsed] = useState(() => !isResultRow(row));
+    // User messages and the result row are expanded by default; everything
+    // else collapses so the log stays compact.
+    const [collapsed, setCollapsed] = useState(() => !shouldExpandByDefault(row));
     // When a row has no structured body, expanding it auto-reveals raw —
     // otherwise the user would have to click twice to see anything.
     const [showRaw, setShowRaw] = useState(() => !hasStructuredBody && hasRaw);
