@@ -262,10 +262,13 @@
 
 /* ── LogRow (uniform event log) ── */
 .bc-row {
+  align-self: stretch;
+  max-width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-surface);
-  overflow: hidden;
 }
 .bc-row-user { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface)); }
 .bc-row-assistant { border-left: 3px solid color-mix(in srgb, var(--text) 30%, transparent); }
