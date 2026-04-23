@@ -497,7 +497,7 @@ function TurnsView({ rows, agent, onToggleCollapse }: {
       <div className="bc-turns-body">
         {items.length === 0 && <div className="bc-turns-empty">No messages yet</div>}
         {items.map(it => (
-          <div key={it.key} className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}`}>
+          <div key={it.key} className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}`} title={it.text}>
             <div className="bc-turns-meta">
               <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>
               <span className="bc-turns-ts">{formatHMS(it.ts)}</span>
@@ -521,11 +521,13 @@ function TurnsView({ rows, agent, onToggleCollapse }: {
 interface TimelineItem {
   key: string
   turnId?: string
+  taskId?: string
   icon: string
   label: string
   detail?: string
+  fullText?: string
   ts: string
-  tone: 'turn' | 'thinking' | 'tool' | 'tool-done' | 'tool-err' | 'task' | 'result' | 'error' | 'text'
+  tone: 'turn' | 'thinking' | 'tool' | 'tool-done' | 'tool-err' | 'task' | 'task-start' | 'result' | 'error' | 'text'
 }
 
 function oneLine(s: string, n = 120): string {
@@ -547,11 +549,28 @@ function toolSnippet(t: ToolEvent): string {
   return keys.join(',')
 }
 
+function toolFullText(t: ToolEvent): string | undefined {
+  if (!t.input) return undefined
+  try { return JSON.stringify(t.input, null, 2) } catch { return undefined }
+}
+
 function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
   const out: TimelineItem[] = []
   const seenTurn = new Set<string>()
+  let currentTurnId: string | undefined
+  let currentTaskId: string | undefined
+
   for (const row of rows) {
+    // Tasks are scoped to the turn they start in; a new turn closes any open
+    // task block. task_started opens a new scope until the next task_started
+    // or the end of the turn.
+    if (row.turnId !== currentTurnId) {
+      currentTurnId = row.turnId
+      currentTaskId = undefined
+    }
+
     if (row.kind === 'user_message') {
+      currentTaskId = undefined
       const turnMark = row.turnId && !seenTurn.has(row.turnId)
       if (row.turnId) seenTurn.add(row.turnId)
       out.push({
@@ -560,8 +579,31 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
         icon: turnMark ? '▶' : '»',
         label: 'Turn',
         detail: row.text ? oneLine(row.text) : undefined,
+        fullText: row.text,
         ts: row.timestamp,
         tone: 'turn',
+      })
+      continue
+    }
+
+    if (row.kind === 'system' && row.subtype && row.subtype.startsWith('task_')) {
+      const taskId = (row.systemFields?.task_id as string | undefined) || undefined
+      if (row.subtype === 'task_started' && taskId) {
+        currentTaskId = taskId
+      }
+      const description = (row.systemFields?.description as string | undefined) || undefined
+      const full = description || row.systemMessage || ''
+      const isStart = row.subtype === 'task_started'
+      out.push({
+        key: `tl_task_${row.key}`,
+        turnId: row.turnId,
+        taskId: currentTaskId,
+        icon: isStart ? '▣' : '📋',
+        label: isStart ? 'Task start' : 'Task',
+        detail: full ? oneLine(full) : undefined,
+        fullText: full || undefined,
+        ts: row.timestamp,
+        tone: isStart ? 'task-start' : 'task',
       })
       continue
     }
@@ -570,9 +612,11 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
       out.push({
         key: `tl_think_${row.key}`,
         turnId: row.turnId,
+        taskId: currentTaskId,
         icon: '💭',
         label: 'Thinking',
         detail: oneLine(row.thinking),
+        fullText: row.thinking,
         ts: row.timestamp,
         tone: 'thinking',
       })
@@ -586,9 +630,11 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
         out.push({
           key: `tl_tool_${row.key}_${t.tool_id || t.tool}`,
           turnId: row.turnId,
+          taskId: currentTaskId,
           icon: err ? '✗' : done ? '✓' : '⚙',
           label: t.tool || 'tool',
           detail: toolSnippet(t),
+          fullText: toolFullText(t),
           ts: row.timestamp,
           tone: err ? 'tool-err' : done ? 'tool-done' : 'tool',
         })
@@ -596,20 +642,8 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
       continue
     }
 
-    if (row.kind === 'system' && row.subtype === 'task_progress') {
-      out.push({
-        key: `tl_task_${row.key}`,
-        turnId: row.turnId,
-        icon: '📋',
-        label: 'Task',
-        detail: row.systemMessage ? oneLine(row.systemMessage) : undefined,
-        ts: row.timestamp,
-        tone: 'task',
-      })
-      continue
-    }
-
     if (row.kind === 'result' && row.done) {
+      currentTaskId = undefined
       const u = row.usage || row.meta?.usage
       let detail: string | undefined
       if (u) {
@@ -624,6 +658,7 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
         icon: '■',
         label: 'Done',
         detail,
+        fullText: row.text || row.meta?.text,
         ts: row.timestamp,
         tone: 'result',
       })
@@ -634,9 +669,11 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
       out.push({
         key: `tl_err_${row.key}`,
         turnId: row.turnId,
+        taskId: currentTaskId,
         icon: '⚠',
         label: 'Error',
         detail: row.errorMessage ? oneLine(row.errorMessage) : undefined,
+        fullText: row.errorMessage,
         ts: row.timestamp,
         tone: 'error',
       })
@@ -647,14 +684,76 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
       out.push({
         key: `tl_text_${row.key}`,
         turnId: row.turnId,
+        taskId: currentTaskId,
         icon: '✎',
         label: 'Text',
         detail: oneLine(row.text),
+        fullText: row.text,
         ts: row.timestamp,
         tone: 'text',
       })
       continue
     }
+  }
+  return out
+}
+
+function TimelineItemRow({ item }: { item: TimelineItem }) {
+  const tip = item.fullText || item.detail || item.label
+  return (
+    <div className={`bc-tl-item bc-tl-${item.tone}`} title={tip}>
+      <span className="bc-tl-ts">{formatHMS(item.ts)}</span>
+      <span className="bc-tl-icon">{item.icon}</span>
+      <span className="bc-tl-label">{item.label}</span>
+      {item.detail && <span className="bc-tl-detail">{item.detail}</span>}
+    </div>
+  )
+}
+
+// Render helpers: nest items inside per-turn groups, and per-task sub-groups
+// within a turn, so the UI can paint left-aligned hierarchy bars.
+function renderTurnChildren(items: TimelineItem[]): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  let i = 0
+  while (i < items.length) {
+    const it = items[i]
+    if (!it.taskId) {
+      out.push(<TimelineItemRow key={it.key} item={it} />)
+      i++
+      continue
+    }
+    const taskId = it.taskId
+    const start = i
+    while (i < items.length && items[i].taskId === taskId) i++
+    const taskItems = items.slice(start, i)
+    out.push(
+      <div key={`tk_${taskId}_${start}`} className="bc-tl-task-group">
+        {taskItems.map(t => <TimelineItemRow key={t.key} item={t} />)}
+      </div>,
+    )
+  }
+  return out
+}
+
+function renderTimelineNodes(items: TimelineItem[]): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  let i = 0
+  while (i < items.length) {
+    const it = items[i]
+    if (!it.turnId) {
+      out.push(<TimelineItemRow key={it.key} item={it} />)
+      i++
+      continue
+    }
+    const turnId = it.turnId
+    const start = i
+    while (i < items.length && items[i].turnId === turnId) i++
+    const turnItems = items.slice(start, i)
+    out.push(
+      <div key={`tg_${turnId}_${start}`} className="bc-tl-turn-group">
+        {renderTurnChildren(turnItems)}
+      </div>,
+    )
   }
   return out
 }
@@ -682,14 +781,7 @@ function Timeline({ rows, onToggleCollapse }: {
       </div>
       <div className="bc-timeline-body">
         {items.length === 0 && <div className="bc-timeline-empty">No events yet</div>}
-        {items.map(it => (
-          <div key={it.key} className={`bc-tl-item bc-tl-${it.tone}`}>
-            <span className="bc-tl-ts">{formatHMS(it.ts)}</span>
-            <span className="bc-tl-icon">{it.icon}</span>
-            <span className="bc-tl-label">{it.label}</span>
-            {it.detail && <span className="bc-tl-detail">{it.detail}</span>}
-          </div>
-        ))}
+        {renderTimelineNodes(items)}
         <div ref={endRef} />
       </div>
     </div>

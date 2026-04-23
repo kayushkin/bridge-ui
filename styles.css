@@ -458,6 +458,31 @@
   text-align: center;
 }
 
+/* Hierarchy: all items sharing a turn_id sit inside a bc-tl-turn-group,
+ * which paints a left-aligned color bar so the eye sees the turn boundary.
+ * Task runs (opened by a system.task_started event) nest inside that with a
+ * second, inset bar. */
+.bc-tl-turn-group {
+  border-left: 3px solid color-mix(in srgb, #f472b6 65%, transparent);
+  margin: 4px 0;
+  padding: 2px 0 2px 6px;
+  border-radius: 0 3px 3px 0;
+  background: color-mix(in srgb, #f472b6 4%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.bc-tl-task-group {
+  border-left: 2px solid color-mix(in srgb, #22d3ee 60%, transparent);
+  margin: 3px 0 3px 10px;
+  padding: 2px 0 2px 6px;
+  border-radius: 0 3px 3px 0;
+  background: color-mix(in srgb, #22d3ee 4%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .bc-tl-item {
   display: flex;
   align-items: baseline;
@@ -467,6 +492,7 @@
   color: var(--text-muted);
   line-height: 1.4;
   min-width: 0;
+  cursor: default;
 }
 .bc-tl-item:hover { background: color-mix(in srgb, var(--bg-surface) 40%, var(--bg)); }
 .bc-tl-ts { color: var(--text-dim); font-size: 0.9em; flex-shrink: 0; }
@@ -481,7 +507,6 @@
   flex: 1;
 }
 
-.bc-tl-turn       { border-left: 2px solid #f472b6; margin-top: 4px; padding-left: 8px; }
 .bc-tl-turn .bc-tl-icon  { color: #f472b6; }
 .bc-tl-turn .bc-tl-label { color: #f472b6; }
 .bc-tl-thinking .bc-tl-icon { color: #a78bfa; }
@@ -492,7 +517,9 @@
 .bc-tl-tool-done .bc-tl-label { color: #eab308; }
 .bc-tl-tool-err .bc-tl-icon, .bc-tl-tool-err .bc-tl-label { color: #ef4444; }
 .bc-tl-task .bc-tl-icon, .bc-tl-task .bc-tl-label { color: #22d3ee; }
-.bc-tl-result { border-top: 1px dashed color-mix(in srgb, var(--border) 100%, transparent); padding-top: 4px; margin-top: 2px; }
+.bc-tl-task-start .bc-tl-icon, .bc-tl-task-start .bc-tl-label { color: #22d3ee; }
+.bc-tl-task-start { font-weight: 600; }
+.bc-tl-result { border-top: 1px dashed var(--border); padding-top: 4px; margin-top: 2px; }
 .bc-tl-result .bc-tl-icon, .bc-tl-result .bc-tl-label { color: #60a5fa; }
 .bc-tl-error .bc-tl-icon, .bc-tl-error .bc-tl-label { color: #ef4444; }
 .bc-tl-text .bc-tl-icon { color: var(--text-muted); }
