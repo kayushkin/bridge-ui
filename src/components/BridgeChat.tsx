@@ -794,10 +794,17 @@ function renderTurnChildren(items: TimelineItem[]): React.ReactNode[] {
     const taskId = it.taskId
     const start = i
     while (i < items.length && items[i].taskId === taskId) i++
-    const taskItems = items.slice(start, i)
+    const [header, ...rest] = items.slice(start, i)
     out.push(
       <div key={`tk_${taskId}_${start}`} className="bc-tl-task-group">
-        {taskItems.map(t => <TimelineItemRow key={t.key} item={t} />)}
+        <div className="bc-tl-task-header">
+          <TimelineItemRow key={header.key} item={header} />
+        </div>
+        {rest.length > 0 && (
+          <div className="bc-tl-task-body">
+            {rest.map(t => <TimelineItemRow key={t.key} item={t} />)}
+          </div>
+        )}
       </div>,
     )
   }
@@ -817,10 +824,17 @@ function renderTimelineNodes(items: TimelineItem[]): React.ReactNode[] {
     const turnId = it.turnId
     const start = i
     while (i < items.length && items[i].turnId === turnId) i++
-    const turnItems = items.slice(start, i)
+    const [header, ...rest] = items.slice(start, i)
     out.push(
       <div key={`tg_${turnId}_${start}`} className="bc-tl-turn-group">
-        {renderTurnChildren(turnItems)}
+        <div className="bc-tl-turn-header">
+          <TimelineItemRow key={header.key} item={header} />
+        </div>
+        {rest.length > 0 && (
+          <div className="bc-tl-turn-body">
+            {renderTurnChildren(rest)}
+          </div>
+        )}
       </div>,
     )
   }

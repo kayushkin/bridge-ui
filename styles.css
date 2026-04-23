@@ -465,9 +465,20 @@
 .bc-tl-turn-group {
   border-left: 3px solid color-mix(in srgb, #f472b6 65%, transparent);
   margin: 4px 0;
-  padding: 2px 0 2px 6px;
   border-radius: 0 3px 3px 0;
   background: color-mix(in srgb, #f472b6 4%, transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.bc-tl-turn-header {
+  background: color-mix(in srgb, #f472b6 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #f472b6 30%, var(--border));
+}
+.bc-tl-turn-header .bc-tl-item { border-radius: 0; padding: 3px 8px; }
+.bc-tl-turn-header .bc-tl-item:hover { background: color-mix(in srgb, #f472b6 22%, transparent); }
+.bc-tl-turn-body {
+  padding: 2px 0 2px 6px;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -475,9 +486,20 @@
 .bc-tl-task-group {
   border-left: 2px solid color-mix(in srgb, #22d3ee 60%, transparent);
   margin: 3px 0 3px 10px;
-  padding: 2px 0 2px 6px;
   border-radius: 0 3px 3px 0;
   background: color-mix(in srgb, #22d3ee 4%, transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.bc-tl-task-header {
+  background: color-mix(in srgb, #22d3ee 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #22d3ee 30%, var(--border));
+}
+.bc-tl-task-header .bc-tl-item { border-radius: 0; padding: 3px 8px; }
+.bc-tl-task-header .bc-tl-item:hover { background: color-mix(in srgb, #22d3ee 22%, transparent); }
+.bc-tl-task-body {
+  padding: 2px 0 2px 6px;
   display: flex;
   flex-direction: column;
   gap: 1px;

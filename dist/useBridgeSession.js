@@ -24,10 +24,13 @@ function eventIdOf(ev) {
 }
 // --- LogRow reducer ---
 //
-// Rule: events with a bridge message_id coalesce into one row (stream deltas
-// accumulate, tool_call + tool_result merge, result finalizes). Events with
-// no message_id (system, session_state, session_info) stand alone, keyed by
-// their event_id. Dedup is per-event_id.
+// Rule: an event only coalesces with an existing row when the group key
+// matches. Group key = `${message_id}_${kind}` so different event kinds under
+// the same message_id stay as separate rows (a turn's text, thinking, and
+// individual tool calls all render as their own rows). Tool calls/results
+// pair by `tool_${tool_id}` so a call and its result merge regardless of
+// which assistant bubble they appeared in. Events with no group key stand
+// alone, keyed by their event_id. Dedup is per-event_id.
 function actorFor(eventType) {
     switch (eventType) {
         case 'user_message':
@@ -40,11 +43,48 @@ function actorFor(eventType) {
             return 'assistant';
     }
 }
-function freshRow(ev) {
+function rowKindOf(ev) {
+    switch (ev.type) {
+        case 'user_message': return 'user_message';
+        case 'stream': {
+            const dt = ev.data.stream?.delta?.type;
+            if (dt === 'thinking_delta')
+                return 'thinking';
+            if (dt === 'text_delta')
+                return 'text';
+            return 'stream';
+        }
+        case 'thinking': return 'thinking';
+        case 'tool_call':
+        case 'tool_result': return 'tool';
+        case 'result': return 'result';
+        case 'error': return 'error';
+        case 'system': return 'system';
+        case 'session_state': return 'session_state';
+        case 'session_info': return 'session_info';
+        case 'plan': return 'plan';
+        case 'approval': return 'approval';
+        default: return 'other';
+    }
+}
+function groupKeyFor(ev) {
+    const kind = rowKindOf(ev);
+    // tool_call / tool_result pair by tool_id — independent of which assistant
+    // bubble's message_id they arrived under.
+    if (kind === 'tool') {
+        const toolId = ev.data.tool_call?.tool_id || ev.data.tool_result?.tool_id;
+        return toolId ? `tool_${toolId}` : null;
+    }
+    const msgId = ev.data.message_id;
+    if (!msgId)
+        return null;
+    return `${msgId}_${kind}`;
+}
+function freshRow(ev, gKey) {
     const msgId = ev.data.message_id;
     const evId = eventIdOf(ev);
     return {
-        key: msgId || `evt_${evId}`,
+        key: gKey || `evt_${evId}`,
         clientId: undefined,
         clientRequestId: ev.data.client_request_id,
         turnId: ev.data.turn_id,
@@ -52,6 +92,7 @@ function freshRow(ev) {
         harnessMessageId: ev.data.harness_message_id,
         eventIds: [],
         actor: actorFor(ev.type),
+        kind: rowKindOf(ev),
         eventType: ev.type,
         subtype: subtypeOf(ev),
         timestamp: ev.data.timestamp || new Date().toISOString(),
@@ -159,11 +200,11 @@ function applyDelta(row, ev) {
 }
 function applyEventToRows(rows, ev) {
     const evId = eventIdOf(ev);
-    const msgId = ev.data.message_id;
-    if (msgId) {
-        const idx = rows.findIndex(r => r.messageId === msgId);
+    const gKey = groupKeyFor(ev);
+    if (gKey) {
+        const idx = rows.findIndex(r => r.key === gKey);
         if (idx === -1) {
-            const fresh = freshRow(ev);
+            const fresh = freshRow(ev, gKey);
             const updated = applyDelta(fresh, ev);
             updated.eventIds = evId ? [evId] : [];
             return [...rows, updated];
@@ -172,6 +213,7 @@ function applyEventToRows(rows, ev) {
         if (evId && existing.eventIds.includes(evId))
             return rows;
         const updated = applyDelta(existing, ev);
+        updated.key = gKey;
         updated.eventIds = evId ? [...existing.eventIds, evId] : existing.eventIds;
         if (!existing.harnessMessageId && ev.data.harness_message_id) {
             updated.harnessMessageId = ev.data.harness_message_id;
@@ -182,6 +224,9 @@ function applyEventToRows(rows, ev) {
         if (!existing.turnId && ev.data.turn_id) {
             updated.turnId = ev.data.turn_id;
         }
+        if (!existing.messageId && ev.data.message_id) {
+            updated.messageId = ev.data.message_id;
+        }
         const next = rows.slice();
         next[idx] = updated;
         return next;
@@ -189,7 +234,7 @@ function applyEventToRows(rows, ev) {
     // Standalone row, keyed by event_id. Dedup against its own eventIds[0].
     if (evId && rows.some(r => r.eventIds[0] === evId))
         return rows;
-    const fresh = freshRow(ev);
+    const fresh = freshRow(ev, null);
     const updated = applyDelta(fresh, ev);
     updated.eventIds = evId ? [evId] : [];
     return [...rows, updated];
@@ -467,14 +512,16 @@ export function useBridgeSession() {
         if (!activeSessionId || !text.trim())
             return;
         // Optimistic user row keyed by clientId. When /send returns with the
-        // canonical bridge MessageID we patch it onto the row; the subsequent
-        // user_message SSE event then coalesces into the same row.
+        // canonical bridge MessageID we patch the row's key to the grouping key
+        // (`${messageId}_user_message`) so the user_message SSE event coalesces
+        // into the same row.
         const clientId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const optimistic = {
             key: clientId,
             clientId,
             eventIds: [],
             actor: 'user',
+            kind: 'user_message',
             eventType: 'user_message',
             timestamp: new Date().toISOString(),
             text,
@@ -497,7 +544,8 @@ export function useBridgeSession() {
             }
             const body = await res.json().catch(() => ({}));
             if (body.message_id) {
-                setLogRows(prev => prev.map(r => r.clientId === clientId ? { ...r, messageId: body.message_id, key: body.message_id } : r));
+                const newKey = `${body.message_id}_user_message`;
+                setLogRows(prev => prev.map(r => r.clientId === clientId ? { ...r, messageId: body.message_id, key: newKey } : r));
             }
             lastEventId.current = undefined;
             startSSE(activeSessionId);

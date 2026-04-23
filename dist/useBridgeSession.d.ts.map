@@ -1,1 +1,1 @@
-{"version":3,"file":"useBridgeSession.d.ts","sourceRoot":"","sources":["../src/useBridgeSession.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAEyC,sBAAsB,EAE1E,MAAM,SAAS,CAAA;AA8MhB,wBAAgB,gBAAgB,IAAI,sBAAsB,CAmezD"}
+{"version":3,"file":"useBridgeSession.d.ts","sourceRoot":"","sources":["../src/useBridgeSession.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAEqD,sBAAsB,EAEtF,MAAM,SAAS,CAAA;AA0PhB,wBAAgB,gBAAgB,IAAI,sBAAsB,CAsezD"}

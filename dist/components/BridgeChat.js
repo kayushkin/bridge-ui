@@ -20,10 +20,18 @@ const COLLAPSE_KEY = 'bridge-ui-collapse';
 function loadCollapseState() {
     try {
         const s = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}');
-        return { harnessBar: !!s.harnessBar, sessionList: !!s.sessionList };
+        return {
+            harnessBar: !!s.harnessBar,
+            sessionList: !!s.sessionList,
+            turns: !!s.turns,
+            thread: !!s.thread,
+            // Timeline defaults to collapsed so existing users keep the previous layout
+            // until they opt in.
+            timeline: s.timeline === undefined ? true : !!s.timeline,
+        };
     }
     catch {
-        return { harnessBar: false, sessionList: false };
+        return { harnessBar: false, sessionList: false, turns: false, thread: false, timeline: true };
     }
 }
 function saveCollapseState(s) {
@@ -31,6 +39,14 @@ function saveCollapseState(s) {
         localStorage.setItem(COLLAPSE_KEY, JSON.stringify(s));
     }
     catch { /* ignore */ }
+}
+// When a user collapses a chat split pane and every other pane is already
+// collapsed, the chat area would be blank — auto-expand one so there's always
+// something visible.
+function ensureOneChatPaneOpen(s) {
+    if (!s.turns || !s.thread || !s.timeline)
+        return s;
+    return { ...s, thread: false };
 }
 /* ── Inline Editable Name ── */
 function EditableName({ value, onSave, className }) {
@@ -97,7 +113,12 @@ function MessageStats({ meta }) {
 function shouldExpandByDefault(row) {
     if (row.actor === 'user')
         return true;
-    return !!row.meta || row.eventType === 'result';
+    // Assistant text bubbles expand so the user sees the response without
+    // clicking; result rows expand to surface usage/cost; everything else
+    // (thinking, tool, system, etc.) collapses to keep the log compact.
+    if (row.kind === 'text' && row.text)
+        return true;
+    return !!row.meta || row.kind === 'result';
 }
 function groupEventsByType(events) {
     const order = [];
@@ -144,10 +165,10 @@ function UsageLine({ usage }) {
 /* ── Inline LogRow ── */
 function LogRowView({ row, agent }) {
     const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent;
-    const eventTypes = Array.from(new Set(row.events.map(e => String(e.type ?? '')).filter(Boolean)));
-    const typeLabel = eventTypes.length > 1
-        ? eventTypes.join('+')
-        : row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType;
+    // With the split-by-kind reducer, every event in a row shares the same kind
+    // so the label reads from row.kind directly. Subtypes on system/thinking
+    // rows still disambiguate (e.g. system.task_progress).
+    const typeLabel = row.subtype ? `${row.kind}.${row.subtype}` : row.kind;
     const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
         || row.usage || row.meta || row.systemMessage || row.systemFields
         || row.stateTransition || row.sessionInfo || row.errorMessage);
@@ -238,15 +259,10 @@ function saveHiddenTypes(s) {
     catch { /* ignore */ }
 }
 function typesInRow(row) {
-    const set = new Set();
-    for (const e of row.events) {
-        const t = e.type;
-        if (typeof t === 'string' && t)
-            set.add(t);
-    }
-    if (set.size === 0 && row.eventType)
-        set.add(row.eventType);
-    return [...set];
+    // After the split-by-kind reducer each row belongs to exactly one kind, so
+    // filter chips key off row.kind — more useful to users than raw event
+    // types (stream/tool_call/tool_result collapse into text/thinking/tool).
+    return [row.kind];
 }
 function FilterBar({ types, hidden, onToggle }) {
     if (types.length === 0)
@@ -255,6 +271,352 @@ function FilterBar({ types, hidden, onToggle }) {
                 const on = !hidden.has(t);
                 return (_jsx("button", { type: "button", className: `bc-filter-chip${on ? ' bc-filter-chip-on' : ''}`, onClick: () => onToggle(t), children: t }, t));
             })] }));
+}
+function rowsToTurns(rows) {
+    const out = [];
+    for (const row of rows) {
+        if (row.kind === 'user_message' && row.text) {
+            out.push({
+                key: `tv_user_${row.key}`,
+                actor: 'user',
+                text: row.text,
+                ts: row.timestamp,
+                turnId: row.turnId,
+            });
+        }
+        else if (row.kind === 'result' && row.done) {
+            const text = row.text || row.meta?.text;
+            if (text) {
+                out.push({
+                    key: `tv_res_${row.key}`,
+                    actor: 'assistant',
+                    text,
+                    ts: row.timestamp,
+                    turnId: row.turnId,
+                    usage: row.usage || row.meta?.usage,
+                    isError: row.meta?.is_error,
+                });
+            }
+        }
+        else if (row.kind === 'error' && row.errorMessage) {
+            out.push({
+                key: `tv_err_${row.key}`,
+                actor: 'assistant',
+                text: row.errorMessage,
+                ts: row.timestamp,
+                turnId: row.turnId,
+                isError: true,
+            });
+        }
+    }
+    return out;
+}
+function TurnsView({ rows, agent, onToggleCollapse }) {
+    const endRef = useRef(null);
+    const items = useMemo(() => rowsToTurns(rows), [rows]);
+    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [items.length]);
+    return (_jsxs("div", { className: "bc-turns-pane", children: [_jsxs("div", { className: "bc-turns-header", children: [_jsx("span", { className: "bc-turns-title", children: "Turns" }), _jsx("span", { className: "bc-turns-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("button", { className: "bc-turns-collapse-btn", onClick: onToggleCollapse, title: "Collapse turns", "aria-label": "Collapse turns", children: "\u25C2" })] }), _jsxs("div", { className: "bc-turns-body", children: [items.length === 0 && _jsx("div", { className: "bc-turns-empty", children: "No messages yet" }), items.map(it => (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}`, title: it.text, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage })] }), _jsx("div", { className: "bc-turns-text", children: it.text })] }, it.key))), _jsx("div", { ref: endRef })] })] }));
+}
+function oneLine(s, n = 120) {
+    const flat = s.replace(/\s+/g, ' ').trim();
+    return flat.length > n ? flat.slice(0, n) + '…' : flat;
+}
+function formatTodoWrite(todos) {
+    if (!Array.isArray(todos))
+        return undefined;
+    let done = 0;
+    let active = 0;
+    let pending = 0;
+    let current;
+    for (const raw of todos) {
+        if (!raw || typeof raw !== 'object')
+            continue;
+        const t = raw;
+        if (t.status === 'completed')
+            done++;
+        else if (t.status === 'in_progress') {
+            active++;
+            current = t.activeForm || t.content || current;
+        }
+        else
+            pending++;
+    }
+    const total = todos.length;
+    const bits = [`${total} todo${total === 1 ? '' : 's'}`];
+    const counts = [];
+    if (done)
+        counts.push(`${done}✓`);
+    if (active)
+        counts.push(`${active}⏺`);
+    if (pending)
+        counts.push(`${pending}○`);
+    if (counts.length)
+        bits.push(`(${counts.join(' ')})`);
+    if (current)
+        bits.push(`— ${oneLine(current, 60)}`);
+    return bits.join(' ');
+}
+function toolSnippet(t) {
+    if (!t.input)
+        return '';
+    const keys = Object.keys(t.input);
+    if (keys.length === 0)
+        return '';
+    // Tool-specific formatters — fall through to the generic picker if nothing
+    // applies. Keeps TodoWrite, which carries an array-of-objects payload, from
+    // rendering as an empty-looking "todos".
+    if (t.tool === 'TodoWrite') {
+        const summary = formatTodoWrite(t.input.todos);
+        if (summary)
+            return summary;
+    }
+    const preferred = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description', 'prompt'];
+    for (const k of preferred) {
+        const v = t.input[k];
+        if (typeof v === 'string' && v)
+            return `${k}=${oneLine(v, 80)}`;
+    }
+    const first = t.input[keys[0]];
+    if (typeof first === 'string')
+        return `${keys[0]}=${oneLine(first, 80)}`;
+    if (Array.isArray(first))
+        return `${keys[0]}[${first.length}]`;
+    return keys.join(',');
+}
+function toolFullText(t) {
+    if (!t.input)
+        return undefined;
+    try {
+        return JSON.stringify(t.input, null, 2);
+    }
+    catch {
+        return undefined;
+    }
+}
+function rowsToTimeline(rows) {
+    const out = [];
+    const seenTurn = new Set();
+    // Maps a live task scope id to its output-array index so task_started and
+    // subsequent task_progress events collapse into a single timeline row.
+    const taskIdxByScope = new Map();
+    let currentTurnId;
+    let currentTaskId;
+    for (const row of rows) {
+        // Tasks are scoped to the turn they start in; a new turn closes any open
+        // task block. task_started opens a new scope until the next task_started
+        // or the end of the turn.
+        if (row.turnId !== currentTurnId) {
+            currentTurnId = row.turnId;
+            currentTaskId = undefined;
+            taskIdxByScope.clear();
+        }
+        if (row.kind === 'user_message') {
+            currentTaskId = undefined;
+            const turnMark = row.turnId && !seenTurn.has(row.turnId);
+            if (row.turnId)
+                seenTurn.add(row.turnId);
+            out.push({
+                key: `tl_turn_${row.key}`,
+                turnId: row.turnId,
+                icon: turnMark ? '▶' : '»',
+                label: 'Turn',
+                detail: row.text ? oneLine(row.text) : undefined,
+                fullText: row.text,
+                ts: row.timestamp,
+                tone: 'turn',
+            });
+            continue;
+        }
+        if (row.kind === 'system' && row.subtype && row.subtype.startsWith('task_')) {
+            // Historical claude_code events stored task_started with only the
+            // subtype — task_id / description live on the raw harness payload.
+            // Fall back to events[0].raw when systemFields didn't capture them.
+            const raw = row.events[0]?.raw;
+            const explicitId = row.systemFields?.task_id
+                || (typeof raw?.task_id === 'string' ? raw.task_id : undefined);
+            const isStart = row.subtype === 'task_started';
+            if (isStart) {
+                // task_started in Claude Code carries no task_id — synthesize a stable
+                // id so following items can nest under the block. task_progress events
+                // do carry task_id, but we reuse the synthesized id so the grouping is
+                // stable even when the real id arrives only mid-task.
+                currentTaskId = explicitId || `task_${row.key}`;
+            }
+            else if (explicitId && !currentTaskId) {
+                // task_progress without a preceding task_started — open a scope from
+                // the first progress event so subsequent items still nest.
+                currentTaskId = explicitId;
+            }
+            const description = row.systemFields?.description
+                || (typeof raw?.description === 'string' ? raw.description : undefined);
+            const lastTool = row.systemFields?.last_tool_name
+                || (typeof raw?.last_tool_name === 'string' ? raw.last_tool_name : undefined);
+            const taskType = typeof raw?.task_type === 'string' ? raw.task_type : undefined;
+            const full = description || row.systemMessage || lastTool || taskType || '';
+            // Collapse task_started + task_progress (and any repeats) into a single
+            // row per scope. task_started is the opener but carries no description;
+            // the first task_progress fills in the description — just update the
+            // existing row rather than emitting a second one.
+            if (currentTaskId && taskIdxByScope.has(currentTaskId)) {
+                const idx = taskIdxByScope.get(currentTaskId);
+                const existing = out[idx];
+                if (!existing.detail && full) {
+                    existing.detail = oneLine(full);
+                    existing.fullText = full;
+                }
+                continue;
+            }
+            out.push({
+                key: `tl_task_${row.key}`,
+                turnId: row.turnId,
+                taskId: currentTaskId,
+                icon: '▣',
+                label: 'Task',
+                detail: full ? oneLine(full) : undefined,
+                fullText: full || undefined,
+                ts: row.timestamp,
+                tone: 'task-start',
+            });
+            if (currentTaskId)
+                taskIdxByScope.set(currentTaskId, out.length - 1);
+            continue;
+        }
+        if (row.kind === 'thinking' && row.thinking) {
+            out.push({
+                key: `tl_think_${row.key}`,
+                turnId: row.turnId,
+                taskId: currentTaskId,
+                icon: '💭',
+                label: 'Thinking',
+                detail: oneLine(row.thinking),
+                fullText: row.thinking,
+                ts: row.timestamp,
+                tone: 'thinking',
+            });
+            continue;
+        }
+        if (row.kind === 'tool' && row.tools && row.tools.length > 0) {
+            for (const t of row.tools) {
+                const done = t.output !== undefined;
+                const err = !!t.error;
+                out.push({
+                    key: `tl_tool_${row.key}_${t.tool_id || t.tool}`,
+                    turnId: row.turnId,
+                    taskId: currentTaskId,
+                    icon: err ? '✗' : done ? '✓' : '⚙',
+                    label: t.tool || 'tool',
+                    detail: toolSnippet(t),
+                    fullText: toolFullText(t),
+                    ts: row.timestamp,
+                    tone: err ? 'tool-err' : done ? 'tool-done' : 'tool',
+                });
+            }
+            continue;
+        }
+        if (row.kind === 'result' && row.done) {
+            currentTaskId = undefined;
+            const u = row.usage || row.meta?.usage;
+            let detail;
+            if (u) {
+                const parts = [];
+                if (u.input_tokens)
+                    parts.push(`in ${formatTokens(u.input_tokens)}`);
+                if (u.output_tokens)
+                    parts.push(`out ${formatTokens(u.output_tokens)}`);
+                detail = parts.join(' · ') || undefined;
+            }
+            out.push({
+                key: `tl_res_${row.key}`,
+                turnId: row.turnId,
+                icon: '■',
+                label: 'Done',
+                detail,
+                fullText: row.text || row.meta?.text,
+                ts: row.timestamp,
+                tone: 'result',
+            });
+            continue;
+        }
+        if (row.kind === 'error' || row.errorMessage) {
+            out.push({
+                key: `tl_err_${row.key}`,
+                turnId: row.turnId,
+                taskId: currentTaskId,
+                icon: '⚠',
+                label: 'Error',
+                detail: row.errorMessage ? oneLine(row.errorMessage) : undefined,
+                fullText: row.errorMessage,
+                ts: row.timestamp,
+                tone: 'error',
+            });
+            continue;
+        }
+        if (row.kind === 'text' && row.text) {
+            out.push({
+                key: `tl_text_${row.key}`,
+                turnId: row.turnId,
+                taskId: currentTaskId,
+                icon: '✎',
+                label: 'Text',
+                detail: oneLine(row.text),
+                fullText: row.text,
+                ts: row.timestamp,
+                tone: 'text',
+            });
+            continue;
+        }
+    }
+    return out;
+}
+function TimelineItemRow({ item }) {
+    const tip = item.fullText || item.detail || item.label;
+    return (_jsxs("div", { className: `bc-tl-item bc-tl-${item.tone}`, title: tip, children: [_jsx("span", { className: "bc-tl-ts", children: formatHMS(item.ts) }), _jsx("span", { className: "bc-tl-icon", children: item.icon }), _jsx("span", { className: "bc-tl-label", children: item.label }), item.detail && _jsx("span", { className: "bc-tl-detail", children: item.detail })] }));
+}
+// Render helpers: nest items inside per-turn groups, and per-task sub-groups
+// within a turn, so the UI can paint left-aligned hierarchy bars.
+function renderTurnChildren(items) {
+    const out = [];
+    let i = 0;
+    while (i < items.length) {
+        const it = items[i];
+        if (!it.taskId) {
+            out.push(_jsx(TimelineItemRow, { item: it }, it.key));
+            i++;
+            continue;
+        }
+        const taskId = it.taskId;
+        const start = i;
+        while (i < items.length && items[i].taskId === taskId)
+            i++;
+        const [header, ...rest] = items.slice(start, i);
+        out.push(_jsxs("div", { className: "bc-tl-task-group", children: [_jsx("div", { className: "bc-tl-task-header", children: _jsx(TimelineItemRow, { item: header }, header.key) }), rest.length > 0 && (_jsx("div", { className: "bc-tl-task-body", children: rest.map(t => _jsx(TimelineItemRow, { item: t }, t.key)) }))] }, `tk_${taskId}_${start}`));
+    }
+    return out;
+}
+function renderTimelineNodes(items) {
+    const out = [];
+    let i = 0;
+    while (i < items.length) {
+        const it = items[i];
+        if (!it.turnId) {
+            out.push(_jsx(TimelineItemRow, { item: it }, it.key));
+            i++;
+            continue;
+        }
+        const turnId = it.turnId;
+        const start = i;
+        while (i < items.length && items[i].turnId === turnId)
+            i++;
+        const [header, ...rest] = items.slice(start, i);
+        out.push(_jsxs("div", { className: "bc-tl-turn-group", children: [_jsx("div", { className: "bc-tl-turn-header", children: _jsx(TimelineItemRow, { item: header }, header.key) }), rest.length > 0 && (_jsx("div", { className: "bc-tl-turn-body", children: renderTurnChildren(rest) }))] }, `tg_${turnId}_${start}`));
+    }
+    return out;
+}
+function Timeline({ rows, onToggleCollapse }) {
+    const endRef = useRef(null);
+    const items = useMemo(() => rowsToTimeline(rows), [rows]);
+    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [items.length]);
+    return (_jsxs("div", { className: "bc-timeline", children: [_jsxs("div", { className: "bc-timeline-header", children: [_jsx("span", { className: "bc-timeline-title", children: "Timeline" }), _jsx("span", { className: "bc-timeline-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("button", { className: "bc-timeline-collapse-btn", onClick: onToggleCollapse, title: "Collapse timeline", "aria-label": "Collapse timeline", children: "\u25B8" })] }), _jsxs("div", { className: "bc-timeline-body", children: [items.length === 0 && _jsx("div", { className: "bc-timeline-empty", children: "No events yet" }), renderTimelineNodes(items), _jsx("div", { ref: endRef })] })] }));
 }
 /* ── Inline Thread ── */
 function Thread({ rows, loading, uiState, activity, error, agent }) {
@@ -536,6 +898,27 @@ export function BridgeChat() {
     const toggleSessionList = useCallback(() => {
         setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next; });
     }, []);
+    const toggleTurns = useCallback(() => {
+        setCollapseState(s => {
+            const next = ensureOneChatPaneOpen({ ...s, turns: !s.turns });
+            saveCollapseState(next);
+            return next;
+        });
+    }, []);
+    const toggleThread = useCallback(() => {
+        setCollapseState(s => {
+            const next = ensureOneChatPaneOpen({ ...s, thread: !s.thread });
+            saveCollapseState(next);
+            return next;
+        });
+    }, []);
+    const toggleTimeline = useCallback(() => {
+        setCollapseState(s => {
+            const next = ensureOneChatPaneOpen({ ...s, timeline: !s.timeline });
+            saveCollapseState(next);
+            return next;
+        });
+    }, []);
     useEffect(() => {
         apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data) => {
             setStoreModels(data.filter(m => m.enabled));
@@ -721,6 +1104,6 @@ export function BridgeChat() {
             return '';
         return instances.instanceMap.get(selectedInstance)?.name ?? '';
     }, [selectedInstance, instances.instanceMap]);
-    return (_jsxs("div", { className: `bc-container ${collapseState.harnessBar ? 'bc-harness-collapsed' : ''} ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: [collapseState.harnessBar ? (_jsx("div", { className: "htb-wrapper htb-wrapper-collapsed", children: _jsxs("button", { className: "htb-expand-btn", onClick: toggleHarnessBar, title: "Expand harness bar", "aria-label": "Expand harness bar", children: [_jsx("span", { className: "htb-expand-chevron", children: "\u25BE" }), _jsxs("span", { className: "htb-expand-label", children: ["Harness: ", currentInstanceName || 'none selected'] })] }) })) : (_jsx(HarnessTabBar, { instances: instances.instances, harnesses: harnesses, sessions: bridge.sessions, selectedInstance: selectedInstance, onSelect: selectInstance, onNewInstance: () => setShowNewInstance(true), basePath: basePath, instancesPath: routes.instances, onToggleCollapse: toggleHarnessBar })), _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: filteredSessions, activeSession: bridge.activeSession?.bridge_id ?? '', onSelect: handleSelectSession, onNewSession: handleCreate, connected: bridge.connected && harnessAvailable, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsxs("div", { className: "bc-chat-area", children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: name => activeChat?.sessionId && handleRenameSession(activeChat.sessionId, name), onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1 }), _jsx(Thread, { rows: bridge.logRows, loading: bridge.loadingHistory, uiState: bridge.uiState, activity: bridge.activity, error: bridge.error, agent: activeChat?.agent ?? '' }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleCompact, title: "Compact context", children: "Compact" })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume })] })] }), showNewInstance && (_jsx(NewInstanceForm, { harnesses: harnesses, onCreate: handleCreateInstance, onCancel: () => setShowNewInstance(false) })), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+    return (_jsxs("div", { className: `bc-container ${collapseState.harnessBar ? 'bc-harness-collapsed' : ''} ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: [collapseState.harnessBar ? (_jsx("div", { className: "htb-wrapper htb-wrapper-collapsed", children: _jsxs("button", { className: "htb-expand-btn", onClick: toggleHarnessBar, title: "Expand harness bar", "aria-label": "Expand harness bar", children: [_jsx("span", { className: "htb-expand-chevron", children: "\u25BE" }), _jsxs("span", { className: "htb-expand-label", children: ["Harness: ", currentInstanceName || 'none selected'] })] }) })) : (_jsx(HarnessTabBar, { instances: instances.instances, harnesses: harnesses, sessions: bridge.sessions, selectedInstance: selectedInstance, onSelect: selectInstance, onNewInstance: () => setShowNewInstance(true), basePath: basePath, instancesPath: routes.instances, onToggleCollapse: toggleHarnessBar })), _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: filteredSessions, activeSession: bridge.activeSession?.bridge_id ?? '', onSelect: handleSelectSession, onNewSession: handleCreate, connected: bridge.connected && harnessAvailable, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsxs("div", { className: "bc-chat-area", children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: name => activeChat?.sessionId && handleRenameSession(activeChat.sessionId, name), onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1 }), _jsxs("div", { className: `bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}`, children: [collapseState.turns ? (_jsxs("button", { className: "bc-split-strip bc-split-strip-turns", onClick: toggleTurns, title: "Show turns", "aria-label": "Show turns", children: [_jsx("span", { className: "bc-split-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-split-strip-label", children: "Turns" })] })) : (_jsx(TurnsView, { rows: bridge.logRows, agent: activeChat?.agent ?? '', onToggleCollapse: toggleTurns })), collapseState.thread ? (_jsxs("button", { className: "bc-split-strip bc-split-strip-thread", onClick: toggleThread, title: "Show thread", "aria-label": "Show thread", children: [_jsx("span", { className: "bc-split-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-split-strip-label", children: "Thread" })] })) : (_jsxs("div", { className: "bc-split-pane bc-split-pane-thread", children: [_jsxs("div", { className: "bc-split-pane-header", children: [_jsx("span", { className: "bc-split-pane-title", children: "Thread" }), _jsx("span", { className: "bc-spacer" }), _jsx("button", { className: "bc-split-collapse-btn", onClick: toggleThread, title: "Collapse thread", "aria-label": "Collapse thread", children: "\u25C2" })] }), _jsx(Thread, { rows: bridge.logRows, loading: bridge.loadingHistory, uiState: bridge.uiState, activity: bridge.activity, error: bridge.error, agent: activeChat?.agent ?? '' })] })), collapseState.timeline ? (_jsxs("button", { className: "bc-split-strip bc-split-strip-timeline", onClick: toggleTimeline, title: "Show timeline", "aria-label": "Show timeline", children: [_jsx("span", { className: "bc-split-strip-chevron", children: "\u25C2" }), _jsx("span", { className: "bc-split-strip-label", children: "Timeline" })] })) : (_jsx(Timeline, { rows: bridge.logRows, onToggleCollapse: toggleTimeline }))] }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleCompact, title: "Compact context", children: "Compact" })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume })] })] }), showNewInstance && (_jsx(NewInstanceForm, { harnesses: harnesses, onCreate: handleCreateInstance, onCancel: () => setShowNewInstance(false) })), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 //# sourceMappingURL=BridgeChat.js.map
