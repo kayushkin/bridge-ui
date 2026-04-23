@@ -999,8 +999,8 @@ function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPr
   for (const r of completed) totalCost += r.meta?.cost?.total_usd ?? 0
 
   const contextTokens = meta?.usage?.context_tokens ?? 0
-  const contextLimit = meta?.usage?.context_limit ?? 200_000
-  const contextPct = contextTokens && contextLimit ? Math.min(100, Math.round((contextTokens / contextLimit) * 100)) : 0
+  const contextLimit = meta?.usage?.context_limit ?? 0
+  const contextPct = contextTokens && contextLimit ? Math.round((contextTokens / contextLimit) * 100) : 0
 
   return (
     <div className="bc-header">
@@ -1019,11 +1019,11 @@ function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPr
         <span className="bc-spacer" />
         {totalCost > 0 && <span className="bc-cost">{formatCost(totalCost)}</span>}
       </div>
-      {contextTokens > 0 && (
+      {contextTokens > 0 && contextLimit > 0 && (
         <div className="bc-context-row">
           <span className="bc-context-label">{formatTokens(contextTokens)} / {formatTokens(contextLimit)} ({contextPct}%)</span>
           <div className="bc-context-bar">
-            <div className={`bc-bar-fill ${contextPct >= 90 ? 'bc-bar-crit' : contextPct >= 70 ? 'bc-bar-warn' : ''}`} style={{ width: `${contextPct}%` }} />
+            <div className={`bc-bar-fill ${contextPct >= 90 ? 'bc-bar-crit' : contextPct >= 70 ? 'bc-bar-warn' : ''}`} style={{ width: `${Math.min(100, contextPct)}%` }} />
           </div>
         </div>
       )}
