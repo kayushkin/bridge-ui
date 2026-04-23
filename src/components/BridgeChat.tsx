@@ -8,7 +8,7 @@ import { useBridgeFolders, type UseBridgeFoldersReturn } from '../useBridgeFolde
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
 import { ToolsSection } from './tools'
-import type { HarnessInfo, LogRow, MessageMeta, SessionInfo, TokenUsage, ToolEvent } from '../types'
+import type { HarnessInfo, LogRow, LogRowActor, MessageMeta, SessionInfo, TokenUsage, ToolEvent } from '../types'
 
 interface StoreModel {
   id: string
@@ -41,6 +41,7 @@ const COLLAPSE_KEY = 'bridge-ui-collapse'
 interface CollapseState {
   harnessBar: boolean
   sessionList: boolean
+  turns: boolean
   thread: boolean
   timeline: boolean
 }
@@ -50,15 +51,23 @@ function loadCollapseState(): CollapseState {
     return {
       harnessBar: !!s.harnessBar,
       sessionList: !!s.sessionList,
+      turns: !!s.turns,
       thread: !!s.thread,
       // Timeline defaults to collapsed so existing users keep the previous layout
       // until they opt in.
       timeline: s.timeline === undefined ? true : !!s.timeline,
     }
-  } catch { return { harnessBar: false, sessionList: false, thread: false, timeline: true } }
+  } catch { return { harnessBar: false, sessionList: false, turns: false, thread: false, timeline: true } }
 }
 function saveCollapseState(s: CollapseState) {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+// When a user collapses a chat split pane and every other pane is already
+// collapsed, the chat area would be blank — auto-expand one so there's always
+// something visible.
+function ensureOneChatPaneOpen(s: CollapseState): CollapseState {
+  if (!s.turns || !s.thread || !s.timeline) return s
+  return { ...s, thread: false }
 }
 
 /* ── Inline Editable Name ── */
@@ -405,6 +414,100 @@ function FilterBar({ types, hidden, onToggle }: {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/* ── Turns View ──
+ *
+ * Strips the event log down to the conversational backbone: user messages and
+ * the final assistant result (or error) for each turn. Rendered in order,
+ * with actor-styled bubbles and a small meta line for results.
+ */
+interface TurnsItem {
+  key: string
+  actor: LogRowActor
+  text: string
+  ts: string
+  turnId?: string
+  usage?: TokenUsage
+  isError?: boolean
+}
+
+function rowsToTurns(rows: LogRow[]): TurnsItem[] {
+  const out: TurnsItem[] = []
+  for (const row of rows) {
+    if (row.kind === 'user_message' && row.text) {
+      out.push({
+        key: `tv_user_${row.key}`,
+        actor: 'user',
+        text: row.text,
+        ts: row.timestamp,
+        turnId: row.turnId,
+      })
+    } else if (row.kind === 'result' && row.done) {
+      const text = row.text || row.meta?.text
+      if (text) {
+        out.push({
+          key: `tv_res_${row.key}`,
+          actor: 'assistant',
+          text,
+          ts: row.timestamp,
+          turnId: row.turnId,
+          usage: row.usage || row.meta?.usage,
+          isError: row.meta?.is_error,
+        })
+      }
+    } else if (row.kind === 'error' && row.errorMessage) {
+      out.push({
+        key: `tv_err_${row.key}`,
+        actor: 'assistant',
+        text: row.errorMessage,
+        ts: row.timestamp,
+        turnId: row.turnId,
+        isError: true,
+      })
+    }
+  }
+  return out
+}
+
+function TurnsView({ rows, agent, onToggleCollapse }: {
+  rows: LogRow[]
+  agent: string
+  onToggleCollapse: () => void
+}) {
+  const endRef = useRef<HTMLDivElement>(null)
+  const items = useMemo(() => rowsToTurns(rows), [rows])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [items.length])
+
+  return (
+    <div className="bc-turns-pane">
+      <div className="bc-turns-header">
+        <span className="bc-turns-title">Turns</span>
+        <span className="bc-turns-count">{items.length}</span>
+        <span className="bc-spacer" />
+        <button
+          className="bc-turns-collapse-btn"
+          onClick={onToggleCollapse}
+          title="Collapse turns"
+          aria-label="Collapse turns"
+        >◂</button>
+      </div>
+      <div className="bc-turns-body">
+        {items.length === 0 && <div className="bc-turns-empty">No messages yet</div>}
+        {items.map(it => (
+          <div key={it.key} className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}`}>
+            <div className="bc-turns-meta">
+              <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>
+              <span className="bc-turns-ts">{formatHMS(it.ts)}</span>
+              {it.usage && <UsageLine usage={it.usage} />}
+            </div>
+            <div className="bc-turns-text">{it.text}</div>
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
     </div>
   )
 }
@@ -1272,21 +1375,23 @@ export function BridgeChat() {
   const toggleSessionList = useCallback(() => {
     setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next })
   }, [])
+  const toggleTurns = useCallback(() => {
+    setCollapseState(s => {
+      const next = ensureOneChatPaneOpen({ ...s, turns: !s.turns })
+      saveCollapseState(next)
+      return next
+    })
+  }, [])
   const toggleThread = useCallback(() => {
     setCollapseState(s => {
-      // Prevent both panes from being collapsed at once — the chat area would
-      // be blank. If thread is being hidden while timeline is already hidden,
-      // auto-expand the timeline.
-      const next: CollapseState = { ...s, thread: !s.thread }
-      if (next.thread && next.timeline) next.timeline = false
+      const next = ensureOneChatPaneOpen({ ...s, thread: !s.thread })
       saveCollapseState(next)
       return next
     })
   }, [])
   const toggleTimeline = useCallback(() => {
     setCollapseState(s => {
-      const next: CollapseState = { ...s, timeline: !s.timeline }
-      if (next.timeline && next.thread) next.thread = false
+      const next = ensureOneChatPaneOpen({ ...s, timeline: !s.timeline })
       saveCollapseState(next)
       return next
     })
@@ -1540,7 +1645,20 @@ export function BridgeChat() {
             hasPrev={navIndex > 0}
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
           />
-          <div className={`bc-chat-split${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}`}>
+          <div className={`bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}`}>
+            {collapseState.turns ? (
+              <button
+                className="bc-split-strip bc-split-strip-turns"
+                onClick={toggleTurns}
+                title="Show turns"
+                aria-label="Show turns"
+              >
+                <span className="bc-split-strip-chevron">▸</span>
+                <span className="bc-split-strip-label">Turns</span>
+              </button>
+            ) : (
+              <TurnsView rows={bridge.logRows} agent={activeChat?.agent ?? ''} onToggleCollapse={toggleTurns} />
+            )}
             {collapseState.thread ? (
               <button
                 className="bc-split-strip bc-split-strip-thread"
