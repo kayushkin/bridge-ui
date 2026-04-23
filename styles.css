@@ -469,7 +469,7 @@
   background: color-mix(in srgb, #f472b6 4%, transparent);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 .bc-tl-turn-header {
   background: color-mix(in srgb, #f472b6 14%, transparent);
@@ -490,7 +490,7 @@
   background: color-mix(in srgb, #22d3ee 4%, transparent);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 .bc-tl-task-header {
   background: color-mix(in srgb, #22d3ee 14%, transparent);
