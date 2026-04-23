@@ -587,13 +587,21 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
     }
 
     if (row.kind === 'system' && row.subtype && row.subtype.startsWith('task_')) {
-      const taskId = (row.systemFields?.task_id as string | undefined) || undefined
-      if (row.subtype === 'task_started' && taskId) {
-        currentTaskId = taskId
+      const explicitId = (row.systemFields?.task_id as string | undefined) || undefined
+      const isStart = row.subtype === 'task_started'
+      if (isStart) {
+        // task_started in Claude Code carries no task_id — synthesize a stable
+        // id so following items can nest under the block. task_progress events
+        // do carry task_id, but we reuse the synthesized id so the grouping is
+        // stable even when the real id arrives only mid-task.
+        currentTaskId = explicitId || `task_${row.key}`
+      } else if (explicitId && !currentTaskId) {
+        // task_progress without a preceding task_started — open a scope from
+        // the first progress event so subsequent items still nest.
+        currentTaskId = explicitId
       }
       const description = (row.systemFields?.description as string | undefined) || undefined
       const full = description || row.systemMessage || ''
-      const isStart = row.subtype === 'task_started'
       out.push({
         key: `tl_task_${row.key}`,
         turnId: row.turnId,
