@@ -24,6 +24,7 @@ export type {
   Message,
   LogRow,
   LogRowActor,
+  LogRowKind,
   SessionUIState,
   ActivityKind,
   BridgeEvent,

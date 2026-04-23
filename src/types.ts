@@ -109,8 +109,27 @@ export interface Message {
 // See useBridgeSession's reducer for the coalesce rules.
 export type LogRowActor = 'user' | 'assistant' | 'system'
 
+// LogRowKind narrows what a row represents. Rows only coalesce events of the
+// same kind under a shared message_id (tool_call/tool_result pair by tool_id).
+// Stream events split into 'text' or 'thinking' rows based on their delta.type.
+export type LogRowKind =
+  | 'user_message'
+  | 'text'
+  | 'thinking'
+  | 'tool'
+  | 'result'
+  | 'error'
+  | 'system'
+  | 'session_state'
+  | 'session_info'
+  | 'plan'
+  | 'approval'
+  | 'stream'      // stream events with no delta (block-boundary markers)
+  | 'other'
+
 export interface LogRow {
-  // Stable React key: messageId when coalescing, otherwise "evt_<eventId>".
+  // Stable React key: <messageId>_<kind> when coalescing, tool_<toolId> for
+  // tool rows, otherwise "evt_<eventId>".
   key: string
 
   // Displayed IDs.
@@ -126,7 +145,8 @@ export interface LogRow {
 
   // Header metadata.
   actor: LogRowActor
-  eventType: string           // type of the first event for this row
+  kind: LogRowKind            // what this row represents, drives grouping + display
+  eventType: string           // raw type of the first event for this row
   subtype?: string            // populated for system/thinking events
   timestamp: string
 

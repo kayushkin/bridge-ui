@@ -8,7 +8,7 @@ import { useBridgeFolders, type UseBridgeFoldersReturn } from '../useBridgeFolde
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
 import { ToolsSection } from './tools'
-import type { HarnessInfo, LogRow, MessageMeta, SessionInfo, TokenUsage } from '../types'
+import type { HarnessInfo, LogRow, MessageMeta, SessionInfo, TokenUsage, ToolEvent } from '../types'
 
 interface StoreModel {
   id: string
@@ -38,12 +38,24 @@ function generateDefaultAgent(harness: string): string {
 
 /* ── Collapse state persistence ── */
 const COLLAPSE_KEY = 'bridge-ui-collapse'
-interface CollapseState { harnessBar: boolean; sessionList: boolean }
+interface CollapseState {
+  harnessBar: boolean
+  sessionList: boolean
+  thread: boolean
+  timeline: boolean
+}
 function loadCollapseState(): CollapseState {
   try {
     const s = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}')
-    return { harnessBar: !!s.harnessBar, sessionList: !!s.sessionList }
-  } catch { return { harnessBar: false, sessionList: false } }
+    return {
+      harnessBar: !!s.harnessBar,
+      sessionList: !!s.sessionList,
+      thread: !!s.thread,
+      // Timeline defaults to collapsed so existing users keep the previous layout
+      // until they opt in.
+      timeline: s.timeline === undefined ? true : !!s.timeline,
+    }
+  } catch { return { harnessBar: false, sessionList: false, thread: false, timeline: true } }
 }
 function saveCollapseState(s: CollapseState) {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
@@ -140,7 +152,11 @@ function MessageStats({ meta }: { meta: MessageMeta }) {
 
 function shouldExpandByDefault(row: LogRow): boolean {
   if (row.actor === 'user') return true
-  return !!row.meta || row.eventType === 'result'
+  // Assistant text bubbles expand so the user sees the response without
+  // clicking; result rows expand to surface usage/cost; everything else
+  // (thinking, tool, system, etc.) collapses to keep the log compact.
+  if (row.kind === 'text' && row.text) return true
+  return !!row.meta || row.kind === 'result'
 }
 
 function groupEventsByType(events: Array<Record<string, unknown>>): Array<{ type: string; events: Array<Record<string, unknown>> }> {
@@ -181,12 +197,10 @@ function UsageLine({ usage }: { usage: TokenUsage }) {
 /* ── Inline LogRow ── */
 function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
   const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent
-  const eventTypes = Array.from(new Set(
-    row.events.map(e => String((e as { type?: unknown }).type ?? '')).filter(Boolean),
-  ))
-  const typeLabel = eventTypes.length > 1
-    ? eventTypes.join('+')
-    : row.subtype ? `${row.eventType}.${row.subtype}` : row.eventType
+  // With the split-by-kind reducer, every event in a row shares the same kind
+  // so the label reads from row.kind directly. Subtypes on system/thinking
+  // rows still disambiguate (e.g. system.task_progress).
+  const typeLabel = row.subtype ? `${row.kind}.${row.subtype}` : row.kind
   const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
     || row.usage || row.meta || row.systemMessage || row.systemFields
     || row.stateTransition || row.sessionInfo || row.errorMessage)
@@ -363,13 +377,10 @@ function saveHiddenTypes(s: Set<string>) {
 }
 
 function typesInRow(row: LogRow): string[] {
-  const set = new Set<string>()
-  for (const e of row.events) {
-    const t = (e as { type?: unknown }).type
-    if (typeof t === 'string' && t) set.add(t)
-  }
-  if (set.size === 0 && row.eventType) set.add(row.eventType)
-  return [...set]
+  // After the split-by-kind reducer each row belongs to exactly one kind, so
+  // filter chips key off row.kind — more useful to users than raw event
+  // types (stream/tool_call/tool_result collapse into text/thinking/tool).
+  return [row.kind]
 }
 
 function FilterBar({ types, hidden, onToggle }: {
@@ -394,6 +405,190 @@ function FilterBar({ types, hidden, onToggle }: {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/* ── Timeline View ──
+ *
+ * Compact event-based stream: new turn, task-progress narrations, tool calls,
+ * thinking, result/error. One line per event, grouped by turn. Built entirely
+ * from logRows — no separate event feed.
+ */
+interface TimelineItem {
+  key: string
+  turnId?: string
+  icon: string
+  label: string
+  detail?: string
+  ts: string
+  tone: 'turn' | 'thinking' | 'tool' | 'tool-done' | 'tool-err' | 'task' | 'result' | 'error' | 'text'
+}
+
+function oneLine(s: string, n = 120): string {
+  const flat = s.replace(/\s+/g, ' ').trim()
+  return flat.length > n ? flat.slice(0, n) + '…' : flat
+}
+
+function toolSnippet(t: ToolEvent): string {
+  if (!t.input) return ''
+  const keys = Object.keys(t.input)
+  if (keys.length === 0) return ''
+  const preferred = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description']
+  for (const k of preferred) {
+    const v = t.input[k]
+    if (typeof v === 'string' && v) return `${k}=${oneLine(v, 80)}`
+  }
+  const first = t.input[keys[0]]
+  if (typeof first === 'string') return `${keys[0]}=${oneLine(first, 80)}`
+  return keys.join(',')
+}
+
+function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
+  const out: TimelineItem[] = []
+  const seenTurn = new Set<string>()
+  for (const row of rows) {
+    if (row.kind === 'user_message') {
+      const turnMark = row.turnId && !seenTurn.has(row.turnId)
+      if (row.turnId) seenTurn.add(row.turnId)
+      out.push({
+        key: `tl_turn_${row.key}`,
+        turnId: row.turnId,
+        icon: turnMark ? '▶' : '»',
+        label: 'Turn',
+        detail: row.text ? oneLine(row.text) : undefined,
+        ts: row.timestamp,
+        tone: 'turn',
+      })
+      continue
+    }
+
+    if (row.kind === 'thinking' && row.thinking) {
+      out.push({
+        key: `tl_think_${row.key}`,
+        turnId: row.turnId,
+        icon: '💭',
+        label: 'Thinking',
+        detail: oneLine(row.thinking),
+        ts: row.timestamp,
+        tone: 'thinking',
+      })
+      continue
+    }
+
+    if (row.kind === 'tool' && row.tools && row.tools.length > 0) {
+      for (const t of row.tools) {
+        const done = t.output !== undefined
+        const err = !!t.error
+        out.push({
+          key: `tl_tool_${row.key}_${t.tool_id || t.tool}`,
+          turnId: row.turnId,
+          icon: err ? '✗' : done ? '✓' : '⚙',
+          label: t.tool || 'tool',
+          detail: toolSnippet(t),
+          ts: row.timestamp,
+          tone: err ? 'tool-err' : done ? 'tool-done' : 'tool',
+        })
+      }
+      continue
+    }
+
+    if (row.kind === 'system' && row.subtype === 'task_progress') {
+      out.push({
+        key: `tl_task_${row.key}`,
+        turnId: row.turnId,
+        icon: '📋',
+        label: 'Task',
+        detail: row.systemMessage ? oneLine(row.systemMessage) : undefined,
+        ts: row.timestamp,
+        tone: 'task',
+      })
+      continue
+    }
+
+    if (row.kind === 'result' && row.done) {
+      const u = row.usage || row.meta?.usage
+      let detail: string | undefined
+      if (u) {
+        const parts: string[] = []
+        if (u.input_tokens) parts.push(`in ${formatTokens(u.input_tokens)}`)
+        if (u.output_tokens) parts.push(`out ${formatTokens(u.output_tokens)}`)
+        detail = parts.join(' · ') || undefined
+      }
+      out.push({
+        key: `tl_res_${row.key}`,
+        turnId: row.turnId,
+        icon: '■',
+        label: 'Done',
+        detail,
+        ts: row.timestamp,
+        tone: 'result',
+      })
+      continue
+    }
+
+    if (row.kind === 'error' || row.errorMessage) {
+      out.push({
+        key: `tl_err_${row.key}`,
+        turnId: row.turnId,
+        icon: '⚠',
+        label: 'Error',
+        detail: row.errorMessage ? oneLine(row.errorMessage) : undefined,
+        ts: row.timestamp,
+        tone: 'error',
+      })
+      continue
+    }
+
+    if (row.kind === 'text' && row.text) {
+      out.push({
+        key: `tl_text_${row.key}`,
+        turnId: row.turnId,
+        icon: '✎',
+        label: 'Text',
+        detail: oneLine(row.text),
+        ts: row.timestamp,
+        tone: 'text',
+      })
+      continue
+    }
+  }
+  return out
+}
+
+function Timeline({ rows, onToggleCollapse }: {
+  rows: LogRow[]
+  onToggleCollapse: () => void
+}) {
+  const endRef = useRef<HTMLDivElement>(null)
+  const items = useMemo(() => rowsToTimeline(rows), [rows])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [items.length])
+
+  return (
+    <div className="bc-timeline">
+      <div className="bc-timeline-header">
+        <span className="bc-timeline-title">Timeline</span>
+        <span className="bc-timeline-count">{items.length}</span>
+        <span className="bc-spacer" />
+        <button
+          className="bc-timeline-collapse-btn"
+          onClick={onToggleCollapse}
+          title="Collapse timeline"
+          aria-label="Collapse timeline"
+        >▸</button>
+      </div>
+      <div className="bc-timeline-body">
+        {items.length === 0 && <div className="bc-timeline-empty">No events yet</div>}
+        {items.map(it => (
+          <div key={it.key} className={`bc-tl-item bc-tl-${it.tone}`}>
+            <span className="bc-tl-ts">{formatHMS(it.ts)}</span>
+            <span className="bc-tl-icon">{it.icon}</span>
+            <span className="bc-tl-label">{it.label}</span>
+            {it.detail && <span className="bc-tl-detail">{it.detail}</span>}
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
     </div>
   )
 }
@@ -1077,6 +1272,25 @@ export function BridgeChat() {
   const toggleSessionList = useCallback(() => {
     setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next })
   }, [])
+  const toggleThread = useCallback(() => {
+    setCollapseState(s => {
+      // Prevent both panes from being collapsed at once — the chat area would
+      // be blank. If thread is being hidden while timeline is already hidden,
+      // auto-expand the timeline.
+      const next: CollapseState = { ...s, thread: !s.thread }
+      if (next.thread && next.timeline) next.timeline = false
+      saveCollapseState(next)
+      return next
+    })
+  }, [])
+  const toggleTimeline = useCallback(() => {
+    setCollapseState(s => {
+      const next: CollapseState = { ...s, timeline: !s.timeline }
+      if (next.timeline && next.thread) next.thread = false
+      saveCollapseState(next)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data: StoreModel[]) => {
@@ -1326,14 +1540,53 @@ export function BridgeChat() {
             hasPrev={navIndex > 0}
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
           />
-          <Thread
-            rows={bridge.logRows}
-            loading={bridge.loadingHistory}
-            uiState={bridge.uiState}
-            activity={bridge.activity}
-            error={bridge.error}
-            agent={activeChat?.agent ?? ''}
-          />
+          <div className={`bc-chat-split${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}`}>
+            {collapseState.thread ? (
+              <button
+                className="bc-split-strip bc-split-strip-thread"
+                onClick={toggleThread}
+                title="Show thread"
+                aria-label="Show thread"
+              >
+                <span className="bc-split-strip-chevron">▸</span>
+                <span className="bc-split-strip-label">Thread</span>
+              </button>
+            ) : (
+              <div className="bc-split-pane bc-split-pane-thread">
+                <div className="bc-split-pane-header">
+                  <span className="bc-split-pane-title">Thread</span>
+                  <span className="bc-spacer" />
+                  <button
+                    className="bc-split-collapse-btn"
+                    onClick={toggleThread}
+                    title="Collapse thread"
+                    aria-label="Collapse thread"
+                  >◂</button>
+                </div>
+                <Thread
+                  rows={bridge.logRows}
+                  loading={bridge.loadingHistory}
+                  uiState={bridge.uiState}
+                  activity={bridge.activity}
+                  error={bridge.error}
+                  agent={activeChat?.agent ?? ''}
+                />
+              </div>
+            )}
+            {collapseState.timeline ? (
+              <button
+                className="bc-split-strip bc-split-strip-timeline"
+                onClick={toggleTimeline}
+                title="Show timeline"
+                aria-label="Show timeline"
+              >
+                <span className="bc-split-strip-chevron">◂</span>
+                <span className="bc-split-strip-label">Timeline</span>
+              </button>
+            ) : (
+              <Timeline rows={bridge.logRows} onToggleCollapse={toggleTimeline} />
+            )}
+          </div>
           <div className="bc-controls-bar">
             {bridge.activeSession && (
               <>
