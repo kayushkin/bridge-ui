@@ -623,7 +623,12 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
     }
 
     if (row.kind === 'system' && row.subtype && row.subtype.startsWith('task_')) {
-      const explicitId = (row.systemFields?.task_id as string | undefined) || undefined
+      // Historical claude_code events stored task_started with only the
+      // subtype — task_id / description live on the raw harness payload.
+      // Fall back to events[0].raw when systemFields didn't capture them.
+      const raw = (row.events[0] as { raw?: Record<string, unknown> } | undefined)?.raw
+      const explicitId = (row.systemFields?.task_id as string | undefined)
+        || (typeof raw?.task_id === 'string' ? (raw.task_id as string) : undefined)
       const isStart = row.subtype === 'task_started'
       if (isStart) {
         // task_started in Claude Code carries no task_id — synthesize a stable
@@ -636,9 +641,12 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
         // the first progress event so subsequent items still nest.
         currentTaskId = explicitId
       }
-      const description = (row.systemFields?.description as string | undefined) || undefined
-      const lastTool = (row.systemFields?.last_tool_name as string | undefined) || undefined
-      const full = description || row.systemMessage || lastTool || ''
+      const description = (row.systemFields?.description as string | undefined)
+        || (typeof raw?.description === 'string' ? (raw.description as string) : undefined)
+      const lastTool = (row.systemFields?.last_tool_name as string | undefined)
+        || (typeof raw?.last_tool_name === 'string' ? (raw.last_tool_name as string) : undefined)
+      const taskType = typeof raw?.task_type === 'string' ? (raw.task_type as string) : undefined
+      const full = description || row.systemMessage || lastTool || taskType || ''
 
       // Collapse task_started + task_progress (and any repeats) into a single
       // row per scope. task_started is the opener but carries no description;
