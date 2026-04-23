@@ -535,17 +535,49 @@ function oneLine(s: string, n = 120): string {
   return flat.length > n ? flat.slice(0, n) + '…' : flat
 }
 
+function formatTodoWrite(todos: unknown): string | undefined {
+  if (!Array.isArray(todos)) return undefined
+  let done = 0
+  let active = 0
+  let pending = 0
+  let current: string | undefined
+  for (const raw of todos) {
+    if (!raw || typeof raw !== 'object') continue
+    const t = raw as { status?: string; content?: string; activeForm?: string }
+    if (t.status === 'completed') done++
+    else if (t.status === 'in_progress') { active++; current = t.activeForm || t.content || current }
+    else pending++
+  }
+  const total = todos.length
+  const bits: string[] = [`${total} todo${total === 1 ? '' : 's'}`]
+  const counts: string[] = []
+  if (done) counts.push(`${done}✓`)
+  if (active) counts.push(`${active}⏺`)
+  if (pending) counts.push(`${pending}○`)
+  if (counts.length) bits.push(`(${counts.join(' ')})`)
+  if (current) bits.push(`— ${oneLine(current, 60)}`)
+  return bits.join(' ')
+}
+
 function toolSnippet(t: ToolEvent): string {
   if (!t.input) return ''
   const keys = Object.keys(t.input)
   if (keys.length === 0) return ''
-  const preferred = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description']
+  // Tool-specific formatters — fall through to the generic picker if nothing
+  // applies. Keeps TodoWrite, which carries an array-of-objects payload, from
+  // rendering as an empty-looking "todos".
+  if (t.tool === 'TodoWrite') {
+    const summary = formatTodoWrite(t.input.todos)
+    if (summary) return summary
+  }
+  const preferred = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description', 'prompt']
   for (const k of preferred) {
     const v = t.input[k]
     if (typeof v === 'string' && v) return `${k}=${oneLine(v, 80)}`
   }
   const first = t.input[keys[0]]
   if (typeof first === 'string') return `${keys[0]}=${oneLine(first, 80)}`
+  if (Array.isArray(first)) return `${keys[0]}[${first.length}]`
   return keys.join(',')
 }
 
@@ -557,6 +589,9 @@ function toolFullText(t: ToolEvent): string | undefined {
 function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
   const out: TimelineItem[] = []
   const seenTurn = new Set<string>()
+  // Maps a live task scope id to its output-array index so task_started and
+  // subsequent task_progress events collapse into a single timeline row.
+  const taskIdxByScope = new Map<string, number>()
   let currentTurnId: string | undefined
   let currentTaskId: string | undefined
 
@@ -567,6 +602,7 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
     if (row.turnId !== currentTurnId) {
       currentTurnId = row.turnId
       currentTaskId = undefined
+      taskIdxByScope.clear()
     }
 
     if (row.kind === 'user_message') {
@@ -601,18 +637,35 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
         currentTaskId = explicitId
       }
       const description = (row.systemFields?.description as string | undefined) || undefined
-      const full = description || row.systemMessage || ''
+      const lastTool = (row.systemFields?.last_tool_name as string | undefined) || undefined
+      const full = description || row.systemMessage || lastTool || ''
+
+      // Collapse task_started + task_progress (and any repeats) into a single
+      // row per scope. task_started is the opener but carries no description;
+      // the first task_progress fills in the description — just update the
+      // existing row rather than emitting a second one.
+      if (currentTaskId && taskIdxByScope.has(currentTaskId)) {
+        const idx = taskIdxByScope.get(currentTaskId)!
+        const existing = out[idx]
+        if (!existing.detail && full) {
+          existing.detail = oneLine(full)
+          existing.fullText = full
+        }
+        continue
+      }
+
       out.push({
         key: `tl_task_${row.key}`,
         turnId: row.turnId,
         taskId: currentTaskId,
-        icon: isStart ? '▣' : '📋',
-        label: isStart ? 'Task start' : 'Task',
+        icon: '▣',
+        label: 'Task',
         detail: full ? oneLine(full) : undefined,
         fullText: full || undefined,
         ts: row.timestamp,
-        tone: isStart ? 'task-start' : 'task',
+        tone: 'task-start',
       })
+      if (currentTaskId) taskIdxByScope.set(currentTaskId, out.length - 1)
       continue
     }
 
