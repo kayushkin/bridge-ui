@@ -1,0 +1,13 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export function ToolsPanel({ info }) {
+    const tools = info.tools ?? [];
+    const slashCommands = info.slash_commands ?? [];
+    const agents = info.agents ?? [];
+    const skills = info.skills ?? [];
+    const mcpServers = info.mcp_servers ?? [];
+    if (tools.length === 0 && slashCommands.length === 0 && agents.length === 0 && skills.length === 0 && mcpServers.length === 0) {
+        return _jsx("div", { className: "bc-tools-panel", children: _jsx("div", { className: "bc-info-empty", children: "No tools reported yet. The harness will emit this after its first init." }) });
+    }
+    return (_jsxs("div", { className: "bc-tools-panel", children: [tools.length > 0 && (_jsxs("div", { className: "bc-tools-section", children: [_jsxs("div", { className: "bc-tools-section-header", children: ["Tools (", tools.length, ")"] }), _jsx("div", { className: "bc-tools-grid", children: tools.map(t => (_jsx("span", { className: "bc-tool-chip", title: t.description || undefined, children: t.name }, t.name))) })] })), slashCommands.length > 0 && (_jsxs("div", { className: "bc-tools-section", children: [_jsxs("div", { className: "bc-tools-section-header", children: ["Slash commands (", slashCommands.length, ")"] }), _jsx("div", { className: "bc-tools-grid", children: slashCommands.map(c => _jsxs("span", { className: "bc-tool-chip", children: ["/", c] }, c)) })] })), agents.length > 0 && (_jsxs("div", { className: "bc-tools-section", children: [_jsxs("div", { className: "bc-tools-section-header", children: ["Sub-agents (", agents.length, ")"] }), _jsx("div", { className: "bc-tools-grid", children: agents.map(a => _jsx("span", { className: "bc-tool-chip", children: a }, a)) })] })), skills.length > 0 && (_jsxs("div", { className: "bc-tools-section", children: [_jsxs("div", { className: "bc-tools-section-header", children: ["Skills (", skills.length, ")"] }), _jsx("div", { className: "bc-tools-grid", children: skills.map(s => _jsx("span", { className: "bc-tool-chip", children: s }, s)) })] })), mcpServers.length > 0 && (_jsxs("div", { className: "bc-tools-section", children: [_jsxs("div", { className: "bc-tools-section-header", children: ["MCP servers (", mcpServers.length, ")"] }), _jsx("div", { className: "bc-tools-grid", children: mcpServers.map(m => (_jsxs("span", { className: "bc-tool-chip", title: m.status || undefined, children: [m.name, m.status ? ` · ${m.status}` : ''] }, m.name))) })] }))] }));
+}
+//# sourceMappingURL=ToolsPanel.js.map
