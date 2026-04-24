@@ -9,6 +9,7 @@ import { useStickyBottomScroll } from '../useStickyBottomScroll'
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
 import { ToolsSection, ToolContext } from './tools'
+import { GitPanel } from './GitPanel'
 import type { HarnessInfo, LogRow, LogRowActor, MessageMeta, SessionInfo, TokenUsage, ToolEvent } from '../types'
 
 interface StoreModel {
@@ -45,6 +46,7 @@ interface CollapseState {
   turns: boolean
   thread: boolean
   timeline: boolean
+  git: boolean
 }
 function loadCollapseState(): CollapseState {
   try {
@@ -57,8 +59,10 @@ function loadCollapseState(): CollapseState {
       // Timeline defaults to collapsed so existing users keep the previous layout
       // until they opt in.
       timeline: s.timeline === undefined ? true : !!s.timeline,
+      // Git defaults to collapsed for the same reason.
+      git: s.git === undefined ? true : !!s.git,
     }
-  } catch { return { harnessBar: false, sessionList: false, turns: false, thread: false, timeline: true } }
+  } catch { return { harnessBar: false, sessionList: false, turns: false, thread: false, timeline: true, git: true } }
 }
 function saveCollapseState(s: CollapseState) {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
@@ -67,7 +71,7 @@ function saveCollapseState(s: CollapseState) {
 // collapsed, the chat area would be blank — auto-expand one so there's always
 // something visible.
 function ensureOneChatPaneOpen(s: CollapseState): CollapseState {
-  if (!s.turns || !s.thread || !s.timeline) return s
+  if (!s.turns || !s.thread || !s.timeline || !s.git) return s
   return { ...s, thread: false }
 }
 
@@ -1604,6 +1608,13 @@ export function BridgeChat() {
       return next
     })
   }, [])
+  const toggleGit = useCallback(() => {
+    setCollapseState(s => {
+      const next = ensureOneChatPaneOpen({ ...s, git: !s.git })
+      saveCollapseState(next)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data: StoreModel[]) => {
@@ -1853,7 +1864,7 @@ export function BridgeChat() {
             hasPrev={navIndex > 0}
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
           />
-          <div className={`bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}`}>
+          <div className={`bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}${collapseState.git ? ' bc-split-git-collapsed' : ''}`}>
             {collapseState.turns ? (
               <button
                 className="bc-split-strip bc-split-strip-turns"
@@ -1912,6 +1923,23 @@ export function BridgeChat() {
               </button>
             ) : (
               <Timeline rows={bridge.logRows} onToggleCollapse={toggleTimeline} />
+            )}
+            {collapseState.git ? (
+              <button
+                className="bc-split-strip bc-split-strip-git"
+                onClick={toggleGit}
+                title="Show git"
+                aria-label="Show git"
+              >
+                <span className="bc-split-strip-chevron">◂</span>
+                <span className="bc-split-strip-label">Git</span>
+              </button>
+            ) : (
+              <GitPanel
+                sessionId={activeChat?.sessionId ?? ''}
+                uiState={bridge.uiState}
+                onToggleCollapse={toggleGit}
+              />
             )}
           </div>
           <div className="bc-controls-bar">

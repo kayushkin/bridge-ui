@@ -10,6 +10,7 @@ export { useBridgeSession } from './useBridgeSession';
 export { useBridgeInstances } from './useBridgeInstances';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
+export { useStickyBottomScroll } from './useStickyBottomScroll';
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
 // Page components

@@ -246,6 +246,7 @@
 
 .bc-split-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .bc-split-pane-thread { flex: 1 1 60%; border-right: 1px solid var(--border); }
+.bc-split-pane-git { flex: 1 1 35%; min-width: 280px; border-left: 1px solid var(--border); background: color-mix(in srgb, var(--bg-surface) 35%, var(--bg)); }
 .bc-split-pane-header {
   display: flex;
   align-items: center;
@@ -293,6 +294,7 @@
   letter-spacing: 0.5px;
 }
 .bc-split-strip-timeline { border-right: none; border-left: 1px solid var(--border); }
+.bc-split-strip-git { border-right: none; border-left: 1px solid var(--border); }
 .bc-split-strip:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface)); }
 .bc-split-strip-chevron { font-size: 0.9em; }
 .bc-split-strip-label { writing-mode: vertical-rl; transform: rotate(180deg); }
@@ -1815,3 +1817,70 @@
 /* Per-file diff stack inside a Bash tool item */
 .bc-bash-diffs { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
 .bc-bash-file-diff { display: flex; flex-direction: column; gap: 0.15rem; }
+
+/* Git panel */
+.bc-git-repo-select {
+  font-size: 0.78em;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.bc-git-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 0.82em;
+}
+.bc-git-empty, .bc-git-error {
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 12px 4px;
+}
+.bc-git-error { color: #dc2626; font-style: normal; white-space: pre-wrap; }
+.bc-git-branch {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.bc-git-branch-label { color: var(--text-dim); font-size: 0.85em; }
+.bc-git-branch-name { color: var(--accent); font-weight: 600; font-family: monospace; }
+.bc-git-repo-path { color: var(--text-dim); font-size: 0.75em; font-family: monospace; word-break: break-all; }
+.bc-git-section { display: flex; flex-direction: column; }
+.bc-git-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 2px;
+  text-align: left;
+  border-bottom: 1px dashed var(--border);
+}
+.bc-git-section-header:hover { color: var(--text); }
+.bc-git-section-chevron { font-size: 0.85em; }
+.bc-git-section-title { font-weight: 600; }
+.bc-git-section-hint { color: var(--text-dim); font-size: 0.85em; margin-left: auto; text-transform: none; letter-spacing: 0; }
+.bc-git-section-body {
+  margin: 0;
+  padding: 6px 4px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82em;
+  white-space: pre;
+  overflow-x: auto;
+  color: var(--text);
+}
+.bc-git-section-empty { color: var(--text-dim); font-style: italic; }
