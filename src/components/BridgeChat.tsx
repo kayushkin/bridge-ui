@@ -5,6 +5,7 @@ import { useBridgeSession } from '../useBridgeSession'
 import { useBridgePrefs } from '../useBridgePrefs'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeFolders, type UseBridgeFoldersReturn } from '../useBridgeFolders'
+import { useStickyBottomScroll } from '../useStickyBottomScroll'
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
 import { ToolsSection } from './tools'
@@ -477,9 +478,9 @@ function TurnsView({ rows, agent, onToggleCollapse }: {
   agent: string
   onToggleCollapse: () => void
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTurns(rows), [rows])
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [items.length])
+  useEffect(() => { autoScrollIfAtBottom() }, [items.length, autoScrollIfAtBottom])
 
   return (
     <div className="bc-turns-pane">
@@ -494,7 +495,7 @@ function TurnsView({ rows, agent, onToggleCollapse }: {
           aria-label="Collapse turns"
         >◂</button>
       </div>
-      <div className="bc-turns-body">
+      <div ref={containerRef} className="bc-turns-body">
         {items.length === 0 && <div className="bc-turns-empty">No messages yet</div>}
         {items.map(it => (
           <div key={it.key} className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}`} title={it.text}>
@@ -508,6 +509,15 @@ function TurnsView({ rows, agent, onToggleCollapse }: {
         ))}
         <div ref={endRef} />
       </div>
+      {!isAtBottom && (
+        <button
+          type="button"
+          className="bc-jump-latest"
+          onClick={() => scrollToBottom()}
+          title="Jump to latest"
+          aria-label="Jump to latest"
+        >↓ New messages</button>
+      )}
     </div>
   )
 }
@@ -845,9 +855,9 @@ function Timeline({ rows, onToggleCollapse }: {
   rows: LogRow[]
   onToggleCollapse: () => void
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTimeline(rows), [rows])
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [items.length])
+  useEffect(() => { autoScrollIfAtBottom() }, [items.length, autoScrollIfAtBottom])
 
   return (
     <div className="bc-timeline">
@@ -862,11 +872,20 @@ function Timeline({ rows, onToggleCollapse }: {
           aria-label="Collapse timeline"
         >▸</button>
       </div>
-      <div className="bc-timeline-body">
+      <div ref={containerRef} className="bc-timeline-body">
         {items.length === 0 && <div className="bc-timeline-empty">No events yet</div>}
         {renderTimelineNodes(items)}
         <div ref={endRef} />
       </div>
+      {!isAtBottom && (
+        <button
+          type="button"
+          className="bc-jump-latest"
+          onClick={() => scrollToBottom()}
+          title="Jump to latest"
+          aria-label="Jump to latest"
+        >↓ New events</button>
+      )}
     </div>
   )
 }
@@ -880,7 +899,7 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
   error: string | null
   agent: string
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
   const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
 
   const allTypes = useMemo(() => {
@@ -896,7 +915,7 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
 
   const blocks = useMemo(() => groupRowsByTurn(visibleRows), [visibleRows])
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [visibleRows])
+  useEffect(() => { autoScrollIfAtBottom() }, [visibleRows, autoScrollIfAtBottom])
 
   const toggleType = useCallback((t: string) => {
     setHidden(prev => {
@@ -911,20 +930,31 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
   if (rows.length === 0 && !error) return <div className="bc-thread"><div className="bc-empty">Send a message to start</div></div>
 
   return (
-    <div className="bc-thread">
-      <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
-      {error && <div className="bridge-error">{error}</div>}
-      {blocks.map((b, i) => b.kind === 'turn'
-        ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} />
-        : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} />
+    <div className="bc-thread-wrap">
+      <div ref={containerRef} className="bc-thread">
+        <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
+        {error && <div className="bridge-error">{error}</div>}
+        {blocks.map((b, i) => b.kind === 'turn'
+          ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} />
+          : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} />
+        )}
+        {uiState === 'running' && (
+          <div className="bc-activity">
+            <span className="bc-activity-dot" />
+            {activity.kind === 'tool' ? `Running: ${activity.name}` : activity.kind === 'thinking' ? 'Thinking...' : 'Streaming...'}
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+      {!isAtBottom && (
+        <button
+          type="button"
+          className="bc-jump-latest"
+          onClick={() => scrollToBottom()}
+          title="Jump to latest"
+          aria-label="Jump to latest"
+        >↓ New messages</button>
       )}
-      {uiState === 'running' && (
-        <div className="bc-activity">
-          <span className="bc-activity-dot" />
-          {activity.kind === 'tool' ? `Running: ${activity.name}` : activity.kind === 'thinking' ? 'Thinking...' : 'Streaming...'}
-        </div>
-      )}
-      <div ref={endRef} />
     </div>
   )
 }
