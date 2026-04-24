@@ -75,6 +75,90 @@ function ensureOneChatPaneOpen(s: CollapseState): CollapseState {
   return { ...s, thread: false }
 }
 
+/* ── Split pane sizing (flex-grow per pane, drag-adjustable) ── */
+const SIZES_KEY = 'bridge-ui-split-sizes'
+type PaneKey = 'turns' | 'thread' | 'timeline' | 'git'
+type PaneSizes = Record<PaneKey, number>
+const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
+function loadPaneSizes(): PaneSizes {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SIZES_KEY) || '{}')
+    const pick = (k: PaneKey) => (typeof raw[k] === 'number' && raw[k] > 0 ? raw[k] : 1)
+    return { turns: pick('turns'), thread: pick('thread'), timeline: pick('timeline'), git: pick('git') }
+  } catch { return { ...DEFAULT_PANE_SIZES } }
+}
+function savePaneSizes(s: PaneSizes) {
+  try { localStorage.setItem(SIZES_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+
+function SplitResizer({ leftKey, rightKey, containerRef, setSizes }: {
+  leftKey: PaneKey
+  rightKey: PaneKey
+  containerRef: React.RefObject<HTMLDivElement | null>
+  setSizes: React.Dispatch<React.SetStateAction<PaneSizes>>
+}) {
+  const [dragging, setDragging] = useState(false)
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const container = containerRef.current
+    if (!container) return
+    const leftEl = container.querySelector(`[data-pane="${leftKey}"]`) as HTMLElement | null
+    const rightEl = container.querySelector(`[data-pane="${rightKey}"]`) as HTMLElement | null
+    if (!leftEl || !rightEl) return
+
+    const startX = e.clientX
+    const pairWidth = leftEl.getBoundingClientRect().width + rightEl.getBoundingClientRect().width
+    let startLeft = 0
+    let startRight = 0
+    setSizes(prev => { startLeft = prev[leftKey]; startRight = prev[rightKey]; return prev })
+    const totalGrow = startLeft + startRight
+    if (totalGrow <= 0 || pairWidth <= 0) return
+    const pixelsPerGrow = pairWidth / totalGrow
+    const MIN_PX = 180
+    const minGrow = Math.min(MIN_PX / pixelsPerGrow, totalGrow / 2)
+
+    setDragging(true)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX
+      const growDelta = dx / pixelsPerGrow
+      let newLeft = startLeft + growDelta
+      let newRight = startRight - growDelta
+      if (newLeft < minGrow) { newLeft = minGrow; newRight = totalGrow - minGrow }
+      if (newRight < minGrow) { newRight = minGrow; newLeft = totalGrow - minGrow }
+      setSizes(prev => ({ ...prev, [leftKey]: newLeft, [rightKey]: newRight }))
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setDragging(false)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }, [leftKey, rightKey, containerRef, setSizes])
+
+  const onDoubleClick = useCallback(() => {
+    setSizes(prev => ({ ...prev, [leftKey]: 1, [rightKey]: 1 }))
+  }, [leftKey, rightKey, setSizes])
+
+  return (
+    <div
+      className={`bc-split-resizer${dragging ? ' is-dragging' : ''}`}
+      onPointerDown={onPointerDown}
+      onDoubleClick={onDoubleClick}
+      role="separator"
+      aria-orientation="vertical"
+      title="Drag to resize — double-click to reset"
+    />
+  )
+}
+
 /* ── Inline Editable Name ── */
 function EditableName({ value, onSave, className }: {
   value: string
@@ -477,27 +561,36 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   return out
 }
 
-function TurnsView({ rows, agent, onToggleCollapse }: {
+function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
   rows: LogRow[]
   agent: string
   onToggleCollapse: () => void
+  style?: React.CSSProperties
+  paneKey?: string
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTurns(rows), [rows])
   useEffect(() => { autoScrollIfAtBottom() }, [items.length, autoScrollIfAtBottom])
 
+  const onHeaderKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() }
+  }, [onToggleCollapse])
+
   return (
-    <div className="bc-turns-pane">
-      <div className="bc-turns-header">
+    <div className="bc-turns-pane" style={style} data-pane={paneKey}>
+      <div
+        className="bc-turns-header bc-header-clickable"
+        onClick={onToggleCollapse}
+        onKeyDown={onHeaderKey}
+        role="button"
+        tabIndex={0}
+        title="Collapse turns"
+        aria-label="Collapse turns"
+      >
         <span className="bc-turns-title">Turns</span>
         <span className="bc-turns-count">{items.length}</span>
         <span className="bc-spacer" />
-        <button
-          className="bc-turns-collapse-btn"
-          onClick={onToggleCollapse}
-          title="Collapse turns"
-          aria-label="Collapse turns"
-        >◂</button>
+        <span className="bc-turns-collapse-btn" aria-hidden="true">◂</span>
       </div>
       <div ref={containerRef} className="bc-turns-body">
         {items.length === 0 && <div className="bc-turns-empty">No messages yet</div>}
@@ -855,26 +948,35 @@ function renderTimelineNodes(items: TimelineItem[]): React.ReactNode[] {
   return out
 }
 
-function Timeline({ rows, onToggleCollapse }: {
+function Timeline({ rows, onToggleCollapse, style, paneKey }: {
   rows: LogRow[]
   onToggleCollapse: () => void
+  style?: React.CSSProperties
+  paneKey?: string
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTimeline(rows), [rows])
   useEffect(() => { autoScrollIfAtBottom() }, [items.length, autoScrollIfAtBottom])
 
+  const onHeaderKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() }
+  }, [onToggleCollapse])
+
   return (
-    <div className="bc-timeline">
-      <div className="bc-timeline-header">
+    <div className="bc-timeline" style={style} data-pane={paneKey}>
+      <div
+        className="bc-timeline-header bc-header-clickable"
+        onClick={onToggleCollapse}
+        onKeyDown={onHeaderKey}
+        role="button"
+        tabIndex={0}
+        title="Collapse timeline"
+        aria-label="Collapse timeline"
+      >
         <span className="bc-timeline-title">Timeline</span>
         <span className="bc-timeline-count">{items.length}</span>
         <span className="bc-spacer" />
-        <button
-          className="bc-timeline-collapse-btn"
-          onClick={onToggleCollapse}
-          title="Collapse timeline"
-          aria-label="Collapse timeline"
-        >▸</button>
+        <span className="bc-timeline-collapse-btn" aria-hidden="true">▸</span>
       </div>
       <div ref={containerRef} className="bc-timeline-body">
         {items.length === 0 && <div className="bc-timeline-empty">No events yet</div>}
@@ -1579,6 +1681,9 @@ export function BridgeChat() {
   const [showTools, setShowTools] = useState(false)
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
+  const [paneSizes, setPaneSizes] = useState<PaneSizes>(loadPaneSizes)
+  const splitRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { savePaneSizes(paneSizes) }, [paneSizes])
   const pendingConfigRef = useRef<{ model?: string; effort?: string } | null>(null)
 
   const toggleHarnessBar = useCallback(() => {
@@ -1864,7 +1969,10 @@ export function BridgeChat() {
             hasPrev={navIndex > 0}
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
           />
-          <div className={`bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}${collapseState.git ? ' bc-split-git-collapsed' : ''}`}>
+          <div
+            ref={splitRef}
+            className={`bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}${collapseState.git ? ' bc-split-git-collapsed' : ''}`}
+          >
             {collapseState.turns ? (
               <button
                 className="bc-split-strip bc-split-strip-turns"
@@ -1876,7 +1984,16 @@ export function BridgeChat() {
                 <span className="bc-split-strip-label">Turns</span>
               </button>
             ) : (
-              <TurnsView rows={bridge.logRows} agent={activeChat?.agent ?? ''} onToggleCollapse={toggleTurns} />
+              <TurnsView
+                rows={bridge.logRows}
+                agent={activeChat?.agent ?? ''}
+                onToggleCollapse={toggleTurns}
+                style={{ flex: `${paneSizes.turns} 1 0` }}
+                paneKey="turns"
+              />
+            )}
+            {!collapseState.turns && !collapseState.thread && (
+              <SplitResizer leftKey="turns" rightKey="thread" containerRef={splitRef} setSizes={setPaneSizes} />
             )}
             {collapseState.thread ? (
               <button
@@ -1889,16 +2006,23 @@ export function BridgeChat() {
                 <span className="bc-split-strip-label">Thread</span>
               </button>
             ) : (
-              <div className="bc-split-pane bc-split-pane-thread">
-                <div className="bc-split-pane-header">
+              <div
+                className="bc-split-pane bc-split-pane-thread"
+                style={{ flex: `${paneSizes.thread} 1 0` }}
+                data-pane="thread"
+              >
+                <div
+                  className="bc-split-pane-header bc-header-clickable"
+                  onClick={toggleThread}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleThread() } }}
+                  role="button"
+                  tabIndex={0}
+                  title="Collapse thread"
+                  aria-label="Collapse thread"
+                >
                   <span className="bc-split-pane-title">Thread</span>
                   <span className="bc-spacer" />
-                  <button
-                    className="bc-split-collapse-btn"
-                    onClick={toggleThread}
-                    title="Collapse thread"
-                    aria-label="Collapse thread"
-                  >◂</button>
+                  <span className="bc-split-collapse-btn" aria-hidden="true">◂</span>
                 </div>
                 <Thread
                   rows={bridge.logRows}
@@ -1911,6 +2035,9 @@ export function BridgeChat() {
                 />
               </div>
             )}
+            {!collapseState.thread && !collapseState.timeline && (
+              <SplitResizer leftKey="thread" rightKey="timeline" containerRef={splitRef} setSizes={setPaneSizes} />
+            )}
             {collapseState.timeline ? (
               <button
                 className="bc-split-strip bc-split-strip-timeline"
@@ -1922,7 +2049,15 @@ export function BridgeChat() {
                 <span className="bc-split-strip-label">Timeline</span>
               </button>
             ) : (
-              <Timeline rows={bridge.logRows} onToggleCollapse={toggleTimeline} />
+              <Timeline
+                rows={bridge.logRows}
+                onToggleCollapse={toggleTimeline}
+                style={{ flex: `${paneSizes.timeline} 1 0` }}
+                paneKey="timeline"
+              />
+            )}
+            {!collapseState.timeline && !collapseState.git && (
+              <SplitResizer leftKey="timeline" rightKey="git" containerRef={splitRef} setSizes={setPaneSizes} />
             )}
             {collapseState.git ? (
               <button
@@ -1939,6 +2074,8 @@ export function BridgeChat() {
                 sessionId={activeChat?.sessionId ?? ''}
                 uiState={bridge.uiState}
                 onToggleCollapse={toggleGit}
+                style={{ flex: `${paneSizes.git} 1 0` }}
+                paneKey="git"
               />
             )}
           </div>

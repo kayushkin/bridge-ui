@@ -244,9 +244,9 @@
 /* Chat vertical split (thread | timeline) */
 .bc-chat-split { display: flex; flex: 1; min-height: 0; min-width: 0; }
 
-.bc-split-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.bc-split-pane-thread { flex: 1 1 60%; border-right: 1px solid var(--border); }
-.bc-split-pane-git { flex: 1 1 35%; min-width: 280px; border-left: 1px solid var(--border); background: color-mix(in srgb, var(--bg-surface) 35%, var(--bg)); }
+.bc-split-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; flex: 1 1 0; }
+.bc-split-pane-thread { border-right: 1px solid var(--border); }
+.bc-split-pane-git { min-width: 280px; border-left: 1px solid var(--border); background: color-mix(in srgb, var(--bg-surface) 35%, var(--bg)); }
 .bc-split-pane-header {
   display: flex;
   align-items: center;
@@ -272,9 +272,35 @@
 }
 .bc-split-collapse-btn:hover { color: var(--text); border-color: var(--border); }
 
-/* When thread is collapsed the timeline should stretch the full width. */
-.bc-split-timeline-collapsed .bc-split-pane-thread { flex: 1 1 100%; border-right: none; }
-.bc-split-thread-collapsed .bc-timeline { flex: 1 1 100%; }
+/* Clickable headers — whole top bar toggles collapse; nested controls stopPropagation. */
+.bc-header-clickable { cursor: pointer; user-select: none; }
+.bc-header-clickable:hover { background: color-mix(in srgb, var(--bg-surface) 55%, var(--bg)); color: var(--text); }
+.bc-header-clickable:hover .bc-split-pane-title,
+.bc-header-clickable:hover .bc-turns-title,
+.bc-header-clickable:hover .bc-timeline-title { color: var(--text); }
+
+/* Column resizer between open panes */
+.bc-split-resizer {
+  flex: 0 0 6px;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  background: transparent;
+  z-index: 2;
+}
+.bc-split-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  right: 2px;
+  background: var(--border);
+  transition: background 0.1s;
+}
+.bc-split-resizer:hover::before,
+.bc-split-resizer.is-dragging::before { background: var(--accent); }
 
 .bc-split-strip {
   flex: 0 0 28px;
@@ -301,7 +327,7 @@
 
 /* Turns pane — conversational backbone (user msgs + final result) */
 .bc-turns-pane {
-  flex: 1 1 35%;
+  flex: 1 1 0;
   min-width: 240px;
   display: flex;
   flex-direction: column;
@@ -400,12 +426,9 @@
 
 .bc-split-strip-turns { border-right: 1px solid var(--border); }
 
-/* When other panes collapse, turns can stretch. */
-.bc-split-thread-collapsed.bc-split-timeline-collapsed .bc-turns-pane { flex: 1 1 100%; }
-
 /* Timeline pane */
 .bc-timeline {
-  flex: 1 1 40%;
+  flex: 1 1 0;
   min-width: 260px;
   display: flex;
   flex-direction: column;

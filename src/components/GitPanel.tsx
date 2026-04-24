@@ -29,9 +29,11 @@ interface GitPanelProps {
   sessionId: string
   uiState: SessionUIState
   onToggleCollapse: () => void
+  style?: React.CSSProperties
+  paneKey?: string
 }
 
-export function GitPanel({ sessionId, uiState, onToggleCollapse }: GitPanelProps) {
+export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey }: GitPanelProps) {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
 
   const [repos, setRepos] = useState<GitRepo[]>([])
@@ -129,14 +131,24 @@ export function GitPanel({ sessionId, uiState, onToggleCollapse }: GitPanelProps
   }), [view])
 
   return (
-    <div className="bc-split-pane bc-split-pane-git">
-      <div className="bc-split-pane-header">
+    <div className="bc-split-pane bc-split-pane-git" style={style} data-pane={paneKey}>
+      <div
+        className="bc-split-pane-header bc-header-clickable"
+        onClick={onToggleCollapse}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() } }}
+        role="button"
+        tabIndex={0}
+        title="Collapse git"
+        aria-label="Collapse git"
+      >
         <span className="bc-split-pane-title">Git</span>
         {repos.length > 0 && (
           <select
             className="bc-git-repo-select"
             value={selectedRepo}
             onChange={e => setSelectedRepo(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => e.stopPropagation()}
             title="Switch repository"
           >
             {repos.map(r => (
@@ -147,17 +159,12 @@ export function GitPanel({ sessionId, uiState, onToggleCollapse }: GitPanelProps
         <span className="bc-spacer" />
         <button
           className="bc-split-collapse-btn"
-          onClick={refresh}
+          onClick={e => { e.stopPropagation(); refresh() }}
           title="Refresh git data"
           aria-label="Refresh git data"
           disabled={loadingRepos || loadingView}
         >⟳</button>
-        <button
-          className="bc-split-collapse-btn"
-          onClick={onToggleCollapse}
-          title="Collapse git"
-          aria-label="Collapse git"
-        >▸</button>
+        <span className="bc-split-collapse-btn" aria-hidden="true">▸</span>
       </div>
       <div className="bc-git-body">
         {error && <div className="bc-git-error">{error}</div>}
