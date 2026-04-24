@@ -8,7 +8,7 @@ import { useBridgeFolders, type UseBridgeFoldersReturn } from '../useBridgeFolde
 import { useStickyBottomScroll } from '../useStickyBottomScroll'
 import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../constants'
 import { formatTokens, formatCost } from '../utils'
-import { ToolsSection } from './tools'
+import { ToolsSection, ToolContext } from './tools'
 import type { HarnessInfo, LogRow, LogRowActor, MessageMeta, SessionInfo, TokenUsage, ToolEvent } from '../types'
 
 interface StoreModel {
@@ -891,13 +891,14 @@ function Timeline({ rows, onToggleCollapse }: {
 }
 
 /* ── Inline Thread ── */
-function Thread({ rows, loading, uiState, activity, error, agent }: {
+function Thread({ rows, loading, uiState, activity, error, agent, sessionId }: {
   rows: LogRow[]
   loading: boolean
   uiState: string
   activity: { kind: string; name?: string }
   error: string | null
   agent: string
+  sessionId: string
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
   const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
@@ -930,6 +931,7 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
   if (rows.length === 0 && !error) return <div className="bc-thread"><div className="bc-empty">Send a message to start</div></div>
 
   return (
+    <ToolContext.Provider value={{ sessionId }}>
     <div className="bc-thread-wrap">
       <div ref={containerRef} className="bc-thread">
         <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
@@ -956,6 +958,7 @@ function Thread({ rows, loading, uiState, activity, error, agent }: {
         >↓ New messages</button>
       )}
     </div>
+    </ToolContext.Provider>
   )
 }
 
@@ -1893,6 +1896,7 @@ export function BridgeChat() {
                   activity={bridge.activity}
                   error={bridge.error}
                   agent={activeChat?.agent ?? ''}
+                  sessionId={activeChat?.sessionId ?? ''}
                 />
               </div>
             )}

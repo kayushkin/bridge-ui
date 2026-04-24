@@ -20,7 +20,8 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts"
+    "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts",
+    "diff": "^7.0.0"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -28,6 +29,7 @@
     "react-router-dom": ">=6"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "react": "^19.2.4",

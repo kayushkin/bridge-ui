@@ -35,11 +35,12 @@ function FileRenderer({ tool, running }: ToolRendererProps) {
   )
 }
 
+// Edit and Write are handled by EditRenderer (diff view with snapshot
+// support). read_file/edit_file/write_file remain here for older harness
+// variants that still emit those names.
 registerToolRenderer('write_file', FileRenderer)
 registerToolRenderer('edit_file', FileRenderer)
 registerToolRenderer('read_file', FileRenderer)
-registerToolRenderer('Write', FileRenderer)
-registerToolRenderer('Edit', FileRenderer)
 registerToolRenderer('Read', FileRenderer)
 
 export default FileRenderer

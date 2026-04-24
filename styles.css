@@ -1789,3 +1789,25 @@
   .bc-composer { padding: 8px; }
   .bc-composer-input { font-size: 1em; }
 }
+
+/* Edit/Write tool diff view */
+.bc-diff {
+  margin: 0.35rem 0 0.25rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-code, rgba(0, 0, 0, 0.25));
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  overflow-x: auto;
+  white-space: pre;
+}
+.bc-diff-hunk + .bc-diff-hunk { margin-top: 0.5rem; }
+.bc-diff-hunk-header {
+  color: var(--text-muted);
+  opacity: 0.65;
+  user-select: none;
+}
+.bc-diff-add { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
+.bc-diff-del { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+.bc-diff-ctx { color: var(--text-muted); }
