@@ -1811,3 +1811,7 @@
 .bc-diff-add { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
 .bc-diff-del { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
 .bc-diff-ctx { color: var(--text-muted); }
+
+/* Per-file diff stack inside a Bash tool item */
+.bc-bash-diffs { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.bc-bash-file-diff { display: flex; flex-direction: column; gap: 0.15rem; }
