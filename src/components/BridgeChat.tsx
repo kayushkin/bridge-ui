@@ -67,13 +67,6 @@ function loadCollapseState(): CollapseState {
 function saveCollapseState(s: CollapseState) {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
 }
-// When a user collapses a chat split pane and every other pane is already
-// collapsed, the chat area would be blank — auto-expand one so there's always
-// something visible.
-function ensureOneChatPaneOpen(s: CollapseState): CollapseState {
-  if (!s.turns || !s.thread || !s.timeline || !s.git) return s
-  return { ...s, thread: false }
-}
 
 /* ── Split pane sizing (flex-grow per pane, drag-adjustable) ── */
 const SIZES_KEY = 'bridge-ui-split-sizes'
@@ -1117,7 +1110,44 @@ function Composer({ connected, streaming, paused, onSend, onStop, onResume }: {
 }
 
 /* ── Inline Session Header ── */
-function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext }: {
+function PaneToggles({ collapseState, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAll }: {
+  collapseState: CollapseState
+  onToggleTurns: () => void
+  onToggleThread: () => void
+  onToggleTimeline: () => void
+  onToggleGit: () => void
+  onCloseAll: () => void
+}) {
+  const allClosed = collapseState.turns && collapseState.thread && collapseState.timeline && collapseState.git
+  const pill = (key: PaneKey, label: string, onClick: () => void) => {
+    const visible = !collapseState[key]
+    return (
+      <button
+        className={`bc-pane-toggle ${visible ? 'bc-pane-toggle-on' : ''}`}
+        onClick={onClick}
+        title={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
+        aria-pressed={visible}
+      >{label}</button>
+    )
+  }
+  return (
+    <div className="bc-pane-toggles" role="group" aria-label="Pane visibility">
+      {pill('turns', 'Turns', onToggleTurns)}
+      {pill('thread', 'Thread', onToggleThread)}
+      {pill('timeline', 'Timeline', onToggleTimeline)}
+      {pill('git', 'Git', onToggleGit)}
+      <button
+        className="bc-pane-close-all"
+        onClick={onCloseAll}
+        disabled={allClosed}
+        title="Close all panes"
+        aria-label="Close all panes"
+      >×</button>
+    </div>
+  )
+}
+
+function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext, collapseState, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAllPanes }: {
   chat: ChatSession | null
   uiState: string
   activity: { kind: string; name?: string }
@@ -1128,6 +1158,12 @@ function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPr
   onNext: () => void
   hasPrev: boolean
   hasNext: boolean
+  collapseState: CollapseState
+  onToggleTurns: () => void
+  onToggleThread: () => void
+  onToggleTimeline: () => void
+  onToggleGit: () => void
+  onCloseAllPanes: () => void
 }) {
   if (!chat || uiState === 'empty') return null
 
@@ -1141,6 +1177,10 @@ function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPr
   const contextLimit = meta?.usage?.context_limit ?? 0
   const contextPct = contextTokens && contextLimit ? Math.round((contextTokens / contextLimit) * 100) : 0
 
+  const activityText = activity.kind !== 'idle' && uiState === 'running'
+    ? (activity.kind === 'tool' ? `${activity.name}` : activity.kind === 'thinking' ? 'thinking' : 'streaming')
+    : ''
+
   return (
     <div className="bc-header">
       <div className="bc-header-row">
@@ -1151,27 +1191,30 @@ function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPr
         <span className={`bc-state-badge bc-state-${uiState}`}>
           {uiState === 'running' && <span className="bc-pulse" />}
           {uiState.charAt(0).toUpperCase() + uiState.slice(1)}
+          {activityText && <span className="bc-state-activity">· {activityText}</span>}
         </span>
         <EditableName value={chat.displayName} onSave={onRename} className="bc-session-name" />
         {meta?.model && <span className="bc-model-badge">{String(meta.model)}</span>}
         {instance && <span className="bc-instance-badge">{instance.name} ({instance.transport})</span>}
-        <span className="bc-spacer" />
+        {contextTokens > 0 && contextLimit > 0 && (
+          <span className="bc-context-inline" title={`${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens`}>
+            <span className="bc-context-label">{formatTokens(contextTokens)}/{formatTokens(contextLimit)} ({contextPct}%)</span>
+            <span className="bc-context-bar">
+              <span className={`bc-bar-fill ${contextPct >= 90 ? 'bc-bar-crit' : contextPct >= 70 ? 'bc-bar-warn' : ''}`} style={{ width: `${Math.min(100, contextPct)}%` }} />
+            </span>
+          </span>
+        )}
         {totalCost > 0 && <span className="bc-cost">{formatCost(totalCost)}</span>}
+        <span className="bc-spacer" />
+        <PaneToggles
+          collapseState={collapseState}
+          onToggleTurns={onToggleTurns}
+          onToggleThread={onToggleThread}
+          onToggleTimeline={onToggleTimeline}
+          onToggleGit={onToggleGit}
+          onCloseAll={onCloseAllPanes}
+        />
       </div>
-      {contextTokens > 0 && contextLimit > 0 && (
-        <div className="bc-context-row">
-          <span className="bc-context-label">{formatTokens(contextTokens)} / {formatTokens(contextLimit)} ({contextPct}%)</span>
-          <div className="bc-context-bar">
-            <div className={`bc-bar-fill ${contextPct >= 90 ? 'bc-bar-crit' : contextPct >= 70 ? 'bc-bar-warn' : ''}`} style={{ width: `${Math.min(100, contextPct)}%` }} />
-          </div>
-        </div>
-      )}
-      {activity.kind !== 'idle' && uiState === 'running' && (
-        <div className="bc-activity-row">
-          <span className="bc-activity-dot" />
-          {activity.kind === 'tool' ? `Running: ${activity.name}` : activity.kind === 'thinking' ? 'Thinking...' : 'Streaming...'}
-        </div>
-      )}
     </div>
   )
 }
@@ -1693,29 +1736,20 @@ export function BridgeChat() {
     setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next })
   }, [])
   const toggleTurns = useCallback(() => {
-    setCollapseState(s => {
-      const next = ensureOneChatPaneOpen({ ...s, turns: !s.turns })
-      saveCollapseState(next)
-      return next
-    })
+    setCollapseState(s => { const next = { ...s, turns: !s.turns }; saveCollapseState(next); return next })
   }, [])
   const toggleThread = useCallback(() => {
-    setCollapseState(s => {
-      const next = ensureOneChatPaneOpen({ ...s, thread: !s.thread })
-      saveCollapseState(next)
-      return next
-    })
+    setCollapseState(s => { const next = { ...s, thread: !s.thread }; saveCollapseState(next); return next })
   }, [])
   const toggleTimeline = useCallback(() => {
-    setCollapseState(s => {
-      const next = ensureOneChatPaneOpen({ ...s, timeline: !s.timeline })
-      saveCollapseState(next)
-      return next
-    })
+    setCollapseState(s => { const next = { ...s, timeline: !s.timeline }; saveCollapseState(next); return next })
   }, [])
   const toggleGit = useCallback(() => {
+    setCollapseState(s => { const next = { ...s, git: !s.git }; saveCollapseState(next); return next })
+  }, [])
+  const closeAllPanes = useCallback(() => {
     setCollapseState(s => {
-      const next = ensureOneChatPaneOpen({ ...s, git: !s.git })
+      const next = { ...s, turns: true, thread: true, timeline: true, git: true }
       saveCollapseState(next)
       return next
     })
@@ -1968,116 +2002,108 @@ export function BridgeChat() {
             onNext={handleNextSession}
             hasPrev={navIndex > 0}
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
+            collapseState={collapseState}
+            onToggleTurns={toggleTurns}
+            onToggleThread={toggleThread}
+            onToggleTimeline={toggleTimeline}
+            onToggleGit={toggleGit}
+            onCloseAllPanes={closeAllPanes}
           />
-          <div
-            ref={splitRef}
-            className={`bc-chat-split${collapseState.turns ? ' bc-split-turns-collapsed' : ''}${collapseState.thread ? ' bc-split-thread-collapsed' : ''}${collapseState.timeline ? ' bc-split-timeline-collapsed' : ''}${collapseState.git ? ' bc-split-git-collapsed' : ''}`}
-          >
-            {collapseState.turns ? (
-              <button
-                className="bc-split-strip bc-split-strip-turns"
-                onClick={toggleTurns}
-                title="Show turns"
-                aria-label="Show turns"
-              >
-                <span className="bc-split-strip-chevron">▸</span>
-                <span className="bc-split-strip-label">Turns</span>
-              </button>
-            ) : (
-              <TurnsView
-                rows={bridge.logRows}
-                agent={activeChat?.agent ?? ''}
-                onToggleCollapse={toggleTurns}
-                style={{ flex: `${paneSizes.turns} 1 0` }}
-                paneKey="turns"
-              />
-            )}
-            {!collapseState.turns && !collapseState.thread && (
-              <SplitResizer leftKey="turns" rightKey="thread" containerRef={splitRef} setSizes={setPaneSizes} />
-            )}
-            {collapseState.thread ? (
-              <button
-                className="bc-split-strip bc-split-strip-thread"
-                onClick={toggleThread}
-                title="Show thread"
-                aria-label="Show thread"
-              >
-                <span className="bc-split-strip-chevron">▸</span>
-                <span className="bc-split-strip-label">Thread</span>
-              </button>
-            ) : (
-              <div
-                className="bc-split-pane bc-split-pane-thread"
-                style={{ flex: `${paneSizes.thread} 1 0` }}
-                data-pane="thread"
-              >
-                <div
-                  className="bc-split-pane-header bc-header-clickable"
-                  onClick={toggleThread}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleThread() } }}
-                  role="button"
-                  tabIndex={0}
-                  title="Collapse thread"
-                  aria-label="Collapse thread"
-                >
-                  <span className="bc-split-pane-title">Thread</span>
-                  <span className="bc-spacer" />
-                  <span className="bc-split-collapse-btn" aria-hidden="true">◂</span>
-                </div>
-                <Thread
-                  rows={bridge.logRows}
-                  loading={bridge.loadingHistory}
-                  uiState={bridge.uiState}
-                  activity={bridge.activity}
-                  error={bridge.error}
-                  agent={activeChat?.agent ?? ''}
-                  sessionId={activeChat?.sessionId ?? ''}
-                />
-              </div>
-            )}
-            {!collapseState.thread && !collapseState.timeline && (
-              <SplitResizer leftKey="thread" rightKey="timeline" containerRef={splitRef} setSizes={setPaneSizes} />
-            )}
-            {collapseState.timeline ? (
-              <button
-                className="bc-split-strip bc-split-strip-timeline"
-                onClick={toggleTimeline}
-                title="Show timeline"
-                aria-label="Show timeline"
-              >
-                <span className="bc-split-strip-chevron">◂</span>
-                <span className="bc-split-strip-label">Timeline</span>
-              </button>
-            ) : (
-              <Timeline
-                rows={bridge.logRows}
-                onToggleCollapse={toggleTimeline}
-                style={{ flex: `${paneSizes.timeline} 1 0` }}
-                paneKey="timeline"
-              />
-            )}
-            {!collapseState.timeline && !collapseState.git && (
-              <SplitResizer leftKey="timeline" rightKey="git" containerRef={splitRef} setSizes={setPaneSizes} />
-            )}
-            {collapseState.git ? (
-              <button
-                className="bc-split-strip bc-split-strip-git"
-                onClick={toggleGit}
-                title="Show git"
-                aria-label="Show git"
-              >
-                <span className="bc-split-strip-chevron">◂</span>
-                <span className="bc-split-strip-label">Git</span>
-              </button>
-            ) : (
-              <GitPanel
-                sessionId={activeChat?.sessionId ?? ''}
-                uiState={bridge.uiState}
-                onToggleCollapse={toggleGit}
-                style={{ flex: `${paneSizes.git} 1 0` }}
-                paneKey="git"
-              />
-            )}
+          <div ref={splitRef} className="bc-chat-split">
+            {(() => {
+              const paneOrder: PaneKey[] = ['turns', 'thread', 'timeline', 'git']
+              const visible = paneOrder.filter(k => !collapseState[k])
+              if (visible.length === 0) {
+                return (
+                  <div className="bc-split-empty">
+                    <div className="bc-split-empty-hint">
+                      All panes hidden. Use the toggles above to show Turns, Thread, Timeline, or Git.
+                    </div>
+                  </div>
+                )
+              }
+              const renderPane = (key: PaneKey) => {
+                const style = { flex: `${paneSizes[key]} 1 0` }
+                switch (key) {
+                  case 'turns':
+                    return (
+                      <TurnsView
+                        key="turns"
+                        rows={bridge.logRows}
+                        agent={activeChat?.agent ?? ''}
+                        onToggleCollapse={toggleTurns}
+                        style={style}
+                        paneKey="turns"
+                      />
+                    )
+                  case 'thread':
+                    return (
+                      <div key="thread" className="bc-split-pane bc-split-pane-thread" style={style} data-pane="thread">
+                        <div
+                          className="bc-split-pane-header bc-header-clickable"
+                          onClick={toggleThread}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleThread() } }}
+                          role="button"
+                          tabIndex={0}
+                          title="Hide thread"
+                          aria-label="Hide thread"
+                        >
+                          <span className="bc-split-pane-title">Thread</span>
+                          <span className="bc-spacer" />
+                          <span className="bc-split-collapse-btn" aria-hidden="true">×</span>
+                        </div>
+                        <Thread
+                          rows={bridge.logRows}
+                          loading={bridge.loadingHistory}
+                          uiState={bridge.uiState}
+                          activity={bridge.activity}
+                          error={bridge.error}
+                          agent={activeChat?.agent ?? ''}
+                          sessionId={activeChat?.sessionId ?? ''}
+                        />
+                      </div>
+                    )
+                  case 'timeline':
+                    return (
+                      <Timeline
+                        key="timeline"
+                        rows={bridge.logRows}
+                        onToggleCollapse={toggleTimeline}
+                        style={style}
+                        paneKey="timeline"
+                      />
+                    )
+                  case 'git':
+                    return (
+                      <GitPanel
+                        key="git"
+                        sessionId={activeChat?.sessionId ?? ''}
+                        uiState={bridge.uiState}
+                        onToggleCollapse={toggleGit}
+                        style={style}
+                        paneKey="git"
+                      />
+                    )
+                }
+              }
+              const nodes: React.ReactNode[] = []
+              visible.forEach((key, i) => {
+                if (i > 0) {
+                  const leftKey = visible[i - 1]
+                  nodes.push(
+                    <SplitResizer
+                      key={`resizer-${leftKey}-${key}`}
+                      leftKey={leftKey}
+                      rightKey={key}
+                      containerRef={splitRef}
+                      setSizes={setPaneSizes}
+                    />
+                  )
+                }
+                nodes.push(renderPane(key))
+              })
+              return nodes
+            })()}
           </div>
           <div className="bc-controls-bar">
             {bridge.activeSession && (
