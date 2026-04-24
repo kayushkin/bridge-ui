@@ -8,6 +8,7 @@ export interface BridgeRoutes {
   auth: string
   usage: string
   settings: string
+  skills: string
   conformance: string
 }
 
@@ -18,6 +19,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   auth: '/bridge/auth',
   usage: '/bridge/usage',
   settings: '/bridge/settings',
+  skills: '/bridge/skills',
   conformance: '/bridge/conformance',
 }
 
@@ -26,6 +28,9 @@ export interface BridgeConfig {
   fetch: FetchFn
   /** Base path for bridge API (e.g. "/api/bridge"). No trailing slash. */
   basePath: string
+  /** Base path for skill-store API (e.g. "/api/skill-store"). No trailing
+   * slash. If empty, the Skills tab is hidden. */
+  skillStoreBasePath: string
   /** Route paths for navigation between bridge pages. */
   routes: BridgeRoutes
 }

@@ -6,6 +6,7 @@ export const DEFAULT_BRIDGE_ROUTES = {
     auth: '/bridge/auth',
     usage: '/bridge/usage',
     settings: '/bridge/settings',
+    skills: '/bridge/skills',
     conformance: '/bridge/conformance',
 };
 export const BridgeContext = createContext(null);
