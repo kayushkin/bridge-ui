@@ -2342,6 +2342,7 @@
   flex-shrink: 0;
 }
 .bc-harness-chip-emoji { font-size: 0.95em; line-height: 1; }
+.bc-harness-chip-img { width: 14px; height: 14px; border-radius: 3px; display: block; flex-shrink: 0; }
 .bc-harness-chip-label { line-height: 1; }
 
 /* Repo chip — current git project + dropdown. The native <select> overlays

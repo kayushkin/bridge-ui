@@ -109,6 +109,13 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   }, [bridge.activeSession])
 
   const activeHarness = activeChat?.harness ?? ''
+  // Server-registered HarnessInfo for the active harness — the canonical
+  // source for label/emoji/image. Constants (HARNESS_LABEL/HARNESS_EMOJI)
+  // remain only as fallbacks for harnesses the server doesn't know yet.
+  const activeHarnessInfo = useMemo(
+    () => activeHarness ? harnesses.find(h => h.name === activeHarness) : undefined,
+    [harnesses, activeHarness]
+  )
   const harnessDefaults = useMemo(
     () => activeHarness ? bridgePrefs.getDefaults(activeHarness) : {},
     [bridgePrefs, activeHarness]
@@ -216,6 +223,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     >
       <SessionHeader
         chat={activeChat}
+        harnessInfo={activeHarnessInfo}
+        basePath={basePath}
         uiState={bridge.uiState}
         rows={bridge.logRows}
         onRename={handleRename}

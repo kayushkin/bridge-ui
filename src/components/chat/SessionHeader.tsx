@@ -1,14 +1,20 @@
 import type { CSSProperties } from 'react'
 import { HARNESS_EMOJI, HARNESS_LABEL, HARNESS_TINT } from '../../constants'
-import type { LogRow } from '../../types'
+import type { HarnessInfo, LogRow } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export function SessionHeader({ chat, harnessInfo, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
+  /** Server-registered HarnessInfo for chat.harness — canonical source for
+   * label/emoji/image. Constants are fallbacks for harnesses the server
+   * hasn't registered. */
+  harnessInfo?: HarnessInfo
+  /** Used to resolve harnessInfo.image (a server-relative path). */
+  basePath: string
   uiState: string
   rows: LogRow[]
   onRename: (name: string) => void
@@ -47,8 +53,12 @@ export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, h
   // the host theme's --accent for unmapped harnesses.
   const harness = chat?.harness ?? ''
   const harnessTint = harness ? HARNESS_TINT[harness] : undefined
-  const harnessLabel = harness ? (HARNESS_LABEL[harness] || harness) : ''
-  const harnessEmoji = harness ? (HARNESS_EMOJI[harness] || '') : ''
+  // Server-first: HarnessInfo from /harnesses is the canonical source for
+  // label/emoji/image (matches SessionList, BridgeSettings, BridgeConformance,
+  // NewSessionMenu). Constants only kick in for harnesses missing server-side.
+  const harnessLabel = harness ? (harnessInfo?.label || HARNESS_LABEL[harness] || harness) : ''
+  const harnessEmoji = harness ? (harnessInfo?.emoji || HARNESS_EMOJI[harness] || '') : ''
+  const harnessImage = harnessInfo?.image
   const headerStyle: CSSProperties | undefined = harnessTint
     ? ({ ['--bc-harness']: harnessTint } as CSSProperties)
     : undefined
@@ -70,7 +80,9 @@ export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, h
         />
         {harness && (
           <span className="bc-harness-chip" title={harnessLabel}>
-            {harnessEmoji && <span className="bc-harness-chip-emoji" aria-hidden>{harnessEmoji}</span>}
+            {harnessImage
+              ? <img className="bc-harness-chip-img" src={`${basePath}${harnessImage}`} alt="" />
+              : harnessEmoji && <span className="bc-harness-chip-emoji" aria-hidden>{harnessEmoji}</span>}
             <span className="bc-harness-chip-label">{harnessLabel}</span>
           </span>
         )}
