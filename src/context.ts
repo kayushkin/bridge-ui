@@ -3,10 +3,6 @@ import type { FetchFn } from './types'
 
 export interface BridgeRoutes {
   chat: string
-  /** Optional visual variant routes — when present, BridgeLayout shows extra Chat2/3/4 tabs. */
-  chat2?: string
-  chat3?: string
-  chat4?: string
   instances: string
   sessions: string
   auth: string
@@ -18,9 +14,6 @@ export interface BridgeRoutes {
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   chat: '/bridge',
-  chat2: '/bridge/chat2',
-  chat3: '/bridge/chat3',
-  chat4: '/bridge/chat4',
   instances: '/bridge/instances',
   sessions: '/bridge/sessions',
   auth: '/bridge/auth',
