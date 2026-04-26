@@ -4,12 +4,11 @@ import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
 import type { ChatSession, PanesHidden } from './types'
 
-export function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAllPanes, onCloseWorkspace }: {
+export function SessionHeader({ chat, uiState, activity, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace }: {
   chat: ChatSession | null
   uiState: string
   activity: { kind: string; name?: string }
   rows: LogRow[]
-  instance: { name: string; transport: string } | null
   onRename: (name: string) => void
   onPrev: () => void
   onNext: () => void
@@ -20,7 +19,6 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
   onToggleThread: () => void
   onToggleTimeline: () => void
   onToggleGit: () => void
-  onCloseAllPanes: () => void
   onCloseWorkspace?: () => void
 }) {
   const completed = chat ? rows.filter(r => r.actor === 'assistant' && r.done && r.meta) : []
@@ -31,7 +29,8 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
 
   const contextTokens = meta?.usage?.context_tokens ?? 0
   const contextLimit = meta?.usage?.context_limit ?? 0
-  const contextPct = contextTokens && contextLimit ? Math.round((contextTokens / contextLimit) * 100) : 0
+  const contextPct = contextTokens && contextLimit ? Math.min(100, Math.round((contextTokens / contextLimit) * 100)) : 0
+  const contextTone = contextPct >= 90 ? 'crit' : contextPct >= 70 ? 'warn' : ''
 
   const activityText = activity.kind !== 'idle' && uiState === 'running'
     ? (activity.kind === 'tool' ? `${activity.name}` : activity.kind === 'thinking' ? 'thinking' : 'streaming')
@@ -58,14 +57,9 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
         {chat
           ? <EditableName value={chat.displayName} onSave={onRename} className="bc-session-name" />
           : <span className="bc-session-name bc-session-name-empty">—</span>}
-        {meta?.model && <span className="bc-model-badge">{String(meta.model)}</span>}
-        {instance && <span className="bc-instance-badge">{instance.name} ({instance.transport})</span>}
         {contextTokens > 0 && contextLimit > 0 && (
-          <span className="bc-context-inline" title={`${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens`}>
-            <span className="bc-context-label">{formatTokens(contextTokens)}/{formatTokens(contextLimit)} ({contextPct}%)</span>
-            <span className="bc-context-bar">
-              <span className={`bc-bar-fill ${contextPct >= 90 ? 'bc-bar-crit' : contextPct >= 70 ? 'bc-bar-warn' : ''}`} style={{ width: `${Math.min(100, contextPct)}%` }} />
-            </span>
+          <span className="bc-context-label" title={`${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens`}>
+            {formatTokens(contextTokens)}/{formatTokens(contextLimit)} ({contextPct}%)
           </span>
         )}
         {totalCost > 0 && <span className="bc-cost">{formatCost(totalCost)}</span>}
@@ -76,7 +70,6 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
           onToggleThread={onToggleThread}
           onToggleTimeline={onToggleTimeline}
           onToggleGit={onToggleGit}
-          onCloseAll={onCloseAllPanes}
         />
         {onCloseWorkspace && (
           <button
@@ -87,6 +80,12 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
           >×</button>
         )}
       </div>
+      {contextTokens > 0 && contextLimit > 0 && (
+        <div
+          className={`bc-header-context ${contextTone ? `bc-header-context-${contextTone}` : ''}`}
+          style={{ width: `${contextPct}%` }}
+        />
+      )}
     </div>
   )
 }

@@ -1,14 +1,12 @@
 import type { PaneKey, PanesHidden } from './types'
 
-export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAll }: {
+export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit }: {
   panesHidden: PanesHidden
   onToggleTurns: () => void
   onToggleThread: () => void
   onToggleTimeline: () => void
   onToggleGit: () => void
-  onCloseAll: () => void
 }) {
-  const allClosed = panesHidden.turns && panesHidden.thread && panesHidden.timeline && panesHidden.git
   const pill = (key: PaneKey, label: string, onClick: () => void) => {
     const visible = !panesHidden[key]
     return (
@@ -26,13 +24,6 @@ export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onTogg
       {pill('thread', 'Thread', onToggleThread)}
       {pill('timeline', 'Timeline', onToggleTimeline)}
       {pill('git', 'Git', onToggleGit)}
-      <button
-        className="bc-pane-close-all"
-        onClick={onCloseAll}
-        disabled={allClosed}
-        title="Close all panes"
-        aria-label="Close all panes"
-      >×</button>
     </div>
   )
 }

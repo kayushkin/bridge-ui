@@ -8,7 +8,7 @@ import { SystemPromptModal } from './SystemPromptModal';
 import { ToolsPanel } from './ToolsPanel';
 import { WorkspaceProvider } from './WorkspaceContext';
 import { generateDefaultAgent } from './utils';
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, bridgePrefs }) {
     const bridge = useBridgeSession();
     const [activeChat, setActiveChat] = useState(null);
     const [configModel, setConfigModel] = useState('');
@@ -53,9 +53,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     const setPaneSizes = useCallback((updater) => {
         onUpdate(w => ({ ...w, paneSizes: typeof updater === 'function' ? updater(w.paneSizes) : updater }));
     }, [onUpdate]);
-    const closeAllPanes = useCallback(() => {
-        onUpdate(w => ({ ...w, panesHidden: { turns: true, thread: true, timeline: true, git: true } }));
-    }, [onUpdate]);
     // Same-instance session list, sorted newest-first, drives workspace nav arrows.
     const instanceId = bridge.activeSession?.instance_id;
     const navOrder = useMemo(() => {
@@ -87,11 +84,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         if (instanceId)
             bridgePrefs.setLastSession(instanceId, target.bridge_id);
     }, [navIndex, navOrder, instanceId, onUpdate, bridgePrefs]);
-    const activeInstance = useMemo(() => {
-        if (!bridge.activeSession?.instance_id)
-            return null;
-        return instanceMap.get(bridge.activeSession.instance_id) ?? null;
-    }, [bridge.activeSession, instanceMap]);
     const activeHarness = activeChat?.harness ?? '';
     const capabilities = useMemo(() => {
         const info = harnesses.find(h => h.name === activeHarness);
@@ -119,7 +111,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         if (activeChat?.sessionId)
             bridge.renameSession(activeChat.sessionId, name);
     }, [bridge, activeChat]);
-    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseAllPanes: closeAllPanes, onCloseWorkspace: onClose }), _jsx(WorkspaceProvider, { value: {
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseWorkspace: onClose }), _jsx(WorkspaceProvider, { value: {
                     chat: activeChat,
                     rows: bridge.logRows,
                     loading: bridge.loadingHistory,

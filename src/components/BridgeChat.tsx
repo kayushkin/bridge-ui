@@ -274,7 +274,6 @@ export function BridgeChat() {
                 onClose={() => closeWorkspace(w.id)}
                 harnesses={harnesses}
                 storeModels={storeModels}
-                instanceMap={instances.instanceMap}
                 bridgePrefs={{
                   getDefaults: bridgePrefs.getDefaults,
                   setHarnessDefaults: bridgePrefs.setHarnessDefaults,

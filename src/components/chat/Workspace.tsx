@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { BridgeInstance, HarnessInfo, ManagedSession } from '../../types'
+import type { HarnessInfo, ManagedSession } from '../../types'
 import { useBridgeSession } from '../../useBridgeSession'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
@@ -18,7 +18,6 @@ interface WorkspaceProps {
   onClose?: () => void
   harnesses: HarnessInfo[]
   storeModels: StoreModel[]
-  instanceMap: Map<string, BridgeInstance>
   bridgePrefs: {
     getDefaults: (harness: string) => { model?: string; effort?: string; max_budget?: number; disabled_tools?: string[] }
     setHarnessDefaults: (harness: string, config: { model?: string; effort?: string; max_budget?: number; disabled_tools?: string[] }) => void
@@ -26,7 +25,7 @@ interface WorkspaceProps {
   }
 }
 
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }: WorkspaceProps) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, bridgePrefs }: WorkspaceProps) {
   const bridge = useBridgeSession()
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const [configModel, setConfigModel] = useState('')
@@ -75,10 +74,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     onUpdate(w => ({ ...w, paneSizes: typeof updater === 'function' ? (updater as (p: PaneSizes) => PaneSizes)(w.paneSizes) : updater }))
   }, [onUpdate])
 
-  const closeAllPanes = useCallback(() => {
-    onUpdate(w => ({ ...w, panesHidden: { turns: true, thread: true, timeline: true, git: true } }))
-  }, [onUpdate])
-
   // Same-instance session list, sorted newest-first, drives workspace nav arrows.
   const instanceId = bridge.activeSession?.instance_id
   const navOrder = useMemo<ManagedSession[]>(() => {
@@ -106,11 +101,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     onUpdate(w => ({ ...w, sessionId: target.bridge_id }))
     if (instanceId) bridgePrefs.setLastSession(instanceId, target.bridge_id)
   }, [navIndex, navOrder, instanceId, onUpdate, bridgePrefs])
-
-  const activeInstance = useMemo(() => {
-    if (!bridge.activeSession?.instance_id) return null
-    return instanceMap.get(bridge.activeSession.instance_id) ?? null
-  }, [bridge.activeSession, instanceMap])
 
   const activeHarness = activeChat?.harness ?? ''
   const capabilities = useMemo(() => {
@@ -154,7 +144,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         uiState={bridge.uiState}
         activity={bridge.activity}
         rows={bridge.logRows}
-        instance={activeInstance}
         onRename={handleRename}
         onPrev={handlePrevSession}
         onNext={handleNextSession}
@@ -165,7 +154,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         onToggleThread={() => togglePane('thread')}
         onToggleTimeline={() => togglePane('timeline')}
         onToggleGit={() => togglePane('git')}
-        onCloseAllPanes={closeAllPanes}
         onCloseWorkspace={onClose}
       />
       <WorkspaceProvider value={{
