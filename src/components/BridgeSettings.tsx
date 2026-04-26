@@ -3,6 +3,7 @@ import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
 import { HARNESS_LABEL, HARNESS_EMOJI } from '../constants'
 import type { HarnessDefaults, HarnessInfo } from '../types'
+import { SourceFoldersEditor } from './SourceFoldersEditor'
 
 interface ModelInfo {
   id: string
@@ -72,6 +73,8 @@ export function BridgeSettings() {
 
   return (
     <div className="bset-container">
+      <SourceFoldersEditor />
+
       <h2 className="bset-title">Harness Defaults</h2>
       <p className="bset-subtitle">Configure default settings for each harness type. These are applied when creating new sessions.</p>
 

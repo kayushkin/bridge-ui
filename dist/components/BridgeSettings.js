@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useBridgeConfig } from '../context';
 import { useBridgePrefs } from '../useBridgePrefs';
 import { HARNESS_LABEL, HARNESS_EMOJI } from '../constants';
+import { SourceFoldersEditor } from './SourceFoldersEditor';
 const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const COMMON_TOOLS = [
     'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'WebFetch', 'WebSearch',
@@ -55,7 +56,7 @@ export function BridgeSettings() {
         setTimeout(() => setSaving(null), 500);
     }, [localDefaults, bridgePrefs]);
     const hasCapability = (harness, cap) => harness.capabilities?.includes(cap);
-    return (_jsxs("div", { className: "bset-container", children: [_jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
+    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
                     const defaults = localDefaults[h.name] || {};
                     const isExpanded = expanded[h.name];
                     const label = h.label || HARNESS_LABEL[h.name] || h.name;

@@ -1,6 +1,9 @@
 import { createContext, useContext } from 'react';
 export const DEFAULT_BRIDGE_ROUTES = {
     chat: '/bridge',
+    chat2: '/bridge/chat2',
+    chat3: '/bridge/chat3',
+    chat4: '/bridge/chat4',
     instances: '/bridge/instances',
     sessions: '/bridge/sessions',
     auth: '/bridge/auth',

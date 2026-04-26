@@ -1,6 +1,10 @@
 import type { FetchFn } from './types';
 export interface BridgeRoutes {
     chat: string;
+    /** Optional visual variant routes — when present, BridgeLayout shows extra Chat2/3/4 tabs. */
+    chat2?: string;
+    chat3?: string;
+    chat4?: string;
     instances: string;
     sessions: string;
     auth: string;
