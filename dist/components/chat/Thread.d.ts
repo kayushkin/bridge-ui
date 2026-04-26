@@ -1,12 +1,7 @@
 import type { LogRow } from '../../types';
-export declare function Thread({ rows, loading, uiState, activity, error, agent, sessionId }: {
+export declare function Thread({ rows, loading, error, agent, sessionId }: {
     rows: LogRow[];
     loading: boolean;
-    uiState: string;
-    activity: {
-        kind: string;
-        name?: string;
-    };
     error: string | null;
     agent: string;
     sessionId: string;

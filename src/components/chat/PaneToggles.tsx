@@ -7,7 +7,7 @@ export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onTogg
   onToggleTimeline: () => void
   onToggleGit: () => void
 }) {
-  const pill = (key: PaneKey, label: string, onClick: () => void) => {
+  const pill = (key: PaneKey, label: string, icon: string, onClick: () => void) => {
     const visible = !panesHidden[key]
     return (
       <button
@@ -15,15 +15,16 @@ export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onTogg
         onClick={onClick}
         title={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
         aria-pressed={visible}
-      >{label}</button>
+        aria-label={label}
+      ><span className="bc-pane-toggle-icon" aria-hidden="true">{icon}</span></button>
     )
   }
   return (
     <div className="bc-pane-toggles" role="group" aria-label="Pane visibility">
-      {pill('turns', 'Turns', onToggleTurns)}
-      {pill('thread', 'Thread', onToggleThread)}
-      {pill('timeline', 'Timeline', onToggleTimeline)}
-      {pill('git', 'Git', onToggleGit)}
+      {pill('turns', 'Turns', '📋', onToggleTurns)}
+      {pill('thread', 'Thread', '💬', onToggleThread)}
+      {pill('timeline', 'Timeline', '⏱', onToggleTimeline)}
+      {pill('git', 'Git', '🌿', onToggleGit)}
     </div>
   )
 }

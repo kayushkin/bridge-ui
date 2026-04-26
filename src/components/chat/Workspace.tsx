@@ -142,7 +142,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       <SessionHeader
         chat={activeChat}
         uiState={bridge.uiState}
-        activity={bridge.activity}
         rows={bridge.logRows}
         onRename={handleRename}
         onPrev={handlePrevSession}
@@ -219,6 +218,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         connected={bridge.connected && !!bridge.activeSession}
         streaming={bridge.uiState === 'running'}
         paused={bridge.uiState === 'paused'}
+        uiState={bridge.uiState}
+        activity={bridge.activity}
         onSend={handleSend}
         onStop={bridge.interrupt}
         onResume={bridge.resume}

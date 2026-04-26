@@ -1,12 +1,8 @@
 import type { LogRow } from '../../types';
 import type { ChatSession, PanesHidden } from './types';
-export declare function SessionHeader({ chat, uiState, activity, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace }: {
+export declare function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace }: {
     chat: ChatSession | null;
     uiState: string;
-    activity: {
-        kind: string;
-        name?: string;
-    };
     rows: LogRow[];
     onRename: (name: string) => void;
     onPrev: () => void;

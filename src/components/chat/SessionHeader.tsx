@@ -4,10 +4,9 @@ import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
 import type { ChatSession, PanesHidden } from './types'
 
-export function SessionHeader({ chat, uiState, activity, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace }: {
+export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace }: {
   chat: ChatSession | null
   uiState: string
-  activity: { kind: string; name?: string }
   rows: LogRow[]
   onRename: (name: string) => void
   onPrev: () => void
@@ -32,11 +31,10 @@ export function SessionHeader({ chat, uiState, activity, rows, onRename, onPrev,
   const contextPct = contextTokens && contextLimit ? Math.min(100, Math.round((contextTokens / contextLimit) * 100)) : 0
   const contextTone = contextPct >= 90 ? 'crit' : contextPct >= 70 ? 'warn' : ''
 
-  const activityText = activity.kind !== 'idle' && uiState === 'running'
-    ? (activity.kind === 'tool' ? `${activity.name}` : activity.kind === 'thinking' ? 'thinking' : 'streaming')
-    : ''
-
-  const showState = !!chat && uiState !== 'empty'
+  const dotState = chat && uiState !== 'empty' ? uiState : 'placeholder'
+  const dotTitle = chat && uiState !== 'empty'
+    ? uiState.charAt(0).toUpperCase() + uiState.slice(1)
+    : 'No session'
 
   return (
     <div className="bc-header">
@@ -45,24 +43,19 @@ export function SessionHeader({ chat, uiState, activity, rows, onRename, onPrev,
           <button className="bc-nav-arrow" onClick={onPrev} disabled={!hasPrev} title="Previous session" aria-label="Previous session">‹</button>
           <button className="bc-nav-arrow" onClick={onNext} disabled={!hasNext} title="Next session" aria-label="Next session">›</button>
         </div>
-        {showState ? (
-          <span className={`bc-state-badge bc-state-${uiState}`}>
-            {uiState === 'running' && <span className="bc-pulse" />}
-            {uiState.charAt(0).toUpperCase() + uiState.slice(1)}
-            {activityText && <span className="bc-state-activity">· {activityText}</span>}
-          </span>
-        ) : (
-          <span className="bc-state-badge bc-state-placeholder">No session</span>
-        )}
+        <span
+          className={`bc-status-dot bc-status-dot-${dotState}`}
+          title={dotTitle}
+          aria-label={dotTitle}
+        />
         {chat
           ? <EditableName value={chat.displayName} onSave={onRename} className="bc-session-name" />
           : <span className="bc-session-name bc-session-name-empty">—</span>}
-        {contextTokens > 0 && contextLimit > 0 && (
-          <span className="bc-context-label" title={`${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens`}>
-            {formatTokens(contextTokens)}/{formatTokens(contextLimit)} ({contextPct}%)
+        {totalCost > 0 && (
+          <span className="bc-cost" title={contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined}>
+            {formatCost(totalCost)}
           </span>
         )}
-        {totalCost > 0 && <span className="bc-cost">{formatCost(totalCost)}</span>}
         <span className="bc-spacer" />
         <PaneToggles
           panesHidden={panesHidden}

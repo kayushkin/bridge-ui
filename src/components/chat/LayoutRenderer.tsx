@@ -46,8 +46,6 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           <Thread
             rows={ws.rows}
             loading={ws.loading}
-            uiState={ws.uiState}
-            activity={ws.activity}
             error={ws.error}
             agent={agent}
             sessionId={sessionId}

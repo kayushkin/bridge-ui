@@ -278,49 +278,49 @@
 .bc-header-context-warn { background: #f59e0b; }
 .bc-header-context-crit { background: #ef4444; }
 .bc-header-row { display: flex; align-items: center; gap: 8px; font-size: 0.85em; min-height: 28px; }
-.bc-state-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 10px; border-radius: 10px; font-size: 0.8em; font-weight: 500;
+/* Unified status dot — used in header (compact) and as a glyph in the composer status row */
+.bc-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #555;
+  display: inline-block;
 }
-.bc-state-idle { background: #1a1a2a; color: #60a5fa; }
-.bc-state-running { background: #0a2a1a; color: #22c55e; }
-.bc-state-paused { background: #2a2a0a; color: #f59e0b; }
-.bc-state-completed { background: #1a1a1a; color: #888; }
-.bc-state-error, .bc-state-aborted { background: #1a0a0a; color: #ef4444; }
-.bc-state-empty { display: none; }
-.bc-state-placeholder { background: #1a1a1a; color: var(--text-dim); }
-.bc-session-name-empty { color: var(--text-dim); font-style: italic; }
-.bc-state-activity { margin-left: 4px; opacity: 0.75; font-weight: 400; }
+.bc-status-dot-idle { background: #60a5fa; }
+.bc-status-dot-running { background: #22c55e; animation: bc-pulse-anim 1.5s ease-in-out infinite; }
+.bc-status-dot-paused { background: #f59e0b; }
+.bc-status-dot-completed { background: #888; }
+.bc-status-dot-error, .bc-status-dot-aborted { background: #ef4444; }
+.bc-status-dot-placeholder { background: var(--border); }
 .bc-pulse {
   width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
   animation: bc-pulse-anim 1.5s ease-in-out infinite;
+  display: inline-block;
 }
 @keyframes bc-pulse-anim { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.bc-session-name-empty { color: var(--text-dim); font-style: italic; }
 .bc-session-name { font-weight: 500; color: var(--text); }
 .bc-spacer { flex: 1; }
 .bc-cost { color: var(--accent); font-weight: 500; font-size: 0.85em; }
 
-.bc-context-label { font-size: 0.75em; color: var(--text-dim); white-space: nowrap; font-family: monospace; }
-
-/* Pane visibility toggles */
+/* Pane visibility toggles (icon pills) */
 .bc-pane-toggles { display: inline-flex; align-items: center; gap: 3px; }
 .bc-pane-toggle {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-dim);
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 8px;
-  font-size: 0.75em;
   cursor: pointer;
-  line-height: 1.4;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  line-height: 1;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, opacity 0.12s;
+  opacity: 0.55;
 }
-.bc-pane-toggle:hover { color: var(--text); border-color: var(--accent); }
+.bc-pane-toggle:hover { color: var(--text); border-color: var(--accent); opacity: 1; }
 .bc-pane-toggle-on {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-color: var(--accent);
   color: var(--text);
+  opacity: 1;
 }
+.bc-pane-toggle-icon { font-size: 14px; line-height: 1; display: inline-block; }
 /* Empty chat-split state (all panes hidden) */
 .bc-split-empty {
   flex: 1;
@@ -994,7 +994,6 @@
   color: var(--text); padding: 1px 6px; font-size: inherit; font-family: inherit;
   outline: none; min-width: 60px;
 }
-.bc-activity { display: flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85em; color: var(--text-muted); }
 
 /* Controls bar */
 .bc-controls-bar { display: flex; gap: 6px; padding: 6px 16px; border-top: 1px solid var(--border); }
@@ -1089,9 +1088,25 @@
 }
 
 /* Composer */
+.bc-composer-wrap {
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--border); background: var(--bg-surface);
+}
+.bc-composer-status {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 16px;
+  font-size: 0.8em; color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.bc-composer-status-label { font-weight: 500; text-transform: capitalize; }
+.bc-composer-status-activity { color: var(--text-dim); }
+.bc-composer-status-running .bc-composer-status-label { color: #22c55e; }
+.bc-composer-status-idle .bc-composer-status-label { color: #60a5fa; }
+.bc-composer-status-paused .bc-composer-status-label { color: #f59e0b; }
+.bc-composer-status-error .bc-composer-status-label,
+.bc-composer-status-aborted .bc-composer-status-label { color: #ef4444; }
 .bc-composer {
   display: flex; gap: 8px; padding: 12px 16px;
-  border-top: 1px solid var(--border); background: var(--bg-surface);
 }
 .bc-composer-input {
   flex: 1; padding: 10px 14px; border-radius: 10px;

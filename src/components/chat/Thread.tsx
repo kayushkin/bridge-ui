@@ -7,11 +7,9 @@ import { LogRowView, TurnGroupView, groupRowsByTurn } from './LogRowView'
 import { loadHiddenTypes, saveHiddenTypes } from './persistence'
 import { typesInRow } from './utils'
 
-export function Thread({ rows, loading, uiState, activity, error, agent, sessionId }: {
+export function Thread({ rows, loading, error, agent, sessionId }: {
   rows: LogRow[]
   loading: boolean
-  uiState: string
-  activity: { kind: string; name?: string }
   error: string | null
   agent: string
   sessionId: string
@@ -55,12 +53,6 @@ export function Thread({ rows, loading, uiState, activity, error, agent, session
         {blocks.map((b, i) => b.kind === 'turn'
           ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} />
           : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} />
-        )}
-        {uiState === 'running' && (
-          <div className="bc-activity">
-            <span className="bc-activity-dot" />
-            {activity.kind === 'tool' ? `Running: ${activity.name}` : activity.kind === 'thinking' ? 'Thinking...' : 'Streaming...'}
-          </div>
         )}
         <div ref={endRef} />
       </div>
