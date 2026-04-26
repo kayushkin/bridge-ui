@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { HarnessInfo, ManagedSession } from '../../types'
 import { useBridgeSession } from '../../useBridgeSession'
+import { formatTokens } from '../../utils'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
 import { SessionHeader } from './SessionHeader'
@@ -59,12 +60,25 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     })
   }, [bridge.activeSession])
 
+  const activeHarness = activeChat?.harness ?? ''
+  const harnessDefaults = useMemo(
+    () => activeHarness ? bridgePrefs.getDefaults(activeHarness) : {},
+    [bridgePrefs, activeHarness]
+  )
+
+  // Pre-populate model/effort with the harness's saved defaults so the user
+  // sees what will actually be used instead of placeholder labels.
   useEffect(() => {
-    const config: { model?: string; effort?: string } = {}
-    if (configModel) config.model = configModel
-    if (configEffort) config.effort = configEffort
-    pendingConfigRef.current = (configModel || configEffort) ? config : null
-  }, [configModel, configEffort])
+    setConfigModel(harnessDefaults.model ?? '')
+    setConfigEffort(harnessDefaults.effort ?? '')
+  }, [harnessDefaults.model, harnessDefaults.effort])
+
+  useEffect(() => {
+    const changed: { model?: string; effort?: string } = {}
+    if (configModel && configModel !== harnessDefaults.model) changed.model = configModel
+    if (configEffort && configEffort !== harnessDefaults.effort) changed.effort = configEffort
+    pendingConfigRef.current = (changed.model || changed.effort) ? changed : null
+  }, [configModel, configEffort, harnessDefaults.model, harnessDefaults.effort])
 
   const togglePane = useCallback((key: PaneKey) => {
     onUpdate(w => ({ ...w, panesHidden: { ...w.panesHidden, [key]: !w.panesHidden[key] } }))
@@ -102,7 +116,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     if (instanceId) bridgePrefs.setLastSession(instanceId, target.bridge_id)
   }, [navIndex, navOrder, instanceId, onUpdate, bridgePrefs])
 
-  const activeHarness = activeChat?.harness ?? ''
   const capabilities = useMemo(() => {
     const info = harnesses.find(h => h.name === activeHarness)
     return new Set(info?.capabilities ?? [])
@@ -117,6 +130,20 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
 
   const handleCompact = useCallback(() => bridge.compact(), [bridge])
   const handleFork = useCallback(() => bridge.fork(), [bridge])
+
+  const contextInfo = useMemo(() => {
+    for (let i = bridge.logRows.length - 1; i >= 0; i--) {
+      const r = bridge.logRows[i]
+      if (r.actor === 'assistant' && r.done && r.meta?.usage) {
+        const tokens = r.meta.usage.context_tokens ?? 0
+        const limit = r.meta.usage.context_limit ?? 0
+        const pct = tokens && limit ? Math.min(100, Math.round((tokens / limit) * 100)) : 0
+        return { tokens, limit, pct }
+      }
+    }
+    return { tokens: 0, limit: 0, pct: 0 }
+  }, [bridge.logRows])
+  const contextTone = contextInfo.pct >= 90 ? 'crit' : contextInfo.pct >= 70 ? 'warn' : ''
 
   const handleSend = useCallback((text: string) => {
     if (pendingConfigRef.current) {
@@ -189,7 +216,17 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
               </select>
             )}
             {capabilities.has('compact') && (
-              <button className="bc-ctrl-btn" onClick={handleCompact} title="Compact context">Compact</button>
+              <button
+                className={`bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`}
+                onClick={handleCompact}
+                title={contextInfo.tokens && contextInfo.limit
+                  ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
+                  : 'Compact context'}
+                style={{ ['--ctx-pct' as string]: `${contextInfo.pct}%` }}
+              >
+                <span className="bc-ctrl-btn-bar" aria-hidden />
+                <span className="bc-ctrl-btn-text">Compact{contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''}</span>
+              </button>
             )}
             {capabilities.has('fork') && (
               <button className="bc-ctrl-btn" onClick={handleFork} title="Fork session">Fork</button>

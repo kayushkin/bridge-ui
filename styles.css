@@ -1006,6 +1006,17 @@
 .bc-ctrl-btn:disabled { opacity: 0.4; cursor: default; }
 .bc-ctrl-btn:disabled:hover { border-color: var(--border); color: var(--text-muted); }
 .bc-ctrl-btn-active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.bc-ctrl-btn-compact { position: relative; overflow: hidden; }
+.bc-ctrl-btn-compact .bc-ctrl-btn-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--ctx-pct, 0%);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: width 0.3s ease, background 0.2s ease;
+  pointer-events: none;
+}
+.bc-ctrl-btn-compact .bc-ctrl-btn-text { position: relative; }
+.bc-ctrl-btn-compact-warn .bc-ctrl-btn-bar { background: color-mix(in srgb, #f59e0b 30%, transparent); }
+.bc-ctrl-btn-compact-crit .bc-ctrl-btn-bar { background: color-mix(in srgb, #ef4444 35%, transparent); }
 .bc-ctrl-select {
   padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);
   background: var(--bg); color: var(--text-muted); cursor: pointer; font-size: 0.8em;

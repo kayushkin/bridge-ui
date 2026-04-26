@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeSession } from '../../useBridgeSession';
+import { formatTokens } from '../../utils';
 import { Composer } from './Composer';
 import { LayoutRenderer } from './LayoutRenderer';
 import { SessionHeader } from './SessionHeader';
@@ -39,14 +40,22 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
             displayName: sess.display_name || agent,
         });
     }, [bridge.activeSession]);
+    const activeHarness = activeChat?.harness ?? '';
+    const harnessDefaults = useMemo(() => activeHarness ? bridgePrefs.getDefaults(activeHarness) : {}, [bridgePrefs, activeHarness]);
+    // Pre-populate model/effort with the harness's saved defaults so the user
+    // sees what will actually be used instead of placeholder labels.
     useEffect(() => {
-        const config = {};
-        if (configModel)
-            config.model = configModel;
-        if (configEffort)
-            config.effort = configEffort;
-        pendingConfigRef.current = (configModel || configEffort) ? config : null;
-    }, [configModel, configEffort]);
+        setConfigModel(harnessDefaults.model ?? '');
+        setConfigEffort(harnessDefaults.effort ?? '');
+    }, [harnessDefaults.model, harnessDefaults.effort]);
+    useEffect(() => {
+        const changed = {};
+        if (configModel && configModel !== harnessDefaults.model)
+            changed.model = configModel;
+        if (configEffort && configEffort !== harnessDefaults.effort)
+            changed.effort = configEffort;
+        pendingConfigRef.current = (changed.model || changed.effort) ? changed : null;
+    }, [configModel, configEffort, harnessDefaults.model, harnessDefaults.effort]);
     const togglePane = useCallback((key) => {
         onUpdate(w => ({ ...w, panesHidden: { ...w.panesHidden, [key]: !w.panesHidden[key] } }));
     }, [onUpdate]);
@@ -84,7 +93,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         if (instanceId)
             bridgePrefs.setLastSession(instanceId, target.bridge_id);
     }, [navIndex, navOrder, instanceId, onUpdate, bridgePrefs]);
-    const activeHarness = activeChat?.harness ?? '';
     const capabilities = useMemo(() => {
         const info = harnesses.find(h => h.name === activeHarness);
         return new Set(info?.capabilities ?? []);
@@ -97,6 +105,19 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     }, [storeModels, harnesses, activeHarness]);
     const handleCompact = useCallback(() => bridge.compact(), [bridge]);
     const handleFork = useCallback(() => bridge.fork(), [bridge]);
+    const contextInfo = useMemo(() => {
+        for (let i = bridge.logRows.length - 1; i >= 0; i--) {
+            const r = bridge.logRows[i];
+            if (r.actor === 'assistant' && r.done && r.meta?.usage) {
+                const tokens = r.meta.usage.context_tokens ?? 0;
+                const limit = r.meta.usage.context_limit ?? 0;
+                const pct = tokens && limit ? Math.min(100, Math.round((tokens / limit) * 100)) : 0;
+                return { tokens, limit, pct };
+            }
+        }
+        return { tokens: 0, limit: 0, pct: 0 };
+    }, [bridge.logRows]);
+    const contextTone = contextInfo.pct >= 90 ? 'crit' : contextInfo.pct >= 70 ? 'warn' : '';
     const handleSend = useCallback((text) => {
         if (pendingConfigRef.current) {
             bridge.sendConfig(pendingConfigRef.current);
@@ -122,6 +143,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     paneSizes: workspace.paneSizes,
                     togglePane,
                     setPaneSizes,
-                }, children: _jsx(LayoutRenderer, { tree: workspace.layout }) }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleCompact, title: "Compact context", children: "Compact" })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', uiState: bridge.uiState, activity: bridge.activity, onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+                }, children: _jsx(LayoutRenderer, { tree: workspace.layout }) }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsxs("button", { className: `bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`, onClick: handleCompact, title: contextInfo.tokens && contextInfo.limit
+                                ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
+                                : 'Compact context', style: { ['--ctx-pct']: `${contextInfo.pct}%` }, children: [_jsx("span", { className: "bc-ctrl-btn-bar", "aria-hidden": true }), _jsxs("span", { className: "bc-ctrl-btn-text", children: ["Compact", contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''] })] })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', uiState: bridge.uiState, activity: bridge.activity, onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 //# sourceMappingURL=Workspace.js.map
