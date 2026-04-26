@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { UsageLine } from './UsageLine';
 import { formatHMS } from './utils';
@@ -43,9 +43,8 @@ function rowsToTurns(rows) {
     return out;
 }
 export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }) {
-    const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll();
+    const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTurns(rows), [rows]);
-    useEffect(() => { autoScrollIfAtBottom(); }, [items.length, autoScrollIfAtBottom]);
     const onHeaderKey = useCallback((e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

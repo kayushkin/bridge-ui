@@ -19,7 +19,7 @@ const DEFAULT_INNER_TREE = {
         { kind: 'leaf', viewType: 'git' },
     ],
 };
-const DEFAULT_PANES_HIDDEN = { turns: false, thread: false, timeline: true, git: true };
+const DEFAULT_PANES_HIDDEN = { turns: false, thread: true, timeline: true, git: true };
 const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1 };
 function makeWorkspace(sessionId, seed) {
     return {

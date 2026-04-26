@@ -3,7 +3,6 @@ export interface StickyBottomScroll<T extends HTMLElement> {
     endRef: React.RefObject<HTMLDivElement | null>;
     isAtBottom: boolean;
     scrollToBottom: (behavior?: ScrollBehavior) => void;
-    autoScrollIfAtBottom: (behavior?: ScrollBehavior) => void;
 }
 export declare function useStickyBottomScroll<T extends HTMLElement = HTMLDivElement>(threshold?: number): StickyBottomScroll<T>;
 //# sourceMappingURL=useStickyBottomScroll.d.ts.map

@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { ToolContext } from '../tools';
 import { FilterBar } from './FilterBar';
@@ -7,7 +7,7 @@ import { LogRowView, TurnGroupView, groupRowsByTurn } from './LogRowView';
 import { loadHiddenTypes, saveHiddenTypes } from './persistence';
 import { typesInRow } from './utils';
 export function Thread({ rows, loading, error, agent, sessionId }) {
-    const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll();
+    const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const [hidden, setHidden] = useState(() => loadHiddenTypes());
     const allTypes = useMemo(() => {
         const set = new Set();
@@ -22,7 +22,6 @@ export function Thread({ rows, loading, error, agent, sessionId }) {
         return rows.filter(r => typesInRow(r).some(t => !hidden.has(t)));
     }, [rows, hidden]);
     const blocks = useMemo(() => groupRowsByTurn(visibleRows), [visibleRows]);
-    useEffect(() => { autoScrollIfAtBottom(); }, [visibleRows, autoScrollIfAtBottom]);
     const toggleType = useCallback((t) => {
         setHidden(prev => {
             const next = new Set(prev);

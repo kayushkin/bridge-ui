@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { ToolContext } from '../tools'
@@ -14,7 +14,7 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
   agent: string
   sessionId: string
 }) {
-  const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
+  const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
 
   const allTypes = useMemo(() => {
@@ -29,8 +29,6 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
   }, [rows, hidden])
 
   const blocks = useMemo(() => groupRowsByTurn(visibleRows), [visibleRows])
-
-  useEffect(() => { autoScrollIfAtBottom() }, [visibleRows, autoScrollIfAtBottom])
 
   const toggleType = useCallback((t: string) => {
     setHidden(prev => {

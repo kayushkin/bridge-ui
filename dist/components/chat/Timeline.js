@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { formatTokens } from '../../utils';
 import { formatHMS, oneLine, toolFullText, toolSnippet } from './utils';
@@ -203,9 +203,8 @@ function renderTimelineNodes(items) {
     return out;
 }
 export function Timeline({ rows, onToggleCollapse, style, paneKey }) {
-    const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll();
+    const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTimeline(rows), [rows]);
-    useEffect(() => { autoScrollIfAtBottom(); }, [items.length, autoScrollIfAtBottom]);
     const onHeaderKey = useCallback((e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

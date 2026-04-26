@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { formatTokens } from '../../utils'
@@ -246,9 +246,8 @@ export function Timeline({ rows, onToggleCollapse, style, paneKey }: {
   style?: React.CSSProperties
   paneKey?: string
 }) {
-  const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
+  const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTimeline(rows), [rows])
-  useEffect(() => { autoScrollIfAtBottom() }, [items.length, autoScrollIfAtBottom])
 
   const onHeaderKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { UsageLine } from './UsageLine'
@@ -50,9 +50,8 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
   style?: React.CSSProperties
   paneKey?: string
 }) {
-  const { containerRef, endRef, isAtBottom, scrollToBottom, autoScrollIfAtBottom } = useStickyBottomScroll<HTMLDivElement>()
+  const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTurns(rows), [rows])
-  useEffect(() => { autoScrollIfAtBottom() }, [items.length, autoScrollIfAtBottom])
 
   const onHeaderKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() }

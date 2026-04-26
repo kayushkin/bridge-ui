@@ -22,7 +22,7 @@ const DEFAULT_INNER_TREE: InnerNode = {
   ],
 }
 
-const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: false, timeline: true, git: true }
+const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: true, timeline: true, git: true }
 const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
 
 function makeWorkspace(sessionId: string | null, seed?: Partial<WorkspaceState>): WorkspaceState {
