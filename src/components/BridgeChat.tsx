@@ -9,7 +9,7 @@ import { HarnessTabBar } from './chat/HarnessTabBar'
 import { NewInstanceForm } from './chat/NewInstanceForm'
 import { SessionList } from './chat/SessionList'
 import { Workspace } from './chat/Workspace'
-import { loadCollapseState, saveCollapseState } from './chat/persistence'
+import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
 import type { CollapseState, InnerNode, PaneSizes, PanesHidden, StoreModel, WorkspaceState } from './chat/types'
 import { generateDefaultAgent, generateFrontendId } from './chat/utils'
 
@@ -49,9 +49,13 @@ export function BridgeChat() {
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
   const [showNewInstance, setShowNewInstance] = useState(false)
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
-  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>([])
-  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null)
+  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => loadWorkspacesState().workspaces)
+  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(() => loadWorkspacesState().focusedWorkspaceId)
   const bootstrappedRef = useRef(false)
+
+  useEffect(() => {
+    saveWorkspacesState({ workspaces, focusedWorkspaceId })
+  }, [workspaces, focusedWorkspaceId])
 
   const toggleHarnessBar = useCallback(() => {
     setCollapseState(s => { const next = { ...s, harnessBar: !s.harnessBar }; saveCollapseState(next); return next })
@@ -121,18 +125,20 @@ export function BridgeChat() {
     }
   }, [bridgePrefs.prefs.last_instance_id, selectedInstance, instances.instances, instances.instanceMap, instances.loading])
 
-  // Bootstrap one workspace from the last-selected session on first ready render.
+  // Bootstrap one workspace from the last-selected session on first ready
+  // render — but only if nothing was restored from localStorage.
   useEffect(() => {
     if (bootstrappedRef.current) return
     if (!selectedInstance) return
-    const lastId = bridgePrefs.getLastSession(selectedInstance)
     bootstrappedRef.current = true
+    if (workspaces.length > 0) return
+    const lastId = bridgePrefs.getLastSession(selectedInstance)
     if (lastId) {
       const ws = makeWorkspace(lastId)
       setWorkspaces([ws])
       setFocusedWorkspaceId(ws.id)
     }
-  }, [selectedInstance, bridgePrefs])
+  }, [selectedInstance, bridgePrefs, workspaces.length])
 
   useEffect(() => {
     apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => {})

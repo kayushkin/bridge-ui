@@ -2,6 +2,7 @@ const COLLAPSE_KEY = 'bridge-ui-collapse';
 const SIZES_KEY = 'bridge-ui-split-sizes';
 const FILTER_KEY = 'bridge-ui-type-filter';
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed';
+const WORKSPACES_KEY = 'bridge-ui-workspaces';
 export const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1 };
 export function loadCollapseState() {
     try {
@@ -70,6 +71,35 @@ export function loadFolderCollapsed() {
 export function saveFolderCollapsed(next) {
     try {
         localStorage.setItem(FOLDER_COLLAPSED_KEY, JSON.stringify(next));
+    }
+    catch { /* ignore */ }
+}
+export function loadWorkspacesState() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(WORKSPACES_KEY) || 'null');
+        if (!raw || !Array.isArray(raw.workspaces))
+            return { workspaces: [], focusedWorkspaceId: null };
+        const workspaces = raw.workspaces.filter((w) => {
+            if (!w || typeof w !== 'object')
+                return false;
+            const ws = w;
+            return typeof ws.id === 'string'
+                && (ws.sessionId === null || typeof ws.sessionId === 'string')
+                && !!ws.panesHidden && !!ws.paneSizes && !!ws.layout;
+        });
+        const ids = new Set(workspaces.map(w => w.id));
+        const focusedWorkspaceId = typeof raw.focusedWorkspaceId === 'string' && ids.has(raw.focusedWorkspaceId)
+            ? raw.focusedWorkspaceId
+            : (workspaces[0]?.id ?? null);
+        return { workspaces, focusedWorkspaceId };
+    }
+    catch {
+        return { workspaces: [], focusedWorkspaceId: null };
+    }
+}
+export function saveWorkspacesState(s) {
+    try {
+        localStorage.setItem(WORKSPACES_KEY, JSON.stringify(s));
     }
     catch { /* ignore */ }
 }

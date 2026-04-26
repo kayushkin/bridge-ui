@@ -1,9 +1,10 @@
-import type { CollapseState, PaneSizes, PaneKey } from './types'
+import type { CollapseState, PaneSizes, PaneKey, WorkspaceState } from './types'
 
 const COLLAPSE_KEY = 'bridge-ui-collapse'
 const SIZES_KEY = 'bridge-ui-split-sizes'
 const FILTER_KEY = 'bridge-ui-type-filter'
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed'
+const WORKSPACES_KEY = 'bridge-ui-workspaces'
 
 export const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
 
@@ -56,4 +57,32 @@ export function loadFolderCollapsed(): Record<string, boolean> {
 
 export function saveFolderCollapsed(next: Record<string, boolean>) {
   try { localStorage.setItem(FOLDER_COLLAPSED_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+}
+
+export interface PersistedWorkspaces {
+  workspaces: WorkspaceState[]
+  focusedWorkspaceId: string | null
+}
+
+export function loadWorkspacesState(): PersistedWorkspaces {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WORKSPACES_KEY) || 'null')
+    if (!raw || !Array.isArray(raw.workspaces)) return { workspaces: [], focusedWorkspaceId: null }
+    const workspaces: WorkspaceState[] = raw.workspaces.filter((w: unknown) => {
+      if (!w || typeof w !== 'object') return false
+      const ws = w as Partial<WorkspaceState>
+      return typeof ws.id === 'string'
+        && (ws.sessionId === null || typeof ws.sessionId === 'string')
+        && !!ws.panesHidden && !!ws.paneSizes && !!ws.layout
+    })
+    const ids = new Set(workspaces.map(w => w.id))
+    const focusedWorkspaceId = typeof raw.focusedWorkspaceId === 'string' && ids.has(raw.focusedWorkspaceId)
+      ? raw.focusedWorkspaceId
+      : (workspaces[0]?.id ?? null)
+    return { workspaces, focusedWorkspaceId }
+  } catch { return { workspaces: [], focusedWorkspaceId: null } }
+}
+
+export function saveWorkspacesState(s: PersistedWorkspaces) {
+  try { localStorage.setItem(WORKSPACES_KEY, JSON.stringify(s)) } catch { /* ignore */ }
 }
