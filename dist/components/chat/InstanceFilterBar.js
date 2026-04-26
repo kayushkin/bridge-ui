@@ -25,9 +25,16 @@ export function InstanceFilterBar({ instances, harnesses, sessions, excluded, on
                     const info = harnessMap.get(inst.harness_type);
                     const active = !excluded.has(inst.id);
                     const count = counts.get(inst.id) ?? 0;
-                    return (_jsxs("button", { type: "button", className: `bc-inst-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggle(inst.id), title: `${inst.name} — click to ${active ? 'hide' : 'show'} sessions`, children: [info?.image
-                                ? _jsx("img", { className: "bc-inst-chip-img", src: `${basePath}${info.image}`, alt: "" })
-                                : _jsx("span", { className: "bc-inst-chip-emoji", children: info?.emoji || HARNESS_EMOJI[inst.harness_type] || '·' }), count > 0 && _jsx("span", { className: "bc-inst-chip-count", children: count })] }, inst.id));
+                    const lines = [
+                        inst.name,
+                        `${info?.label || inst.harness_type} · ${inst.host}`,
+                        inst.working_dir ? `cwd: ${inst.working_dir}` : null,
+                        `${count} session${count === 1 ? '' : 's'}`,
+                        `click to ${active ? 'hide' : 'show'}`,
+                    ].filter(Boolean).join('\n');
+                    return (_jsx("button", { type: "button", className: `bc-inst-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggle(inst.id), title: lines, children: info?.image
+                            ? _jsx("img", { className: "bc-inst-chip-img", src: `${basePath}${info.image}`, alt: "" })
+                            : _jsx("span", { className: "bc-inst-chip-emoji", children: info?.emoji || HARNESS_EMOJI[inst.harness_type] || '·' }) }, inst.id));
                 }) }), anyExcluded && (_jsx("button", { type: "button", className: "bc-inst-filter-clear", onClick: onClear, title: "Show sessions from all instances", children: "show all" }))] }));
 }
 //# sourceMappingURL=InstanceFilterBar.js.map

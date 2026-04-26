@@ -40,18 +40,24 @@ export function InstanceFilterBar({ instances, harnesses, sessions, excluded, on
           const info = harnessMap.get(inst.harness_type)
           const active = !excluded.has(inst.id)
           const count = counts.get(inst.id) ?? 0
+          const lines = [
+            inst.name,
+            `${info?.label || inst.harness_type} · ${inst.host}`,
+            inst.working_dir ? `cwd: ${inst.working_dir}` : null,
+            `${count} session${count === 1 ? '' : 's'}`,
+            `click to ${active ? 'hide' : 'show'}`,
+          ].filter(Boolean).join('\n')
           return (
             <button
               key={inst.id}
               type="button"
               className={`bc-inst-chip ${active ? 'bc-inst-chip-active' : ''}`}
               onClick={() => onToggle(inst.id)}
-              title={`${inst.name} — click to ${active ? 'hide' : 'show'} sessions`}
+              title={lines}
             >
               {info?.image
                 ? <img className="bc-inst-chip-img" src={`${basePath}${info.image}`} alt="" />
                 : <span className="bc-inst-chip-emoji">{info?.emoji || HARNESS_EMOJI[inst.harness_type] || '·'}</span>}
-              {count > 0 && <span className="bc-inst-chip-count">{count}</span>}
             </button>
           )
         })}
