@@ -9,7 +9,7 @@ import { SessionList } from './chat/SessionList'
 import { Workspace } from './chat/Workspace'
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
 import type { CollapseState, InnerNode, PaneSizes, PanesHidden, StoreModel, WorkspaceState } from './chat/types'
-import { generateDefaultAgent, generateFrontendId } from './chat/utils'
+import { generateFrontendId } from './chat/utils'
 
 const DEFAULT_INNER_TREE: InnerNode = {
   kind: 'split',
@@ -128,9 +128,7 @@ export function BridgeChat() {
   }, [apiFetch, basePath])
 
   const getDisplayName = useCallback((session: { agent_id?: string; display_name: string; harness: string }): string => {
-    if (session.display_name) return session.display_name
-    if (session.agent_id) return session.agent_id
-    return generateDefaultAgent(session.harness)
+    return session.display_name || session.agent_id || ''
   }, [])
 
   const handleCreateForInstance = useCallback(async (instanceId: string) => {
@@ -140,11 +138,9 @@ export function BridgeChat() {
     const harnessInfo = harnesses.find(h => h.name === harness)
     if (!harnessInfo?.available) return
     const frontendId = generateFrontendId()
-    const agentId = generateDefaultAgent(harness)
     const sess = await bridge.createSession({
       harness,
       instance_id: instanceId,
-      agent_id: agentId,
       display_name: '',
       client_id: frontendId,
     })

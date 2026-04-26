@@ -11,7 +11,6 @@ import { ToolsPanel } from './ToolsPanel'
 import { WorkspaceProvider } from './WorkspaceContext'
 import type { GitRepo } from './WorkspaceContext'
 import type { ChatSession, PaneKey, PaneSizes, StoreModel, WorkspaceState } from './types'
-import { generateDefaultAgent } from './utils'
 
 interface WorkspaceProps {
   workspace: WorkspaceState
@@ -99,7 +98,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       setActiveChat(null)
       return
     }
-    const agent = sess.agent_id ? sess.agent_id : generateDefaultAgent(sess.harness)
+    const agent = sess.agent_id || ''
     setActiveChat({
       frontendId: sess.client_id || `fe_${sess.bridge_id}`,
       sessionId: sess.bridge_id,

@@ -4,10 +4,6 @@ export function generateFrontendId(): string {
   return `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-export function generateDefaultAgent(harness: string): string {
-  return `${harness}-agent`
-}
-
 export function formatHMS(ts: string): string {
   try {
     const d = new Date(ts)
