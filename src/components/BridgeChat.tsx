@@ -5,21 +5,29 @@ import { useBridgePrefs } from '../useBridgePrefs'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeFolders } from '../useBridgeFolders'
 import type { HarnessInfo } from '../types'
-import { GitPanel } from './GitPanel'
 import { Composer } from './chat/Composer'
 import { HarnessTabBar } from './chat/HarnessTabBar'
+import { LayoutRenderer } from './chat/LayoutRenderer'
 import { NewInstanceForm } from './chat/NewInstanceForm'
 import { SessionHeader } from './chat/SessionHeader'
 import { SessionList } from './chat/SessionList'
-import { SplitResizer } from './chat/SplitResizer'
 import { SystemPromptModal } from './chat/SystemPromptModal'
-import { Thread } from './chat/Thread'
-import { Timeline } from './chat/Timeline'
 import { ToolsPanel } from './chat/ToolsPanel'
-import { TurnsView } from './chat/TurnsView'
+import { WorkspaceProvider } from './chat/WorkspaceContext'
 import { loadCollapseState, loadPaneSizes, saveCollapseState, savePaneSizes } from './chat/persistence'
-import type { ChatSession, CollapseState, PaneKey, PaneSizes, StoreModel } from './chat/types'
+import type { ChatSession, CollapseState, InnerNode, PaneKey, PaneSizes, StoreModel } from './chat/types'
 import { generateDefaultAgent, generateFrontendId } from './chat/utils'
+
+const DEFAULT_INNER_TREE: InnerNode = {
+  kind: 'split',
+  direction: 'h',
+  children: [
+    { kind: 'leaf', viewType: 'turns' },
+    { kind: 'leaf', viewType: 'thread' },
+    { kind: 'leaf', viewType: 'timeline' },
+    { kind: 'leaf', viewType: 'git' },
+  ],
+}
 
 export function BridgeChat() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
@@ -38,27 +46,18 @@ export function BridgeChat() {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
   const [paneSizes, setPaneSizes] = useState<PaneSizes>(loadPaneSizes)
-  const splitRef = useRef<HTMLDivElement>(null)
   useEffect(() => { savePaneSizes(paneSizes) }, [paneSizes])
   const pendingConfigRef = useRef<{ model?: string; effort?: string } | null>(null)
+
+  const togglePane = useCallback((key: PaneKey) => {
+    setCollapseState(s => { const next = { ...s, [key]: !s[key] }; saveCollapseState(next); return next })
+  }, [])
 
   const toggleHarnessBar = useCallback(() => {
     setCollapseState(s => { const next = { ...s, harnessBar: !s.harnessBar }; saveCollapseState(next); return next })
   }, [])
   const toggleSessionList = useCallback(() => {
     setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next })
-  }, [])
-  const toggleTurns = useCallback(() => {
-    setCollapseState(s => { const next = { ...s, turns: !s.turns }; saveCollapseState(next); return next })
-  }, [])
-  const toggleThread = useCallback(() => {
-    setCollapseState(s => { const next = { ...s, thread: !s.thread }; saveCollapseState(next); return next })
-  }, [])
-  const toggleTimeline = useCallback(() => {
-    setCollapseState(s => { const next = { ...s, timeline: !s.timeline }; saveCollapseState(next); return next })
-  }, [])
-  const toggleGit = useCallback(() => {
-    setCollapseState(s => { const next = { ...s, git: !s.git }; saveCollapseState(next); return next })
   }, [])
   const closeAllPanes = useCallback(() => {
     setCollapseState(s => {
@@ -316,108 +315,26 @@ export function BridgeChat() {
             hasPrev={navIndex > 0}
             hasNext={navIndex >= 0 && navIndex < navOrder.length - 1}
             collapseState={collapseState}
-            onToggleTurns={toggleTurns}
-            onToggleThread={toggleThread}
-            onToggleTimeline={toggleTimeline}
-            onToggleGit={toggleGit}
+            onToggleTurns={() => togglePane('turns')}
+            onToggleThread={() => togglePane('thread')}
+            onToggleTimeline={() => togglePane('timeline')}
+            onToggleGit={() => togglePane('git')}
             onCloseAllPanes={closeAllPanes}
           />
-          <div ref={splitRef} className="bc-chat-split">
-            {(() => {
-              const paneOrder: PaneKey[] = ['turns', 'thread', 'timeline', 'git']
-              const visible = paneOrder.filter(k => !collapseState[k])
-              if (visible.length === 0) {
-                return (
-                  <div className="bc-split-empty">
-                    <div className="bc-split-empty-hint">
-                      All panes hidden. Use the toggles above to show Turns, Thread, Timeline, or Git.
-                    </div>
-                  </div>
-                )
-              }
-              const renderPane = (key: PaneKey) => {
-                const style = { flex: `${paneSizes[key]} 1 0` }
-                switch (key) {
-                  case 'turns':
-                    return (
-                      <TurnsView
-                        key="turns"
-                        rows={bridge.logRows}
-                        agent={activeChat?.agent ?? ''}
-                        onToggleCollapse={toggleTurns}
-                        style={style}
-                        paneKey="turns"
-                      />
-                    )
-                  case 'thread':
-                    return (
-                      <div key="thread" className="bc-split-pane bc-split-pane-thread" style={style} data-pane="thread">
-                        <div
-                          className="bc-split-pane-header bc-header-clickable"
-                          onClick={toggleThread}
-                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleThread() } }}
-                          role="button"
-                          tabIndex={0}
-                          title="Hide thread"
-                          aria-label="Hide thread"
-                        >
-                          <span className="bc-split-pane-title">Thread</span>
-                          <span className="bc-spacer" />
-                          <span className="bc-split-collapse-btn" aria-hidden="true">×</span>
-                        </div>
-                        <Thread
-                          rows={bridge.logRows}
-                          loading={bridge.loadingHistory}
-                          uiState={bridge.uiState}
-                          activity={bridge.activity}
-                          error={bridge.error}
-                          agent={activeChat?.agent ?? ''}
-                          sessionId={activeChat?.sessionId ?? ''}
-                        />
-                      </div>
-                    )
-                  case 'timeline':
-                    return (
-                      <Timeline
-                        key="timeline"
-                        rows={bridge.logRows}
-                        onToggleCollapse={toggleTimeline}
-                        style={style}
-                        paneKey="timeline"
-                      />
-                    )
-                  case 'git':
-                    return (
-                      <GitPanel
-                        key="git"
-                        sessionId={activeChat?.sessionId ?? ''}
-                        uiState={bridge.uiState}
-                        onToggleCollapse={toggleGit}
-                        style={style}
-                        paneKey="git"
-                      />
-                    )
-                }
-              }
-              const nodes: React.ReactNode[] = []
-              visible.forEach((key, i) => {
-                if (i > 0) {
-                  const leftKey = visible[i - 1]
-                  nodes.push(
-                    <SplitResizer
-                      key={`resizer-${leftKey}-${key}`}
-                      leftKey={leftKey}
-                      rightKey={key}
-                      containerRef={splitRef}
-                      setSizes={setPaneSizes}
-                    />
-                  )
-                }
-                nodes.push(renderPane(key))
-              })
-              return nodes
-            })()}
-          </div>
+          <WorkspaceProvider value={{
+            chat: activeChat,
+            rows: bridge.logRows,
+            loading: bridge.loadingHistory,
+            uiState: bridge.uiState,
+            activity: bridge.activity,
+            error: bridge.error,
+            collapseState,
+            paneSizes,
+            togglePane,
+            setPaneSizes,
+          }}>
+            <LayoutRenderer tree={DEFAULT_INNER_TREE} />
+          </WorkspaceProvider>
           <div className="bc-controls-bar">
             {bridge.activeSession && (
               <>

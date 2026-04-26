@@ -5,20 +5,27 @@ import { useBridgeSession } from '../useBridgeSession';
 import { useBridgePrefs } from '../useBridgePrefs';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { useBridgeFolders } from '../useBridgeFolders';
-import { GitPanel } from './GitPanel';
 import { Composer } from './chat/Composer';
 import { HarnessTabBar } from './chat/HarnessTabBar';
+import { LayoutRenderer } from './chat/LayoutRenderer';
 import { NewInstanceForm } from './chat/NewInstanceForm';
 import { SessionHeader } from './chat/SessionHeader';
 import { SessionList } from './chat/SessionList';
-import { SplitResizer } from './chat/SplitResizer';
 import { SystemPromptModal } from './chat/SystemPromptModal';
-import { Thread } from './chat/Thread';
-import { Timeline } from './chat/Timeline';
 import { ToolsPanel } from './chat/ToolsPanel';
-import { TurnsView } from './chat/TurnsView';
+import { WorkspaceProvider } from './chat/WorkspaceContext';
 import { loadCollapseState, loadPaneSizes, saveCollapseState, savePaneSizes } from './chat/persistence';
 import { generateDefaultAgent, generateFrontendId } from './chat/utils';
+const DEFAULT_INNER_TREE = {
+    kind: 'split',
+    direction: 'h',
+    children: [
+        { kind: 'leaf', viewType: 'turns' },
+        { kind: 'leaf', viewType: 'thread' },
+        { kind: 'leaf', viewType: 'timeline' },
+        { kind: 'leaf', viewType: 'git' },
+    ],
+};
 export function BridgeChat() {
     const { fetch: apiFetch, basePath, routes } = useBridgeConfig();
     const bridge = useBridgeSession();
@@ -36,26 +43,16 @@ export function BridgeChat() {
     const [activeChat, setActiveChat] = useState(null);
     const [collapseState, setCollapseState] = useState(loadCollapseState);
     const [paneSizes, setPaneSizes] = useState(loadPaneSizes);
-    const splitRef = useRef(null);
     useEffect(() => { savePaneSizes(paneSizes); }, [paneSizes]);
     const pendingConfigRef = useRef(null);
+    const togglePane = useCallback((key) => {
+        setCollapseState(s => { const next = { ...s, [key]: !s[key] }; saveCollapseState(next); return next; });
+    }, []);
     const toggleHarnessBar = useCallback(() => {
         setCollapseState(s => { const next = { ...s, harnessBar: !s.harnessBar }; saveCollapseState(next); return next; });
     }, []);
     const toggleSessionList = useCallback(() => {
         setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next; });
-    }, []);
-    const toggleTurns = useCallback(() => {
-        setCollapseState(s => { const next = { ...s, turns: !s.turns }; saveCollapseState(next); return next; });
-    }, []);
-    const toggleThread = useCallback(() => {
-        setCollapseState(s => { const next = { ...s, thread: !s.thread }; saveCollapseState(next); return next; });
-    }, []);
-    const toggleTimeline = useCallback(() => {
-        setCollapseState(s => { const next = { ...s, timeline: !s.timeline }; saveCollapseState(next); return next; });
-    }, []);
-    const toggleGit = useCallback(() => {
-        setCollapseState(s => { const next = { ...s, git: !s.git }; saveCollapseState(next); return next; });
     }, []);
     const closeAllPanes = useCallback(() => {
         setCollapseState(s => {
@@ -249,37 +246,17 @@ export function BridgeChat() {
             return '';
         return instances.instanceMap.get(selectedInstance)?.name ?? '';
     }, [selectedInstance, instances.instanceMap]);
-    return (_jsxs("div", { className: `bc-container ${collapseState.harnessBar ? 'bc-harness-collapsed' : ''} ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: [collapseState.harnessBar ? (_jsx("div", { className: "htb-wrapper htb-wrapper-collapsed", children: _jsxs("button", { className: "htb-expand-btn", onClick: toggleHarnessBar, title: "Expand harness bar", "aria-label": "Expand harness bar", children: [_jsx("span", { className: "htb-expand-chevron", children: "\u25BE" }), _jsxs("span", { className: "htb-expand-label", children: ["Harness: ", currentInstanceName || 'none selected'] })] }) })) : (_jsx(HarnessTabBar, { instances: instances.instances, harnesses: harnesses, sessions: bridge.sessions, selectedInstance: selectedInstance, onSelect: selectInstance, onNewInstance: () => setShowNewInstance(true), basePath: basePath, instancesPath: routes.instances, onToggleCollapse: toggleHarnessBar })), _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: filteredSessions, activeSession: bridge.activeSession?.bridge_id ?? '', onSelect: handleSelectSession, onNewSession: handleCreate, connected: bridge.connected && harnessAvailable, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsxs("div", { className: "bc-chat-area", children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: name => activeChat?.sessionId && handleRenameSession(activeChat.sessionId, name), onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, collapseState: collapseState, onToggleTurns: toggleTurns, onToggleThread: toggleThread, onToggleTimeline: toggleTimeline, onToggleGit: toggleGit, onCloseAllPanes: closeAllPanes }), _jsx("div", { ref: splitRef, className: "bc-chat-split", children: (() => {
-                                    const paneOrder = ['turns', 'thread', 'timeline', 'git'];
-                                    const visible = paneOrder.filter(k => !collapseState[k]);
-                                    if (visible.length === 0) {
-                                        return (_jsx("div", { className: "bc-split-empty", children: _jsx("div", { className: "bc-split-empty-hint", children: "All panes hidden. Use the toggles above to show Turns, Thread, Timeline, or Git." }) }));
-                                    }
-                                    const renderPane = (key) => {
-                                        const style = { flex: `${paneSizes[key]} 1 0` };
-                                        switch (key) {
-                                            case 'turns':
-                                                return (_jsx(TurnsView, { rows: bridge.logRows, agent: activeChat?.agent ?? '', onToggleCollapse: toggleTurns, style: style, paneKey: "turns" }, "turns"));
-                                            case 'thread':
-                                                return (_jsxs("div", { className: "bc-split-pane bc-split-pane-thread", style: style, "data-pane": "thread", children: [_jsxs("div", { className: "bc-split-pane-header bc-header-clickable", onClick: toggleThread, onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') {
-                                                                e.preventDefault();
-                                                                toggleThread();
-                                                            } }, role: "button", tabIndex: 0, title: "Hide thread", "aria-label": "Hide thread", children: [_jsx("span", { className: "bc-split-pane-title", children: "Thread" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsx(Thread, { rows: bridge.logRows, loading: bridge.loadingHistory, uiState: bridge.uiState, activity: bridge.activity, error: bridge.error, agent: activeChat?.agent ?? '', sessionId: activeChat?.sessionId ?? '' })] }, "thread"));
-                                            case 'timeline':
-                                                return (_jsx(Timeline, { rows: bridge.logRows, onToggleCollapse: toggleTimeline, style: style, paneKey: "timeline" }, "timeline"));
-                                            case 'git':
-                                                return (_jsx(GitPanel, { sessionId: activeChat?.sessionId ?? '', uiState: bridge.uiState, onToggleCollapse: toggleGit, style: style, paneKey: "git" }, "git"));
-                                        }
-                                    };
-                                    const nodes = [];
-                                    visible.forEach((key, i) => {
-                                        if (i > 0) {
-                                            const leftKey = visible[i - 1];
-                                            nodes.push(_jsx(SplitResizer, { leftKey: leftKey, rightKey: key, containerRef: splitRef, setSizes: setPaneSizes }, `resizer-${leftKey}-${key}`));
-                                        }
-                                        nodes.push(renderPane(key));
-                                    });
-                                    return nodes;
-                                })() }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleCompact, title: "Compact context", children: "Compact" })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume })] })] }), showNewInstance && (_jsx(NewInstanceForm, { harnesses: harnesses, onCreate: handleCreateInstance, onCancel: () => setShowNewInstance(false) })), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+    return (_jsxs("div", { className: `bc-container ${collapseState.harnessBar ? 'bc-harness-collapsed' : ''} ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: [collapseState.harnessBar ? (_jsx("div", { className: "htb-wrapper htb-wrapper-collapsed", children: _jsxs("button", { className: "htb-expand-btn", onClick: toggleHarnessBar, title: "Expand harness bar", "aria-label": "Expand harness bar", children: [_jsx("span", { className: "htb-expand-chevron", children: "\u25BE" }), _jsxs("span", { className: "htb-expand-label", children: ["Harness: ", currentInstanceName || 'none selected'] })] }) })) : (_jsx(HarnessTabBar, { instances: instances.instances, harnesses: harnesses, sessions: bridge.sessions, selectedInstance: selectedInstance, onSelect: selectInstance, onNewInstance: () => setShowNewInstance(true), basePath: basePath, instancesPath: routes.instances, onToggleCollapse: toggleHarnessBar })), _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: filteredSessions, activeSession: bridge.activeSession?.bridge_id ?? '', onSelect: handleSelectSession, onNewSession: handleCreate, connected: bridge.connected && harnessAvailable, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsxs("div", { className: "bc-chat-area", children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: name => activeChat?.sessionId && handleRenameSession(activeChat.sessionId, name), onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, collapseState: collapseState, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseAllPanes: closeAllPanes }), _jsx(WorkspaceProvider, { value: {
+                                    chat: activeChat,
+                                    rows: bridge.logRows,
+                                    loading: bridge.loadingHistory,
+                                    uiState: bridge.uiState,
+                                    activity: bridge.activity,
+                                    error: bridge.error,
+                                    collapseState,
+                                    paneSizes,
+                                    togglePane,
+                                    setPaneSizes,
+                                }, children: _jsx(LayoutRenderer, { tree: DEFAULT_INNER_TREE }) }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleCompact, title: "Compact context", children: "Compact" })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume })] })] }), showNewInstance && (_jsx(NewInstanceForm, { harnesses: harnesses, onCreate: handleCreateInstance, onCancel: () => setShowNewInstance(false) })), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 //# sourceMappingURL=BridgeChat.js.map
