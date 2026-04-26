@@ -47,6 +47,7 @@ export { connectSSE } from './bridgeSSE'
 // Hooks
 export { useBridgeSession } from './useBridgeSession'
 export { useBridgeInstances } from './useBridgeInstances'
+export { useBridgeMachines } from './useBridgeMachines'
 export { useBridgePrefs } from './useBridgePrefs'
 export { useBridgeFolders } from './useBridgeFolders'
 export type { UseBridgeFoldersReturn } from './useBridgeFolders'

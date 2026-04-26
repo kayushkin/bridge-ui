@@ -1,5 +1,5 @@
-import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest } from '@kayushkin/llm-bridge-types';
-export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest, };
+import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;

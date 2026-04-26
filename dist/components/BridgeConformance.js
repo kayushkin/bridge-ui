@@ -2,7 +2,6 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useBridgeConfig } from '../context';
-import { HARNESS_LABEL, HARNESS_EMOJI } from '../constants';
 const ALL_FEATURES = [
     'start', 'message', 'resume', 'fork', 'compact', 'config',
     'discover', 'import', 'streaming', 'tool_calls', 'thinking', 'errors',
@@ -116,8 +115,8 @@ export function BridgeConformance() {
                             }) })] }) })), _jsxs("div", { className: "cf-legend", children: [_jsxs("span", { className: "cf-legend-item", children: [_jsx("span", { className: "cf-badge cf-pass", children: "Pass" }), " Feature supported", _jsx(InfoTip, { text: STATUS_DESCRIPTIONS.pass })] }), _jsxs("span", { className: "cf-legend-item", children: [_jsx("span", { className: "cf-badge cf-fail", children: "Fail" }), " Feature failed", _jsx(InfoTip, { text: STATUS_DESCRIPTIONS.fail })] }), _jsxs("span", { className: "cf-legend-item", children: [_jsx("span", { className: "cf-badge cf-skip", children: "Skip" }), " Not applicable / skipped", _jsx(InfoTip, { text: STATUS_DESCRIPTIONS.skip })] }), _jsxs("span", { className: "cf-legend-item", children: [_jsx("span", { className: "cf-untested", children: "-" }), " Not yet tested", _jsx(InfoTip, { text: STATUS_DESCRIPTIONS.untested })] })] }), _jsxs("details", { className: "cf-how-it-works", children: [_jsx("summary", { children: "How the tests work" }), _jsxs("p", { children: ["Each harness is launched as a subprocess. The server writes JSON-RPC commands to its stdin and reads JSON event lines from its stdout. For every feature the runner sends a specific command and waits up to 10 seconds for an event matching a predicate (e.g. ", _jsx("code", { children: "EventSessionState" }), "with ", _jsx("code", { children: "state=running" }), ", a non-empty ", _jsx("code", { children: "EventResult" }), ", or an ", _jsx("code", { children: "EventError" }), "). A match is a ", _jsx("strong", { children: "Pass" }), "; a wrong/missing event or timeout is a ", _jsx("strong", { children: "Fail" }), "; a harness that declares the feature unsupported yields a ", _jsx("strong", { children: "Skip" }), ". ", _jsx("code", { children: "discover" }), " and ", _jsx("code", { children: "import" }), "are exceptions \u2014 they run the binary with ", _jsx("code", { children: "-discover" }), " / ", _jsx("code", { children: "-import-history" }), " flags and inspect exit code and stdout rather than speaking the JSON-RPC protocol."] })] })] }));
 }
 function HarnessRow({ harness, result, state, expanded, onToggle, basePath, }) {
-    const label = harness.label || HARNESS_LABEL[harness.name] || harness.name;
-    const emoji = harness.emoji || HARNESS_EMOJI[harness.name] || '';
+    const label = harness.label || harness.name;
+    const emoji = harness.emoji || '';
     const nameCell = (_jsxs("td", { className: `cf-td-harness-col cf-harness-state-${state}`, onClick: onToggle, children: [_jsx("span", { className: "cf-expand-chevron", "aria-label": expanded ? 'Collapse' : 'Expand', children: expanded ? '▾' : '▸' }), harness.image
                 ? _jsx("img", { className: "cf-harness-img", src: `${basePath}${harness.image}`, alt: label })
                 : _jsx("span", { className: "cf-emoji", children: emoji }), _jsx("span", { className: "cf-harness-label", children: label }), _jsx(StateDot, { state: state })] }));

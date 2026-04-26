@@ -1193,6 +1193,8 @@
 }
 .bi-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .bi-card-name { font-weight: 500; font-size: 1em; }
+.bi-machine-emoji { font-size: 1.1em; line-height: 1; flex-shrink: 0; }
+.bi-form-wide { grid-column: 1 / -1; }
 .bi-transport {
   padding: 2px 8px; border-radius: 6px; font-size: 0.75em;
   background: #1a2a1a; color: #22c55e;
@@ -1853,6 +1855,15 @@
 .bc-inst-chip-active { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); color: var(--text); opacity: 1; }
 .bc-inst-chip-img { width: 16px; height: 16px; border-radius: 2px; object-fit: contain; }
 .bc-inst-chip-emoji { font-size: 1.1em; }
+/* Machine row in the sidebar filter — wider chips that include the
+ * machine name (instance row stays icon-only since their identity is
+ * carried by harness emoji). */
+.bc-inst-filter-machines { padding-bottom: 2px; }
+.bc-machine-chip { /* sidebar filter variant */ }
+.bc-inst-chip.bc-machine-chip {
+  padding: 2px 8px 2px 6px;
+  font-size: 0.72em;
+}
 .bc-inst-filter-clear {
   align-self: flex-end;
   border: none;
@@ -2346,6 +2357,37 @@
 .bc-harness-chip-emoji { font-size: 0.95em; line-height: 1; }
 .bc-harness-chip-img { width: 14px; height: 14px; border-radius: 3px; display: block; flex-shrink: 0; object-fit: contain; }
 .bc-harness-chip-label { line-height: 1; }
+
+/* Machine chip — emoji + name + reachability dot. Sibling to the harness
+ * chip in the session header; tone is neutral so it doesn't compete with
+ * the harness's per-product accent. */
+.bc-machine-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font-size: 0.72em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bc-machine-chip-emoji { font-size: 0.95em; line-height: 1; }
+.bc-machine-chip-label { line-height: 1; }
+.bc-machine-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.bc-machine-chip-dot-ok { background: #22c55e; box-shadow: 0 0 6px color-mix(in srgb, #22c55e 60%, transparent); }
+.bc-machine-chip-dot-fail { background: #ef4444; }
+.bc-machine-chip-dot-unknown { background: var(--border); }
+.bc-machine-chip-name { line-height: 1; }
 
 /* Repo chip — current git project + dropdown. The native <select> overlays
  * the chip's clickable area so clicks open the menu without extra JS; the

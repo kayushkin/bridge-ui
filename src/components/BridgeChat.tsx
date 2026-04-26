@@ -3,6 +3,7 @@ import { useBridgeConfig } from '../context'
 import { useBridgeSession } from '../useBridgeSession'
 import { useBridgePrefs } from '../useBridgePrefs'
 import { useBridgeInstances } from '../useBridgeInstances'
+import { useBridgeMachines } from '../useBridgeMachines'
 import { useBridgeFolders } from '../useBridgeFolders'
 import type { HarnessInfo } from '../types'
 import { SessionList } from './chat/SessionList'
@@ -41,6 +42,7 @@ export function BridgeChat() {
   const bridge = useBridgeSession()
   const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` })
   const instances = useBridgeInstances()
+  const machines = useBridgeMachines()
   const folders = useBridgeFolders()
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
@@ -187,6 +189,7 @@ export function BridgeChat() {
           <SessionList
             sessions={bridge.sessions}
             instances={instances.instances}
+            machines={machines.machines}
             harnesses={harnesses}
             basePath={basePath}
             instancesPath={routes.instances}
@@ -221,6 +224,8 @@ export function BridgeChat() {
                 onUpdate={fn => updateWorkspace(w.id, fn)}
                 onClose={() => closeWorkspace(w.id)}
                 harnesses={harnesses}
+                instances={instances.instances}
+                machines={machines.machines}
                 storeModels={storeModels}
                 bridgePrefs={{
                   getDefaults: bridgePrefs.getDefaults,

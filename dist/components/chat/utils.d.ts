@@ -1,6 +1,5 @@
 import type { LogRow, ToolEvent } from '../../types';
 export declare function generateFrontendId(): string;
-export declare function generateDefaultAgent(harness: string): string;
 export declare function formatHMS(ts: string): string;
 export declare function idTail(id: string, n?: number): string;
 export declare function oneLine(s: string, n?: number): string;

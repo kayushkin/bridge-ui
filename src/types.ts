@@ -14,6 +14,7 @@ import type {
   Instance,
   InstanceCredential,
   InstanceStatus,
+  Machine,
   ManagedSession,
   HarnessInfo,
   HarnessDefaults,
@@ -25,6 +26,8 @@ import type {
   ToolInfo,
   MCPServerInfo,
   CreateSessionRequest,
+  CreateMachineRequest,
+  UpdateMachineRequest,
 } from '@kayushkin/llm-bridge-types'
 
 // Re-export canonical types for consumers.
@@ -34,6 +37,7 @@ export type {
   Event,
   InstanceCredential,
   InstanceStatus,
+  Machine,
   ManagedSession,
   HarnessInfo,
   HarnessDefaults,
@@ -45,6 +49,8 @@ export type {
   ToolInfo,
   MCPServerInfo,
   CreateSessionRequest,
+  CreateMachineRequest,
+  UpdateMachineRequest,
 }
 
 // Re-export with backward-compatible aliases where names differ.

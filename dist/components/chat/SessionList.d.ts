@@ -1,8 +1,9 @@
-import type { BridgeInstance, HarnessInfo, ManagedSession } from '../../types';
+import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types';
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders';
-export declare function SessionList({ sessions, instances, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export declare function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
     sessions: ManagedSession[];
     instances: BridgeInstance[];
+    machines: Machine[];
     harnesses: HarnessInfo[];
     basePath: string;
     instancesPath: string;

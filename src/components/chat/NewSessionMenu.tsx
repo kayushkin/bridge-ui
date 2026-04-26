@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { BridgeInstance, HarnessInfo } from '../../types'
-import { TRANSPORT_LABEL } from '../../constants'
 
 interface NewSessionMenuProps {
   instances: BridgeInstance[]
@@ -75,7 +74,7 @@ export function NewSessionMenu({ instances, harnesses, defaultInstanceId, basePa
               >
                 <span className={`bc-new-session-avail ${available ? 'bc-new-session-avail-on' : 'bc-new-session-avail-off'}`} />
                 <span className="bc-new-session-item-name">{inst.name}</span>
-                <span className="bc-new-session-item-meta">{TRANSPORT_LABEL[inst.transport] || inst.transport}</span>
+                <span className="bc-new-session-item-meta">{inst.machine?.name ?? '—'}</span>
               </button>
             ))}
           </div>

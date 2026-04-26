@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBridgeConfig } from '../../context';
 import { useBridgeSession } from '../../useBridgeSession';
 import { formatTokens } from '../../utils';
 import { Composer } from './Composer';
@@ -8,8 +9,8 @@ import { SessionHeader } from './SessionHeader';
 import { SystemPromptModal } from './SystemPromptModal';
 import { ToolsPanel } from './ToolsPanel';
 import { WorkspaceProvider } from './WorkspaceContext';
-import { generateDefaultAgent } from './utils';
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, bridgePrefs }) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, instances, machines, storeModels, bridgePrefs }) {
+    const { fetch: apiFetch, basePath } = useBridgeConfig();
     const bridge = useBridgeSession();
     const [activeChat, setActiveChat] = useState(null);
     const [configModel, setConfigModel] = useState('');
@@ -17,6 +18,53 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     const [showSystemPrompt, setShowSystemPrompt] = useState(false);
     const [showTools, setShowTools] = useState(false);
     const pendingConfigRef = useRef(null);
+    // Git repos discovered for the active session — fetched once at workspace
+    // level so SessionHeader's selector and GitPanel share the same selection.
+    // Refetched on session swap, on every turn boundary (uiState flip), and on
+    // explicit refresh.
+    const [gitRepos, setGitRepos] = useState([]);
+    const [selectedRepo, setSelectedRepo] = useState('');
+    const [gitReposLoading, setGitReposLoading] = useState(false);
+    const [gitReposError, setGitReposError] = useState(null);
+    const [gitRefreshTick, setGitRefreshTick] = useState(0);
+    const refreshGitRepos = useCallback(() => setGitRefreshTick(t => t + 1), []);
+    const sessionId = bridge.activeSession?.bridge_id;
+    useEffect(() => {
+        if (!sessionId) {
+            setGitRepos([]);
+            setGitReposError(null);
+            return;
+        }
+        let cancelled = false;
+        setGitReposLoading(true);
+        setGitReposError(null);
+        apiFetch(`${basePath}/sessions/${sessionId}/git/repos`)
+            .then(async (r) => {
+            if (!r.ok)
+                throw new Error(`${r.status} ${await r.text()}`);
+            return r.json();
+        })
+            .then(data => { if (!cancelled)
+            setGitRepos(data.repos || []); })
+            .catch(err => {
+            if (cancelled)
+                return;
+            setGitReposError(`repos: ${err instanceof Error ? err.message : String(err)}`);
+            setGitRepos([]);
+        })
+            .finally(() => { if (!cancelled)
+            setGitReposLoading(false); });
+        return () => { cancelled = true; };
+    }, [sessionId, bridge.uiState, gitRefreshTick, apiFetch, basePath]);
+    useEffect(() => {
+        if (gitRepos.length === 0) {
+            setSelectedRepo('');
+            return;
+        }
+        if (!selectedRepo || !gitRepos.find(r => r.path === selectedRepo)) {
+            setSelectedRepo(gitRepos[0].path);
+        }
+    }, [gitRepos, selectedRepo]);
     // Bind this workspace's bridge instance to its assigned session id.
     useEffect(() => {
         const target = workspace.sessionId ?? '';
@@ -31,7 +79,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
             setActiveChat(null);
             return;
         }
-        const agent = sess.agent_id ? sess.agent_id : generateDefaultAgent(sess.harness);
+        const agent = sess.agent_id || '';
         setActiveChat({
             frontendId: sess.client_id || `fe_${sess.bridge_id}`,
             sessionId: sess.bridge_id,
@@ -41,6 +89,53 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         });
     }, [bridge.activeSession]);
     const activeHarness = activeChat?.harness ?? '';
+    // Server-registered HarnessInfo for the active harness — single source
+    // of truth for label / emoji / image / tint. No client-side fallbacks;
+    // missing fields mean the server registration needs fixing.
+    const activeHarnessInfo = useMemo(() => activeHarness ? harnesses.find(h => h.name === activeHarness) : undefined, [harnesses, activeHarness]);
+    // Resolve the machine the active session is running on — header chip
+    // shows machine name + emoji + reachability so users know which host
+    // is doing the work.
+    const activeInstanceID = bridge.activeSession?.instance_id;
+    const activeMachine = useMemo(() => {
+        if (!activeInstanceID)
+            return undefined;
+        const inst = instances.find(i => i.id === activeInstanceID);
+        if (!inst)
+            return undefined;
+        return machines.find(m => m.id === inst.machine_id);
+    }, [instances, machines, activeInstanceID]);
+    // Per-instance reachability for the header dot. Polled in line with
+    // the rest of the header — cheap, and the API already aggregates
+    // local/SSH/runner liveness behind a single bool.
+    const [activeReachable, setActiveReachable] = useState(null);
+    useEffect(() => {
+        if (!activeInstanceID) {
+            setActiveReachable(null);
+            return;
+        }
+        let cancelled = false;
+        const check = async () => {
+            try {
+                const res = await apiFetch(`${basePath}/instances/${activeInstanceID}/status`);
+                if (!res.ok) {
+                    if (!cancelled)
+                        setActiveReachable(null);
+                    return;
+                }
+                const data = await res.json();
+                if (!cancelled)
+                    setActiveReachable(Boolean(data?.reachable));
+            }
+            catch {
+                if (!cancelled)
+                    setActiveReachable(null);
+            }
+        };
+        check();
+        const t = setInterval(check, 15000);
+        return () => { cancelled = true; clearInterval(t); };
+    }, [apiFetch, basePath, activeInstanceID]);
     const harnessDefaults = useMemo(() => activeHarness ? bridgePrefs.getDefaults(activeHarness) : {}, [bridgePrefs, activeHarness]);
     // Pre-populate model/effort with the harness's saved defaults so the user
     // sees what will actually be used instead of placeholder labels.
@@ -132,7 +227,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         if (activeChat?.sessionId)
             bridge.renameSession(activeChat.sessionId, name);
     }, [bridge, activeChat]);
-    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseWorkspace: onClose }), _jsx(WorkspaceProvider, { value: {
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [_jsx(SessionHeader, { chat: activeChat, harnessInfo: activeHarnessInfo, machine: activeMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsx(WorkspaceProvider, { value: {
                     chat: activeChat,
                     rows: bridge.logRows,
                     loading: bridge.loadingHistory,
@@ -143,6 +238,12 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     paneSizes: workspace.paneSizes,
                     togglePane,
                     setPaneSizes,
+                    gitRepos,
+                    selectedRepo,
+                    setSelectedRepo,
+                    gitReposLoading,
+                    gitReposError,
+                    refreshGitRepos,
                 }, children: _jsx(LayoutRenderer, { tree: workspace.layout }) }), _jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsxs("button", { className: `bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`, onClick: handleCompact, title: contextInfo.tokens && contextInfo.limit
                                 ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
                                 : 'Compact context', style: { ['--ctx-pct']: `${contextInfo.pct}%` }, children: [_jsx("span", { className: "bc-ctrl-btn-bar", "aria-hidden": true }), _jsxs("span", { className: "bc-ctrl-btn-text", children: ["Compact", contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''] })] })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] }))] })) }), showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', uiState: bridge.uiState, activity: bridge.activity, onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));

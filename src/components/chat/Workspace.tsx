@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { HarnessInfo, ManagedSession } from '../../types'
+import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types'
 import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
@@ -19,6 +19,8 @@ interface WorkspaceProps {
   onUpdate: (fn: (w: WorkspaceState) => WorkspaceState) => void
   onClose?: () => void
   harnesses: HarnessInfo[]
+  instances: BridgeInstance[]
+  machines: Machine[]
   storeModels: StoreModel[]
   bridgePrefs: {
     getDefaults: (harness: string) => { model?: string; effort?: string; max_budget?: number; disabled_tools?: string[] }
@@ -27,7 +29,7 @@ interface WorkspaceProps {
   }
 }
 
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, bridgePrefs }: WorkspaceProps) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps) {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const bridge = useBridgeSession()
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
@@ -116,6 +118,39 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     () => activeHarness ? harnesses.find(h => h.name === activeHarness) : undefined,
     [harnesses, activeHarness]
   )
+
+  // Resolve the machine the active session is running on — header chip
+  // shows machine name + emoji + reachability so users know which host
+  // is doing the work.
+  const activeInstanceID = bridge.activeSession?.instance_id
+  const activeMachine = useMemo(() => {
+    if (!activeInstanceID) return undefined
+    const inst = instances.find(i => i.id === activeInstanceID)
+    if (!inst) return undefined
+    return machines.find(m => m.id === inst.machine_id)
+  }, [instances, machines, activeInstanceID])
+
+  // Per-instance reachability for the header dot. Polled in line with
+  // the rest of the header — cheap, and the API already aggregates
+  // local/SSH/runner liveness behind a single bool.
+  const [activeReachable, setActiveReachable] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!activeInstanceID) { setActiveReachable(null); return }
+    let cancelled = false
+    const check = async () => {
+      try {
+        const res = await apiFetch(`${basePath}/instances/${activeInstanceID}/status`)
+        if (!res.ok) { if (!cancelled) setActiveReachable(null); return }
+        const data = await res.json()
+        if (!cancelled) setActiveReachable(Boolean(data?.reachable))
+      } catch {
+        if (!cancelled) setActiveReachable(null)
+      }
+    }
+    check()
+    const t = setInterval(check, 15000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [apiFetch, basePath, activeInstanceID])
   const harnessDefaults = useMemo(
     () => activeHarness ? bridgePrefs.getDefaults(activeHarness) : {},
     [bridgePrefs, activeHarness]
@@ -224,6 +259,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       <SessionHeader
         chat={activeChat}
         harnessInfo={activeHarnessInfo}
+        machine={activeMachine}
+        machineReachable={activeReachable}
         basePath={basePath}
         uiState={bridge.uiState}
         rows={bridge.logRows}

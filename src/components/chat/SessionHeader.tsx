@@ -1,17 +1,23 @@
 import type { CSSProperties } from 'react'
-import type { HarnessInfo, LogRow } from '../../types'
+import type { HarnessInfo, LogRow, Machine } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, harnessInfo, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export function SessionHeader({ chat, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
   /** Server-registered HarnessInfo for chat.harness — canonical source for
    * label/emoji/image. Constants are fallbacks for harnesses the server
    * hasn't registered. */
   harnessInfo?: HarnessInfo
+  /** The machine the active session's instance is bound to. Drives the
+   * machine chip in the header. Undefined when no session is active. */
+  machine?: Machine
+  /** Latest reachability for the active instance's machine (polled
+   * upstream). null = unknown / no active session. */
+  machineReachable?: boolean | null
   /** Used to resolve harnessInfo.image (a server-relative path). */
   basePath: string
   uiState: string
@@ -79,6 +85,31 @@ export function SessionHeader({ chat, harnessInfo, basePath, uiState, rows, onRe
               ? <img className="bc-harness-chip-img" src={`${basePath}${harnessImage}`} alt="" />
               : harnessEmoji && <span className="bc-harness-chip-emoji" aria-hidden>{harnessEmoji}</span>}
             <span className="bc-harness-chip-label">{harnessLabel}</span>
+          </span>
+        )}
+        {machine && (
+          <span
+            className="bc-machine-chip"
+            title={[
+              `${machine.name}${machine.hostname ? ` (${machine.hostname})` : ''}`,
+              `transport: ${machine.transport}`,
+              machineReachable === null ? 'reachability unknown' :
+                machineReachable ? 'reachable' : 'unreachable',
+            ].join('\n')}
+          >
+            <span className="bc-machine-chip-emoji" aria-hidden>{machine.emoji || '🖥'}</span>
+            <span className="bc-machine-chip-label">{machine.name}</span>
+            <span
+              className={
+                'bc-machine-chip-dot ' +
+                (machineReachable === null
+                  ? 'bc-machine-chip-dot-unknown'
+                  : machineReachable
+                    ? 'bc-machine-chip-dot-ok'
+                    : 'bc-machine-chip-dot-fail')
+              }
+              aria-hidden
+            />
           </span>
         )}
         {chat

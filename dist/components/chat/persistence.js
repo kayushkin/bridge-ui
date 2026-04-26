@@ -122,4 +122,26 @@ export function saveExcludedInstances(s) {
     }
     catch { /* ignore */ }
 }
+// Excluded machine IDs for the sidebar filter — sibling to the instance
+// blacklist above. Stored under its own localStorage key so the two
+// filters can be cleared/reset independently.
+const MACHINE_FILTER_KEY = 'bridge.machineFilter.excluded';
+export function loadExcludedMachines() {
+    try {
+        const raw = localStorage.getItem(MACHINE_FILTER_KEY);
+        if (!raw)
+            return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    }
+    catch {
+        return new Set();
+    }
+}
+export function saveExcludedMachines(s) {
+    try {
+        localStorage.setItem(MACHINE_FILTER_KEY, JSON.stringify([...s]));
+    }
+    catch { /* ignore */ }
+}
 //# sourceMappingURL=persistence.js.map

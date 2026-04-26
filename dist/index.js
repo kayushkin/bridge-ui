@@ -1,5 +1,5 @@
 // Constants
-export { HARNESS_LABEL, HARNESS_EMOJI, TRANSPORT_LABEL } from './constants';
+export { TRANSPORT_LABEL } from './constants';
 // Context & Provider
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context';
 export { BridgeProvider } from './provider';
@@ -8,6 +8,7 @@ export { connectSSE } from './bridgeSSE';
 // Hooks
 export { useBridgeSession } from './useBridgeSession';
 export { useBridgeInstances } from './useBridgeInstances';
+export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
@@ -16,9 +17,6 @@ export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
 // Page components
 export { BridgeLayout } from './components/BridgeLayout';
 export { BridgeChat } from './components/BridgeChat';
-export { BridgeChat2 } from './components/BridgeChat2';
-export { BridgeChat3 } from './components/BridgeChat3';
-export { BridgeChat4 } from './components/BridgeChat4';
 export { BridgeSessions } from './components/BridgeSessions';
 export { BridgeInstances } from './components/BridgeInstances';
 export { BridgeSettings } from './components/BridgeSettings';

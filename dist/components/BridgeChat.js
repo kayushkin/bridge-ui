@@ -4,11 +4,12 @@ import { useBridgeConfig } from '../context';
 import { useBridgeSession } from '../useBridgeSession';
 import { useBridgePrefs } from '../useBridgePrefs';
 import { useBridgeInstances } from '../useBridgeInstances';
+import { useBridgeMachines } from '../useBridgeMachines';
 import { useBridgeFolders } from '../useBridgeFolders';
 import { SessionList } from './chat/SessionList';
 import { Workspace } from './chat/Workspace';
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence';
-import { generateDefaultAgent, generateFrontendId } from './chat/utils';
+import { generateFrontendId } from './chat/utils';
 const DEFAULT_INNER_TREE = {
     kind: 'split',
     direction: 'h',
@@ -36,6 +37,7 @@ export function BridgeChat() {
     const bridge = useBridgeSession();
     const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` });
     const instances = useBridgeInstances();
+    const machines = useBridgeMachines();
     const folders = useBridgeFolders();
     const [harnesses, setHarnesses] = useState([]);
     const [storeModels, setStoreModels] = useState([]);
@@ -121,11 +123,7 @@ export function BridgeChat() {
         apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => { });
     }, [apiFetch, basePath]);
     const getDisplayName = useCallback((session) => {
-        if (session.display_name)
-            return session.display_name;
-        if (session.agent_id)
-            return session.agent_id;
-        return generateDefaultAgent(session.harness);
+        return session.display_name || session.agent_id || '';
     }, []);
     const handleCreateForInstance = useCallback(async (instanceId) => {
         const inst = instances.instanceMap.get(instanceId);
@@ -136,11 +134,9 @@ export function BridgeChat() {
         if (!harnessInfo?.available)
             return;
         const frontendId = generateFrontendId();
-        const agentId = generateDefaultAgent(harness);
         const sess = await bridge.createSession({
             harness,
             instance_id: instanceId,
-            agent_id: agentId,
             display_name: '',
             client_id: frontendId,
         });
@@ -168,7 +164,7 @@ export function BridgeChat() {
         return ws?.sessionId ?? null;
     }, [workspaces, focusedWorkspaceId]);
     const defaultInstanceId = bridgePrefs.prefs.last_instance_id;
-    return (_jsx("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: handleSelectSession, onSpawnWorkspace: spawnWorkspace, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsx("div", { className: "bc-workspaces", children: workspaces.length === 0 ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (workspaces.map(w => (_jsx(Workspace, { workspace: w, focused: w.id === focusedWorkspaceId, onFocus: () => setFocusedWorkspaceId(w.id), onUpdate: fn => updateWorkspace(w.id, fn), onClose: () => closeWorkspace(w.id), harnesses: harnesses, storeModels: storeModels, bridgePrefs: {
+    return (_jsx("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: handleSelectSession, onSpawnWorkspace: spawnWorkspace, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsx("div", { className: "bc-workspaces", children: workspaces.length === 0 ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (workspaces.map(w => (_jsx(Workspace, { workspace: w, focused: w.id === focusedWorkspaceId, onFocus: () => setFocusedWorkspaceId(w.id), onUpdate: fn => updateWorkspace(w.id, fn), onClose: () => closeWorkspace(w.id), harnesses: harnesses, instances: instances.instances, machines: machines.machines, storeModels: storeModels, bridgePrefs: {
                             getDefaults: bridgePrefs.getDefaults,
                             setHarnessDefaults: bridgePrefs.setHarnessDefaults,
                             setLastSession: bridgePrefs.setLastSession,

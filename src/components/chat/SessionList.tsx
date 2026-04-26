@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BridgeInstance, HarnessInfo, ManagedSession } from '../../types'
+import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types'
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
 import { InstanceFilterBar } from './InstanceFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
-import { loadExcludedInstances, loadFolderCollapsed, saveExcludedInstances, saveFolderCollapsed } from './persistence'
+import {
+  loadExcludedInstances, loadExcludedMachines, loadFolderCollapsed,
+  saveExcludedInstances, saveExcludedMachines, saveFolderCollapsed,
+} from './persistence'
 import type { CtxMenuState } from './types'
 
-export function SessionList({ sessions, instances, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
+  machines: Machine[]
   harnesses: HarnessInfo[]
   basePath: string
   instancesPath: string
@@ -32,6 +36,7 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
   const [newFolderName, setNewFolderName] = useState('')
   const newFolderRef = useRef<HTMLInputElement>(null)
   const [excluded, setExcluded] = useState<Set<string>>(loadExcludedInstances)
+  const [excludedMachines, setExcludedMachines] = useState<Set<string>>(loadExcludedMachines)
   const [showNewMenu, setShowNewMenu] = useState(false)
 
   useEffect(() => {
@@ -57,9 +62,21 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
     return m
   }, [instances])
 
+  const instanceMachineByID = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const i of instances) m.set(i.id, i.machine_id)
+    return m
+  }, [instances])
+
   const filtered = useMemo(() =>
-    sessions.filter(s => !s.instance_id || !excluded.has(s.instance_id)),
-    [sessions, excluded]
+    sessions.filter(s => {
+      if (!s.instance_id) return true
+      if (excluded.has(s.instance_id)) return false
+      const machineID = instanceMachineByID.get(s.instance_id)
+      if (machineID && excludedMachines.has(machineID)) return false
+      return true
+    }),
+    [sessions, excluded, excludedMachines, instanceMachineByID]
   )
 
   const sorted = useMemo(() =>
@@ -99,12 +116,24 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
     })
   }
 
+  const toggleMachine = (id: string) => {
+    setExcludedMachines(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      saveExcludedMachines(next)
+      return next
+    })
+  }
+
   const clearInstanceFilter = () => {
     setExcluded(prev => {
-      if (prev.size === 0) return prev
-      const next = new Set<string>()
-      saveExcludedInstances(next)
-      return next
+      if (prev.size > 0) saveExcludedInstances(new Set())
+      return prev.size === 0 ? prev : new Set()
+    })
+    setExcludedMachines(prev => {
+      if (prev.size > 0) saveExcludedMachines(new Set())
+      return prev.size === 0 ? prev : new Set()
     })
   }
 
@@ -228,10 +257,13 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
 
       <InstanceFilterBar
         instances={instances}
+        machines={machines}
         harnesses={harnesses}
         sessions={sessions}
         excluded={excluded}
+        excludedMachines={excludedMachines}
         onToggle={toggleInstance}
+        onToggleMachine={toggleMachine}
         onClear={clearInstanceFilter}
         basePath={basePath}
       />

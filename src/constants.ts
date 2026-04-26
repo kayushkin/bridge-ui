@@ -1,6 +1,7 @@
 export const TRANSPORT_LABEL: Record<string, string> = {
   local: 'Local',
   ssh: 'SSH',
+  runner: 'Runner',
 }
 
 // Note: harness label/emoji/image/tint live on the server-side HarnessInfo
