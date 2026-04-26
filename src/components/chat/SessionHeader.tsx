@@ -1,10 +1,13 @@
+import type { CSSProperties } from 'react'
+import { HARNESS_EMOJI, HARNESS_LABEL, HARNESS_TINT } from '../../constants'
 import type { LogRow } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
 import type { ChatSession, PanesHidden } from './types'
+import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace }: {
+export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
   uiState: string
   rows: LogRow[]
@@ -19,6 +22,9 @@ export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, h
   onToggleTimeline: () => void
   onToggleGit: () => void
   onCloseWorkspace?: () => void
+  gitRepos: GitRepo[]
+  selectedRepo: string
+  onSelectRepo: (path: string) => void
 }) {
   const completed = chat ? rows.filter(r => r.actor === 'assistant' && r.done && r.meta) : []
   const last = completed[completed.length - 1]
@@ -36,8 +42,22 @@ export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, h
     ? uiState.charAt(0).toUpperCase() + uiState.slice(1)
     : 'No session'
 
+  // Per-harness header tint, exposed as --bc-harness so styles.css can
+  // color-mix() it down for the bg gradient and accent edges. Falls back to
+  // the host theme's --accent for unmapped harnesses.
+  const harness = chat?.harness ?? ''
+  const harnessTint = harness ? HARNESS_TINT[harness] : undefined
+  const harnessLabel = harness ? (HARNESS_LABEL[harness] || harness) : ''
+  const harnessEmoji = harness ? (HARNESS_EMOJI[harness] || '') : ''
+  const headerStyle: CSSProperties | undefined = harnessTint
+    ? ({ ['--bc-harness']: harnessTint } as CSSProperties)
+    : undefined
+
+  const currentRepo = gitRepos.find(r => r.path === selectedRepo) ?? gitRepos[0]
+  const repoCount = gitRepos.length
+
   return (
-    <div className="bc-header">
+    <div className="bc-header" style={headerStyle} data-harness={harness || undefined}>
       <div className="bc-header-row">
         <div className="bc-nav-arrows">
           <button className="bc-nav-arrow" onClick={onPrev} disabled={!hasPrev} title="Previous session" aria-label="Previous session">‹</button>
@@ -48,6 +68,12 @@ export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, h
           title={dotTitle}
           aria-label={dotTitle}
         />
+        {harness && (
+          <span className="bc-harness-chip" title={harnessLabel}>
+            {harnessEmoji && <span className="bc-harness-chip-emoji" aria-hidden>{harnessEmoji}</span>}
+            <span className="bc-harness-chip-label">{harnessLabel}</span>
+          </span>
+        )}
         {chat
           ? <EditableName value={chat.displayName} onSave={onRename} className="bc-session-name" />
           : <span className="bc-session-name bc-session-name-empty">—</span>}
@@ -55,6 +81,27 @@ export function SessionHeader({ chat, uiState, rows, onRename, onPrev, onNext, h
           <span className="bc-cost" title={contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined}>
             {formatCost(totalCost)}
           </span>
+        )}
+        {repoCount > 0 && currentRepo && (
+          <label
+            className="bc-repo-chip"
+            title={`${currentRepo.path}${repoCount > 1 ? ` — ${repoCount} repos discovered` : ''}`}
+          >
+            <span className="bc-repo-chip-icon" aria-hidden>◆</span>
+            <span className="bc-repo-chip-name">{currentRepo.name}</span>
+            {repoCount > 1 && <span className="bc-repo-chip-count" aria-hidden>+{repoCount - 1}</span>}
+            <select
+              className="bc-repo-chip-select"
+              value={selectedRepo}
+              onChange={e => onSelectRepo(e.target.value)}
+              aria-label="Switch repository"
+            >
+              {gitRepos.map(r => (
+                <option key={r.path} value={r.path}>{r.name}</option>
+              ))}
+            </select>
+            <span className="bc-repo-chip-caret" aria-hidden>▾</span>
+          </label>
         )}
         <span className="bc-spacer" />
         <PaneToggles

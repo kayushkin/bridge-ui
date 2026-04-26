@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import type { SessionUIState } from '../types'
-
-interface GitRepo {
-  path: string
-  name: string
-}
+import { useWorkspace } from './chat/WorkspaceContext'
 
 interface GitView {
   repo: string
@@ -35,12 +31,19 @@ interface GitPanelProps {
 
 export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey }: GitPanelProps) {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
+  // Repos + selection are owned by the surrounding Workspace and shared with
+  // SessionHeader's repo dropdown so both reflect the same selection.
+  const {
+    gitRepos: repos,
+    selectedRepo,
+    setSelectedRepo,
+    gitReposLoading: loadingRepos,
+    gitReposError: reposError,
+    refreshGitRepos,
+  } = useWorkspace()
 
-  const [repos, setRepos] = useState<GitRepo[]>([])
-  const [selectedRepo, setSelectedRepo] = useState<string>('')
   const [view, setView] = useState<GitView | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loadingRepos, setLoadingRepos] = useState(false)
+  const [viewError, setViewError] = useState<string | null>(null)
   const [loadingView, setLoadingView] = useState(false)
   const [openSections, setOpenSections] = useState<Record<Section, boolean>>({
     status: true,
@@ -48,53 +51,17 @@ export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey 
     diff_staged: false,
     log: false,
   })
-  // Bumped manually to force a refetch even when nothing else changed.
+  // Bumped manually to force a view refetch even when nothing else changed.
   const [refreshTick, setRefreshTick] = useState(0)
 
-  const refresh = useCallback(() => setRefreshTick(t => t + 1), [])
+  const refresh = useCallback(() => {
+    refreshGitRepos()
+    setRefreshTick(t => t + 1)
+  }, [refreshGitRepos])
 
-  // Refetch repos on session change, on every turn boundary (uiState flips),
-  // and on manual refresh.
-  useEffect(() => {
-    if (!sessionId) {
-      setRepos([])
-      setView(null)
-      return
-    }
-    let cancelled = false
-    setLoadingRepos(true)
-    setError(null)
-    fetchFn(`${basePath}/sessions/${sessionId}/git/repos`)
-      .then(async r => {
-        if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
-        return r.json() as Promise<{ repos: GitRepo[] }>
-      })
-      .then(data => {
-        if (cancelled) return
-        setRepos(data.repos || [])
-      })
-      .catch(err => {
-        if (cancelled) return
-        setError(`repos: ${err instanceof Error ? err.message : String(err)}`)
-        setRepos([])
-      })
-      .finally(() => { if (!cancelled) setLoadingRepos(false) })
-    return () => { cancelled = true }
-  }, [sessionId, uiState, refreshTick, fetchFn, basePath])
-
-  // Keep a valid selection — pick the first repo when the current selection
-  // is missing from the list (initial load, or a repo just disappeared).
-  useEffect(() => {
-    if (repos.length === 0) {
-      setSelectedRepo('')
-      return
-    }
-    if (!selectedRepo || !repos.find(r => r.path === selectedRepo)) {
-      setSelectedRepo(repos[0].path)
-    }
-  }, [repos, selectedRepo])
-
-  // Fetch the four-pane view for the selected repo.
+  // Fetch the four-pane view for the selected repo. Repos themselves are
+  // fetched at workspace level so they stay populated even when this pane
+  // is hidden.
   useEffect(() => {
     if (!sessionId || !selectedRepo) {
       setView(null)
@@ -102,7 +69,7 @@ export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey 
     }
     let cancelled = false
     setLoadingView(true)
-    setError(null)
+    setViewError(null)
     const url = `${basePath}/sessions/${sessionId}/git?repo=${encodeURIComponent(selectedRepo)}`
     fetchFn(url)
       .then(async r => {
@@ -112,12 +79,14 @@ export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey 
       .then(data => { if (!cancelled) setView(data) })
       .catch(err => {
         if (cancelled) return
-        setError(`git: ${err instanceof Error ? err.message : String(err)}`)
+        setViewError(`git: ${err instanceof Error ? err.message : String(err)}`)
         setView(null)
       })
       .finally(() => { if (!cancelled) setLoadingView(false) })
     return () => { cancelled = true }
   }, [sessionId, selectedRepo, uiState, refreshTick, fetchFn, basePath])
+
+  const error = reposError || viewError
 
   const toggleSection = useCallback((s: Section) => {
     setOpenSections(prev => ({ ...prev, [s]: !prev[s] }))

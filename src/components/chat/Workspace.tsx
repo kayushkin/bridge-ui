@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { HarnessInfo, ManagedSession } from '../../types'
+import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
 import { Composer } from './Composer'
@@ -8,6 +9,7 @@ import { SessionHeader } from './SessionHeader'
 import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
 import { WorkspaceProvider } from './WorkspaceContext'
+import type { GitRepo } from './WorkspaceContext'
 import type { ChatSession, PaneKey, PaneSizes, StoreModel, WorkspaceState } from './types'
 import { generateDefaultAgent } from './utils'
 
@@ -27,6 +29,7 @@ interface WorkspaceProps {
 }
 
 export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, bridgePrefs }: WorkspaceProps) {
+  const { fetch: apiFetch, basePath } = useBridgeConfig()
   const bridge = useBridgeSession()
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const [configModel, setConfigModel] = useState('')
@@ -34,6 +37,52 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
   const [showTools, setShowTools] = useState(false)
   const pendingConfigRef = useRef<{ model?: string; effort?: string } | null>(null)
+
+  // Git repos discovered for the active session — fetched once at workspace
+  // level so SessionHeader's selector and GitPanel share the same selection.
+  // Refetched on session swap, on every turn boundary (uiState flip), and on
+  // explicit refresh.
+  const [gitRepos, setGitRepos] = useState<GitRepo[]>([])
+  const [selectedRepo, setSelectedRepo] = useState<string>('')
+  const [gitReposLoading, setGitReposLoading] = useState(false)
+  const [gitReposError, setGitReposError] = useState<string | null>(null)
+  const [gitRefreshTick, setGitRefreshTick] = useState(0)
+  const refreshGitRepos = useCallback(() => setGitRefreshTick(t => t + 1), [])
+
+  const sessionId = bridge.activeSession?.bridge_id
+  useEffect(() => {
+    if (!sessionId) {
+      setGitRepos([])
+      setGitReposError(null)
+      return
+    }
+    let cancelled = false
+    setGitReposLoading(true)
+    setGitReposError(null)
+    apiFetch(`${basePath}/sessions/${sessionId}/git/repos`)
+      .then(async r => {
+        if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+        return r.json() as Promise<{ repos: GitRepo[] }>
+      })
+      .then(data => { if (!cancelled) setGitRepos(data.repos || []) })
+      .catch(err => {
+        if (cancelled) return
+        setGitReposError(`repos: ${err instanceof Error ? err.message : String(err)}`)
+        setGitRepos([])
+      })
+      .finally(() => { if (!cancelled) setGitReposLoading(false) })
+    return () => { cancelled = true }
+  }, [sessionId, bridge.uiState, gitRefreshTick, apiFetch, basePath])
+
+  useEffect(() => {
+    if (gitRepos.length === 0) {
+      setSelectedRepo('')
+      return
+    }
+    if (!selectedRepo || !gitRepos.find(r => r.path === selectedRepo)) {
+      setSelectedRepo(gitRepos[0].path)
+    }
+  }, [gitRepos, selectedRepo])
 
   // Bind this workspace's bridge instance to its assigned session id.
   useEffect(() => {
@@ -181,6 +230,9 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         onToggleTimeline={() => togglePane('timeline')}
         onToggleGit={() => togglePane('git')}
         onCloseWorkspace={onClose}
+        gitRepos={gitRepos}
+        selectedRepo={selectedRepo}
+        onSelectRepo={setSelectedRepo}
       />
       <WorkspaceProvider value={{
         chat: activeChat,
@@ -193,6 +245,12 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         paneSizes: workspace.paneSizes,
         togglePane,
         setPaneSizes,
+        gitRepos,
+        selectedRepo,
+        setSelectedRepo,
+        gitReposLoading,
+        gitReposError,
+        refreshGitRepos,
       }}>
         <LayoutRenderer tree={workspace.layout} />
       </WorkspaceProvider>

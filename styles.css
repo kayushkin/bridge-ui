@@ -2300,16 +2300,117 @@
 }
 .bc-workspace-focused .bc-header { box-shadow: none; }
 
+/* Header — gets a harness-keyed tint via the inline --bc-harness CSS var
+ * SessionHeader sets. Falls back to the host's --accent for harnesses with
+ * no entry in HARNESS_TINT. The tint is composited as a left-to-right wash
+ * on top of the standard glass top-light gradient. */
 .bc-header {
   padding: 11px 18px;
-  background: linear-gradient(180deg,
-    color-mix(in srgb, white 4%, transparent),
-    transparent);
-  border-bottom: 1px solid var(--bc-edge);
+  background:
+    linear-gradient(110deg,
+      color-mix(in srgb, var(--bc-harness, var(--accent)) 16%, transparent) 0%,
+      color-mix(in srgb, var(--bc-harness, var(--accent)) 5%, transparent) 38%,
+      transparent 78%),
+    linear-gradient(180deg,
+      color-mix(in srgb, white 4%, transparent),
+      transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--bc-harness, var(--accent)) 22%, var(--bc-edge));
 }
-.bc-header-context { height: 2px; opacity: .85; }
+.bc-header-context {
+  height: 2px;
+  opacity: .85;
+  /* Override the base --accent fill with the harness color when present. */
+  background: var(--bc-harness, var(--accent));
+}
 .bc-session-name { font-weight: 500; letter-spacing: -0.005em; }
 .bc-cost { font-variant-numeric: tabular-nums; }
+
+/* Harness chip — emoji + label, tinted by the same --bc-harness var. */
+.bc-harness-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bc-harness, var(--accent)) 36%, transparent);
+  background: color-mix(in srgb, var(--bc-harness, var(--accent)) 14%, transparent);
+  color: color-mix(in srgb, var(--bc-harness, var(--accent)) 75%, var(--text));
+  font-size: 0.72em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bc-harness-chip-emoji { font-size: 0.95em; line-height: 1; }
+.bc-harness-chip-label { line-height: 1; }
+
+/* Repo chip — current git project + dropdown. The native <select> overlays
+ * the chip's clickable area so clicks open the menu without extra JS; the
+ * visible content (name, count, caret) is just the rendered face. */
+.bc-repo-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-edge);
+  background: color-mix(in srgb, white 5%, transparent);
+  color: var(--text);
+  font-size: 0.74em;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.bc-repo-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--bc-edge));
+  background: color-mix(in srgb, white 8%, transparent);
+}
+.bc-repo-chip:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.bc-repo-chip-icon {
+  font-size: 0.85em;
+  color: color-mix(in srgb, var(--accent) 75%, var(--text-muted));
+  line-height: 1;
+}
+.bc-repo-chip-name {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.bc-repo-chip-count {
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: color-mix(in srgb, var(--accent) 90%, var(--text));
+  line-height: 1.4;
+}
+.bc-repo-chip-caret { font-size: 0.7em; opacity: .55; line-height: 1; }
+.bc-repo-chip-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+.bc-repo-chip-select option {
+  background: var(--bg-surface);
+  color: var(--text);
+}
 
 /* Pane toggles — soft pills */
 .bc-pane-toggle {

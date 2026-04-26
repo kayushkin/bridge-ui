@@ -38,3 +38,24 @@ export const TRANSPORT_LABEL: Record<string, string> = {
   local: 'Local',
   ssh: 'SSH',
 }
+
+// Per-harness accent color used to tint the chat header. Falls back to the
+// host theme's --accent when a harness has no entry. Hex sRGB so the UI can
+// pass it straight into a CSS custom property and color-mix() it down.
+export const HARNESS_TINT: Record<string, string> = {
+  claude_code: '#d97757', // anthropic orange
+  codex: '#10a37f',       // openai green
+  openclaw: '#dc2626',    // crab red
+  inber: '#22c55e',       // leaf green
+  hermes: '#eab308',      // mailbox gold
+  jig: '#a855f7',         // puzzle violet
+  nanoclaw: '#06b6d4',    // microscope cyan
+  aider: '#f97316',       // tools orange
+  goose: '#84cc16',       // lime
+  autohand: '#94a3b8',    // robot slate
+  dexto: '#ec4899',       // dart pink
+  commander: '#64748b',   // medal slate
+  cline: '#3b82f6',       // pencil blue
+  roo_code: '#fb7185',    // kangaroo rose
+  kilo_code: '#f59e0b',   // bolt amber
+}
