@@ -1,5 +1,5 @@
-export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, BridgeInstance, BridgeSession, } from './types';
-export type { FetchFn, ToolEvent, MessageMeta, Message, LogRow, LogRowActor, LogRowKind, SessionUIState, ActivityKind, BridgeEvent, EventData, CreateSessionOpts, UseBridgeSessionReturn, } from './types';
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, BridgeInstance, BridgeSession, CreateSessionRequest, } from './types';
+export type { FetchFn, ToolEvent, MessageMeta, Message, LogRow, LogRowActor, LogRowKind, SessionUIState, ActivityKind, BridgeEvent, EventData, UseBridgeSessionReturn, } from './types';
 export { HARNESS_LABEL, HARNESS_EMOJI, TRANSPORT_LABEL } from './constants';
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context';
 export type { BridgeConfig, BridgeRoutes } from './context';

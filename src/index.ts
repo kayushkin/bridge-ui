@@ -14,6 +14,7 @@ export type {
   ResultEvent,
   BridgeInstance,
   BridgeSession,
+  CreateSessionRequest,
 } from './types'
 
 // Types — UI-specific
@@ -29,7 +30,6 @@ export type {
   ActivityKind,
   BridgeEvent,
   EventData,
-  CreateSessionOpts,
   UseBridgeSessionReturn,
 } from './types'
 

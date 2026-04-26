@@ -480,14 +480,9 @@ export function useBridgeSession() {
     // --- Actions ---
     const createSession = useCallback(async (opts) => {
         try {
-            const clientId = opts.clientId ?? `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             const body = {
-                harness: opts.harness,
-                display_name: opts.displayName,
-                agent_id: opts.agentId,
-                instance_id: opts.instanceId,
-                auto_start: false,
-                client_id: clientId,
+                ...opts,
+                client_id: opts.client_id ?? `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             };
             const res = await fetchFn(`${basePath}/sessions`, {
                 method: 'POST',

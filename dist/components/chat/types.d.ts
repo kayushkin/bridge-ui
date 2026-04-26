@@ -35,16 +35,6 @@ export interface WorkspaceState {
     paneSizes: PaneSizes;
     layout: InnerNode;
 }
-export interface SidebarSession {
-    bridge_id: string;
-    agent_id?: string;
-    display_name: string;
-    harness: string;
-    instance_id?: string;
-    state: string;
-    updated_at: string;
-    folder_name?: string;
-}
 export interface CtxMenuState {
     type: 'session' | 'folder';
     id: string;

@@ -3,7 +3,7 @@ import { useBridgeConfig } from './context'
 import { connectSSE } from './bridgeSSE'
 import type {
   BridgeEvent, EventData, ManagedSession, SessionUIState, ActivityKind,
-  LogRow, LogRowActor, LogRowKind, ToolEvent, CreateSessionOpts, UseBridgeSessionReturn,
+  LogRow, LogRowActor, LogRowKind, ToolEvent, CreateSessionRequest, UseBridgeSessionReturn,
   SessionInfo, MessageMeta,
 } from './types'
 
@@ -494,16 +494,11 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   // --- Actions ---
 
-  const createSession = useCallback(async (opts: CreateSessionOpts): Promise<ManagedSession | null> => {
+  const createSession = useCallback(async (opts: CreateSessionRequest): Promise<ManagedSession | null> => {
     try {
-      const clientId = opts.clientId ?? `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      const body: Record<string, unknown> = {
-        harness: opts.harness,
-        display_name: opts.displayName,
-        agent_id: opts.agentId,
-        instance_id: opts.instanceId,
-        auto_start: false,
-        client_id: clientId,
+      const body: CreateSessionRequest = {
+        ...opts,
+        client_id: opts.client_id ?? `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       }
       const res = await fetchFn(`${basePath}/sessions`, {
         method: 'POST',

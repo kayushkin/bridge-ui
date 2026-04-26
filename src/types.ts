@@ -24,6 +24,7 @@ import type {
   SessionInfo,
   ToolInfo,
   MCPServerInfo,
+  CreateSessionRequest,
 } from '@kayushkin/llm-bridge-types'
 
 // Re-export canonical types for consumers.
@@ -43,6 +44,7 @@ export type {
   SessionInfo,
   ToolInfo,
   MCPServerInfo,
+  CreateSessionRequest,
 }
 
 // Re-export with backward-compatible aliases where names differ.
@@ -190,14 +192,6 @@ export interface BridgeEvent {
 
 // --- Hook return types ---
 
-export interface CreateSessionOpts {
-  harness: string
-  instanceId: string
-  agentId: string
-  displayName: string
-  clientId?: string
-}
-
 export interface UseBridgeSessionReturn {
   sessions: ManagedSession[]
   activeSession: ManagedSession | null
@@ -207,7 +201,7 @@ export interface UseBridgeSessionReturn {
   connected: boolean
   error: string | null
   loadingHistory: boolean
-  createSession: (opts: CreateSessionOpts) => Promise<ManagedSession | null>
+  createSession: (opts: CreateSessionRequest) => Promise<ManagedSession | null>
   selectSession: (id: string) => void
   send: (text: string) => void
   interrupt: () => void

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BridgeInstance, HarnessInfo } from '../../types'
+import type { BridgeInstance, HarnessInfo, ManagedSession } from '../../types'
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { HARNESS_EMOJI } from '../../constants'
 import { EditableName } from './EditableName'
 import { InstanceFilterBar } from './InstanceFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
 import { loadExcludedInstances, loadFolderCollapsed, saveExcludedInstances, saveFolderCollapsed } from './persistence'
-import type { CtxMenuState, SidebarSession } from './types'
+import type { CtxMenuState } from './types'
 
 export function SessionList({ sessions, instances, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
-  sessions: SidebarSession[]
+  sessions: ManagedSession[]
   instances: BridgeInstance[]
   harnesses: HarnessInfo[]
   basePath: string
@@ -21,7 +21,7 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
   onSpawnWorkspace: (id: string) => void
   onNewSession: (instanceId: string) => void
   connected: boolean
-  getDisplayName: (session: SidebarSession) => string
+  getDisplayName: (session: ManagedSession) => string
   onRename: (id: string, name: string) => void
   folders: UseBridgeFoldersReturn
   onAfterFolderChange: () => void
@@ -70,9 +70,9 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
 
   const { unfiled, grouped } = useMemo(() => {
     const known = new Set(folders.folderOrder)
-    const buckets = new Map<string, SidebarSession[]>()
+    const buckets = new Map<string, ManagedSession[]>()
     for (const f of folders.folderOrder) buckets.set(f, [])
-    const unfiled: SidebarSession[] = []
+    const unfiled: ManagedSession[] = []
     for (const s of sorted) {
       const fn = s.folder_name ?? ''
       if (fn && known.has(fn)) buckets.get(fn)!.push(s)
@@ -150,7 +150,7 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
     onNewSession(id)
   }
 
-  const renderSession = (s: SidebarSession) => {
+  const renderSession = (s: ManagedSession) => {
     const isOpen = openSessionIds.has(s.bridge_id)
     const isFocused = focusedSessionId === s.bridge_id
     const tierClass = isFocused

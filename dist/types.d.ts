@@ -1,5 +1,5 @@
-import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo } from '@kayushkin/llm-bridge-types';
-export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, };
+import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest } from '@kayushkin/llm-bridge-types';
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
@@ -84,13 +84,6 @@ export interface BridgeEvent {
     type: string;
     data: EventData;
 }
-export interface CreateSessionOpts {
-    harness: string;
-    instanceId: string;
-    agentId: string;
-    displayName: string;
-    clientId?: string;
-}
 export interface UseBridgeSessionReturn {
     sessions: ManagedSession[];
     activeSession: ManagedSession | null;
@@ -100,7 +93,7 @@ export interface UseBridgeSessionReturn {
     connected: boolean;
     error: string | null;
     loadingHistory: boolean;
-    createSession: (opts: CreateSessionOpts) => Promise<ManagedSession | null>;
+    createSession: (opts: CreateSessionRequest) => Promise<ManagedSession | null>;
     selectSession: (id: string) => void;
     send: (text: string) => void;
     interrupt: () => void;

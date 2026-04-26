@@ -139,10 +139,10 @@ export function BridgeChat() {
         const agentId = generateDefaultAgent(harness);
         const sess = await bridge.createSession({
             harness,
-            instanceId,
-            agentId,
-            displayName: '',
-            clientId: frontendId,
+            instance_id: instanceId,
+            agent_id: agentId,
+            display_name: '',
+            client_id: frontendId,
         });
         if (sess) {
             bridgePrefs.setLastInstanceId(instanceId);
