@@ -46,6 +46,37 @@
 .bc-main { display: flex; flex: 1; min-height: 0; }
 .bc-chat-area { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 
+/* Multi-workspace layout */
+.bc-workspaces { flex: 1; display: flex; min-width: 0; min-height: 0; }
+.bc-workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bc-workspace + .bc-workspace { border-left: 1px solid var(--border); }
+.bc-workspaces-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.bc-workspaces-empty-hint {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  text-align: center;
+  max-width: 480px;
+  line-height: 1.5;
+}
+.bc-workspace-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 0.95em;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: 4px;
+}
+.bc-workspace-close:hover { color: #ef4444; border-color: #ef4444; }
+
 /* Session List (sidebar) */
 .bc-session-list {
   width: 220px;
@@ -72,20 +103,45 @@
 .bc-session-item {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  transition: background 0.15s;
+}
+.bc-session-item-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px;
   border: none;
   background: none;
-  color: var(--text-muted);
+  color: inherit;
   cursor: pointer;
-  font-size: 0.85em;
+  font-size: inherit;
   text-align: left;
-  transition: background 0.15s;
+  min-width: 0;
 }
 .bc-session-item:hover { background: rgba(99, 102, 241, 0.08); }
 .bc-session-item-active { background: rgba(99, 102, 241, 0.15); color: var(--text); }
 .bc-session-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bc-session-spawn-btn {
+  flex-shrink: 0;
+  padding: 0 8px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.bc-session-item:hover .bc-session-spawn-btn { opacity: 1; }
+.bc-session-spawn-btn:hover { color: var(--accent); border-color: var(--accent); }
 .bc-sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #555; }
 .bc-sdot-running { background: #22c55e; }
 .bc-sdot-idle { background: #60a5fa; }

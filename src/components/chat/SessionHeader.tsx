@@ -2,9 +2,9 @@ import type { LogRow } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
-import type { ChatSession, CollapseState } from './types'
+import type { ChatSession, PanesHidden } from './types'
 
-export function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext, collapseState, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAllPanes }: {
+export function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAllPanes, onCloseWorkspace }: {
   chat: ChatSession | null
   uiState: string
   activity: { kind: string; name?: string }
@@ -15,12 +15,13 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
   onNext: () => void
   hasPrev: boolean
   hasNext: boolean
-  collapseState: CollapseState
+  panesHidden: PanesHidden
   onToggleTurns: () => void
   onToggleThread: () => void
   onToggleTimeline: () => void
   onToggleGit: () => void
   onCloseAllPanes: () => void
+  onCloseWorkspace?: () => void
 }) {
   if (!chat || uiState === 'empty') return null
 
@@ -64,13 +65,21 @@ export function SessionHeader({ chat, uiState, activity, rows, instance, onRenam
         {totalCost > 0 && <span className="bc-cost">{formatCost(totalCost)}</span>}
         <span className="bc-spacer" />
         <PaneToggles
-          collapseState={collapseState}
+          panesHidden={panesHidden}
           onToggleTurns={onToggleTurns}
           onToggleThread={onToggleThread}
           onToggleTimeline={onToggleTimeline}
           onToggleGit={onToggleGit}
           onCloseAll={onCloseAllPanes}
         />
+        {onCloseWorkspace && (
+          <button
+            className="bc-workspace-close"
+            onClick={onCloseWorkspace}
+            title="Close workspace"
+            aria-label="Close workspace"
+          >×</button>
+        )}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EditableName } from './EditableName';
 import { loadFolderCollapsed, saveFolderCollapsed } from './persistence';
-export function SessionList({ sessions, activeSession, onSelect, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }) {
+export function SessionList({ sessions, openSessionIds, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }) {
     const [collapsed, setCollapsed] = useState(loadFolderCollapsed);
     const [ctxMenu, setCtxMenu] = useState(null);
     const [showNewFolder, setShowNewFolder] = useState(false);
@@ -80,10 +80,13 @@ export function SessionList({ sessions, activeSession, onSelect, onNewSession, c
         await folders.deleteFolder(name);
         onAfterFolderChange();
     };
-    const renderSession = (s) => (_jsxs("button", { className: `bc-session-item ${s.bridge_id === activeSession ? 'bc-session-item-active' : ''}`, onClick: () => onSelect(s.bridge_id), onContextMenu: e => openSessionMenu(e, s.bridge_id), children: [_jsx("span", { className: `bc-sdot bc-sdot-${s.state}` }), _jsx(EditableName, { value: getDisplayName(s), onSave: name => onRename(s.bridge_id, name), className: "bc-session-label" }), _jsx("span", { className: "bc-session-menu-btn", role: "button", tabIndex: 0, onClick: e => openSessionMenu(e, s.bridge_id), title: "Move to folder", children: "\u22EF" })] }, s.bridge_id));
+    const renderSession = (s) => {
+        const isOpen = openSessionIds.has(s.bridge_id);
+        return (_jsxs("div", { className: `bc-session-item ${isOpen ? 'bc-session-item-active' : ''}`, onContextMenu: e => openSessionMenu(e, s.bridge_id), children: [_jsxs("button", { className: "bc-session-item-main", onClick: () => onSelect(s.bridge_id), children: [_jsx("span", { className: `bc-sdot bc-sdot-${s.state}` }), _jsx(EditableName, { value: getDisplayName(s), onSave: name => onRename(s.bridge_id, name), className: "bc-session-label" })] }), _jsx("button", { className: "bc-session-spawn-btn", onClick: e => { e.stopPropagation(); onSpawnWorkspace(s.bridge_id); }, title: "Open in new workspace", "aria-label": "Open in new workspace", children: "+" }), _jsx("span", { className: "bc-session-menu-btn", role: "button", tabIndex: 0, onClick: e => openSessionMenu(e, s.bridge_id), title: "Move to folder", children: "\u22EF" })] }, s.bridge_id));
+    };
     return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsx("button", { className: "bc-new-session-btn", onClick: onNewSession, disabled: !connected, children: "+ New Session" }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: connected ? 'No sessions yet' : 'Connecting...' })), unfiled.map(renderSession), grouped.map(({ name, sessions: entries }) => {
                 const isCollapsed = collapsed[name] ?? false;
-                const hasActive = entries.some(s => s.bridge_id === activeSession);
+                const hasActive = entries.some(s => openSessionIds.has(s.bridge_id));
                 return (_jsxs("div", { children: [_jsxs("button", { className: `bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`, onClick: () => toggleFolder(name), onContextMenu: e => openFolderMenu(e, name), children: [_jsx("span", { className: "bc-folder-chevron", children: isCollapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-folder-icon", children: "\uD83D\uDCC1" }), _jsx("span", { className: "bc-folder-name", children: name }), _jsx("span", { className: "bc-folder-count", children: entries.length })] }), !isCollapsed && entries.map(renderSession)] }, name));
             }), ctxMenu && (_jsxs("div", { className: "bc-ctx-menu", style: { top: ctxMenu.y, left: ctxMenu.x }, onClick: e => e.stopPropagation(), children: [ctxMenu.type === 'session' && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ctx-menu-label", children: "Move to folder" }), (() => {
                                 const sess = sessions.find(s => s.bridge_id === ctxMenu.id);

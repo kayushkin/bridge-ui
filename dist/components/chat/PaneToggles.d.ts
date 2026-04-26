@@ -1,6 +1,6 @@
-import type { CollapseState } from './types';
-export declare function PaneToggles({ collapseState, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAll }: {
-    collapseState: CollapseState;
+import type { PanesHidden } from './types';
+export declare function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAll }: {
+    panesHidden: PanesHidden;
     onToggleTurns: () => void;
     onToggleThread: () => void;
     onToggleTimeline: () => void;

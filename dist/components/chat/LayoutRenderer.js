@@ -67,13 +67,13 @@ function SplitView({ node, hidden }) {
 export function LayoutRenderer({ tree }) {
     const ws = useWorkspace();
     const hidden = new Set();
-    if (ws.collapseState.turns)
+    if (ws.panesHidden.turns)
         hidden.add('turns');
-    if (ws.collapseState.thread)
+    if (ws.panesHidden.thread)
         hidden.add('thread');
-    if (ws.collapseState.timeline)
+    if (ws.panesHidden.timeline)
         hidden.add('timeline');
-    if (ws.collapseState.git)
+    if (ws.panesHidden.git)
         hidden.add('git');
     if (!hasVisibleLeaf(tree, hidden)) {
         return (_jsx("div", { className: "bc-chat-split", children: _jsx("div", { className: "bc-split-empty", children: _jsx("div", { className: "bc-split-empty-hint", children: "All panes hidden. Use the toggles above to show Turns, Thread, Timeline, or Git." }) }) }));

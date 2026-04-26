@@ -1,6 +1,6 @@
 import type { LogRow } from '../../types';
-import type { ChatSession, CollapseState } from './types';
-export declare function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext, collapseState, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAllPanes }: {
+import type { ChatSession, PanesHidden } from './types';
+export declare function SessionHeader({ chat, uiState, activity, rows, instance, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAllPanes, onCloseWorkspace }: {
     chat: ChatSession | null;
     uiState: string;
     activity: {
@@ -17,11 +17,12 @@ export declare function SessionHeader({ chat, uiState, activity, rows, instance,
     onNext: () => void;
     hasPrev: boolean;
     hasNext: boolean;
-    collapseState: CollapseState;
+    panesHidden: PanesHidden;
     onToggleTurns: () => void;
     onToggleThread: () => void;
     onToggleTimeline: () => void;
     onToggleGit: () => void;
     onCloseAllPanes: () => void;
+    onCloseWorkspace?: () => void;
 }): import("react/jsx-runtime").JSX.Element | null;
 //# sourceMappingURL=SessionHeader.d.ts.map

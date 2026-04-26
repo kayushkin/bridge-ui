@@ -1,5 +1,5 @@
 import type { ActivityKind, LogRow, SessionUIState } from '../../types';
-import type { ChatSession, CollapseState, PaneKey, PaneSizes } from './types';
+import type { ChatSession, PaneKey, PaneSizes, PanesHidden } from './types';
 export interface WorkspaceValue {
     chat: ChatSession | null;
     rows: LogRow[];
@@ -7,7 +7,7 @@ export interface WorkspaceValue {
     uiState: SessionUIState;
     activity: ActivityKind;
     error: string | null;
-    collapseState: CollapseState;
+    panesHidden: PanesHidden;
     paneSizes: PaneSizes;
     togglePane: (key: PaneKey) => void;
     setPaneSizes: React.Dispatch<React.SetStateAction<PaneSizes>>;

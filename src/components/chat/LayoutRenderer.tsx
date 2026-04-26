@@ -124,10 +124,10 @@ function SplitView({ node, hidden }: { node: Extract<InnerNode, { kind: 'split' 
 export function LayoutRenderer({ tree }: { tree: InnerNode }) {
   const ws = useWorkspace()
   const hidden = new Set<ViewType>()
-  if (ws.collapseState.turns) hidden.add('turns')
-  if (ws.collapseState.thread) hidden.add('thread')
-  if (ws.collapseState.timeline) hidden.add('timeline')
-  if (ws.collapseState.git) hidden.add('git')
+  if (ws.panesHidden.turns) hidden.add('turns')
+  if (ws.panesHidden.thread) hidden.add('thread')
+  if (ws.panesHidden.timeline) hidden.add('timeline')
+  if (ws.panesHidden.git) hidden.add('git')
 
   if (!hasVisibleLeaf(tree, hidden)) {
     return (

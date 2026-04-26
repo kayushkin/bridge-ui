@@ -1,16 +1,16 @@
-import type { CollapseState, PaneKey } from './types'
+import type { PaneKey, PanesHidden } from './types'
 
-export function PaneToggles({ collapseState, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAll }: {
-  collapseState: CollapseState
+export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseAll }: {
+  panesHidden: PanesHidden
   onToggleTurns: () => void
   onToggleThread: () => void
   onToggleTimeline: () => void
   onToggleGit: () => void
   onCloseAll: () => void
 }) {
-  const allClosed = collapseState.turns && collapseState.thread && collapseState.timeline && collapseState.git
+  const allClosed = panesHidden.turns && panesHidden.thread && panesHidden.timeline && panesHidden.git
   const pill = (key: PaneKey, label: string, onClick: () => void) => {
-    const visible = !collapseState[key]
+    const visible = !panesHidden[key]
     return (
       <button
         className={`bc-pane-toggle ${visible ? 'bc-pane-toggle-on' : ''}`}

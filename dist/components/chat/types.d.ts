@@ -23,8 +23,20 @@ export interface CollapseState {
     timeline: boolean;
     git: boolean;
 }
+export interface AppCollapseState {
+    harnessBar: boolean;
+    sessionList: boolean;
+}
 export type PaneKey = 'turns' | 'thread' | 'timeline' | 'git';
+export type PanesHidden = Record<PaneKey, boolean>;
 export type PaneSizes = Record<PaneKey, number>;
+export interface WorkspaceState {
+    id: string;
+    sessionId: string | null;
+    panesHidden: PanesHidden;
+    paneSizes: PaneSizes;
+    layout: InnerNode;
+}
 export interface SidebarSession {
     bridge_id: string;
     agent_id?: string;

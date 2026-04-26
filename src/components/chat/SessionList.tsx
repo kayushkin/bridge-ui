@@ -4,10 +4,11 @@ import { EditableName } from './EditableName'
 import { loadFolderCollapsed, saveFolderCollapsed } from './persistence'
 import type { CtxMenuState, SidebarSession } from './types'
 
-export function SessionList({ sessions, activeSession, onSelect, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, openSessionIds, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: SidebarSession[]
-  activeSession: string
+  openSessionIds: Set<string>
   onSelect: (id: string) => void
+  onSpawnWorkspace: (id: string) => void
   onNewSession: () => void
   connected: boolean
   getDisplayName: (session: SidebarSession) => string
@@ -96,28 +97,38 @@ export function SessionList({ sessions, activeSession, onSelect, onNewSession, c
     onAfterFolderChange()
   }
 
-  const renderSession = (s: SidebarSession) => (
-    <button
-      key={s.bridge_id}
-      className={`bc-session-item ${s.bridge_id === activeSession ? 'bc-session-item-active' : ''}`}
-      onClick={() => onSelect(s.bridge_id)}
-      onContextMenu={e => openSessionMenu(e, s.bridge_id)}
-    >
-      <span className={`bc-sdot bc-sdot-${s.state}`} />
-      <EditableName
-        value={getDisplayName(s)}
-        onSave={name => onRename(s.bridge_id, name)}
-        className="bc-session-label"
-      />
-      <span
-        className="bc-session-menu-btn"
-        role="button"
-        tabIndex={0}
-        onClick={e => openSessionMenu(e, s.bridge_id)}
-        title="Move to folder"
-      >⋯</span>
-    </button>
-  )
+  const renderSession = (s: SidebarSession) => {
+    const isOpen = openSessionIds.has(s.bridge_id)
+    return (
+      <div
+        key={s.bridge_id}
+        className={`bc-session-item ${isOpen ? 'bc-session-item-active' : ''}`}
+        onContextMenu={e => openSessionMenu(e, s.bridge_id)}
+      >
+        <button className="bc-session-item-main" onClick={() => onSelect(s.bridge_id)}>
+          <span className={`bc-sdot bc-sdot-${s.state}`} />
+          <EditableName
+            value={getDisplayName(s)}
+            onSave={name => onRename(s.bridge_id, name)}
+            className="bc-session-label"
+          />
+        </button>
+        <button
+          className="bc-session-spawn-btn"
+          onClick={e => { e.stopPropagation(); onSpawnWorkspace(s.bridge_id) }}
+          title="Open in new workspace"
+          aria-label="Open in new workspace"
+        >+</button>
+        <span
+          className="bc-session-menu-btn"
+          role="button"
+          tabIndex={0}
+          onClick={e => openSessionMenu(e, s.bridge_id)}
+          title="Move to folder"
+        >⋯</span>
+      </div>
+    )
+  }
 
   return (
     <div className="bc-session-list">
@@ -133,7 +144,7 @@ export function SessionList({ sessions, activeSession, onSelect, onNewSession, c
 
       {grouped.map(({ name, sessions: entries }) => {
         const isCollapsed = collapsed[name] ?? false
-        const hasActive = entries.some(s => s.bridge_id === activeSession)
+        const hasActive = entries.some(s => openSessionIds.has(s.bridge_id))
         return (
           <div key={name}>
             <button
