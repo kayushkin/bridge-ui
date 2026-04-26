@@ -1839,9 +1839,8 @@
 }
 .bc-inst-chip:hover { border-color: var(--accent); color: var(--text); }
 .bc-inst-chip-active { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); color: var(--text); opacity: 1; }
-.bc-inst-chip-img { width: 12px; height: 12px; border-radius: 2px; }
-.bc-inst-chip-emoji { font-size: 0.95em; }
-.bc-inst-chip-name { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-inst-chip-img { width: 16px; height: 16px; border-radius: 2px; }
+.bc-inst-chip-emoji { font-size: 1.1em; }
 .bc-inst-chip-count { padding: 0 5px; border-radius: 8px; background: var(--border); color: var(--text-dim); font-size: 0.85em; }
 .bc-inst-chip-active .bc-inst-chip-count { background: rgba(99, 102, 241, 0.2); color: var(--text); }
 .bc-inst-filter-clear {

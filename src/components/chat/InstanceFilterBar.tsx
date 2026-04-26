@@ -51,7 +51,6 @@ export function InstanceFilterBar({ instances, harnesses, sessions, excluded, on
               {info?.image
                 ? <img className="bc-inst-chip-img" src={`${basePath}${info.image}`} alt="" />
                 : <span className="bc-inst-chip-emoji">{info?.emoji || HARNESS_EMOJI[inst.harness_type] || '·'}</span>}
-              <span className="bc-inst-chip-name">{inst.name}</span>
               {count > 0 && <span className="bc-inst-chip-count">{count}</span>}
             </button>
           )
