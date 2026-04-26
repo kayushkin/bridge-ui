@@ -61,13 +61,9 @@ export function BridgeChat() {
     const spawnWorkspace = useCallback((sessionId) => {
         setWorkspaces(prev => [...prev, makeWorkspace(sessionId)]);
     }, []);
-    // Click session in sidebar: focus existing workspace if any, else spawn.
+    // Plain click on a session row tracks last-used (so reload restores the
+    // right one) but does NOT spawn a workspace — use the + button for that.
     const handleSelectSession = useCallback((id) => {
-        setWorkspaces(prev => {
-            if (prev.some(w => w.sessionId === id))
-                return prev;
-            return [...prev, makeWorkspace(id)];
-        });
         if (id && selectedInstance)
             bridgePrefs.setLastSession(selectedInstance, id);
     }, [bridgePrefs, selectedInstance]);

@@ -24,5 +24,5 @@ export declare function SessionHeader({ chat, uiState, activity, rows, instance,
     onToggleGit: () => void;
     onCloseAllPanes: () => void;
     onCloseWorkspace?: () => void;
-}): import("react/jsx-runtime").JSX.Element | null;
+}): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=SessionHeader.d.ts.map

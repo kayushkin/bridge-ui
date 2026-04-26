@@ -130,18 +130,16 @@
   flex-shrink: 0;
   padding: 0 8px;
   height: 24px;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   border-radius: 4px;
   background: none;
   color: var(--text-dim);
   cursor: pointer;
   font-size: 1em;
   line-height: 1;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.bc-session-item:hover .bc-session-spawn-btn { opacity: 1; }
-.bc-session-spawn-btn:hover { color: var(--accent); border-color: var(--accent); }
+.bc-session-spawn-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(99, 102, 241, 0.08); }
 .bc-sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #555; }
 .bc-sdot-running { background: #22c55e; }
 .bc-sdot-idle { background: #60a5fa; }
@@ -276,6 +274,8 @@
 .bc-state-completed { background: #1a1a1a; color: #888; }
 .bc-state-error, .bc-state-aborted { background: #1a0a0a; color: #ef4444; }
 .bc-state-empty { display: none; }
+.bc-state-placeholder { background: #1a1a1a; color: var(--text-dim); }
+.bc-session-name-empty { color: var(--text-dim); font-style: italic; }
 .bc-state-activity { margin-left: 4px; opacity: 0.75; font-weight: 400; }
 .bc-pulse {
   width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
