@@ -4,9 +4,10 @@ import { EditableName } from './EditableName'
 import { loadFolderCollapsed, saveFolderCollapsed } from './persistence'
 import type { CtxMenuState, SidebarSession } from './types'
 
-export function SessionList({ sessions, openSessionIds, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: SidebarSession[]
   openSessionIds: Set<string>
+  focusedSessionId: string | null
   onSelect: (id: string) => void
   onSpawnWorkspace: (id: string) => void
   onNewSession: () => void
@@ -99,10 +100,16 @@ export function SessionList({ sessions, openSessionIds, onSelect, onSpawnWorkspa
 
   const renderSession = (s: SidebarSession) => {
     const isOpen = openSessionIds.has(s.bridge_id)
+    const isFocused = focusedSessionId === s.bridge_id
+    const tierClass = isFocused
+      ? 'bc-session-item-selected'
+      : isOpen
+        ? 'bc-session-item-open'
+        : ''
     return (
       <div
         key={s.bridge_id}
-        className={`bc-session-item ${isOpen ? 'bc-session-item-active' : ''}`}
+        className={`bc-session-item ${tierClass}`}
         onContextMenu={e => openSessionMenu(e, s.bridge_id)}
       >
         <button className="bc-session-item-main" onClick={() => onSelect(s.bridge_id)}>

@@ -8,7 +8,7 @@ import { SystemPromptModal } from './SystemPromptModal';
 import { ToolsPanel } from './ToolsPanel';
 import { WorkspaceProvider } from './WorkspaceContext';
 import { generateDefaultAgent } from './utils';
-export function Workspace({ workspace, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }) {
     const bridge = useBridgeSession();
     const [activeChat, setActiveChat] = useState(null);
     const [configModel, setConfigModel] = useState('');
@@ -119,7 +119,7 @@ export function Workspace({ workspace, onUpdate, onClose, harnesses, storeModels
         if (activeChat?.sessionId)
             bridge.renameSession(activeChat.sessionId, name);
     }, [bridge, activeChat]);
-    return (_jsxs("div", { className: "bc-workspace", children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseAllPanes: closeAllPanes, onCloseWorkspace: onClose }), _jsx(WorkspaceProvider, { value: {
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [_jsx(SessionHeader, { chat: activeChat, uiState: bridge.uiState, activity: bridge.activity, rows: bridge.logRows, instance: activeInstance, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onCloseAllPanes: closeAllPanes, onCloseWorkspace: onClose }), _jsx(WorkspaceProvider, { value: {
                     chat: activeChat,
                     rows: bridge.logRows,
                     loading: bridge.loadingHistory,

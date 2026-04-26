@@ -12,6 +12,8 @@ import { generateDefaultAgent } from './utils'
 
 interface WorkspaceProps {
   workspace: WorkspaceState
+  focused: boolean
+  onFocus: () => void
   onUpdate: (fn: (w: WorkspaceState) => WorkspaceState) => void
   onClose?: () => void
   harnesses: HarnessInfo[]
@@ -24,7 +26,7 @@ interface WorkspaceProps {
   }
 }
 
-export function Workspace({ workspace, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }: WorkspaceProps) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }: WorkspaceProps) {
   const bridge = useBridgeSession()
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const [configModel, setConfigModel] = useState('')
@@ -142,7 +144,11 @@ export function Workspace({ workspace, onUpdate, onClose, harnesses, storeModels
   }, [bridge, activeChat])
 
   return (
-    <div className="bc-workspace">
+    <div
+      className={`bc-workspace${focused ? ' bc-workspace-focused' : ''}`}
+      onMouseDownCapture={onFocus}
+      onFocusCapture={onFocus}
+    >
       <SessionHeader
         chat={activeChat}
         uiState={bridge.uiState}

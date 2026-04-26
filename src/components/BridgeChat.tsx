@@ -50,6 +50,7 @@ export function BridgeChat() {
   const [showNewInstance, setShowNewInstance] = useState(false)
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
   const [workspaces, setWorkspaces] = useState<WorkspaceState[]>([])
+  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null)
   const bootstrappedRef = useRef(false)
 
   const toggleHarnessBar = useCallback(() => {
@@ -64,18 +65,39 @@ export function BridgeChat() {
   }, [])
 
   const closeWorkspace = useCallback((id: string) => {
-    setWorkspaces(prev => prev.filter(w => w.id !== id))
+    setWorkspaces(prev => {
+      const next = prev.filter(w => w.id !== id)
+      setFocusedWorkspaceId(curFocus => {
+        if (curFocus !== id) return curFocus
+        return next[0]?.id ?? null
+      })
+      return next
+    })
   }, [])
 
   const spawnWorkspace = useCallback((sessionId: string | null) => {
-    setWorkspaces(prev => [...prev, makeWorkspace(sessionId)])
+    const ws = makeWorkspace(sessionId)
+    setWorkspaces(prev => [...prev, ws])
+    setFocusedWorkspaceId(ws.id)
   }, [])
 
-  // Plain click on a session row tracks last-used (so reload restores the
-  // right one) but does NOT spawn a workspace — use the + button for that.
+  // Plain click on a session row: focus existing workspace if one exists for
+  // that session, else retarget the focused workspace, else spawn one. Use
+  // the + button to explicitly open in a new split.
   const handleSelectSession = useCallback((id: string) => {
-    if (id && selectedInstance) bridgePrefs.setLastSession(selectedInstance, id)
-  }, [bridgePrefs, selectedInstance])
+    if (!id) return
+    const existing = workspaces.find(w => w.sessionId === id)
+    if (existing) {
+      setFocusedWorkspaceId(existing.id)
+    } else if (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId)) {
+      setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id } : w))
+    } else {
+      const ws = makeWorkspace(id)
+      setWorkspaces(prev => [...prev, ws])
+      setFocusedWorkspaceId(ws.id)
+    }
+    if (selectedInstance) bridgePrefs.setLastSession(selectedInstance, id)
+  }, [workspaces, focusedWorkspaceId, bridgePrefs, selectedInstance])
 
   useEffect(() => {
     apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data: StoreModel[]) => {
@@ -104,13 +126,11 @@ export function BridgeChat() {
     if (bootstrappedRef.current) return
     if (!selectedInstance) return
     const lastId = bridgePrefs.getLastSession(selectedInstance)
+    bootstrappedRef.current = true
     if (lastId) {
-      bootstrappedRef.current = true
-      setWorkspaces([makeWorkspace(lastId)])
-    } else {
-      // Mark bootstrapped so we don't keep retrying on every render once an
-      // instance is selected without a saved last session.
-      bootstrappedRef.current = true
+      const ws = makeWorkspace(lastId)
+      setWorkspaces([ws])
+      setFocusedWorkspaceId(ws.id)
     }
   }, [selectedInstance, bridgePrefs])
 
@@ -187,6 +207,10 @@ export function BridgeChat() {
     () => new Set(workspaces.map(w => w.sessionId).filter((id): id is string => !!id)),
     [workspaces]
   )
+  const focusedSessionId = useMemo(() => {
+    const ws = workspaces.find(w => w.id === focusedWorkspaceId)
+    return ws?.sessionId ?? null
+  }, [workspaces, focusedWorkspaceId])
 
   return (
     <div className={`bc-container ${collapseState.harnessBar ? 'bc-harness-collapsed' : ''} ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`}>
@@ -220,6 +244,7 @@ export function BridgeChat() {
           <SessionList
             sessions={filteredSessions}
             openSessionIds={openSessionIds}
+            focusedSessionId={focusedSessionId}
             onSelect={handleSelectSession}
             onSpawnWorkspace={spawnWorkspace}
             onNewSession={handleCreate}
@@ -243,6 +268,8 @@ export function BridgeChat() {
               <Workspace
                 key={w.id}
                 workspace={w}
+                focused={w.id === focusedWorkspaceId}
+                onFocus={() => setFocusedWorkspaceId(w.id)}
                 onUpdate={fn => updateWorkspace(w.id, fn)}
                 onClose={() => closeWorkspace(w.id)}
                 harnesses={harnesses}

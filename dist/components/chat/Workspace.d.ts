@@ -2,6 +2,8 @@ import type { BridgeInstance, HarnessInfo } from '../../types';
 import type { StoreModel, WorkspaceState } from './types';
 interface WorkspaceProps {
     workspace: WorkspaceState;
+    focused: boolean;
+    onFocus: () => void;
     onUpdate: (fn: (w: WorkspaceState) => WorkspaceState) => void;
     onClose?: () => void;
     harnesses: HarnessInfo[];
@@ -23,6 +25,6 @@ interface WorkspaceProps {
         setLastSession: (instanceId: string, sessionId: string) => void;
     };
 }
-export declare function Workspace({ workspace, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }: WorkspaceProps): import("react/jsx-runtime").JSX.Element;
+export declare function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, storeModels, instanceMap, bridgePrefs }: WorkspaceProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=Workspace.d.ts.map

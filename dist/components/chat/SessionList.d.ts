@@ -1,8 +1,9 @@
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders';
 import type { SidebarSession } from './types';
-export declare function SessionList({ sessions, openSessionIds, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export declare function SessionList({ sessions, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
     sessions: SidebarSession[];
     openSessionIds: Set<string>;
+    focusedSessionId: string | null;
     onSelect: (id: string) => void;
     onSpawnWorkspace: (id: string) => void;
     onNewSession: () => void;
