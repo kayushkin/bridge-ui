@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
-import { HARNESS_LABEL, HARNESS_EMOJI } from '../constants'
 import type { HarnessDefaults, HarnessInfo } from '../types'
 import { SourceFoldersEditor } from './SourceFoldersEditor'
 
@@ -82,8 +81,8 @@ export function BridgeSettings() {
         {harnesses.map(h => {
           const defaults = localDefaults[h.name] || {}
           const isExpanded = expanded[h.name]
-          const label = h.label || HARNESS_LABEL[h.name] || h.name
-          const emoji = h.emoji || HARNESS_EMOJI[h.name] || ''
+          const label = h.label || h.name
+          const emoji = h.emoji || ''
 
           return (
             <div key={h.name} className={`bset-card ${!h.available ? 'bset-unavailable' : ''}`}>

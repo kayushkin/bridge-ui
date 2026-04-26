@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BridgeInstance, HarnessInfo, ManagedSession } from '../../types'
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
-import { HARNESS_EMOJI } from '../../constants'
 import { EditableName } from './EditableName'
 import { InstanceFilterBar } from './InstanceFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
@@ -171,7 +170,7 @@ export function SessionList({ sessions, instances, harnesses, basePath, instance
           <span className="bc-session-harness" title={harnessTitle}>
             {hinfo?.image
               ? <img src={`${basePath}${hinfo.image}`} alt="" />
-              : <span className="bc-session-harness-emoji">{hinfo?.emoji || HARNESS_EMOJI[s.harness] || '·'}</span>}
+              : <span className="bc-session-harness-emoji">{hinfo?.emoji || '·'}</span>}
           </span>
           <span className={`bc-sdot bc-sdot-${s.state}`} />
           <EditableName

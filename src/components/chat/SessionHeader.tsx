@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react'
-import { HARNESS_EMOJI, HARNESS_LABEL, HARNESS_TINT } from '../../constants'
 import type { HarnessInfo, LogRow } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
@@ -48,19 +47,15 @@ export function SessionHeader({ chat, harnessInfo, basePath, uiState, rows, onRe
     ? uiState.charAt(0).toUpperCase() + uiState.slice(1)
     : 'No session'
 
-  // Per-harness header tint, exposed as --bc-harness so styles.css can
-  // color-mix() it down for the bg gradient and accent edges. Falls back to
-  // the host theme's --accent for unmapped harnesses.
+  // All harness chrome (label / emoji / image / tint) comes from server-side
+  // HarnessInfo. No client-side fallback maps — if a field is missing, fix
+  // the server registration (llm-bridge-server harnessMetadata).
   const harness = chat?.harness ?? ''
-  const harnessTint = harness ? HARNESS_TINT[harness] : undefined
-  // Server-first: HarnessInfo from /harnesses is the canonical source for
-  // label/emoji/image (matches SessionList, BridgeSettings, BridgeConformance,
-  // NewSessionMenu). Constants only kick in for harnesses missing server-side.
-  const harnessLabel = harness ? (harnessInfo?.label || HARNESS_LABEL[harness] || harness) : ''
-  const harnessEmoji = harness ? (harnessInfo?.emoji || HARNESS_EMOJI[harness] || '') : ''
+  const harnessLabel = harnessInfo?.label || harness
+  const harnessEmoji = harnessInfo?.emoji || ''
   const harnessImage = harnessInfo?.image
-  const headerStyle: CSSProperties | undefined = harnessTint
-    ? ({ ['--bc-harness']: harnessTint } as CSSProperties)
+  const headerStyle: CSSProperties | undefined = harnessInfo?.tint
+    ? ({ ['--bc-harness']: harnessInfo.tint } as CSSProperties)
     : undefined
 
   const currentRepo = gitRepos.find(r => r.path === selectedRepo) ?? gitRepos[0]

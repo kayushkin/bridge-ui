@@ -34,7 +34,7 @@ export type {
 } from './types'
 
 // Constants
-export { HARNESS_LABEL, HARNESS_EMOJI, HARNESS_TINT, TRANSPORT_LABEL } from './constants'
+export { TRANSPORT_LABEL } from './constants'
 
 // Context & Provider
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context'

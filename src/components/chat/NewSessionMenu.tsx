@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { BridgeInstance, HarnessInfo } from '../../types'
-import { HARNESS_EMOJI, TRANSPORT_LABEL } from '../../constants'
+import { TRANSPORT_LABEL } from '../../constants'
 
 interface NewSessionMenuProps {
   instances: BridgeInstance[]
@@ -61,7 +61,7 @@ export function NewSessionMenu({ instances, harnesses, defaultInstanceId, basePa
             <div className="bc-new-session-group-label">
               {info?.image
                 ? <img className="bc-new-session-group-img" src={`${basePath}${info.image}`} alt="" />
-                : <span>{info?.emoji || HARNESS_EMOJI[harnessType] || ''}</span>}
+                : <span>{info?.emoji || ''}</span>}
               <span>{info?.label || harnessType}</span>
             </div>
             {group.map(inst => (

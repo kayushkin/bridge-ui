@@ -109,9 +109,9 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   }, [bridge.activeSession])
 
   const activeHarness = activeChat?.harness ?? ''
-  // Server-registered HarnessInfo for the active harness — the canonical
-  // source for label/emoji/image. Constants (HARNESS_LABEL/HARNESS_EMOJI)
-  // remain only as fallbacks for harnesses the server doesn't know yet.
+  // Server-registered HarnessInfo for the active harness — single source
+  // of truth for label / emoji / image / tint. No client-side fallbacks;
+  // missing fields mean the server registration needs fixing.
   const activeHarnessInfo = useMemo(
     () => activeHarness ? harnesses.find(h => h.name === activeHarness) : undefined,
     [harnesses, activeHarness]

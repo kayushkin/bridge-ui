@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useBridgeConfig } from '../context'
-import { HARNESS_LABEL, HARNESS_EMOJI } from '../constants'
 import type { HarnessInfo } from '../types'
 import type { ConformanceMatrix, ConformanceHarnessResult, ConformanceTestResult } from '@kayushkin/llm-bridge-types'
 
@@ -241,8 +240,8 @@ function HarnessRow({
   onToggle: () => void
   basePath: string
 }) {
-  const label = harness.label || HARNESS_LABEL[harness.name] || harness.name
-  const emoji = harness.emoji || HARNESS_EMOJI[harness.name] || ''
+  const label = harness.label || harness.name
+  const emoji = harness.emoji || ''
 
   const nameCell = (
     <td className={`cf-td-harness-col cf-harness-state-${state}`} onClick={onToggle}>

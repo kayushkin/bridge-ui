@@ -1389,7 +1389,7 @@
 }
 .bset-card-header:hover { background: rgba(99, 102, 241, 0.05); }
 .bset-harness-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
-.bset-harness-img { width: 20px; height: 20px; border-radius: 4px; }
+.bset-harness-img { width: 20px; height: 20px; border-radius: 4px; object-fit: contain; }
 .bset-emoji { font-size: 1.1em; }
 .bset-unavail-badge { padding: 2px 8px; border-radius: 6px; background: #1a1a1a; color: #888; font-size: 0.75em; font-weight: 400; }
 .bset-expand-icon { color: var(--text-dim); font-size: 1.2em; }
@@ -1599,6 +1599,7 @@
   width: 20px;
   height: 20px;
   border-radius: 4px;
+  object-fit: contain;
   vertical-align: middle;
   margin-right: 4px;
 }
@@ -1785,7 +1786,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.bc-new-session-group-img { width: 14px; height: 14px; border-radius: 3px; }
+.bc-new-session-group-img { width: 14px; height: 14px; border-radius: 3px; object-fit: contain; }
 .bc-new-session-item {
   display: flex;
   align-items: center;
@@ -1850,7 +1851,7 @@
 }
 .bc-inst-chip:hover { border-color: var(--accent); color: var(--text); }
 .bc-inst-chip-active { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); color: var(--text); opacity: 1; }
-.bc-inst-chip-img { width: 16px; height: 16px; border-radius: 2px; }
+.bc-inst-chip-img { width: 16px; height: 16px; border-radius: 2px; object-fit: contain; }
 .bc-inst-chip-emoji { font-size: 1.1em; }
 .bc-inst-filter-clear {
   align-self: flex-end;
@@ -1872,7 +1873,7 @@
   width: 16px;
   height: 16px;
 }
-.bc-session-harness img { width: 16px; height: 16px; border-radius: 3px; display: block; }
+.bc-session-harness img { width: 16px; height: 16px; border-radius: 3px; display: block; object-fit: contain; }
 .bc-session-harness-emoji { font-size: 1em; line-height: 1; }
 
 .bc-sidebar-strip {
@@ -2301,9 +2302,10 @@
 .bc-workspace-focused .bc-header { box-shadow: none; }
 
 /* Header — gets a harness-keyed tint via the inline --bc-harness CSS var
- * SessionHeader sets. Falls back to the host's --accent for harnesses with
- * no entry in HARNESS_TINT. The tint is composited as a left-to-right wash
- * on top of the standard glass top-light gradient. */
+ * SessionHeader sets from HarnessInfo.tint. Falls back to the host's
+ * --accent when the harness has no canonical color server-side. The tint
+ * is composited as a left-to-right wash on top of the standard glass
+ * top-light gradient. */
 .bc-header {
   padding: 11px 18px;
   background:
@@ -2342,7 +2344,7 @@
   flex-shrink: 0;
 }
 .bc-harness-chip-emoji { font-size: 0.95em; line-height: 1; }
-.bc-harness-chip-img { width: 14px; height: 14px; border-radius: 3px; display: block; flex-shrink: 0; }
+.bc-harness-chip-img { width: 14px; height: 14px; border-radius: 3px; display: block; flex-shrink: 0; object-fit: contain; }
 .bc-harness-chip-label { line-height: 1; }
 
 /* Repo chip — current git project + dropdown. The native <select> overlays
