@@ -16,7 +16,6 @@ export interface ChatSession {
     displayName: string;
 }
 export interface CollapseState {
-    harnessBar: boolean;
     sessionList: boolean;
     turns: boolean;
     thread: boolean;
@@ -24,7 +23,6 @@ export interface CollapseState {
     git: boolean;
 }
 export interface AppCollapseState {
-    harnessBar: boolean;
     sessionList: boolean;
 }
 export type PaneKey = 'turns' | 'thread' | 'timeline' | 'git';
@@ -42,6 +40,7 @@ export interface SidebarSession {
     agent_id?: string;
     display_name: string;
     harness: string;
+    instance_id?: string;
     state: string;
     updated_at: string;
     folder_name?: string;

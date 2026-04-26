@@ -5,6 +5,7 @@ const SIZES_KEY = 'bridge-ui-split-sizes'
 const FILTER_KEY = 'bridge-ui-type-filter'
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed'
 const WORKSPACES_KEY = 'bridge-ui-workspaces'
+const INSTANCE_FILTER_KEY = 'bridge-ui-instance-filter'
 
 export const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
 
@@ -12,14 +13,13 @@ export function loadCollapseState(): CollapseState {
   try {
     const s = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}')
     return {
-      harnessBar: !!s.harnessBar,
       sessionList: !!s.sessionList,
       turns: !!s.turns,
       thread: !!s.thread,
       timeline: s.timeline === undefined ? true : !!s.timeline,
       git: s.git === undefined ? true : !!s.git,
     }
-  } catch { return { harnessBar: false, sessionList: false, turns: false, thread: false, timeline: true, git: true } }
+  } catch { return { sessionList: false, turns: false, thread: false, timeline: true, git: true } }
 }
 
 export function saveCollapseState(s: CollapseState) {
@@ -85,4 +85,18 @@ export function loadWorkspacesState(): PersistedWorkspaces {
 
 export function saveWorkspacesState(s: PersistedWorkspaces) {
   try { localStorage.setItem(WORKSPACES_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+
+// Excluded instance IDs for the sidebar filter. Default = empty set (show all).
+export function loadExcludedInstances(): Set<string> {
+  try {
+    const raw = localStorage.getItem(INSTANCE_FILTER_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return new Set(Array.isArray(arr) ? arr.map(String) : [])
+  } catch { return new Set() }
+}
+
+export function saveExcludedInstances(s: Set<string>) {
+  try { localStorage.setItem(INSTANCE_FILTER_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
 }

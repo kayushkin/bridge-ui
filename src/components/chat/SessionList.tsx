@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { BridgeInstance, HarnessInfo } from '../../types'
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
+import { HARNESS_EMOJI } from '../../constants'
 import { EditableName } from './EditableName'
-import { loadFolderCollapsed, saveFolderCollapsed } from './persistence'
+import { InstanceFilterBar } from './InstanceFilterBar'
+import { NewSessionMenu } from './NewSessionMenu'
+import { loadExcludedInstances, loadFolderCollapsed, saveExcludedInstances, saveFolderCollapsed } from './persistence'
 import type { CtxMenuState, SidebarSession } from './types'
 
-export function SessionList({ sessions, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: SidebarSession[]
+  instances: BridgeInstance[]
+  harnesses: HarnessInfo[]
+  basePath: string
+  instancesPath: string
+  defaultInstanceId?: string
   openSessionIds: Set<string>
   focusedSessionId: string | null
   onSelect: (id: string) => void
   onSpawnWorkspace: (id: string) => void
-  onNewSession: () => void
+  onNewSession: (instanceId: string) => void
   connected: boolean
   getDisplayName: (session: SidebarSession) => string
   onRename: (id: string, name: string) => void
@@ -23,6 +32,8 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const newFolderRef = useRef<HTMLInputElement>(null)
+  const [excluded, setExcluded] = useState<Set<string>>(loadExcludedInstances)
+  const [showNewMenu, setShowNewMenu] = useState(false)
 
   useEffect(() => {
     if (!ctxMenu) return
@@ -35,9 +46,26 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
     if (showNewFolder) newFolderRef.current?.focus()
   }, [showNewFolder])
 
+  const harnessMap = useMemo(() => {
+    const m = new Map<string, HarnessInfo>()
+    for (const h of harnesses) m.set(h.name, h)
+    return m
+  }, [harnesses])
+
+  const instanceMap = useMemo(() => {
+    const m = new Map<string, BridgeInstance>()
+    for (const i of instances) m.set(i.id, i)
+    return m
+  }, [instances])
+
+  const filtered = useMemo(() =>
+    sessions.filter(s => !s.instance_id || !excluded.has(s.instance_id)),
+    [sessions, excluded]
+  )
+
   const sorted = useMemo(() =>
-    [...sessions].sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-    [sessions]
+    [...filtered].sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    [filtered]
   )
 
   const { unfiled, grouped } = useMemo(() => {
@@ -58,6 +86,25 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
     setCollapsed(prev => {
       const next = { ...prev, [name]: !prev[name] }
       saveFolderCollapsed(next)
+      return next
+    })
+  }
+
+  const toggleInstance = (id: string) => {
+    setExcluded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      saveExcludedInstances(next)
+      return next
+    })
+  }
+
+  const clearInstanceFilter = () => {
+    setExcluded(prev => {
+      if (prev.size === 0) return prev
+      const next = new Set<string>()
+      saveExcludedInstances(next)
       return next
     })
   }
@@ -98,6 +145,11 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
     onAfterFolderChange()
   }
 
+  const handlePickInstance = (id: string) => {
+    setShowNewMenu(false)
+    onNewSession(id)
+  }
+
   const renderSession = (s: SidebarSession) => {
     const isOpen = openSessionIds.has(s.bridge_id)
     const isFocused = focusedSessionId === s.bridge_id
@@ -106,6 +158,9 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
       : isOpen
         ? 'bc-session-item-open'
         : ''
+    const hinfo = harnessMap.get(s.harness)
+    const instance = s.instance_id ? instanceMap.get(s.instance_id) : undefined
+    const harnessTitle = instance ? `${hinfo?.label || s.harness} — ${instance.name}` : (hinfo?.label || s.harness)
     return (
       <div
         key={s.bridge_id}
@@ -113,6 +168,11 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
         onContextMenu={e => openSessionMenu(e, s.bridge_id)}
       >
         <button className="bc-session-item-main" onClick={() => onSelect(s.bridge_id)}>
+          <span className="bc-session-harness" title={harnessTitle}>
+            {hinfo?.image
+              ? <img src={`${basePath}${hinfo.image}`} alt="" />
+              : <span className="bc-session-harness-emoji">{hinfo?.emoji || HARNESS_EMOJI[s.harness] || '·'}</span>}
+          </span>
           <span className={`bc-sdot bc-sdot-${s.state}`} />
           <EditableName
             value={getDisplayName(s)}
@@ -137,14 +197,50 @@ export function SessionList({ sessions, openSessionIds, focusedSessionId, onSele
     )
   }
 
+  const enabledInstanceCount = useMemo(() => instances.filter(i => i.enabled).length, [instances])
+
   return (
     <div className="bc-session-list">
       <div className="bc-new-session">
-        <button className="bc-new-session-btn" onClick={onNewSession} disabled={!connected}>+ New Session</button>
+        <div className="bc-new-session-wrap">
+          <button
+            className="bc-new-session-btn"
+            onClick={() => setShowNewMenu(s => !s)}
+            disabled={!connected || enabledInstanceCount === 0}
+            aria-haspopup="menu"
+            aria-expanded={showNewMenu}
+          >
+            + New Session <span className="bc-new-session-caret">▾</span>
+          </button>
+          {showNewMenu && (
+            <NewSessionMenu
+              instances={instances}
+              harnesses={harnesses}
+              defaultInstanceId={defaultInstanceId}
+              basePath={basePath}
+              instancesPath={instancesPath}
+              onPick={handlePickInstance}
+              onClose={() => setShowNewMenu(false)}
+            />
+          )}
+        </div>
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
+
+      <InstanceFilterBar
+        instances={instances}
+        harnesses={harnesses}
+        sessions={sessions}
+        excluded={excluded}
+        onToggle={toggleInstance}
+        onClear={clearInstanceFilter}
+        basePath={basePath}
+      />
+
       {sorted.length === 0 && (
-        <div className="bc-session-list-empty">{connected ? 'No sessions yet' : 'Connecting...'}</div>
+        <div className="bc-session-list-empty">
+          {!connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter')}
+        </div>
       )}
 
       {unfiled.map(renderSession)}
