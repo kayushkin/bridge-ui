@@ -80,11 +80,12 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
           aria-label={dotTitle}
         />
         {harness && (
-          <span className="bc-harness-chip" title={harnessLabel}>
+          <span className="bc-harness-chip" title={harnessLabel} aria-label={harnessLabel}>
             {harnessImage
               ? <img className="bc-harness-chip-img" src={`${basePath}${harnessImage}`} alt="" />
-              : harnessEmoji && <span className="bc-harness-chip-emoji" aria-hidden>{harnessEmoji}</span>}
-            <span className="bc-harness-chip-label">{harnessLabel}</span>
+              : harnessEmoji
+                ? <span className="bc-harness-chip-emoji" aria-hidden>{harnessEmoji}</span>
+                : <span className="bc-harness-chip-label">{harnessLabel}</span>}
           </span>
         )}
         {machine && (
@@ -141,22 +142,23 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
             <span className="bc-repo-chip-caret" aria-hidden>▾</span>
           </label>
         )}
-        <span className="bc-spacer" />
-        <PaneToggles
-          panesHidden={panesHidden}
-          onToggleTurns={onToggleTurns}
-          onToggleThread={onToggleThread}
-          onToggleTimeline={onToggleTimeline}
-          onToggleGit={onToggleGit}
-        />
-        {onCloseWorkspace && (
-          <button
-            className="bc-workspace-close"
-            onClick={onCloseWorkspace}
-            title="Close workspace"
-            aria-label="Close workspace"
-          >×</button>
-        )}
+        <div className="bc-header-right">
+          <PaneToggles
+            panesHidden={panesHidden}
+            onToggleTurns={onToggleTurns}
+            onToggleThread={onToggleThread}
+            onToggleTimeline={onToggleTimeline}
+            onToggleGit={onToggleGit}
+          />
+          {onCloseWorkspace && (
+            <button
+              className="bc-workspace-close"
+              onClick={onCloseWorkspace}
+              title="Close workspace"
+              aria-label="Close workspace"
+            >×</button>
+          )}
+        </div>
       </div>
       {contextTokens > 0 && contextLimit > 0 && (
         <div

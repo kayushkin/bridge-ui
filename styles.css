@@ -277,7 +277,11 @@
 }
 .bc-header-context-warn { background: #f59e0b; }
 .bc-header-context-crit { background: #ef4444; }
-.bc-header-row { display: flex; align-items: center; gap: 8px; font-size: 0.85em; min-height: 28px; }
+.bc-header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 6px; font-size: 0.85em; min-height: 28px; }
+/* Right cluster (pane toggles + close) — pinned right via margin-left:auto.
+ * Wraps as a single unit so the close button never gets orphaned off-screen
+ * when the header is narrow (e.g. multiple workspaces open side-by-side). */
+.bc-header-right { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
 /* Unified status dot — used in header (compact) and as a glyph in the composer status row */
 .bc-status-dot {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #555;
