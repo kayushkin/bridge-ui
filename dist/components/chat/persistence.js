@@ -3,7 +3,7 @@ const SIZES_KEY = 'bridge-ui-split-sizes';
 const FILTER_KEY = 'bridge-ui-type-filter';
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed';
 const WORKSPACES_KEY = 'bridge-ui-workspaces';
-const INSTANCE_FILTER_KEY = 'bridge-ui-instance-filter';
+const HARNESS_FILTER_KEY = 'bridge-ui-harness-filter';
 export const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1 };
 export function loadCollapseState() {
     try {
@@ -103,10 +103,10 @@ export function saveWorkspacesState(s) {
     }
     catch { /* ignore */ }
 }
-// Excluded instance IDs for the sidebar filter. Default = empty set (show all).
-export function loadExcludedInstances() {
+// Excluded harness names for the sidebar filter. Default = empty set (show all).
+export function loadExcludedHarnesses() {
     try {
-        const raw = localStorage.getItem(INSTANCE_FILTER_KEY);
+        const raw = localStorage.getItem(HARNESS_FILTER_KEY);
         if (!raw)
             return new Set();
         const arr = JSON.parse(raw);
@@ -116,9 +116,9 @@ export function loadExcludedInstances() {
         return new Set();
     }
 }
-export function saveExcludedInstances(s) {
+export function saveExcludedHarnesses(s) {
     try {
-        localStorage.setItem(INSTANCE_FILTER_KEY, JSON.stringify([...s]));
+        localStorage.setItem(HARNESS_FILTER_KEY, JSON.stringify([...s]));
     }
     catch { /* ignore */ }
 }

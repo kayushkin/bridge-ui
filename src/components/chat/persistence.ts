@@ -5,7 +5,7 @@ const SIZES_KEY = 'bridge-ui-split-sizes'
 const FILTER_KEY = 'bridge-ui-type-filter'
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed'
 const WORKSPACES_KEY = 'bridge-ui-workspaces'
-const INSTANCE_FILTER_KEY = 'bridge-ui-instance-filter'
+const HARNESS_FILTER_KEY = 'bridge-ui-harness-filter'
 
 export const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
 
@@ -87,18 +87,18 @@ export function saveWorkspacesState(s: PersistedWorkspaces) {
   try { localStorage.setItem(WORKSPACES_KEY, JSON.stringify(s)) } catch { /* ignore */ }
 }
 
-// Excluded instance IDs for the sidebar filter. Default = empty set (show all).
-export function loadExcludedInstances(): Set<string> {
+// Excluded harness names for the sidebar filter. Default = empty set (show all).
+export function loadExcludedHarnesses(): Set<string> {
   try {
-    const raw = localStorage.getItem(INSTANCE_FILTER_KEY)
+    const raw = localStorage.getItem(HARNESS_FILTER_KEY)
     if (!raw) return new Set()
     const arr = JSON.parse(raw)
     return new Set(Array.isArray(arr) ? arr.map(String) : [])
   } catch { return new Set() }
 }
 
-export function saveExcludedInstances(s: Set<string>) {
-  try { localStorage.setItem(INSTANCE_FILTER_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
+export function saveExcludedHarnesses(s: Set<string>) {
+  try { localStorage.setItem(HARNESS_FILTER_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
 }
 
 // Excluded machine IDs for the sidebar filter — sibling to the instance

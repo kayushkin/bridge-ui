@@ -1,16 +1,16 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EditableName } from './EditableName';
-import { InstanceFilterBar } from './InstanceFilterBar';
+import { HarnessFilterBar } from './HarnessFilterBar';
 import { NewSessionMenu } from './NewSessionMenu';
-import { loadExcludedInstances, loadExcludedMachines, loadFolderCollapsed, saveExcludedInstances, saveExcludedMachines, saveFolderCollapsed, } from './persistence';
+import { loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed, saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed, } from './persistence';
 export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }) {
     const [collapsed, setCollapsed] = useState(loadFolderCollapsed);
     const [ctxMenu, setCtxMenu] = useState(null);
     const [showNewFolder, setShowNewFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const newFolderRef = useRef(null);
-    const [excluded, setExcluded] = useState(loadExcludedInstances);
+    const [excludedHarnesses, setExcludedHarnesses] = useState(loadExcludedHarnesses);
     const [excludedMachines, setExcludedMachines] = useState(loadExcludedMachines);
     const [showNewMenu, setShowNewMenu] = useState(false);
     useEffect(() => {
@@ -43,15 +43,13 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         return m;
     }, [instances]);
     const filtered = useMemo(() => sessions.filter(s => {
-        if (!s.instance_id)
-            return true;
-        if (excluded.has(s.instance_id))
+        if (excludedHarnesses.has(s.harness))
             return false;
-        const machineID = instanceMachineByID.get(s.instance_id);
+        const machineID = s.instance_id ? instanceMachineByID.get(s.instance_id) : undefined;
         if (machineID && excludedMachines.has(machineID))
             return false;
         return true;
-    }), [sessions, excluded, excludedMachines, instanceMachineByID]);
+    }), [sessions, excludedHarnesses, excludedMachines, instanceMachineByID]);
     const sorted = useMemo(() => [...filtered].sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [filtered]);
     const { unfiled, grouped } = useMemo(() => {
         const known = new Set(folders.folderOrder);
@@ -76,14 +74,14 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
             return next;
         });
     };
-    const toggleInstance = (id) => {
-        setExcluded(prev => {
+    const toggleHarness = (name) => {
+        setExcludedHarnesses(prev => {
             const next = new Set(prev);
-            if (next.has(id))
-                next.delete(id);
+            if (next.has(name))
+                next.delete(name);
             else
-                next.add(id);
-            saveExcludedInstances(next);
+                next.add(name);
+            saveExcludedHarnesses(next);
             return next;
         });
     };
@@ -98,10 +96,10 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
             return next;
         });
     };
-    const clearInstanceFilter = () => {
-        setExcluded(prev => {
+    const clearSessionFilter = () => {
+        setExcludedHarnesses(prev => {
             if (prev.size > 0)
-                saveExcludedInstances(new Set());
+                saveExcludedHarnesses(new Set());
             return prev.size === 0 ? prev : new Set();
         });
         setExcludedMachines(prev => {
@@ -167,7 +165,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                                 : _jsx("span", { className: "bc-session-harness-emoji", children: hinfo?.emoji || '·' }) }), _jsx("span", { className: `bc-sdot bc-sdot-${s.state}` }), _jsx(EditableName, { value: getDisplayName(s), onSave: name => onRename(s.bridge_id, name), className: "bc-session-label" })] }), _jsx("button", { className: "bc-session-spawn-btn", onClick: e => { e.stopPropagation(); onSpawnWorkspace(s.bridge_id); }, title: "Open in new workspace", "aria-label": "Open in new workspace", children: "+" }), _jsx("span", { className: "bc-session-menu-btn", role: "button", tabIndex: 0, onClick: e => openSessionMenu(e, s.bridge_id), title: "Move to folder", children: "\u22EF" })] }, s.bridge_id));
     };
     const enabledInstanceCount = useMemo(() => instances.filter(i => i.enabled).length, [instances]);
-    return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsxs("div", { className: "bc-new-session-wrap", children: [_jsxs("button", { className: "bc-new-session-btn", onClick: () => setShowNewMenu(s => !s), disabled: !connected || enabledInstanceCount === 0, "aria-haspopup": "menu", "aria-expanded": showNewMenu, children: ["+ New Session ", _jsx("span", { className: "bc-new-session-caret", children: "\u25BE" })] }), showNewMenu && (_jsx(NewSessionMenu, { instances: instances, harnesses: harnesses, defaultInstanceId: defaultInstanceId, basePath: basePath, instancesPath: instancesPath, onPick: handlePickInstance, onClose: () => setShowNewMenu(false) }))] }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), _jsx(InstanceFilterBar, { instances: instances, machines: machines, harnesses: harnesses, sessions: sessions, excluded: excluded, excludedMachines: excludedMachines, onToggle: toggleInstance, onToggleMachine: toggleMachine, onClear: clearInstanceFilter, basePath: basePath }), sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: !connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter') })), unfiled.map(renderSession), grouped.map(({ name, sessions: entries }) => {
+    return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsxs("div", { className: "bc-new-session-wrap", children: [_jsxs("button", { className: "bc-new-session-btn", onClick: () => setShowNewMenu(s => !s), disabled: !connected || enabledInstanceCount === 0, "aria-haspopup": "menu", "aria-expanded": showNewMenu, children: ["+ New Session ", _jsx("span", { className: "bc-new-session-caret", children: "\u25BE" })] }), showNewMenu && (_jsx(NewSessionMenu, { instances: instances, harnesses: harnesses, defaultInstanceId: defaultInstanceId, basePath: basePath, instancesPath: instancesPath, onPick: handlePickInstance, onClose: () => setShowNewMenu(false) }))] }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), _jsx(HarnessFilterBar, { machines: machines, harnesses: harnesses, sessions: sessions, instanceMachineByID: instanceMachineByID, excludedHarnesses: excludedHarnesses, excludedMachines: excludedMachines, onToggleHarness: toggleHarness, onToggleMachine: toggleMachine, onClear: clearSessionFilter, basePath: basePath }), sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: !connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter') })), unfiled.map(renderSession), grouped.map(({ name, sessions: entries }) => {
                 const isCollapsed = collapsed[name] ?? false;
                 const hasActive = entries.some(s => openSessionIds.has(s.bridge_id));
                 return (_jsxs("div", { children: [_jsxs("button", { className: `bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`, onClick: () => toggleFolder(name), onContextMenu: e => openFolderMenu(e, name), children: [_jsx("span", { className: "bc-folder-chevron", children: isCollapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-folder-icon", children: "\uD83D\uDCC1" }), _jsx("span", { className: "bc-folder-name", children: name }), _jsx("span", { className: "bc-folder-count", children: entries.length })] }), !isCollapsed && entries.map(renderSession)] }, name));

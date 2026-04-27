@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types'
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
-import { InstanceFilterBar } from './InstanceFilterBar'
+import { HarnessFilterBar } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
 import {
-  loadExcludedInstances, loadExcludedMachines, loadFolderCollapsed,
-  saveExcludedInstances, saveExcludedMachines, saveFolderCollapsed,
+  loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
+  saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
 } from './persistence'
 import type { CtxMenuState } from './types'
 
@@ -35,7 +35,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const newFolderRef = useRef<HTMLInputElement>(null)
-  const [excluded, setExcluded] = useState<Set<string>>(loadExcludedInstances)
+  const [excludedHarnesses, setExcludedHarnesses] = useState<Set<string>>(loadExcludedHarnesses)
   const [excludedMachines, setExcludedMachines] = useState<Set<string>>(loadExcludedMachines)
   const [showNewMenu, setShowNewMenu] = useState(false)
 
@@ -70,13 +70,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
 
   const filtered = useMemo(() =>
     sessions.filter(s => {
-      if (!s.instance_id) return true
-      if (excluded.has(s.instance_id)) return false
-      const machineID = instanceMachineByID.get(s.instance_id)
+      if (excludedHarnesses.has(s.harness)) return false
+      const machineID = s.instance_id ? instanceMachineByID.get(s.instance_id) : undefined
       if (machineID && excludedMachines.has(machineID)) return false
       return true
     }),
-    [sessions, excluded, excludedMachines, instanceMachineByID]
+    [sessions, excludedHarnesses, excludedMachines, instanceMachineByID]
   )
 
   const sorted = useMemo(() =>
@@ -106,12 +105,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     })
   }
 
-  const toggleInstance = (id: string) => {
-    setExcluded(prev => {
+  const toggleHarness = (name: string) => {
+    setExcludedHarnesses(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      saveExcludedInstances(next)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      saveExcludedHarnesses(next)
       return next
     })
   }
@@ -126,9 +125,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     })
   }
 
-  const clearInstanceFilter = () => {
-    setExcluded(prev => {
-      if (prev.size > 0) saveExcludedInstances(new Set())
+  const clearSessionFilter = () => {
+    setExcludedHarnesses(prev => {
+      if (prev.size > 0) saveExcludedHarnesses(new Set())
       return prev.size === 0 ? prev : new Set()
     })
     setExcludedMachines(prev => {
@@ -255,16 +254,16 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
 
-      <InstanceFilterBar
-        instances={instances}
+      <HarnessFilterBar
         machines={machines}
         harnesses={harnesses}
         sessions={sessions}
-        excluded={excluded}
+        instanceMachineByID={instanceMachineByID}
+        excludedHarnesses={excludedHarnesses}
         excludedMachines={excludedMachines}
-        onToggle={toggleInstance}
+        onToggleHarness={toggleHarness}
         onToggleMachine={toggleMachine}
-        onClear={clearInstanceFilter}
+        onClear={clearSessionFilter}
         basePath={basePath}
       />
 

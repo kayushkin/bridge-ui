@@ -14,8 +14,8 @@ export interface PersistedWorkspaces {
 }
 export declare function loadWorkspacesState(): PersistedWorkspaces;
 export declare function saveWorkspacesState(s: PersistedWorkspaces): void;
-export declare function loadExcludedInstances(): Set<string>;
-export declare function saveExcludedInstances(s: Set<string>): void;
+export declare function loadExcludedHarnesses(): Set<string>;
+export declare function saveExcludedHarnesses(s: Set<string>): void;
 export declare function loadExcludedMachines(): Set<string>;
 export declare function saveExcludedMachines(s: Set<string>): void;
 //# sourceMappingURL=persistence.d.ts.map

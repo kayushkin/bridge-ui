@@ -35,9 +35,16 @@ export function useStickyBottomScroll(threshold = 40) {
             setAtBottom(atBottom);
         };
         c.addEventListener('scroll', onScroll, { passive: true });
+        // Initial mount: if we're starting in sticky-bottom mode (the default and
+        // also the state we land in after a remount triggered by layout/split
+        // changes), snap to the bottom before evaluating user position. Without
+        // this, fresh DOM with scrollTop=0 and overflowing content makes onScroll
+        // flip isAtBottom to false, which then disables the resize-pin path.
+        if (isAtBottomRef.current)
+            pinNow();
         onScroll();
         return () => c.removeEventListener('scroll', onScroll);
-    }, [threshold, setAtBottom]);
+    }, [threshold, setAtBottom, pinNow]);
     // Re-pin on container resize and content size changes (streaming text,
     // image loads, expanding rows, window/pane resize). When the user is sticky,
     // any layout change snaps back to the bottom; otherwise we leave them be.
