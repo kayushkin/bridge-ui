@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { BridgeInstance, HarnessInfo } from '../../types'
+import type { SplitMode } from './types'
 
 interface NewSessionMenuProps {
   instances: BridgeInstance[]
@@ -8,11 +9,12 @@ interface NewSessionMenuProps {
   defaultInstanceId?: string
   basePath: string
   instancesPath: string
-  onPick: (instanceId: string) => void
+  onPick: (instanceId: string, mode: SplitMode) => void
   onClose: () => void
 }
 
 export function NewSessionMenu({ instances, harnesses, defaultInstanceId, basePath, instancesPath, onPick, onClose }: NewSessionMenuProps) {
+  const [mode, setMode] = useState<SplitMode>('replace')
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,8 +48,27 @@ export function NewSessionMenu({ instances, harnesses, defaultInstanceId, basePa
     return Array.from(groupMap.entries()).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
   }, [instances, harnesses])
 
+  const modeOptions: { value: SplitMode; label: string; title: string }[] = [
+    { value: 'replace', label: 'Replace current', title: 'Replace the focused workspace' },
+    { value: 'split-h', label: 'Split right', title: 'Open in a new split to the right' },
+    { value: 'split-v', label: 'Split below', title: 'Open in a new split below' },
+  ]
+
   return (
     <div ref={menuRef} className="bc-new-session-menu" role="menu">
+      <div className="bc-new-session-mode" role="radiogroup" aria-label="Open in">
+        {modeOptions.map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={mode === opt.value}
+            className={`bc-new-session-mode-btn ${mode === opt.value ? 'bc-new-session-mode-btn-active' : ''}`}
+            title={opt.title}
+            onClick={() => setMode(opt.value)}
+          >{opt.label}</button>
+        ))}
+      </div>
       {groups.length === 0 ? (
         <div className="bc-new-session-empty">
           No instances configured. <Link to={instancesPath}>Add an instance</Link>.
@@ -68,7 +89,7 @@ export function NewSessionMenu({ instances, harnesses, defaultInstanceId, basePa
                 key={inst.id}
                 type="button"
                 className={`bc-new-session-item ${inst.id === defaultInstanceId ? 'bc-new-session-item-default' : ''}`}
-                onClick={() => available && onPick(inst.id)}
+                onClick={() => available && onPick(inst.id, mode)}
                 disabled={!available}
                 title={available ? `Create new session in ${inst.name}` : `${harnessType} harness unavailable`}
               >

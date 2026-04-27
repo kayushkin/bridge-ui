@@ -80,3 +80,9 @@ export type ViewType = PaneKey
 export type InnerNode =
   | { kind: 'leaf'; viewType: ViewType }
   | { kind: 'split'; direction: 'h' | 'v'; children: InnerNode[] }
+
+export type WorkspaceLayoutNode =
+  | { kind: 'leaf'; workspaceId: string }
+  | { kind: 'split'; direction: 'h' | 'v'; children: WorkspaceLayoutNode[]; sizes: number[] }
+
+export type SplitMode = 'replace' | 'split-h' | 'split-v'

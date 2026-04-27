@@ -8,9 +8,9 @@ import {
   loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
   saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
 } from './persistence'
-import type { CtxMenuState } from './types'
+import type { CtxMenuState, SplitMode } from './types'
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -21,8 +21,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   openSessionIds: Set<string>
   focusedSessionId: string | null
   onSelect: (id: string) => void
-  onSpawnWorkspace: (id: string) => void
-  onNewSession: (instanceId: string) => void
+  onOpenInSplit: (id: string, direction: 'h' | 'v') => void
+  onNewSession: (instanceId: string, mode: SplitMode) => void
   connected: boolean
   getDisplayName: (session: ManagedSession) => string
   onRename: (id: string, name: string) => void
@@ -172,9 +172,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     onAfterFolderChange()
   }
 
-  const handlePickInstance = (id: string) => {
+  const handlePickInstance = (id: string, mode: SplitMode) => {
     setShowNewMenu(false)
-    onNewSession(id)
+    onNewSession(id, mode)
   }
 
   const renderSession = (s: ManagedSession) => {
@@ -209,10 +209,16 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         </button>
         <button
           className="bc-session-spawn-btn"
-          onClick={e => { e.stopPropagation(); onSpawnWorkspace(s.bridge_id) }}
-          title="Open in new workspace"
-          aria-label="Open in new workspace"
-        >+</button>
+          onClick={e => { e.stopPropagation(); onOpenInSplit(s.bridge_id, 'h') }}
+          title="Open in split right"
+          aria-label="Open in split right"
+        >→</button>
+        <button
+          className="bc-session-spawn-btn"
+          onClick={e => { e.stopPropagation(); onOpenInSplit(s.bridge_id, 'v') }}
+          title="Open in split below"
+          aria-label="Open in split below"
+        >↓</button>
         <span
           className="bc-session-menu-btn"
           role="button"

@@ -8,9 +8,11 @@ import { useBridgeFolders } from '../useBridgeFolders'
 import type { HarnessInfo } from '../types'
 import { SessionList } from './chat/SessionList'
 import { Workspace } from './chat/Workspace'
+import { WorkspaceLayout } from './chat/WorkspaceLayout'
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
-import type { CollapseState, InnerNode, PaneSizes, PanesHidden, StoreModel, WorkspaceState } from './chat/types'
+import type { CollapseState, InnerNode, PaneSizes, PanesHidden, SplitMode, StoreModel, WorkspaceLayoutNode, WorkspaceState } from './chat/types'
 import { generateFrontendId } from './chat/utils'
+import { buildFlatLayout, firstLeafId, iterateLeafIds, removeLeaf, splitLeaf } from './chat/workspaceTree'
 
 const DEFAULT_INNER_TREE: InnerNode = {
   kind: 'split',
@@ -47,13 +49,15 @@ export function BridgeChat() {
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
-  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => loadWorkspacesState().workspaces)
-  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(() => loadWorkspacesState().focusedWorkspaceId)
+  const initialState = useRef(loadWorkspacesState())
+  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => initialState.current.workspaces)
+  const [layout, setLayout] = useState<WorkspaceLayoutNode | null>(() => initialState.current.layout)
+  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(() => initialState.current.focusedWorkspaceId)
   const bootstrappedRef = useRef(false)
 
   useEffect(() => {
-    saveWorkspacesState({ workspaces, focusedWorkspaceId })
-  }, [workspaces, focusedWorkspaceId])
+    saveWorkspacesState({ workspaces, focusedWorkspaceId, layout })
+  }, [workspaces, focusedWorkspaceId, layout])
 
   const toggleSessionList = useCallback(() => {
     setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next })
@@ -64,25 +68,47 @@ export function BridgeChat() {
   }, [])
 
   const closeWorkspace = useCallback((id: string) => {
-    setWorkspaces(prev => {
-      const next = prev.filter(w => w.id !== id)
-      setFocusedWorkspaceId(curFocus => {
-        if (curFocus !== id) return curFocus
-        return next[0]?.id ?? null
-      })
-      return next
+    setWorkspaces(prev => prev.filter(w => w.id !== id))
+    setLayout(prev => removeLeaf(prev, id))
+    setFocusedWorkspaceId(curFocus => {
+      if (curFocus !== id) return curFocus
+      // Pick a new focus from the post-removal tree using the latest layout
+      // value below — read via setter.
+      return null
     })
   }, [])
 
-  const spawnWorkspace = useCallback((sessionId: string | null) => {
+  // After a close, ensure focus lands on something that still exists.
+  useEffect(() => {
+    if (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId)) return
+    const next = firstLeafId(layout)
+    if (next !== focusedWorkspaceId) setFocusedWorkspaceId(next)
+  }, [layout, workspaces, focusedWorkspaceId])
+
+  // Add a workspace as a new leaf in the tree. Caller picks the split
+  // direction; 'replace' is only meaningful when the tree is empty (it
+  // becomes the root). With a non-empty tree, 'replace' falls back to
+  // 'split-h' so the new workspace is never orphaned.
+  const addWorkspace = useCallback((sessionId: string | null, mode: SplitMode): string => {
     const ws = makeWorkspace(sessionId)
     setWorkspaces(prev => [...prev, ws])
+    setLayout(prev => {
+      if (!prev) return { kind: 'leaf', workspaceId: ws.id }
+      const direction: 'h' | 'v' = mode === 'split-v' ? 'v' : 'h'
+      const target = focusedWorkspaceId && [...iterateLeafIds(prev)].includes(focusedWorkspaceId)
+        ? focusedWorkspaceId
+        : firstLeafId(prev)
+      if (!target) return { kind: 'leaf', workspaceId: ws.id }
+      return splitLeaf(prev, target, ws.id, direction)
+    })
     setFocusedWorkspaceId(ws.id)
-  }, [])
+    return ws.id
+  }, [focusedWorkspaceId])
 
   // Plain click on a session row: focus existing workspace if one exists for
   // that session, else retarget the focused workspace, else spawn one. Use
-  // the + button to explicitly open in a new split.
+  // the per-row split buttons (or the New Session menu's split modes) to
+  // explicitly open in a new split.
   const handleSelectSession = useCallback((id: string) => {
     if (!id) return
     const existing = workspaces.find(w => w.sessionId === id)
@@ -91,16 +117,25 @@ export function BridgeChat() {
     } else if (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId)) {
       setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id } : w))
     } else {
-      const ws = makeWorkspace(id)
-      setWorkspaces(prev => [...prev, ws])
-      setFocusedWorkspaceId(ws.id)
+      addWorkspace(id, 'replace')
     }
     const session = bridge.sessions.find(s => s.bridge_id === id)
     if (session?.instance_id) {
       bridgePrefs.setLastSession(session.instance_id, id)
       bridgePrefs.setLastInstanceId(session.instance_id)
     }
-  }, [workspaces, focusedWorkspaceId, bridge.sessions, bridgePrefs])
+  }, [workspaces, focusedWorkspaceId, bridge.sessions, bridgePrefs, addWorkspace])
+
+  // Open an existing session in a new split rather than retargeting focus.
+  const handleOpenSessionInSplit = useCallback((id: string, direction: 'h' | 'v') => {
+    if (!id) return
+    addWorkspace(id, direction === 'v' ? 'split-v' : 'split-h')
+    const session = bridge.sessions.find(s => s.bridge_id === id)
+    if (session?.instance_id) {
+      bridgePrefs.setLastSession(session.instance_id, id)
+      bridgePrefs.setLastInstanceId(session.instance_id)
+    }
+  }, [addWorkspace, bridge.sessions, bridgePrefs])
 
   useEffect(() => {
     apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data: StoreModel[]) => {
@@ -121,6 +156,7 @@ export function BridgeChat() {
     if (lastId) {
       const ws = makeWorkspace(lastId)
       setWorkspaces([ws])
+      setLayout(buildFlatLayout([ws.id]))
       setFocusedWorkspaceId(ws.id)
     }
   }, [bridgePrefs, instances.loading, instances.instanceMap, workspaces.length])
@@ -133,7 +169,10 @@ export function BridgeChat() {
     return session.display_name || session.agent_id || ''
   }, [])
 
-  const handleCreateForInstance = useCallback(async (instanceId: string) => {
+  // New chat creation. Default mode = replace focused workspace's session
+  // (matches sidebar select behavior); 'split-h' / 'split-v' open in a new
+  // split in that direction.
+  const handleCreateForInstance = useCallback(async (instanceId: string, mode: SplitMode = 'replace') => {
     const inst = instances.instanceMap.get(instanceId)
     if (!inst) return
     const harness = inst.harness_type
@@ -146,21 +185,27 @@ export function BridgeChat() {
       display_name: '',
       client_id: frontendId,
     })
-    if (sess) {
-      bridgePrefs.setLastInstanceId(instanceId)
-      bridgePrefs.setLastSession(instanceId, sess.bridge_id)
-      const defaults = bridgePrefs.getDefaults(harness)
-      if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
-        bridge.sendConfig({
-          model: defaults.model,
-          effort: defaults.effort,
-          max_budget: defaults.max_budget,
-          disabled_tools: defaults.disabled_tools,
-        })
-      }
-      spawnWorkspace(sess.bridge_id)
+    if (!sess) return
+    bridgePrefs.setLastInstanceId(instanceId)
+    bridgePrefs.setLastSession(instanceId, sess.bridge_id)
+    const defaults = bridgePrefs.getDefaults(harness)
+    if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
+      bridge.sendConfig({
+        model: defaults.model,
+        effort: defaults.effort,
+        max_budget: defaults.max_budget,
+        disabled_tools: defaults.disabled_tools,
+      })
     }
-  }, [bridge, bridgePrefs, instances.instanceMap, harnesses, spawnWorkspace])
+    // Replace focused workspace's session when possible — only spawn a new
+    // workspace if the user chose split-h/-v or no workspace is focused.
+    const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId)
+    if (mode === 'replace' && focused) {
+      setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.bridge_id } : w))
+    } else {
+      addWorkspace(sess.bridge_id, mode === 'replace' ? 'replace' : mode)
+    }
+  }, [bridge, bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, addWorkspace])
 
   const handleRenameSession = useCallback((id: string, name: string) => {
     bridge.renameSession(id, name)
@@ -176,6 +221,29 @@ export function BridgeChat() {
   }, [workspaces, focusedWorkspaceId])
 
   const defaultInstanceId = bridgePrefs.prefs.last_instance_id
+
+  const renderLeaf = useCallback((workspaceId: string) => {
+    const w = workspaces.find(ws => ws.id === workspaceId)
+    if (!w) return null
+    return (
+      <Workspace
+        workspace={w}
+        focused={w.id === focusedWorkspaceId}
+        onFocus={() => setFocusedWorkspaceId(w.id)}
+        onUpdate={fn => updateWorkspace(w.id, fn)}
+        onClose={() => closeWorkspace(w.id)}
+        harnesses={harnesses}
+        instances={instances.instances}
+        machines={machines.machines}
+        storeModels={storeModels}
+        bridgePrefs={{
+          getDefaults: bridgePrefs.getDefaults,
+          setHarnessDefaults: bridgePrefs.setHarnessDefaults,
+          setLastSession: bridgePrefs.setLastSession,
+        }}
+      />
+    )
+  }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace])
 
   return (
     <div className={`bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`}>
@@ -197,7 +265,7 @@ export function BridgeChat() {
             openSessionIds={openSessionIds}
             focusedSessionId={focusedSessionId}
             onSelect={handleSelectSession}
-            onSpawnWorkspace={spawnWorkspace}
+            onOpenInSplit={handleOpenSessionInSplit}
             onNewSession={handleCreateForInstance}
             connected={bridge.connected}
             getDisplayName={getDisplayName}
@@ -208,35 +276,37 @@ export function BridgeChat() {
           />
         )}
         <div className="bc-workspaces">
-          {workspaces.length === 0 ? (
+          {!layout ? (
             <div className="bc-workspaces-empty">
               <div className="bc-workspaces-empty-hint">
                 No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one.
               </div>
             </div>
           ) : (
-            workspaces.map(w => (
-              <Workspace
-                key={w.id}
-                workspace={w}
-                focused={w.id === focusedWorkspaceId}
-                onFocus={() => setFocusedWorkspaceId(w.id)}
-                onUpdate={fn => updateWorkspace(w.id, fn)}
-                onClose={() => closeWorkspace(w.id)}
-                harnesses={harnesses}
-                instances={instances.instances}
-                machines={machines.machines}
-                storeModels={storeModels}
-                bridgePrefs={{
-                  getDefaults: bridgePrefs.getDefaults,
-                  setHarnessDefaults: bridgePrefs.setHarnessDefaults,
-                  setLastSession: bridgePrefs.setLastSession,
-                }}
-              />
-            ))
+            <WorkspaceLayout
+              node={layout}
+              renderLeaf={renderLeaf}
+              onResize={(path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev)}
+            />
           )}
         </div>
       </div>
     </div>
   )
+}
+
+function applySizes(node: WorkspaceLayoutNode, path: number[], sizes: number[]): WorkspaceLayoutNode {
+  if (path.length === 0) {
+    if (node.kind !== 'split') return node
+    return { ...node, sizes }
+  }
+  if (node.kind !== 'split') return node
+  const [head, ...rest] = path
+  const child = node.children[head]
+  if (!child) return node
+  const updated = applySizes(child, rest, sizes)
+  if (updated === child) return node
+  const children = node.children.slice()
+  children[head] = updated
+  return { ...node, children }
 }

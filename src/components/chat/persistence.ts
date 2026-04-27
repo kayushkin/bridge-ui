@@ -1,4 +1,5 @@
-import type { CollapseState, PaneSizes, PaneKey, WorkspaceState } from './types'
+import type { CollapseState, PaneSizes, PaneKey, WorkspaceLayoutNode, WorkspaceState } from './types'
+import { buildFlatLayout, isLayoutValid } from './workspaceTree'
 
 const COLLAPSE_KEY = 'bridge-ui-collapse'
 const SIZES_KEY = 'bridge-ui-split-sizes'
@@ -62,12 +63,35 @@ export function saveFolderCollapsed(next: Record<string, boolean>) {
 export interface PersistedWorkspaces {
   workspaces: WorkspaceState[]
   focusedWorkspaceId: string | null
+  layout: WorkspaceLayoutNode | null
+}
+
+function parseLayoutNode(raw: unknown): WorkspaceLayoutNode | null {
+  if (!raw || typeof raw !== 'object') return null
+  const n = raw as Record<string, unknown>
+  if (n.kind === 'leaf') {
+    if (typeof n.workspaceId !== 'string') return null
+    return { kind: 'leaf', workspaceId: n.workspaceId }
+  }
+  if (n.kind === 'split') {
+    if (n.direction !== 'h' && n.direction !== 'v') return null
+    if (!Array.isArray(n.children)) return null
+    const children = n.children.map(parseLayoutNode).filter((c): c is WorkspaceLayoutNode => !!c)
+    if (children.length < 2) return null
+    const sizesRaw = Array.isArray(n.sizes) ? n.sizes : []
+    const sizes = children.map((_, i) => {
+      const v = sizesRaw[i]
+      return typeof v === 'number' && v > 0 ? v : 1
+    })
+    return { kind: 'split', direction: n.direction, children, sizes }
+  }
+  return null
 }
 
 export function loadWorkspacesState(): PersistedWorkspaces {
   try {
     const raw = JSON.parse(localStorage.getItem(WORKSPACES_KEY) || 'null')
-    if (!raw || !Array.isArray(raw.workspaces)) return { workspaces: [], focusedWorkspaceId: null }
+    if (!raw || !Array.isArray(raw.workspaces)) return { workspaces: [], focusedWorkspaceId: null, layout: null }
     const workspaces: WorkspaceState[] = raw.workspaces.filter((w: unknown) => {
       if (!w || typeof w !== 'object') return false
       const ws = w as Partial<WorkspaceState>
@@ -79,8 +103,12 @@ export function loadWorkspacesState(): PersistedWorkspaces {
     const focusedWorkspaceId = typeof raw.focusedWorkspaceId === 'string' && ids.has(raw.focusedWorkspaceId)
       ? raw.focusedWorkspaceId
       : (workspaces[0]?.id ?? null)
-    return { workspaces, focusedWorkspaceId }
-  } catch { return { workspaces: [], focusedWorkspaceId: null } }
+    let layout: WorkspaceLayoutNode | null = parseLayoutNode(raw.layout)
+    if (!layout || !isLayoutValid(layout, ids)) {
+      layout = buildFlatLayout(workspaces.map(w => w.id))
+    }
+    return { workspaces, focusedWorkspaceId, layout }
+  } catch { return { workspaces: [], focusedWorkspaceId: null, layout: null } }
 }
 
 export function saveWorkspacesState(s: PersistedWorkspaces) {
