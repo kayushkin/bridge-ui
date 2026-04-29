@@ -33,7 +33,7 @@ export interface Message {
     sessionId?: string;
 }
 export type LogRowActor = 'user' | 'assistant' | 'system';
-export type LogRowKind = 'user_message' | 'text' | 'thinking' | 'tool' | 'result' | 'error' | 'system' | 'session_state' | 'session_info' | 'plan' | 'approval' | 'stream' | 'other';
+export type LogRowKind = 'user_message' | 'text' | 'thinking' | 'tool' | 'result' | 'error' | 'system' | 'session_state' | 'session_info' | 'plan' | 'approval' | 'stream' | 'block' | 'other';
 export interface LogRow {
     key: string;
     clientId?: string;

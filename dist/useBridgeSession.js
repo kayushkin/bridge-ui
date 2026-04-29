@@ -54,6 +54,14 @@ function rowKindOf(ev) {
                 return 'text';
             return 'stream';
         }
+        case 'block': {
+            const bt = ev.data.block?.block?.type;
+            if (bt === 'thinking')
+                return 'thinking';
+            if (bt === 'text')
+                return 'text';
+            return 'block';
+        }
         case 'thinking': return 'thinking';
         case 'tool_call':
         case 'tool_result': return 'tool';
@@ -104,6 +112,8 @@ function subtypeOf(ev) {
         return ev.data.system?.subtype;
     if (ev.type === 'thinking')
         return ev.data.thinking?.subtype;
+    if (ev.type === 'block')
+        return ev.data.block?.block?.type;
     return undefined;
 }
 function applyDelta(row, ev) {
@@ -121,6 +131,18 @@ function applyDelta(row, ev) {
             else if (d?.type === 'thinking_delta')
                 next = { ...next, thinking: (row.thinking || '') + (d.thinking || '') };
             return next;
+        }
+        case 'block': {
+            const b = ev.data.block?.block;
+            if (!b)
+                return base;
+            if (b.type === 'text' && b.text_block) {
+                return { ...base, text: (row.text || '') + (b.text_block.text || '') };
+            }
+            if (b.type === 'thinking' && b.thinking_block) {
+                return { ...base, thinking: (row.thinking || '') + (b.thinking_block.text || '') };
+            }
+            return base;
         }
         case 'thinking': {
             return { ...base, thinking: (row.thinking || '') + (ev.data.thinking?.text || '') };
@@ -353,6 +375,13 @@ export function useBridgeSession() {
             switch (type) {
                 case 'stream': {
                     if (data.stream?.delta?.type === 'thinking_delta')
+                        setActivity({ kind: 'thinking' });
+                    else
+                        setActivity({ kind: 'streaming' });
+                    break;
+                }
+                case 'block': {
+                    if (data.block?.block?.type === 'thinking')
                         setActivity({ kind: 'thinking' });
                     else
                         setActivity({ kind: 'streaming' });

@@ -133,6 +133,7 @@ export type LogRowKind =
   | 'plan'
   | 'approval'
   | 'stream'      // stream events with no delta (block-boundary markers)
+  | 'block'       // finished content blocks not specialized to text/thinking (e.g. images, refusals)
   | 'other'
 
 export interface LogRow {
