@@ -2388,14 +2388,10 @@
   --bc-shadow: 0 8px 30px -10px rgba(0, 0, 0, 0.55),
                inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
   --bc-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  background:
-    radial-gradient(900px 700px at 8% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
-    radial-gradient(800px 600px at 100% 100%, color-mix(in srgb, #f472b6 12%, transparent), transparent 65%),
-    radial-gradient(700px 500px at 50% 50%, color-mix(in srgb, #22d3ee 8%, transparent), transparent 70%),
-    var(--bg);
+  background: var(--bg);
 }
 
-.bc-main { padding: 14px; gap: 14px; }
+.bc-main { padding: 4px; gap: 6px; }
 .bc-workspace { padding: 0; }
 
 /* Session list — floating glass column */
