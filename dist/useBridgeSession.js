@@ -378,6 +378,8 @@ export function useBridgeSession() {
                     const sys = data.system;
                     if (sys?.subtype === 'harness_id_set')
                         refreshSessionsImpl();
+                    else if (sys?.subtype === 'display_name_changed')
+                        refreshSessionsImpl();
                     else if (sys?.subtype === 'retry')
                         setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`);
                     else if (sys?.subtype === 'compact_boundary' || sys?.subtype === 'compact_ack')
