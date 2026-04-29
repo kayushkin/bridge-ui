@@ -18,11 +18,18 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
 
   // turnId -> set of message_ids that have a closed `result` row.
   const turnResultMsgIds = new Map<string, Set<string>>()
+  // Texts of user_message rows that have a canonical messageId. Used to drop
+  // orphan optimistic rows when the SSE user_message arrived before /send's
+  // response could patch the optimistic row's key into the same group.
+  const canonicalUserTexts = new Set<string>()
   for (const r of rows) {
     if (r.kind === 'result' && r.done && r.messageId && r.turnId) {
       let s = turnResultMsgIds.get(r.turnId)
       if (!s) { s = new Set(); turnResultMsgIds.set(r.turnId, s) }
       s.add(r.messageId)
+    }
+    if (r.kind === 'user_message' && r.messageId && r.text) {
+      canonicalUserTexts.add(r.text)
     }
   }
 
@@ -31,6 +38,7 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
 
   for (const row of rows) {
     if (row.kind === 'user_message' && row.text) {
+      if (!row.messageId && canonicalUserTexts.has(row.text)) continue
       out.push({
         key: `tv_user_${row.key}`,
         actor: 'user',
