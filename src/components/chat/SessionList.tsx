@@ -4,6 +4,7 @@ import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
 import { HarnessFilterBar } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
+import { SplitButtons } from './SplitButtons'
 import {
   loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
   saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
@@ -21,7 +22,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   openSessionIds: Set<string>
   focusedSessionId: string | null
   onSelect: (id: string) => void
-  onOpenInSplit: (id: string, direction: 'h' | 'v') => void
+  onOpenInSplit: (id: string, mode: SplitMode) => void
   onNewSession: (instanceId: string, mode: SplitMode) => void
   connected: boolean
   getDisplayName: (session: ManagedSession) => string
@@ -207,18 +208,11 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
             className="bc-session-label"
           />
         </button>
-        <button
-          className="bc-session-spawn-btn"
-          onClick={e => { e.stopPropagation(); onOpenInSplit(s.bridge_id, 'h') }}
-          title="Open in split right"
-          aria-label="Open in split right"
-        >→</button>
-        <button
-          className="bc-session-spawn-btn"
-          onClick={e => { e.stopPropagation(); onOpenInSplit(s.bridge_id, 'v') }}
-          title="Open in split below"
-          aria-label="Open in split below"
-        >↓</button>
+        <SplitButtons
+          onSplit={mode => onOpenInSplit(s.bridge_id, mode)}
+          autoTitle="Open session in a new split (auto direction)"
+          chooseTitle="Choose split direction for this session"
+        />
         <span
           className="bc-session-menu-btn"
           role="button"

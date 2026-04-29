@@ -8,10 +8,12 @@ interface BridgeProviderProps {
     basePath?: string;
     /** Base path for skill-store API. If omitted, the Skills tab is hidden. */
     skillStoreBasePath?: string;
+    /** Base path for tool-store API. If omitted, the Tools tab is hidden. */
+    toolStoreBasePath?: string;
     /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES. */
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map

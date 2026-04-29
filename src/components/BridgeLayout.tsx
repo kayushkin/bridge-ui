@@ -7,7 +7,7 @@ interface BridgeLayoutProps {
 }
 
 export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
-  const { routes, skillStoreBasePath } = useBridgeConfig()
+  const { routes, skillStoreBasePath, toolStoreBasePath } = useBridgeConfig()
   const tabs = [
     { to: routes.chat, label: 'Chat', end: true },
     { to: routes.instances, label: 'Instances', end: false },
@@ -16,6 +16,7 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     { to: routes.usage, label: 'Usage', end: false },
     { to: routes.settings, label: 'Settings', end: false },
     ...(skillStoreBasePath ? [{ to: routes.skills, label: 'Skills', end: false }] : []),
+    ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
     ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
   ]
 

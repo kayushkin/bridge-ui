@@ -265,12 +265,25 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const [error, setError] = useState<string | null>(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [activity, setActivity] = useState<ActivityKind>({ kind: 'idle' })
+  const [compacting, setCompacting] = useState(false)
 
   const wasInterrupted = useRef(false)
   const sseAbort = useRef<AbortController | null>(null)
   const lastEventId = useRef<string | undefined>(undefined)
   const activeSessionRef = useRef<ManagedSession | null>(null)
   const historyLoadId = useRef(0)
+  const sessionsRef = useRef<ManagedSession[]>([])
+  sessionsRef.current = sessions
+  const activeSessionIdRef = useRef<string | null>(null)
+  activeSessionIdRef.current = activeSessionId
+  const compactingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearCompacting = useCallback(() => {
+    if (compactingTimer.current) {
+      clearTimeout(compactingTimer.current)
+      compactingTimer.current = null
+    }
+    setCompacting(false)
+  }, [])
 
   // --- Session refresh (debounced) ---
 
@@ -378,6 +391,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           const sys = data.system
           if (sys?.subtype === 'harness_id_set') refreshSessionsImpl()
           else if (sys?.subtype === 'retry') setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`)
+          else if (sys?.subtype === 'compact_boundary' || sys?.subtype === 'compact_ack') clearCompacting()
           break
         }
         case 'session_info':
@@ -425,7 +439,11 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       const raws: EventData[] = await res.json()
 
+      // Two guards: bail if a newer load started, or if the user has navigated
+      // to a different session entirely (so we don't clobber that session's
+      // rows with this one's history).
       if (loadId !== historyLoadId.current) return
+      if (activeSessionIdRef.current !== sessionId) return
 
       let rows: LogRow[] = []
       let maxEventId = 0
@@ -451,6 +469,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     wasInterrupted.current = false
     setError(null)
     setActivity({ kind: 'idle' })
+    clearCompacting()
 
     if (!id) {
       setActiveSessionId(null)
@@ -458,13 +477,24 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       return
     }
 
+    // Only wipe rows when actually switching sessions. A re-select of the
+    // current session (e.g. an effect re-firing after a sessions-list refresh)
+    // must not blank the screen — loadHistory will atomically replace rows
+    // once it resolves.
+    const switching = activeSessionIdRef.current !== id
     setActiveSessionId(id)
-    setLogRows([])
-    lastEventId.current = undefined
+    activeSessionIdRef.current = id
+    if (switching) {
+      setLogRows([])
+      lastEventId.current = undefined
+    }
 
     ;(async () => {
       await loadHistory(id)
-      const session = sessions.find(s => s.bridge_id === id)
+      // Read the latest sessions list at resolution time, not the value
+      // captured when this callback was created — the session may have been
+      // freshly created and not yet present in the closure snapshot.
+      const session = sessionsRef.current.find(s => s.bridge_id === id)
       if (session?.state === 'running') {
         startSSE(id)
       }
@@ -472,13 +502,36 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         wasInterrupted.current = false
       }
     })()
-  }, [closeSSE, loadHistory, startSSE, sessions])
+  }, [closeSSE, loadHistory, startSSE])
 
   useEffect(() => {
     if (activeSession?.state === 'running' && !sseAbort.current) {
       startSSE(activeSession.bridge_id)
     }
   }, [activeSession?.state, activeSession?.bridge_id, startSSE])
+
+  // --- Stuck-running reconciler ---
+  //
+  // A freshly created harness reports state='running' while it boots, then
+  // emits a `session_state: idle` event when ready. If that event lands
+  // before our SSE attaches (or is otherwise missed), the Composer stays
+  // disabled forever — no further state changes can rescue it without a
+  // manual refresh. Watchdog: when the active session sits in `running`
+  // with no activity, repoll /sessions every 2s for up to ~10s. As soon as
+  // the server reports a different state, the deps change and the loop
+  // unwinds on its own.
+  useEffect(() => {
+    if (!activeSessionId) return
+    if (activeSession?.state !== 'running') return
+    if (activity.kind !== 'idle') return
+    let attempts = 0
+    const t = window.setInterval(() => {
+      attempts++
+      refreshSessionsImpl()
+      if (attempts >= 5) window.clearInterval(t)
+    }, 2000)
+    return () => window.clearInterval(t)
+  }, [activeSessionId, activeSession?.state, activity.kind, refreshSessionsImpl])
 
   // --- Visibility change reconnection ---
 
@@ -628,6 +681,12 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   const compact = useCallback(async (summary?: string) => {
     if (!activeSessionId) return
+    setCompacting(true)
+    if (compactingTimer.current) clearTimeout(compactingTimer.current)
+    compactingTimer.current = setTimeout(() => {
+      compactingTimer.current = null
+      setCompacting(false)
+    }, 30000)
     try {
       const body: Record<string, string> = {}
       if (summary) body.summary = summary
@@ -638,8 +697,9 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       })
     } catch (err) {
       setError(`Compact failed: ${err}`)
+      clearCompacting()
     }
-  }, [fetchFn, basePath, activeSessionId])
+  }, [fetchFn, basePath, activeSessionId, clearCompacting])
 
   const forkSession = useCallback(async (displayName?: string) => {
     if (!activeSessionId) return
@@ -693,6 +753,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   useEffect(() => () => {
     closeSSE()
     debouncedRefresh.cancel()
+    if (compactingTimer.current) clearTimeout(compactingTimer.current)
   }, [closeSSE, debouncedRefresh])
 
   return useMemo(() => ({
@@ -702,6 +763,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     uiState,
     activity,
     connected,
+    compacting,
     error,
     loadingHistory,
     createSession,
@@ -722,6 +784,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     uiState,
     activity,
     connected,
+    compacting,
     error,
     loadingHistory,
     createSession,

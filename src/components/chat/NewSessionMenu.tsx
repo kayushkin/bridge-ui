@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { BridgeInstance, HarnessInfo } from '../../types'
+import { SplitButtons } from './SplitButtons'
 import type { SplitMode } from './types'
+
+const SPLIT_MODE_LABEL: Record<SplitMode, string> = {
+  'replace':     'Replace current',
+  'split-auto':  'Split (auto)',
+  'split-left':  'Split left',
+  'split-right': 'Split right',
+  'split-up':    'Split above',
+  'split-down':  'Split below',
+}
 
 interface NewSessionMenuProps {
   instances: BridgeInstance[]
@@ -48,26 +58,29 @@ export function NewSessionMenu({ instances, harnesses, defaultInstanceId, basePa
     return Array.from(groupMap.entries()).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
   }, [instances, harnesses])
 
-  const modeOptions: { value: SplitMode; label: string; title: string }[] = [
-    { value: 'replace', label: 'Replace current', title: 'Replace the focused workspace' },
-    { value: 'split-h', label: 'Split right', title: 'Open in a new split to the right' },
-    { value: 'split-v', label: 'Split below', title: 'Open in a new split below' },
-  ]
-
   return (
     <div ref={menuRef} className="bc-new-session-menu" role="menu">
       <div className="bc-new-session-mode" role="radiogroup" aria-label="Open in">
-        {modeOptions.map(opt => (
-          <button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={mode === opt.value}
-            className={`bc-new-session-mode-btn ${mode === opt.value ? 'bc-new-session-mode-btn-active' : ''}`}
-            title={opt.title}
-            onClick={() => setMode(opt.value)}
-          >{opt.label}</button>
-        ))}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === 'replace'}
+          className={`bc-new-session-mode-btn ${mode === 'replace' ? 'bc-new-session-mode-btn-active' : ''}`}
+          title="Replace the focused workspace"
+          onClick={() => setMode('replace')}
+        >Replace current</button>
+        <span className="bc-new-session-mode-split">
+          <span className="bc-new-session-mode-label" title={SPLIT_MODE_LABEL[mode]}>
+            {mode === 'replace' ? 'Split…' : SPLIT_MODE_LABEL[mode]}
+          </span>
+          <SplitButtons
+            onSplit={setMode}
+            active={mode === 'replace' ? null : mode}
+            size="sm"
+            autoTitle="Open in a new split (auto direction)"
+            chooseTitle="Choose split direction"
+          />
+        </span>
       </div>
       {groups.length === 0 ? (
         <div className="bc-new-session-empty">

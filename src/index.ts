@@ -51,6 +51,8 @@ export { useBridgeMachines } from './useBridgeMachines'
 export { useBridgePrefs } from './useBridgePrefs'
 export { useBridgeFolders } from './useBridgeFolders'
 export type { UseBridgeFoldersReturn } from './useBridgeFolders'
+export { useBridgeTools } from './useBridgeTools'
+export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools'
 export { useStickyBottomScroll } from './useStickyBottomScroll'
 export type { StickyBottomScroll } from './useStickyBottomScroll'
 
@@ -67,6 +69,7 @@ export { BridgeAuth } from './components/BridgeAuth'
 export { BridgeUsage } from './components/BridgeUsage'
 export { BridgeConformance } from './components/BridgeConformance'
 export { BridgeSkills } from './components/BridgeSkills'
+export { BridgeTools } from './components/BridgeTools'
 
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools'

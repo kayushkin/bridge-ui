@@ -91,6 +91,7 @@ export interface UseBridgeSessionReturn {
     uiState: SessionUIState;
     activity: ActivityKind;
     connected: boolean;
+    compacting: boolean;
     error: string | null;
     loadingHistory: boolean;
     createSession: (opts: CreateSessionRequest) => Promise<ManagedSession | null>;

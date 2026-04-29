@@ -7,6 +7,7 @@ const FILTER_KEY = 'bridge-ui-type-filter'
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed'
 const WORKSPACES_KEY = 'bridge-ui-workspaces'
 const HARNESS_FILTER_KEY = 'bridge-ui-harness-filter'
+const DRAFTS_KEY = 'bridge-ui-drafts'
 
 export const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
 
@@ -145,4 +146,44 @@ export function loadExcludedMachines(): Set<string> {
 
 export function saveExcludedMachines(s: Set<string>) {
   try { localStorage.setItem(MACHINE_FILTER_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
+}
+
+// Composer drafts keyed by session id. Persisted as a single object so a
+// session's in-progress text survives layout changes, pane swaps, and reloads.
+function readDrafts(): Record<string, string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}')
+    if (!raw || typeof raw !== 'object') return {}
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof k === 'string' && typeof v === 'string') out[k] = v
+    }
+    return out
+  } catch { return {} }
+}
+
+function writeDrafts(drafts: Record<string, string>) {
+  try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)) } catch { /* ignore */ }
+}
+
+export function loadDraft(sessionId: string): string {
+  if (!sessionId) return ''
+  return readDrafts()[sessionId] ?? ''
+}
+
+export function saveDraft(sessionId: string, text: string) {
+  if (!sessionId) return
+  const drafts = readDrafts()
+  if (text) drafts[sessionId] = text
+  else delete drafts[sessionId]
+  writeDrafts(drafts)
+}
+
+export function clearDraft(sessionId: string) {
+  if (!sessionId) return
+  const drafts = readDrafts()
+  if (sessionId in drafts) {
+    delete drafts[sessionId]
+    writeDrafts(drafts)
+  }
 }

@@ -7,6 +7,7 @@ export interface BridgeRoutes {
     usage: string;
     settings: string;
     skills: string;
+    tools: string;
     conformance: string;
 }
 export declare const DEFAULT_BRIDGE_ROUTES: BridgeRoutes;
@@ -18,6 +19,9 @@ export interface BridgeConfig {
     /** Base path for skill-store API (e.g. "/api/skill-store"). No trailing
      * slash. If empty, the Skills tab is hidden. */
     skillStoreBasePath: string;
+    /** Base path for tool-store API (e.g. "/api/tool-store"). No trailing
+     * slash. If empty, the Tools tab is hidden. */
+    toolStoreBasePath: string;
     /** Route paths for navigation between bridge pages. */
     routes: BridgeRoutes;
 }

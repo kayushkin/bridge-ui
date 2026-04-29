@@ -8,8 +8,11 @@ import { useBridgeMachines } from '../useBridgeMachines';
 import { useBridgeFolders } from '../useBridgeFolders';
 import { SessionList } from './chat/SessionList';
 import { Workspace } from './chat/Workspace';
+import { WorkspaceLayout } from './chat/WorkspaceLayout';
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence';
+import { splitModeAxis } from './chat/types';
 import { generateFrontendId } from './chat/utils';
+import { buildFlatLayout, firstLeafId, iterateLeafIds, removeLeaf, splitLeaf } from './chat/workspaceTree';
 const DEFAULT_INNER_TREE = {
     kind: 'split',
     direction: 'h',
@@ -22,6 +25,29 @@ const DEFAULT_INNER_TREE = {
 };
 const DEFAULT_PANES_HIDDEN = { turns: false, thread: true, timeline: true, git: true };
 const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1 };
+// Resolve a SplitMode to a concrete axis + position. 'split-auto' looks at
+// the currently focused workspace pane and picks the longer side; ties and
+// missing rect fall back to horizontal (split right) which mirrors the prior
+// default behavior.
+function resolveSplitMode(mode) {
+    const directional = splitModeAxis(mode);
+    if (directional)
+        return directional;
+    if (mode === 'split-auto') {
+        const el = typeof document !== 'undefined'
+            ? document.querySelector('.bc-workspace-focused')
+            : null;
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            if (rect.height > rect.width)
+                return { axis: 'v', position: 'after' };
+        }
+        return { axis: 'h', position: 'after' };
+    }
+    // 'replace' falls through here when the tree is non-empty: behave like a
+    // sensible default split so the new leaf is never orphaned.
+    return { axis: 'h', position: 'after' };
+}
 function makeWorkspace(sessionId, seed) {
     return {
         id: `ws_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -42,12 +68,14 @@ export function BridgeChat() {
     const [harnesses, setHarnesses] = useState([]);
     const [storeModels, setStoreModels] = useState([]);
     const [collapseState, setCollapseState] = useState(loadCollapseState);
-    const [workspaces, setWorkspaces] = useState(() => loadWorkspacesState().workspaces);
-    const [focusedWorkspaceId, setFocusedWorkspaceId] = useState(() => loadWorkspacesState().focusedWorkspaceId);
+    const initialState = useRef(loadWorkspacesState());
+    const [workspaces, setWorkspaces] = useState(() => initialState.current.workspaces);
+    const [layout, setLayout] = useState(() => initialState.current.layout);
+    const [focusedWorkspaceId, setFocusedWorkspaceId] = useState(() => initialState.current.focusedWorkspaceId);
     const bootstrappedRef = useRef(false);
     useEffect(() => {
-        saveWorkspacesState({ workspaces, focusedWorkspaceId });
-    }, [workspaces, focusedWorkspaceId]);
+        saveWorkspacesState({ workspaces, focusedWorkspaceId, layout });
+    }, [workspaces, focusedWorkspaceId, layout]);
     const toggleSessionList = useCallback(() => {
         setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next; });
     }, []);
@@ -55,24 +83,50 @@ export function BridgeChat() {
         setWorkspaces(prev => prev.map(w => w.id === id ? fn(w) : w));
     }, []);
     const closeWorkspace = useCallback((id) => {
-        setWorkspaces(prev => {
-            const next = prev.filter(w => w.id !== id);
-            setFocusedWorkspaceId(curFocus => {
-                if (curFocus !== id)
-                    return curFocus;
-                return next[0]?.id ?? null;
-            });
-            return next;
+        setWorkspaces(prev => prev.filter(w => w.id !== id));
+        setLayout(prev => removeLeaf(prev, id));
+        setFocusedWorkspaceId(curFocus => {
+            if (curFocus !== id)
+                return curFocus;
+            // Pick a new focus from the post-removal tree using the latest layout
+            // value below — read via setter.
+            return null;
         });
     }, []);
-    const spawnWorkspace = useCallback((sessionId) => {
+    // After a close, ensure focus lands on something that still exists.
+    useEffect(() => {
+        if (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId))
+            return;
+        const next = firstLeafId(layout);
+        if (next !== focusedWorkspaceId)
+            setFocusedWorkspaceId(next);
+    }, [layout, workspaces, focusedWorkspaceId]);
+    // Add a workspace as a new leaf in the tree. Caller picks the split mode;
+    // 'replace' is only meaningful when the tree is empty (it becomes the
+    // root). With a non-empty tree, 'replace' falls back to a directional split
+    // so the new workspace is never orphaned. 'split-auto' picks h or v based
+    // on which dimension of the focused pane is longer.
+    const addWorkspace = useCallback((sessionId, mode) => {
         const ws = makeWorkspace(sessionId);
         setWorkspaces(prev => [...prev, ws]);
+        setLayout(prev => {
+            if (!prev)
+                return { kind: 'leaf', workspaceId: ws.id };
+            const target = focusedWorkspaceId && [...iterateLeafIds(prev)].includes(focusedWorkspaceId)
+                ? focusedWorkspaceId
+                : firstLeafId(prev);
+            if (!target)
+                return { kind: 'leaf', workspaceId: ws.id };
+            const resolved = resolveSplitMode(mode);
+            return splitLeaf(prev, target, ws.id, resolved.axis, resolved.position);
+        });
         setFocusedWorkspaceId(ws.id);
-    }, []);
+        return ws.id;
+    }, [focusedWorkspaceId]);
     // Plain click on a session row: focus existing workspace if one exists for
     // that session, else retarget the focused workspace, else spawn one. Use
-    // the + button to explicitly open in a new split.
+    // the per-row split buttons (or the New Session menu's split modes) to
+    // explicitly open in a new split.
     const handleSelectSession = useCallback((id) => {
         if (!id)
             return;
@@ -84,16 +138,25 @@ export function BridgeChat() {
             setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id } : w));
         }
         else {
-            const ws = makeWorkspace(id);
-            setWorkspaces(prev => [...prev, ws]);
-            setFocusedWorkspaceId(ws.id);
+            addWorkspace(id, 'replace');
         }
         const session = bridge.sessions.find(s => s.bridge_id === id);
         if (session?.instance_id) {
             bridgePrefs.setLastSession(session.instance_id, id);
             bridgePrefs.setLastInstanceId(session.instance_id);
         }
-    }, [workspaces, focusedWorkspaceId, bridge.sessions, bridgePrefs]);
+    }, [workspaces, focusedWorkspaceId, bridge.sessions, bridgePrefs, addWorkspace]);
+    // Open an existing session in a new split rather than retargeting focus.
+    const handleOpenSessionInSplit = useCallback((id, mode) => {
+        if (!id)
+            return;
+        addWorkspace(id, mode);
+        const session = bridge.sessions.find(s => s.bridge_id === id);
+        if (session?.instance_id) {
+            bridgePrefs.setLastSession(session.instance_id, id);
+            bridgePrefs.setLastInstanceId(session.instance_id);
+        }
+    }, [addWorkspace, bridge.sessions, bridgePrefs]);
     useEffect(() => {
         apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data) => {
             setStoreModels(data.filter(m => m.enabled));
@@ -116,6 +179,7 @@ export function BridgeChat() {
         if (lastId) {
             const ws = makeWorkspace(lastId);
             setWorkspaces([ws]);
+            setLayout(buildFlatLayout([ws.id]));
             setFocusedWorkspaceId(ws.id);
         }
     }, [bridgePrefs, instances.loading, instances.instanceMap, workspaces.length]);
@@ -125,7 +189,10 @@ export function BridgeChat() {
     const getDisplayName = useCallback((session) => {
         return session.display_name || session.agent_id || '';
     }, []);
-    const handleCreateForInstance = useCallback(async (instanceId) => {
+    // New chat creation. Default mode = replace focused workspace's session
+    // (matches sidebar select behavior); any 'split-*' mode spawns a new
+    // workspace via addWorkspace (which resolves 'split-auto' to a direction).
+    const handleCreateForInstance = useCallback(async (instanceId, mode = 'replace') => {
         const inst = instances.instanceMap.get(instanceId);
         if (!inst)
             return;
@@ -140,21 +207,29 @@ export function BridgeChat() {
             display_name: '',
             client_id: frontendId,
         });
-        if (sess) {
-            bridgePrefs.setLastInstanceId(instanceId);
-            bridgePrefs.setLastSession(instanceId, sess.bridge_id);
-            const defaults = bridgePrefs.getDefaults(harness);
-            if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
-                bridge.sendConfig({
-                    model: defaults.model,
-                    effort: defaults.effort,
-                    max_budget: defaults.max_budget,
-                    disabled_tools: defaults.disabled_tools,
-                });
-            }
-            spawnWorkspace(sess.bridge_id);
+        if (!sess)
+            return;
+        bridgePrefs.setLastInstanceId(instanceId);
+        bridgePrefs.setLastSession(instanceId, sess.bridge_id);
+        const defaults = bridgePrefs.getDefaults(harness);
+        if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
+            bridge.sendConfig({
+                model: defaults.model,
+                effort: defaults.effort,
+                max_budget: defaults.max_budget,
+                disabled_tools: defaults.disabled_tools,
+            });
         }
-    }, [bridge, bridgePrefs, instances.instanceMap, harnesses, spawnWorkspace]);
+        // Replace focused workspace's session when possible — only spawn a new
+        // workspace if the user chose split-h/-v or no workspace is focused.
+        const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId);
+        if (mode === 'replace' && focused) {
+            setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.bridge_id } : w));
+        }
+        else {
+            addWorkspace(sess.bridge_id, mode === 'replace' ? 'replace' : mode);
+        }
+    }, [bridge, bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, addWorkspace]);
     const handleRenameSession = useCallback((id, name) => {
         bridge.renameSession(id, name);
     }, [bridge]);
@@ -164,10 +239,35 @@ export function BridgeChat() {
         return ws?.sessionId ?? null;
     }, [workspaces, focusedWorkspaceId]);
     const defaultInstanceId = bridgePrefs.prefs.last_instance_id;
-    return (_jsx("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: handleSelectSession, onSpawnWorkspace: spawnWorkspace, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsx("div", { className: "bc-workspaces", children: workspaces.length === 0 ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (workspaces.map(w => (_jsx(Workspace, { workspace: w, focused: w.id === focusedWorkspaceId, onFocus: () => setFocusedWorkspaceId(w.id), onUpdate: fn => updateWorkspace(w.id, fn), onClose: () => closeWorkspace(w.id), harnesses: harnesses, instances: instances.instances, machines: machines.machines, storeModels: storeModels, bridgePrefs: {
-                            getDefaults: bridgePrefs.getDefaults,
-                            setHarnessDefaults: bridgePrefs.setHarnessDefaults,
-                            setLastSession: bridgePrefs.setLastSession,
-                        } }, w.id)))) })] }) }));
+    const renderLeaf = useCallback((workspaceId) => {
+        const w = workspaces.find(ws => ws.id === workspaceId);
+        if (!w)
+            return null;
+        return (_jsx(Workspace, { workspace: w, focused: w.id === focusedWorkspaceId, onFocus: () => setFocusedWorkspaceId(w.id), onUpdate: fn => updateWorkspace(w.id, fn), onClose: () => closeWorkspace(w.id), harnesses: harnesses, instances: instances.instances, machines: machines.machines, storeModels: storeModels, bridgePrefs: {
+                getDefaults: bridgePrefs.getDefaults,
+                setHarnessDefaults: bridgePrefs.setHarnessDefaults,
+                setLastSession: bridgePrefs.setLastSession,
+            } }));
+    }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace]);
+    return (_jsx("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: handleSelectSession, onOpenInSplit: handleOpenSessionInSplit, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsx("div", { className: "bc-workspaces", children: !layout ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (_jsx(WorkspaceLayout, { node: layout, renderLeaf: renderLeaf, onResize: (path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev) })) })] }) }));
+}
+function applySizes(node, path, sizes) {
+    if (path.length === 0) {
+        if (node.kind !== 'split')
+            return node;
+        return { ...node, sizes };
+    }
+    if (node.kind !== 'split')
+        return node;
+    const [head, ...rest] = path;
+    const child = node.children[head];
+    if (!child)
+        return node;
+    const updated = applySizes(child, rest, sizes);
+    if (updated === child)
+        return node;
+    const children = node.children.slice();
+    children[head] = updated;
+    return { ...node, children };
 }
 //# sourceMappingURL=BridgeChat.js.map

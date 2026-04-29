@@ -1,46 +1,76 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { clearDraft, loadDraft, saveDraft } from './persistence'
 
-export function Composer({ connected, streaming, paused, uiState, activity, onSend, onStop, onResume }: {
+const MAX_INPUT_PX = 220
+
+export function Composer({ sessionId, connected, streaming, paused, onSend, onStop, onResume }: {
+  sessionId: string | null | undefined
   connected: boolean
   streaming: boolean
   paused: boolean
-  uiState: string
-  activity: { kind: string; name?: string }
   onSend: (text: string) => void
   onStop: () => void
   onResume: () => void
 }) {
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => loadDraft(sessionId ?? ''))
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const saveTimer = useRef<number | null>(null)
+  const lastSessionId = useRef<string>(sessionId ?? '')
+
+  useEffect(() => {
+    const next = sessionId ?? ''
+    if (next === lastSessionId.current) return
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+      saveDraft(lastSessionId.current, text)
+    }
+    lastSessionId.current = next
+    setText(loadDraft(next))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  useEffect(() => {
+    const sid = sessionId ?? ''
+    if (!sid) return
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null
+      saveDraft(sid, text)
+    }, 250)
+    return () => {
+      if (saveTimer.current !== null) {
+        window.clearTimeout(saveTimer.current)
+        saveTimer.current = null
+        saveDraft(sid, text)
+      }
+    }
+  }, [text, sessionId])
 
   const handleSubmit = () => {
     const t = text.trim()
-    if (!t || !connected || streaming) return
+    if (!t || !connected) return
     onSend(t)
     setText('')
+    if (sessionId) clearDraft(sessionId)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
   }
 
-  useEffect(() => { if (connected && !streaming) inputRef.current?.focus() }, [connected, streaming])
+  useEffect(() => { if (connected) inputRef.current?.focus() }, [connected])
 
-  const showStatus = uiState && uiState !== 'empty'
-  const stateLabel = uiState ? uiState.charAt(0).toUpperCase() + uiState.slice(1) : ''
-  const activityText = activity.kind !== 'idle' && uiState === 'running'
-    ? (activity.kind === 'tool' ? activity.name ?? 'tool' : activity.kind === 'thinking' ? 'thinking' : 'streaming')
-    : ''
+  // Auto-grow: reset to 0 to shrink on delete, then size to scrollHeight up to cap.
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_PX)}px`
+  }, [text])
 
   return (
     <div className="bc-composer-wrap">
-      {showStatus && (
-        <div className={`bc-composer-status bc-composer-status-${uiState}`}>
-          <span className={`bc-status-dot bc-status-dot-${uiState}`} />
-          <span className="bc-composer-status-label">{stateLabel}</span>
-          {activityText && <span className="bc-composer-status-activity">· {activityText}</span>}
-        </div>
-      )}
       <div className="bc-composer">
         <textarea
           ref={inputRef}
@@ -49,16 +79,24 @@ export function Composer({ connected, streaming, paused, uiState, activity, onSe
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={connected ? 'Send a message...' : 'Select a session'}
-          disabled={!connected || streaming}
+          disabled={!connected}
           rows={1}
         />
-        {streaming ? (
-          <button className="bc-composer-btn bc-btn-stop" onClick={onStop}>Stop</button>
-        ) : paused ? (
-          <button className="bc-composer-btn bc-btn-resume" onClick={onResume}>Resume</button>
-        ) : (
-          <button className="bc-composer-btn" onClick={handleSubmit} disabled={!text.trim() || !connected}>Send</button>
-        )}
+        <div className="bc-composer-actions">
+          {paused ? (
+            <button className="bc-composer-btn bc-btn-resume" onClick={onResume}>Resume</button>
+          ) : (
+            <button
+              className="bc-composer-btn"
+              onClick={handleSubmit}
+              disabled={!text.trim() || !connected}
+              title={streaming ? 'Send (interrupts current response)' : 'Send'}
+            >Send</button>
+          )}
+          {streaming && (
+            <button className="bc-composer-btn bc-btn-stop" onClick={onStop} title="Stop">Stop</button>
+          )}
+        </div>
       </div>
     </div>
   )

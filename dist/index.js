@@ -11,6 +11,7 @@ export { useBridgeInstances } from './useBridgeInstances';
 export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
+export { useBridgeTools } from './useBridgeTools';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
@@ -24,6 +25,7 @@ export { BridgeAuth } from './components/BridgeAuth';
 export { BridgeUsage } from './components/BridgeUsage';
 export { BridgeConformance } from './components/BridgeConformance';
 export { BridgeSkills } from './components/BridgeSkills';
+export { BridgeTools } from './components/BridgeTools';
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
 //# sourceMappingURL=index.js.map

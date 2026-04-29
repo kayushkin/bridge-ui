@@ -61,6 +61,9 @@ export interface TurnsItem {
   turnId?: string
   usage?: TokenUsage
   isError?: boolean
+  isStreaming?: boolean
+  isMarker?: boolean
+  markerKind?: 'compact'
 }
 
 export interface TimelineItem {
@@ -85,4 +88,21 @@ export type WorkspaceLayoutNode =
   | { kind: 'leaf'; workspaceId: string }
   | { kind: 'split'; direction: 'h' | 'v'; children: WorkspaceLayoutNode[]; sizes: number[] }
 
-export type SplitMode = 'replace' | 'split-h' | 'split-v'
+export type SplitDirection = 'left' | 'right' | 'up' | 'down'
+export type SplitMode =
+  | 'replace'
+  | 'split-auto'
+  | 'split-left'
+  | 'split-right'
+  | 'split-up'
+  | 'split-down'
+
+export function splitModeAxis(mode: SplitMode): { axis: 'h' | 'v'; position: 'before' | 'after' } | null {
+  switch (mode) {
+    case 'split-left':  return { axis: 'h', position: 'before' }
+    case 'split-right': return { axis: 'h', position: 'after' }
+    case 'split-up':    return { axis: 'v', position: 'before' }
+    case 'split-down':  return { axis: 'v', position: 'after' }
+    default: return null
+  }
+}

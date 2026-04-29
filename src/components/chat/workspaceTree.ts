@@ -26,6 +26,7 @@ export function splitLeaf(
   targetId: string,
   newWorkspaceId: string,
   direction: 'h' | 'v',
+  position: 'before' | 'after' = 'after',
 ): WorkspaceLayoutNode {
   const newLeaf: WorkspaceLayoutNode = { kind: 'leaf', workspaceId: newWorkspaceId }
 
@@ -35,9 +36,12 @@ export function splitLeaf(
   const path = findLeafPath(tree, targetId)
   if (!path) return tree
 
+  const orderedChildren = (existing: WorkspaceLayoutNode): WorkspaceLayoutNode[] =>
+    position === 'before' ? [newLeaf, existing] : [existing, newLeaf]
+
   // Splitting the root leaf: wrap it in a split with the new sibling.
   if (path.length === 0) {
-    return { kind: 'split', direction, children: [tree, newLeaf], sizes: [1, 1] }
+    return { kind: 'split', direction, children: orderedChildren(tree), sizes: [1, 1] }
   }
 
   // Walk to the parent split, then either insert as a sibling (if direction
@@ -45,18 +49,19 @@ export function splitLeaf(
   return mutateAtPath(tree, path.slice(0, -1), parent => {
     if (parent.kind !== 'split') return parent
     const idx = path[path.length - 1]
+    const insertIdx = position === 'before' ? idx : idx + 1
     if (parent.direction === direction) {
       const children = parent.children.slice()
       const sizes = parent.sizes.slice()
-      children.splice(idx + 1, 0, newLeaf)
-      sizes.splice(idx + 1, 0, 1)
+      children.splice(insertIdx, 0, newLeaf)
+      sizes.splice(insertIdx, 0, 1)
       return { ...parent, children, sizes }
     }
     const target = parent.children[idx]
     const wrapped: WorkspaceLayoutNode = {
       kind: 'split',
       direction,
-      children: [target, newLeaf],
+      children: orderedChildren(target),
       sizes: [1, 1],
     }
     const children = parent.children.slice()

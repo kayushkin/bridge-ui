@@ -11,6 +11,7 @@ import { Workspace } from './chat/Workspace'
 import { WorkspaceLayout } from './chat/WorkspaceLayout'
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
 import type { CollapseState, InnerNode, PaneSizes, PanesHidden, SplitMode, StoreModel, WorkspaceLayoutNode, WorkspaceState } from './chat/types'
+import { splitModeAxis } from './chat/types'
 import { generateFrontendId } from './chat/utils'
 import { buildFlatLayout, firstLeafId, iterateLeafIds, removeLeaf, splitLeaf } from './chat/workspaceTree'
 
@@ -27,6 +28,28 @@ const DEFAULT_INNER_TREE: InnerNode = {
 
 const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: true, timeline: true, git: true }
 const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
+
+// Resolve a SplitMode to a concrete axis + position. 'split-auto' looks at
+// the currently focused workspace pane and picks the longer side; ties and
+// missing rect fall back to horizontal (split right) which mirrors the prior
+// default behavior.
+function resolveSplitMode(mode: SplitMode): { axis: 'h' | 'v'; position: 'before' | 'after' } {
+  const directional = splitModeAxis(mode)
+  if (directional) return directional
+  if (mode === 'split-auto') {
+    const el = typeof document !== 'undefined'
+      ? document.querySelector<HTMLElement>('.bc-workspace-focused')
+      : null
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      if (rect.height > rect.width) return { axis: 'v', position: 'after' }
+    }
+    return { axis: 'h', position: 'after' }
+  }
+  // 'replace' falls through here when the tree is non-empty: behave like a
+  // sensible default split so the new leaf is never orphaned.
+  return { axis: 'h', position: 'after' }
+}
 
 function makeWorkspace(sessionId: string | null, seed?: Partial<WorkspaceState>): WorkspaceState {
   return {
@@ -85,21 +108,22 @@ export function BridgeChat() {
     if (next !== focusedWorkspaceId) setFocusedWorkspaceId(next)
   }, [layout, workspaces, focusedWorkspaceId])
 
-  // Add a workspace as a new leaf in the tree. Caller picks the split
-  // direction; 'replace' is only meaningful when the tree is empty (it
-  // becomes the root). With a non-empty tree, 'replace' falls back to
-  // 'split-h' so the new workspace is never orphaned.
+  // Add a workspace as a new leaf in the tree. Caller picks the split mode;
+  // 'replace' is only meaningful when the tree is empty (it becomes the
+  // root). With a non-empty tree, 'replace' falls back to a directional split
+  // so the new workspace is never orphaned. 'split-auto' picks h or v based
+  // on which dimension of the focused pane is longer.
   const addWorkspace = useCallback((sessionId: string | null, mode: SplitMode): string => {
     const ws = makeWorkspace(sessionId)
     setWorkspaces(prev => [...prev, ws])
     setLayout(prev => {
       if (!prev) return { kind: 'leaf', workspaceId: ws.id }
-      const direction: 'h' | 'v' = mode === 'split-v' ? 'v' : 'h'
       const target = focusedWorkspaceId && [...iterateLeafIds(prev)].includes(focusedWorkspaceId)
         ? focusedWorkspaceId
         : firstLeafId(prev)
       if (!target) return { kind: 'leaf', workspaceId: ws.id }
-      return splitLeaf(prev, target, ws.id, direction)
+      const resolved = resolveSplitMode(mode)
+      return splitLeaf(prev, target, ws.id, resolved.axis, resolved.position)
     })
     setFocusedWorkspaceId(ws.id)
     return ws.id
@@ -127,9 +151,9 @@ export function BridgeChat() {
   }, [workspaces, focusedWorkspaceId, bridge.sessions, bridgePrefs, addWorkspace])
 
   // Open an existing session in a new split rather than retargeting focus.
-  const handleOpenSessionInSplit = useCallback((id: string, direction: 'h' | 'v') => {
+  const handleOpenSessionInSplit = useCallback((id: string, mode: SplitMode) => {
     if (!id) return
-    addWorkspace(id, direction === 'v' ? 'split-v' : 'split-h')
+    addWorkspace(id, mode)
     const session = bridge.sessions.find(s => s.bridge_id === id)
     if (session?.instance_id) {
       bridgePrefs.setLastSession(session.instance_id, id)
@@ -170,8 +194,8 @@ export function BridgeChat() {
   }, [])
 
   // New chat creation. Default mode = replace focused workspace's session
-  // (matches sidebar select behavior); 'split-h' / 'split-v' open in a new
-  // split in that direction.
+  // (matches sidebar select behavior); any 'split-*' mode spawns a new
+  // workspace via addWorkspace (which resolves 'split-auto' to a direction).
   const handleCreateForInstance = useCallback(async (instanceId: string, mode: SplitMode = 'replace') => {
     const inst = instances.instanceMap.get(instanceId)
     if (!inst) return

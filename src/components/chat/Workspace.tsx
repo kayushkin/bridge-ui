@@ -235,7 +235,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   }, [bridge.logRows])
   const contextTone = contextInfo.pct >= 90 ? 'crit' : contextInfo.pct >= 70 ? 'warn' : ''
 
-  const handleSend = useCallback((text: string) => {
+  const handleSend = useCallback(async (text: string) => {
     if (pendingConfigRef.current) {
       bridge.sendConfig(pendingConfigRef.current)
       if (activeHarness) {
@@ -243,6 +243,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       }
       pendingConfigRef.current = null
     }
+    if (bridge.uiState === 'running') await bridge.interrupt()
     bridge.send(text)
   }, [bridge, bridgePrefs, activeHarness])
 
@@ -302,6 +303,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       <div className="bc-controls-bar">
         {bridge.activeSession && (
           <>
+            <StatusChip uiState={bridge.uiState} activity={bridge.activity} compacting={bridge.compacting} />
             {capabilities.has('model') && harnessModels.length > 0 && (
               <select className="bc-ctrl-select" value={configModel} onChange={e => setConfigModel(e.target.value)} title="Model">
                 <option value="">Model</option>
@@ -355,11 +357,10 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       </div>
       {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
       <Composer
+        sessionId={bridge.activeSession?.bridge_id ?? null}
         connected={bridge.connected && !!bridge.activeSession}
         streaming={bridge.uiState === 'running'}
         paused={bridge.uiState === 'paused'}
-        uiState={bridge.uiState}
-        activity={bridge.activity}
         onSend={handleSend}
         onStop={bridge.interrupt}
         onResume={bridge.resume}
@@ -371,5 +372,32 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         />
       )}
     </div>
+  )
+}
+
+function StatusChip({ uiState, activity, compacting }: {
+  uiState: string
+  activity: { kind: string; name?: string }
+  compacting: boolean
+}) {
+  if (compacting) {
+    return (
+      <span className="bc-status-chip bc-status-chip-compacting">
+        <span className="bc-status-dot bc-status-dot-compacting" />
+        <span className="bc-status-chip-label">Compacting</span>
+      </span>
+    )
+  }
+  if (!uiState || uiState === 'empty') return null
+  const stateLabel = uiState.charAt(0).toUpperCase() + uiState.slice(1)
+  const activityText = activity.kind !== 'idle' && uiState === 'running'
+    ? (activity.kind === 'tool' ? activity.name ?? 'tool' : activity.kind === 'thinking' ? 'thinking' : 'streaming')
+    : ''
+  return (
+    <span className={`bc-status-chip bc-status-chip-${uiState}`}>
+      <span className={`bc-status-dot bc-status-dot-${uiState}`} />
+      <span className="bc-status-chip-label">{stateLabel}</span>
+      {activityText && <span className="bc-status-chip-activity">· {activityText}</span>}
+    </span>
   )
 }

@@ -1,4 +1,4 @@
-import type { CollapseState, PaneSizes, WorkspaceState } from './types';
+import type { CollapseState, PaneSizes, WorkspaceLayoutNode, WorkspaceState } from './types';
 export declare const DEFAULT_PANE_SIZES: PaneSizes;
 export declare function loadCollapseState(): CollapseState;
 export declare function saveCollapseState(s: CollapseState): void;
@@ -11,6 +11,7 @@ export declare function saveFolderCollapsed(next: Record<string, boolean>): void
 export interface PersistedWorkspaces {
     workspaces: WorkspaceState[];
     focusedWorkspaceId: string | null;
+    layout: WorkspaceLayoutNode | null;
 }
 export declare function loadWorkspacesState(): PersistedWorkspaces;
 export declare function saveWorkspacesState(s: PersistedWorkspaces): void;
@@ -18,4 +19,7 @@ export declare function loadExcludedHarnesses(): Set<string>;
 export declare function saveExcludedHarnesses(s: Set<string>): void;
 export declare function loadExcludedMachines(): Set<string>;
 export declare function saveExcludedMachines(s: Set<string>): void;
+export declare function loadDraft(sessionId: string): string;
+export declare function saveDraft(sessionId: string, text: string): void;
+export declare function clearDraft(sessionId: string): void;
 //# sourceMappingURL=persistence.d.ts.map

@@ -1,6 +1,7 @@
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types';
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders';
-export declare function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onSpawnWorkspace, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+import type { SplitMode } from './types';
+export declare function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
     sessions: ManagedSession[];
     instances: BridgeInstance[];
     machines: Machine[];
@@ -11,8 +12,8 @@ export declare function SessionList({ sessions, instances, machines, harnesses, 
     openSessionIds: Set<string>;
     focusedSessionId: string | null;
     onSelect: (id: string) => void;
-    onSpawnWorkspace: (id: string) => void;
-    onNewSession: (instanceId: string) => void;
+    onOpenInSplit: (id: string, mode: SplitMode) => void;
+    onNewSession: (instanceId: string, mode: SplitMode) => void;
     connected: boolean;
     getDisplayName: (session: ManagedSession) => string;
     onRename: (id: string, name: string) => void;
