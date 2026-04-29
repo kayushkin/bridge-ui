@@ -40,6 +40,7 @@
 .bridge-tab:hover { color: var(--text); }
 .bridge-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
 .bridge-content { flex: 1; overflow-y: auto; padding: 20px; }
+.bridge-content:has(> .bc-container) { padding: 0; overflow: hidden; }
 
 /* ===== BridgeChat ===== */
 .bc-container { display: flex; flex-direction: column; height: 100%; }
