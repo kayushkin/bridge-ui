@@ -180,7 +180,6 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
             <div
               key={it.key}
               className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`}
-              title={it.text}
             >
               <div className="bc-turns-meta">
                 <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>

@@ -514,6 +514,13 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
 
     ;(async () => {
+      // If this bridge instance hasn't seen the session yet (e.g. it was
+      // just created via a *different* useBridgeSession instance), refresh
+      // the list so derived state — activeSession, machine, harness info —
+      // populates immediately instead of waiting for the next event.
+      if (!sessionsRef.current.find(s => s.bridge_id === id)) {
+        await refreshSessionsImpl()
+      }
       await loadHistory(id)
       // Read the latest sessions list at resolution time, not the value
       // captured when this callback was created — the session may have been
@@ -526,7 +533,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         wasInterrupted.current = false
       }
     })()
-  }, [closeSSE, loadHistory, startSSE])
+  }, [closeSSE, loadHistory, startSSE, refreshSessionsImpl])
 
   useEffect(() => {
     if (activeSession?.state === 'running' && !sseAbort.current) {
