@@ -6,6 +6,8 @@ export interface BridgeRoutes {
     auth: string;
     usage: string;
     settings: string;
+    agents: string;
+    files: string;
     skills: string;
     tools: string;
     conformance: string;

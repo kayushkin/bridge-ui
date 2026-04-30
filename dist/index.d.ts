@@ -26,6 +26,10 @@ export { BridgeUsage } from './components/BridgeUsage';
 export { BridgeConformance } from './components/BridgeConformance';
 export { BridgeSkills } from './components/BridgeSkills';
 export { BridgeTools } from './components/BridgeTools';
+export { BridgeAgents } from './components/BridgeAgents';
+export { BridgeFiles } from './components/BridgeFiles';
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
 export type { ToolRendererProps } from './components/tools';
+export { StatusDot } from './components/chat/StatusDot';
+export type { StatusDotState } from './components/chat/StatusDot';
 //# sourceMappingURL=index.d.ts.map

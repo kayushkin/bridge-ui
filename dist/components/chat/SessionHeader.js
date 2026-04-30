@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { formatCost, formatTokens } from '../../utils';
 import { EditableName } from './EditableName';
 import { PaneToggles } from './PaneToggles';
+import { StatusDot } from './StatusDot';
 export function SessionHeader({ chat, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }) {
     const completed = chat ? rows.filter(r => r.actor === 'assistant' && r.done && r.meta) : [];
     const last = completed[completed.length - 1];
@@ -29,7 +30,7 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
         : undefined;
     const currentRepo = gitRepos.find(r => r.path === selectedRepo) ?? gitRepos[0];
     const repoCount = gitRepos.length;
-    return (_jsxs("div", { className: "bc-header", style: headerStyle, "data-harness": harness || undefined, children: [_jsxs("div", { className: "bc-header-row", children: [_jsxs("div", { className: "bc-nav-arrows", children: [_jsx("button", { className: "bc-nav-arrow", onClick: onPrev, disabled: !hasPrev, title: "Previous session", "aria-label": "Previous session", children: "\u2039" }), _jsx("button", { className: "bc-nav-arrow", onClick: onNext, disabled: !hasNext, title: "Next session", "aria-label": "Next session", children: "\u203A" })] }), _jsx("span", { className: `bc-status-dot bc-status-dot-${dotState}`, title: dotTitle, "aria-label": dotTitle }), harness && (_jsx("span", { className: "bc-harness-chip", title: harnessLabel, "aria-label": harnessLabel, children: harnessImage
+    return (_jsxs("div", { className: "bc-header", style: headerStyle, "data-harness": harness || undefined, children: [_jsxs("div", { className: "bc-header-row", children: [_jsxs("div", { className: "bc-nav-arrows", children: [_jsx("button", { className: "bc-nav-arrow", onClick: onPrev, disabled: !hasPrev, title: "Previous session", "aria-label": "Previous session", children: "\u2039" }), _jsx("button", { className: "bc-nav-arrow", onClick: onNext, disabled: !hasNext, title: "Next session", "aria-label": "Next session", children: "\u203A" })] }), _jsx(StatusDot, { state: dotState, title: dotTitle }), harness && (_jsx("span", { className: "bc-harness-chip", title: harnessLabel, "aria-label": harnessLabel, children: harnessImage
                             ? _jsx("img", { className: "bc-harness-chip-img", src: `${basePath}${harnessImage}`, alt: "" })
                             : harnessEmoji
                                 ? _jsx("span", { className: "bc-harness-chip-emoji", "aria-hidden": true, children: harnessEmoji })

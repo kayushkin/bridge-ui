@@ -275,6 +275,41 @@ function debounce(fn, ms) {
     } };
     return debounced;
 }
+// --- Interrupted-session persistence ---
+//
+// `paused` is a frontend-only refinement of the canonical `idle` state — it
+// means "the user interrupted this session's last turn." We persist the set
+// of interrupted bridge_ids in localStorage so the marker survives reloads
+// and tab switches, and so the sidebar can show a paused dot for any session
+// (not just the active one).
+const INTERRUPTED_KEY = 'bridge-ui-interrupted-sessions';
+function loadInterruptedIds() {
+    try {
+        const raw = localStorage.getItem(INTERRUPTED_KEY);
+        if (!raw)
+            return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    }
+    catch {
+        return new Set();
+    }
+}
+function saveInterruptedIds(s) {
+    try {
+        localStorage.setItem(INTERRUPTED_KEY, JSON.stringify([...s]));
+    }
+    catch { /* ignore */ }
+}
+function deriveSessionUIState(session, interrupted) {
+    if (session.state === 'running')
+        return 'running';
+    if (session.state === 'idle' && interrupted.has(session.bridge_id))
+        return 'paused';
+    if (session.state === 'idle')
+        return 'idle';
+    return session.state;
+}
 // --- Hook ---
 export function useBridgeSession() {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
@@ -286,7 +321,7 @@ export function useBridgeSession() {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [activity, setActivity] = useState({ kind: 'idle' });
     const [compacting, setCompacting] = useState(false);
-    const wasInterrupted = useRef(false);
+    const [interruptedIds, setInterruptedIds] = useState(loadInterruptedIds);
     const sseAbort = useRef(null);
     const lastEventId = useRef(undefined);
     const activeSessionRef = useRef(null);
@@ -295,6 +330,8 @@ export function useBridgeSession() {
     sessionsRef.current = sessions;
     const activeSessionIdRef = useRef(null);
     activeSessionIdRef.current = activeSessionId;
+    const interruptedIdsRef = useRef(interruptedIds);
+    interruptedIdsRef.current = interruptedIds;
     const compactingTimer = useRef(null);
     const clearCompacting = useCallback(() => {
         if (compactingTimer.current) {
@@ -302,6 +339,26 @@ export function useBridgeSession() {
             compactingTimer.current = null;
         }
         setCompacting(false);
+    }, []);
+    const markInterrupted = useCallback((id) => {
+        setInterruptedIds(prev => {
+            if (prev.has(id))
+                return prev;
+            const next = new Set(prev);
+            next.add(id);
+            saveInterruptedIds(next);
+            return next;
+        });
+    }, []);
+    const unmarkInterrupted = useCallback((id) => {
+        setInterruptedIds(prev => {
+            if (!prev.has(id))
+                return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            saveInterruptedIds(next);
+            return next;
+        });
     }, []);
     // --- Session refresh (debounced) ---
     const refreshSessionsImpl = useCallback(async () => {
@@ -334,14 +391,38 @@ export function useBridgeSession() {
     const uiState = useMemo(() => {
         if (!activeSession)
             return 'empty';
-        if (activeSession.state === 'running')
-            return 'running';
-        if (activeSession.state === 'idle' && wasInterrupted.current)
-            return 'paused';
-        if (activeSession.state === 'idle')
-            return 'idle';
-        return activeSession.state;
-    }, [activeSession]);
+        return deriveSessionUIState(activeSession, interruptedIds);
+    }, [activeSession, interruptedIds]);
+    const getSessionUIState = useCallback((session) => deriveSessionUIState(session, interruptedIds), [interruptedIds]);
+    // Drop interrupted markers for sessions that are no longer in `idle` or no
+    // longer present in the sessions list. Anything that's now running, completed,
+    // errored, or deleted shouldn't carry a pause marker — when it next reaches
+    // idle, that's a fresh idle, not a paused-from-before.
+    useEffect(() => {
+        if (sessions.length === 0)
+            return;
+        setInterruptedIds(prev => {
+            if (prev.size === 0)
+                return prev;
+            const next = new Set();
+            for (const s of sessions) {
+                if (s.state === 'idle' && prev.has(s.bridge_id))
+                    next.add(s.bridge_id);
+            }
+            if (next.size === prev.size) {
+                let same = true;
+                for (const id of prev)
+                    if (!next.has(id)) {
+                        same = false;
+                        break;
+                    }
+                if (same)
+                    return prev;
+            }
+            saveInterruptedIds(next);
+            return next;
+        });
+    }, [sessions]);
     // --- SSE connection ---
     const closeSSE = useCallback(() => {
         if (sseAbort.current) {
@@ -399,7 +480,7 @@ export function useBridgeSession() {
                     break;
                 case 'result':
                     setActivity({ kind: 'idle' });
-                    wasInterrupted.current = false;
+                    unmarkInterrupted(sessId);
                     patchSessionState(sessId, 'completed');
                     refreshSessions();
                     break;
@@ -426,12 +507,14 @@ export function useBridgeSession() {
                 }
                 case 'session_state': {
                     const state = data.state?.state;
-                    if (state === 'idle' && !wasInterrupted.current)
+                    if (state === 'idle' && !interruptedIdsRef.current.has(sessId))
                         setActivity({ kind: 'idle' });
                     else if (state === 'running')
-                        wasInterrupted.current = false;
-                    else if (state === 'completed')
+                        unmarkInterrupted(sessId);
+                    else if (state === 'completed') {
                         setActivity({ kind: 'idle' });
+                        unmarkInterrupted(sessId);
+                    }
                     if (state)
                         patchSessionState(sessId, state);
                     refreshSessions();
@@ -445,7 +528,7 @@ export function useBridgeSession() {
                     break;
             }
         }
-    }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState]);
+    }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState, unmarkInterrupted, clearCompacting]);
     // --- History loading ---
     //
     // Fetch raw events from /history (each event JSON has event_id injected by
@@ -491,7 +574,6 @@ export function useBridgeSession() {
     // --- Session selection ---
     const selectSession = useCallback((id) => {
         closeSSE();
-        wasInterrupted.current = false;
         setError(null);
         setActivity({ kind: 'idle' });
         clearCompacting();
@@ -528,11 +610,8 @@ export function useBridgeSession() {
             if (session?.state === 'running') {
                 startSSE(id);
             }
-            if (session?.state === 'idle') {
-                wasInterrupted.current = false;
-            }
         })();
-    }, [closeSSE, loadHistory, startSSE, refreshSessionsImpl]);
+    }, [closeSSE, loadHistory, startSSE, refreshSessionsImpl, clearCompacting]);
     useEffect(() => {
         if (activeSession?.state === 'running' && !sseAbort.current) {
             startSSE(activeSession.bridge_id);
@@ -622,7 +701,7 @@ export function useBridgeSession() {
         };
         setLogRows(prev => [...prev, optimistic]);
         setError(null);
-        wasInterrupted.current = false;
+        unmarkInterrupted(activeSessionId);
         try {
             const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/send`, {
                 method: 'POST',
@@ -646,7 +725,7 @@ export function useBridgeSession() {
         catch (err) {
             setError(`Send failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions]);
+    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions, unmarkInterrupted]);
     const markLastAssistantDone = useCallback(() => {
         setLogRows(prev => {
             for (let i = prev.length - 1; i >= 0; i--) {
@@ -664,7 +743,7 @@ export function useBridgeSession() {
             return;
         try {
             await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' });
-            wasInterrupted.current = true;
+            markInterrupted(activeSessionId);
             markLastAssistantDone();
             setActivity({ kind: 'idle' });
             refreshSessions();
@@ -672,7 +751,7 @@ export function useBridgeSession() {
         catch (err) {
             setError(`Interrupt failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, refreshSessions, markLastAssistantDone]);
+    }, [fetchFn, basePath, activeSessionId, refreshSessions, markLastAssistantDone, markInterrupted]);
     const resume = useCallback(async () => {
         if (!activeSessionId)
             return;
@@ -682,14 +761,14 @@ export function useBridgeSession() {
                 setError(`Resume failed: ${res.statusText}`);
                 return;
             }
-            wasInterrupted.current = false;
+            unmarkInterrupted(activeSessionId);
             startSSE(activeSessionId);
             refreshSessions();
         }
         catch (err) {
             setError(`Resume failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions]);
+    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions, unmarkInterrupted]);
     const stopSession = useCallback(async () => {
         if (!activeSessionId)
             return;
@@ -697,14 +776,14 @@ export function useBridgeSession() {
             await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' });
             closeSSE();
             markLastAssistantDone();
-            wasInterrupted.current = false;
+            unmarkInterrupted(activeSessionId);
             setActivity({ kind: 'idle' });
             refreshSessions();
         }
         catch (err) {
             setError(`Stop failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions, markLastAssistantDone]);
+    }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions, markLastAssistantDone, unmarkInterrupted]);
     const compact = useCallback(async (summary) => {
         if (!activeSessionId)
             return;
@@ -791,6 +870,7 @@ export function useBridgeSession() {
         activeSession,
         logRows,
         uiState,
+        getSessionUIState,
         activity,
         connected,
         compacting,
@@ -812,6 +892,7 @@ export function useBridgeSession() {
         activeSession,
         logRows,
         uiState,
+        getSessionUIState,
         activity,
         connected,
         compacting,

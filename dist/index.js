@@ -26,6 +26,10 @@ export { BridgeUsage } from './components/BridgeUsage';
 export { BridgeConformance } from './components/BridgeConformance';
 export { BridgeSkills } from './components/BridgeSkills';
 export { BridgeTools } from './components/BridgeTools';
+export { BridgeAgents } from './components/BridgeAgents';
+export { BridgeFiles } from './components/BridgeFiles';
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
+// Shared status dot — used by header, sidebar, and composer status chip
+export { StatusDot } from './components/chat/StatusDot';
 //# sourceMappingURL=index.js.map

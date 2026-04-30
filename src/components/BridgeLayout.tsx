@@ -15,6 +15,8 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     { to: routes.auth, label: 'Auth', end: false },
     { to: routes.usage, label: 'Usage', end: false },
     { to: routes.settings, label: 'Settings', end: false },
+    { to: routes.agents, label: 'Agents', end: false },
+    { to: routes.files, label: 'Files', end: false },
     ...(skillStoreBasePath ? [{ to: routes.skills, label: 'Skills', end: false }] : []),
     ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
     ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),

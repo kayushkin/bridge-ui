@@ -6,6 +6,7 @@ import { formatTokens } from '../../utils';
 import { Composer } from './Composer';
 import { LayoutRenderer } from './LayoutRenderer';
 import { SessionHeader } from './SessionHeader';
+import { StatusDot } from './StatusDot';
 import { SystemPromptModal } from './SystemPromptModal';
 import { ToolsPanel } from './ToolsPanel';
 import { WorkspaceProvider } from './WorkspaceContext';
@@ -252,7 +253,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
 }
 function StatusChip({ uiState, activity, compacting }) {
     if (compacting) {
-        return (_jsxs("span", { className: "bc-status-chip bc-status-chip-compacting", children: [_jsx("span", { className: "bc-status-dot bc-status-dot-compacting" }), _jsx("span", { className: "bc-status-chip-label", children: "Compacting" })] }));
+        return (_jsxs("span", { className: "bc-status-chip bc-status-chip-compacting", children: [_jsx(StatusDot, { state: "compacting" }), _jsx("span", { className: "bc-status-chip-label", children: "Compacting" })] }));
     }
     if (!uiState || uiState === 'empty')
         return null;
@@ -260,6 +261,6 @@ function StatusChip({ uiState, activity, compacting }) {
     const activityText = activity.kind !== 'idle' && uiState === 'running'
         ? (activity.kind === 'tool' ? activity.name ?? 'tool' : activity.kind === 'thinking' ? 'thinking' : 'streaming')
         : '';
-    return (_jsxs("span", { className: `bc-status-chip bc-status-chip-${uiState}`, children: [_jsx("span", { className: `bc-status-dot bc-status-dot-${uiState}` }), _jsx("span", { className: "bc-status-chip-label", children: stateLabel }), activityText && _jsxs("span", { className: "bc-status-chip-activity", children: ["\u00B7 ", activityText] })] }));
+    return (_jsxs("span", { className: `bc-status-chip bc-status-chip-${uiState}`, children: [_jsx(StatusDot, { state: uiState }), _jsx("span", { className: "bc-status-chip-label", children: stateLabel }), activityText && _jsxs("span", { className: "bc-status-chip-activity", children: ["\u00B7 ", activityText] })] }));
 }
 //# sourceMappingURL=Workspace.js.map

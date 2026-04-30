@@ -89,6 +89,7 @@ export interface UseBridgeSessionReturn {
     activeSession: ManagedSession | null;
     logRows: LogRow[];
     uiState: SessionUIState;
+    getSessionUIState: (session: ManagedSession) => SessionUIState;
     activity: ActivityKind;
     connected: boolean;
     compacting: boolean;

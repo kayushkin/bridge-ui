@@ -8,6 +8,8 @@ export interface BridgeRoutes {
   auth: string
   usage: string
   settings: string
+  agents: string
+  files: string
   skills: string
   tools: string
   conformance: string
@@ -20,6 +22,8 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   auth: '/bridge/auth',
   usage: '/bridge/usage',
   settings: '/bridge/settings',
+  agents: '/bridge/agents',
+  files: '/bridge/files',
   skills: '/bridge/skills',
   tools: '/bridge/tools',
   conformance: '/bridge/conformance',

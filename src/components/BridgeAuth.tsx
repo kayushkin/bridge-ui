@@ -11,9 +11,77 @@ const PROVIDERS = [
   { id: 'github', label: 'GitHub' },
 ]
 
+interface ModelHealth {
+  model: string
+  last_success_at: string
+  last_success_ms: number
+  avg_response_ms: number
+  last_error_at: string
+  last_error?: string
+  consecutive_errors?: number
+}
+
+interface ModelCredRef {
+  id: string
+  provider: string
+  label: string
+  auth_type: string
+  api_key_masked?: string
+  token_masked?: string
+  priority: number
+  enabled: boolean
+  expires_at: number
+}
+
+interface ModelEntry {
+  id: string
+  provider: string
+  name: string
+  max_tokens: number
+  input_cost: number
+  output_cost: number
+  enabled: boolean
+  priority: number
+  health: ModelHealth | null
+  credentials: ModelCredRef[]
+}
+
+function timeAgo(dateStr: string): string {
+  if (!dateStr || dateStr === '0001-01-01T00:00:00Z') return 'never'
+  const d = new Date(dateStr)
+  if (d.getTime() === 0) return 'never'
+  const seconds = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86400)}d ago`
+}
+
+function modelHealthState(h: ModelHealth | null): { icon: string; cls: string } {
+  if (!h || (!h.last_success_at && !h.last_error_at) ||
+      (h.last_success_at === '0001-01-01T00:00:00Z' && h.last_error_at === '0001-01-01T00:00:00Z')) {
+    return { icon: '❓', cls: 'ba-model-unknown' }
+  }
+  const successTime = new Date(h.last_success_at).getTime()
+  const errorTime = new Date(h.last_error_at).getTime()
+  const thirtyMin = 30 * 60 * 1000
+  const now = Date.now()
+  if (successTime > 0 && (now - successTime) < thirtyMin && successTime > errorTime) {
+    return { icon: '\u{1F7E2}', cls: 'ba-model-healthy' }
+  }
+  if (errorTime > successTime && errorTime > 0) {
+    return { icon: '\u{1F534}', cls: 'ba-model-error' }
+  }
+  if (successTime > 0) {
+    return { icon: '\u{1F7E1}', cls: 'ba-model-stale' }
+  }
+  return { icon: '❓', cls: 'ba-model-unknown' }
+}
+
 export function BridgeAuth() {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const [credentials, setCredentials] = useState<Credential[]>([])
+  const [models, setModels] = useState<ModelEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddKey, setShowAddKey] = useState(false)
@@ -34,7 +102,20 @@ export function BridgeAuth() {
     finally { setLoading(false) }
   }, [apiFetch, basePath])
 
-  useEffect(() => { fetchCredentials() }, [fetchCredentials])
+  const fetchModels = useCallback(async () => {
+    try {
+      const res = await apiFetch(`${basePath}/models`)
+      if (!res.ok) return
+      setModels(await res.json() || [])
+    } catch { /* models section is optional — don't block the page */ }
+  }, [apiFetch, basePath])
+
+  useEffect(() => {
+    fetchCredentials()
+    fetchModels()
+    const interval = setInterval(() => { fetchCredentials(); fetchModels() }, 30000)
+    return () => clearInterval(interval)
+  }, [fetchCredentials, fetchModels])
 
   useEffect(() => {
     for (const inst of instances.instances) {
@@ -207,6 +288,72 @@ export function BridgeAuth() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {models.length > 0 && (
+        <div className="ba-models-section">
+          <div className="ba-models-header">
+            <h2>Models</h2>
+            <span className="ba-models-count">{models.length}</span>
+          </div>
+          <div className="ba-models-table">
+            <div className="ba-models-row ba-models-thead">
+              <span className="ba-col-status">Status</span>
+              <span className="ba-col-name">Model</span>
+              <span className="ba-col-provider">Provider</span>
+              <span className="ba-col-priority">Pri</span>
+              <span className="ba-col-cost">Cost (in/out)</span>
+              <span className="ba-col-response">Avg Response</span>
+              <span className="ba-col-last">Last Success</span>
+            </div>
+            {models.map(m => {
+              const hs = modelHealthState(m.health)
+              return (
+                <div key={m.id} className="ba-model-group">
+                  <div className={`ba-models-row ${!m.enabled ? 'ba-model-disabled' : ''} ${hs.cls}`}>
+                    <span className="ba-col-status">
+                      <span className="ba-status-icon">{hs.icon}</span>
+                      <span className={`ba-enabled-badge ${m.enabled ? 'ba-badge-on' : 'ba-badge-off'}`}>
+                        {m.enabled ? 'ON' : 'OFF'}
+                      </span>
+                    </span>
+                    <span className="ba-col-name">
+                      <strong>{m.name}</strong>
+                      <span className="ba-model-id">{m.id}</span>
+                    </span>
+                    <span className="ba-col-provider">{m.provider}</span>
+                    <span className="ba-col-priority">{m.priority}</span>
+                    <span className="ba-col-cost">${m.input_cost} / ${m.output_cost}</span>
+                    <span className="ba-col-response">
+                      {m.health && m.health.avg_response_ms > 0
+                        ? `${(m.health.avg_response_ms / 1000).toFixed(1)}s`
+                        : '—'}
+                    </span>
+                    <span className="ba-col-last">
+                      {m.health ? timeAgo(m.health.last_success_at) : '—'}
+                    </span>
+                  </div>
+                  {m.credentials && m.credentials.length > 0 && (
+                    <div className="ba-cred-subrows">
+                      {m.credentials.map(c => (
+                        <div key={c.id} className={`ba-cred-subrow ${!c.enabled ? 'ba-model-disabled' : ''}`}>
+                          <span className="ba-cred-sub-icon">{c.enabled ? '↳' : '⏸'}</span>
+                          <span className="ba-cred-sub-label">
+                            {c.label || c.id}
+                            {c.api_key_masked && <span className="ba-model-id"> {c.api_key_masked}</span>}
+                            {c.token_masked && <span className="ba-model-id"> {c.token_masked}</span>}
+                          </span>
+                          <span className="ba-cred-sub-type">{c.auth_type}</span>
+                          <span className="ba-cred-sub-pri">pri {c.priority}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

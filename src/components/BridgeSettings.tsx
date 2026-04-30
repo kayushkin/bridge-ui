@@ -3,6 +3,7 @@ import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
 import type { HarnessDefaults, HarnessInfo } from '../types'
 import { SourceFoldersEditor } from './SourceFoldersEditor'
+import { InberAgentsConfig } from './InberAgentsConfig'
 
 interface ModelInfo {
   id: string
@@ -150,6 +151,8 @@ export function BridgeSettings() {
                   <button className="bset-save-btn" onClick={() => saveDefaults(h.name)} disabled={saving === h.name}>
                     {saving === h.name ? 'Saved!' : 'Save Defaults'}
                   </button>
+
+                  {h.name === 'inber' && <InberAgentsConfig />}
                 </div>
               )}
             </div>

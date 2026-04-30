@@ -6,6 +6,8 @@ export const DEFAULT_BRIDGE_ROUTES = {
     auth: '/bridge/auth',
     usage: '/bridge/usage',
     settings: '/bridge/settings',
+    agents: '/bridge/agents',
+    files: '/bridge/files',
     skills: '/bridge/skills',
     tools: '/bridge/tools',
     conformance: '/bridge/conformance',
