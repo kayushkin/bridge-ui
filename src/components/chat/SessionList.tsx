@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types'
+import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
 import { HarnessFilterBar } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
 import { SplitButtons } from './SplitButtons'
+import { StatusDot } from './StatusDot'
 import {
   loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
   saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
 } from './persistence'
 import type { CtxMenuState, SplitMode } from './types'
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -26,6 +27,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   onNewSession: (instanceId: string, mode: SplitMode) => void
   connected: boolean
   getDisplayName: (session: ManagedSession) => string
+  getSessionUIState: (session: ManagedSession) => SessionUIState
   onRename: (id: string, name: string) => void
   folders: UseBridgeFoldersReturn
   onAfterFolderChange: () => void
@@ -189,6 +191,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     const hinfo = harnessMap.get(s.harness)
     const instance = s.instance_id ? instanceMap.get(s.instance_id) : undefined
     const harnessTitle = instance ? `${hinfo?.label || s.harness} — ${instance.name}` : (hinfo?.label || s.harness)
+    const sessUIState = getSessionUIState(s)
+    const sessTitle = sessUIState.charAt(0).toUpperCase() + sessUIState.slice(1)
     return (
       <div
         key={s.bridge_id}
@@ -201,7 +205,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
               ? <img src={`${basePath}${hinfo.image}`} alt="" />
               : <span className="bc-session-harness-emoji">{hinfo?.emoji || '·'}</span>}
           </span>
-          <span className={`bc-sdot bc-sdot-${s.state}`} />
+          <StatusDot state={sessUIState} title={sessTitle} />
           <EditableName
             value={getDisplayName(s)}
             onSave={name => onRename(s.bridge_id, name)}

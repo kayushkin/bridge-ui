@@ -293,6 +293,7 @@ export function BridgeChat() {
             onNewSession={handleCreateForInstance}
             connected={bridge.connected}
             getDisplayName={getDisplayName}
+            getSessionUIState={bridge.getSessionUIState}
             onRename={handleRenameSession}
             folders={folders}
             onAfterFolderChange={bridge.refreshSessions}

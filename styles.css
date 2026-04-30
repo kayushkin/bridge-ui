@@ -231,12 +231,6 @@
   font-size: 0.85em;
   pointer-events: none;
 }
-.bc-sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #555; }
-.bc-sdot-running { background: #22c55e; }
-.bc-sdot-idle { background: #60a5fa; }
-.bc-sdot-completed { background: #888; }
-.bc-sdot-error, .bc-sdot-aborted { background: #ef4444; }
-
 /* Session menu (three-dots, appears on hover) */
 .bc-session-menu-btn {
   margin-left: auto;
@@ -2439,9 +2433,8 @@
   border-radius: 999px;
   font-weight: 600;
 }
-.bc-sdot,
 .bc-status-dot { width: 8px; height: 8px; }
-.bc-sdot-running, .bc-status-dot-running {
+.bc-status-dot-running {
   box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 22%, transparent),
               0 0 12px color-mix(in srgb, #22c55e 70%, transparent);
 }

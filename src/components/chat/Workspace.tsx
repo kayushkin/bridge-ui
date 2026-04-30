@@ -6,6 +6,7 @@ import { formatTokens } from '../../utils'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
 import { SessionHeader } from './SessionHeader'
+import { StatusDot } from './StatusDot'
 import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
 import { WorkspaceProvider } from './WorkspaceContext'
@@ -383,7 +384,7 @@ function StatusChip({ uiState, activity, compacting }: {
   if (compacting) {
     return (
       <span className="bc-status-chip bc-status-chip-compacting">
-        <span className="bc-status-dot bc-status-dot-compacting" />
+        <StatusDot state="compacting" />
         <span className="bc-status-chip-label">Compacting</span>
       </span>
     )
@@ -395,7 +396,7 @@ function StatusChip({ uiState, activity, compacting }: {
     : ''
   return (
     <span className={`bc-status-chip bc-status-chip-${uiState}`}>
-      <span className={`bc-status-dot bc-status-dot-${uiState}`} />
+      <StatusDot state={uiState} />
       <span className="bc-status-chip-label">{stateLabel}</span>
       {activityText && <span className="bc-status-chip-activity">· {activityText}</span>}
     </span>

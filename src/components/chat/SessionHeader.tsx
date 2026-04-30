@@ -3,6 +3,7 @@ import type { HarnessInfo, LogRow, Machine } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
+import { StatusDot } from './StatusDot'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
@@ -74,11 +75,7 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
           <button className="bc-nav-arrow" onClick={onPrev} disabled={!hasPrev} title="Previous session" aria-label="Previous session">‹</button>
           <button className="bc-nav-arrow" onClick={onNext} disabled={!hasNext} title="Next session" aria-label="Next session">›</button>
         </div>
-        <span
-          className={`bc-status-dot bc-status-dot-${dotState}`}
-          title={dotTitle}
-          aria-label={dotTitle}
-        />
+        <StatusDot state={dotState} title={dotTitle} />
         {harness && (
           <span className="bc-harness-chip" title={harnessLabel} aria-label={harnessLabel}>
             {harnessImage
