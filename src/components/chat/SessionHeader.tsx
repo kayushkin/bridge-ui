@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react'
-import type { HarnessInfo, LogRow, Machine } from '../../types'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
@@ -7,8 +7,12 @@ import { StatusDot } from './StatusDot'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
+  /** Full session row from the bridge — drives the details dropdown
+   * (source, folder, instance, mode, IDs, timestamps). Undefined when
+   * no session is active. */
+  session?: ManagedSession | null
   /** Server-registered HarnessInfo for chat.harness — canonical source for
    * label/emoji/image. Constants are fallbacks for harnesses the server
    * hasn't registered. */
@@ -68,6 +72,25 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
   const currentRepo = gitRepos.find(r => r.path === selectedRepo) ?? gitRepos[0]
   const repoCount = gitRepos.length
 
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!detailsOpen) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!detailsRef.current) return
+      if (!detailsRef.current.contains(e.target as Node)) setDetailsOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailsOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [detailsOpen])
+
+  const sourceLabel = session?.source || 'interactive'
+
   return (
     <div className="bc-header" style={headerStyle} data-harness={harness || undefined}>
       <div className="bc-header-row">
@@ -109,6 +132,23 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
               aria-hidden
             />
           </span>
+        )}
+        {session && (
+          <div className="bc-details-wrap" ref={detailsRef}>
+            <button
+              type="button"
+              className={`bc-source-chip${detailsOpen ? ' bc-source-chip-open' : ''}`}
+              onClick={() => setDetailsOpen(o => !o)}
+              data-source={session.source || 'interactive'}
+              title={`source: ${sourceLabel}\nclick for full session details`}
+              aria-expanded={detailsOpen}
+              aria-label="Session details"
+            >
+              <span className="bc-source-chip-label">{sourceLabel}</span>
+              <span className="bc-source-chip-caret" aria-hidden>▾</span>
+            </button>
+            {detailsOpen && <SessionDetailsPanel session={session} />}
+          </div>
         )}
         {chat
           ? <EditableName value={chat.displayName} onSave={onRename} className="bc-session-name" />
@@ -163,6 +203,44 @@ export function SessionHeader({ chat, harnessInfo, machine, machineReachable, ba
           style={{ width: `${contextPct}%` }}
         />
       )}
+    </div>
+  )
+}
+
+function SessionDetailsPanel({ session }: { session: ManagedSession }) {
+  const fmt = (v: string | undefined | null) => v && v.length ? v : '—'
+  const fmtDate = (v: string | undefined | null) => {
+    if (!v) return '—'
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? v : d.toLocaleString()
+  }
+  const rows: Array<[string, string, boolean?]> = [
+    ['source', session.source || 'interactive'],
+    ['folder', fmt(session.folder_name)],
+    ['state', fmt(session.state)],
+    ['mode', session.mode || 'events'],
+    ['harness', fmt(session.harness)],
+    ['agent', fmt(session.agent_id)],
+    ['instance', fmt(session.instance_id), true],
+    ['bridge id', fmt(session.bridge_id), true],
+    ['harness session', fmt(session.harness_session_id), true],
+    ['client id', fmt(session.client_id), true],
+    ['parent', fmt(session.parent_id), true],
+    ['spawner', fmt(session.spawner_id), true],
+    ['pid', session.pid ? String(session.pid) : '—'],
+    ['created', fmtDate(session.created_at)],
+    ['updated', fmtDate(session.updated_at)],
+  ]
+  return (
+    <div className="bc-details-panel" role="dialog" aria-label="Session details">
+      <dl className="bc-details-list">
+        {rows.map(([k, v, mono]) => (
+          <div className="bc-details-row" key={k}>
+            <dt>{k}</dt>
+            <dd className={mono ? 'bc-details-mono' : undefined} title={v}>{v}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }

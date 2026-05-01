@@ -270,6 +270,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     >
       <SessionHeader
         chat={activeChat}
+        session={bridge.activeSession}
         harnessInfo={activeHarnessInfo}
         machine={activeMachine}
         machineReachable={activeReachable}
