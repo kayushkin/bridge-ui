@@ -1,8 +1,12 @@
-import type { HarnessInfo, LogRow, Machine } from '../../types';
+import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types';
 import type { ChatSession, PanesHidden } from './types';
 import type { GitRepo } from './WorkspaceContext';
-export declare function SessionHeader({ chat, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export declare function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
     chat: ChatSession | null;
+    /** Full session row from the bridge — drives the details dropdown
+     * (source, folder, instance, mode, IDs, timestamps). Undefined when
+     * no session is active. */
+    session?: ManagedSession | null;
     /** Server-registered HarnessInfo for chat.harness — canonical source for
      * label/emoji/image. Constants are fallbacks for harnesses the server
      * hasn't registered. */

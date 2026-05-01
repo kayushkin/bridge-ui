@@ -1465,7 +1465,7 @@
 .bu-instance-label { padding: 1px 6px; border-radius: 4px; background: #1a1a2a; font-size: 0.9em; }
 .bu-session-model { color: var(--text-dim); min-width: 80px; }
 
-/* BridgeUsage — API spend (admin cost_report) */
+/* BridgeUsage — per-API-key spend */
 .bu-spend-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
 .bu-spend-provider {
   background: var(--bg-surface); border: 1px solid var(--border);
@@ -1477,16 +1477,37 @@
   font-size: 0.7em; color: var(--text-dim);
   padding: 2px 8px; border-radius: 6px; background: var(--border);
 }
-.bu-spend-grid { display: flex; gap: 16px; flex-wrap: wrap; }
-.bu-spend-cell {
-  display: flex; flex-direction: column; gap: 2px;
-  flex: 1; min-width: 100px;
+.bu-spend-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.bu-spend-table th {
+  text-align: left; font-weight: 500; color: var(--text-muted);
+  font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 4px 8px; border-bottom: 1px solid var(--border);
 }
-.bu-spend-window { font-size: 0.7em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.bu-spend-amount { font-size: 1.3em; font-weight: 600; font-variant-numeric: tabular-nums; }
-.bu-spend-fetched { font-size: 0.65em; color: var(--text-dim); }
-.bu-spend-hint { font-size: 0.75em; color: var(--text-dim); }
-.bu-spend-hint code { padding: 1px 5px; border-radius: 4px; background: var(--border); font-size: 0.95em; }
+.bu-spend-table td {
+  padding: 8px; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bu-spend-table tr:last-child td { border-bottom: none; }
+.bu-spend-num { text-align: right; font-variant-numeric: tabular-nums; min-width: 80px; }
+.bu-spend-keyname { font-weight: 500; }
+.bu-spend-keyhint { font-size: 0.85em; color: var(--text-dim); margin-top: 2px; }
+.bu-spend-keyhint code { font-family: monospace; font-size: 0.95em; }
+.bu-spend-keystatus { color: var(--text-dim); text-transform: capitalize; }
+.bu-spend-row-inactive { opacity: 0.5; }
+.bu-spend-toggle {
+  font-size: 0.75em; padding: 2px 8px;
+  background: var(--border); border: none; border-radius: 4px;
+  color: var(--text-muted); cursor: pointer;
+}
+.bu-spend-toggle:hover { background: var(--text-dim); color: var(--bg-surface); }
+.bu-spend-raw-row td { padding: 0 8px 12px; border-bottom: 1px solid var(--border); }
+.bu-spend-raw {
+  font-size: 0.7em; line-height: 1.4;
+  background: var(--bg-base, #0a0a14); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 12px;
+  max-height: 320px; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
 
 /* BridgeUsage — subscription limits */
 .bu-limits-section { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }

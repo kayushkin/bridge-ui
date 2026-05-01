@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { formatTokens, formatDuration } from '../utils'
@@ -34,25 +34,26 @@ interface ProviderLimits {
 
 type LimitsResponse = Record<string, ProviderLimits | null>
 
-interface SpendSnapshot {
+interface KeySpend {
   provider: string
-  window: 'day' | 'week' | 'month'
-  period_start: number
-  period_end: number
-  total_usd: number
-  currency: string
+  api_key_id: string
+  api_key_name: string
+  api_key_hint: string
+  api_key_status: string
+  total_usd_24h: number
+  total_usd_7d: number
+  total_usd_30d: number
   fetched_at: number
-  source: string
 }
 
-interface SpendProvider {
+interface ProviderKeys {
   configured: boolean
-  windows: Record<string, SpendSnapshot | null>
+  keys: KeySpend[]
 }
 
-interface SpendResponse {
-  anthropic: SpendProvider
-  openai: SpendProvider
+interface SpendKeysResponse {
+  anthropic: ProviderKeys
+  openai: ProviderKeys
 }
 
 type Period = 'day' | 'week' | 'month'
@@ -73,15 +74,9 @@ const PROVIDER_LABELS: Record<string, string> = {
   codex: 'Codex',
 }
 
-const SPEND_PROVIDER_LABELS: Record<keyof SpendResponse, string> = {
+const SPEND_PROVIDER_LABELS: Record<keyof SpendKeysResponse, string> = {
   anthropic: 'Anthropic API',
   openai: 'OpenAI / Codex API',
-}
-
-const SPEND_WINDOW_LABELS: Record<Period, string> = {
-  day: '24h',
-  week: '7d',
-  month: '30d',
 }
 
 function formatTimeUntil(unixSec: number): string {
@@ -126,7 +121,8 @@ export function BridgeUsage() {
   const [sessions, setSessions] = useState<BridgeSession[]>([])
   const [usageMap, setUsageMap] = useState<Map<string, SessionUsage>>(new Map())
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
-  const [spend, setSpend] = useState<SpendResponse | null>(null)
+  const [spend, setSpend] = useState<SpendKeysResponse | null>(null)
+  const [expandedRaw, setExpandedRaw] = useState<Record<string, string | 'loading' | 'error' | undefined>>({})
   const [loading, setLoading] = useState(true)
   const [loadingUsage, setLoadingUsage] = useState(false)
   const [period, setPeriod] = useState<Period>('day')
@@ -149,14 +145,34 @@ export function BridgeUsage() {
     } catch { /* ignore */ }
   }, [apiFetch])
 
-  // API spend (Anthropic admin cost_report + OpenAI admin costs). Refreshed
-  // hourly on the server; the UI just reads the latest snapshot.
+  // Per-API-key spend (computed from usage_report token counts × per-model
+  // pricing). Refreshed hourly on the server; the UI just reads the latest.
   const fetchSpend = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/usage/spend')
+      const res = await apiFetch('/api/usage/spend/keys')
       if (res.ok) setSpend(await res.json())
     } catch { /* ignore */ }
   }, [apiFetch])
+
+  const toggleRaw = useCallback(async (provider: string, apiKeyID: string) => {
+    const k = `${provider}:${apiKeyID}`
+    setExpandedRaw(prev => {
+      if (prev[k] !== undefined) {
+        const next = { ...prev }
+        delete next[k]
+        return next
+      }
+      return { ...prev, [k]: 'loading' }
+    })
+    if (expandedRaw[k] !== undefined) return
+    try {
+      const res = await apiFetch(`/api/usage/spend/keys/${provider}/${apiKeyID}/raw`)
+      const text = res.ok ? await res.text() : `error ${res.status}: ${await res.text()}`
+      setExpandedRaw(prev => ({ ...prev, [k]: text }))
+    } catch (e) {
+      setExpandedRaw(prev => ({ ...prev, [k]: `error: ${e}` }))
+    }
+  }, [apiFetch, expandedRaw])
 
   useEffect(() => { fetchSessions() }, [fetchSessions])
   useEffect(() => {
@@ -255,37 +271,64 @@ export function BridgeUsage() {
 
       {spend && (
         <div className="bu-spend-section">
-          {(['anthropic', 'openai'] as Array<keyof SpendResponse>).map(provider => {
+          {(['anthropic', 'openai'] as Array<keyof SpendKeysResponse>).map(provider => {
             const p = spend[provider]
             return (
               <div key={provider} className="bu-spend-provider">
                 <div className="bu-spend-header">
                   <span className="bu-spend-title">{SPEND_PROVIDER_LABELS[provider]}</span>
                   {!p.configured && <span className="bu-spend-unconfigured">admin key not configured</span>}
+                  {p.configured && p.keys.length === 0 && <span className="bu-spend-unconfigured">no keys yet (refresh pending)</span>}
                 </div>
-                {p.configured ? (
-                  <div className="bu-spend-grid">
-                    {(['day', 'week', 'month'] as Period[]).map(w => {
-                      const snap = p.windows[w]
-                      return (
-                        <div key={w} className="bu-spend-cell">
-                          <span className="bu-spend-window">{SPEND_WINDOW_LABELS[w]}</span>
-                          <span className="bu-spend-amount">
-                            {snap ? `$${snap.total_usd.toFixed(2)}` : '—'}
-                          </span>
-                          {snap && (
-                            <span className="bu-spend-fetched" title={new Date(snap.fetched_at * 1000).toLocaleString()}>
-                              as of {new Date(snap.fetched_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="bu-spend-hint">
-                    Set <code>USAGE_STORE_{provider === 'anthropic' ? 'ANTHROPIC' : 'OPENAI'}_ADMIN_CRED_ID</code> on usage-store after storing an admin key in auth-store.
-                  </div>
+                {p.keys.length > 0 && (
+                  <table className="bu-spend-table">
+                    <thead>
+                      <tr>
+                        <th>Key</th>
+                        <th className="bu-spend-num">24h</th>
+                        <th className="bu-spend-num">7d</th>
+                        <th className="bu-spend-num">30d</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.keys.map(k => {
+                        const rawKey = `${k.provider}:${k.api_key_id}`
+                        const raw = expandedRaw[rawKey]
+                        const isOpen = raw !== undefined
+                        return (
+                          <Fragment key={rawKey}>
+                            <tr className={k.api_key_status !== 'active' ? 'bu-spend-row-inactive' : ''}>
+                              <td>
+                                <div className="bu-spend-keyname">{k.api_key_name || k.api_key_id}</div>
+                                <div className="bu-spend-keyhint">
+                                  <code>{k.api_key_hint}</code>
+                                  {k.api_key_status !== 'active' && <span className="bu-spend-keystatus"> · {k.api_key_status}</span>}
+                                </div>
+                              </td>
+                              <td className="bu-spend-num">${k.total_usd_24h.toFixed(2)}</td>
+                              <td className="bu-spend-num">${k.total_usd_7d.toFixed(2)}</td>
+                              <td className="bu-spend-num">${k.total_usd_30d.toFixed(2)}</td>
+                              <td>
+                                <button className="bu-spend-toggle" onClick={() => toggleRaw(k.provider, k.api_key_id)}>
+                                  {isOpen ? 'hide raw' : 'raw'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isOpen && (
+                              <tr className="bu-spend-raw-row">
+                                <td colSpan={5}>
+                                  <pre className="bu-spend-raw">
+                                    {raw === 'loading' ? 'loading...' : raw}
+                                  </pre>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 )}
               </div>
             )

@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from '../context';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { formatTokens, formatDuration } from '../utils';
@@ -20,11 +20,6 @@ const PROVIDER_LABELS = {
 const SPEND_PROVIDER_LABELS = {
     anthropic: 'Anthropic API',
     openai: 'OpenAI / Codex API',
-};
-const SPEND_WINDOW_LABELS = {
-    day: '24h',
-    week: '7d',
-    month: '30d',
 };
 function formatTimeUntil(unixSec) {
     const diffMs = unixSec * 1000 - Date.now();
@@ -56,6 +51,7 @@ export function BridgeUsage() {
     const [usageMap, setUsageMap] = useState(new Map());
     const [limits, setLimits] = useState(null);
     const [spend, setSpend] = useState(null);
+    const [expandedRaw, setExpandedRaw] = useState({});
     const [loading, setLoading] = useState(true);
     const [loadingUsage, setLoadingUsage] = useState(false);
     const [period, setPeriod] = useState('day');
@@ -81,16 +77,37 @@ export function BridgeUsage() {
         }
         catch { /* ignore */ }
     }, [apiFetch]);
-    // API spend (Anthropic admin cost_report + OpenAI admin costs). Refreshed
-    // hourly on the server; the UI just reads the latest snapshot.
+    // Per-API-key spend (computed from usage_report token counts × per-model
+    // pricing). Refreshed hourly on the server; the UI just reads the latest.
     const fetchSpend = useCallback(async () => {
         try {
-            const res = await apiFetch('/api/usage/spend');
+            const res = await apiFetch('/api/usage/spend/keys');
             if (res.ok)
                 setSpend(await res.json());
         }
         catch { /* ignore */ }
     }, [apiFetch]);
+    const toggleRaw = useCallback(async (provider, apiKeyID) => {
+        const k = `${provider}:${apiKeyID}`;
+        setExpandedRaw(prev => {
+            if (prev[k] !== undefined) {
+                const next = { ...prev };
+                delete next[k];
+                return next;
+            }
+            return { ...prev, [k]: 'loading' };
+        });
+        if (expandedRaw[k] !== undefined)
+            return;
+        try {
+            const res = await apiFetch(`/api/usage/spend/keys/${provider}/${apiKeyID}/raw`);
+            const text = res.ok ? await res.text() : `error ${res.status}: ${await res.text()}`;
+            setExpandedRaw(prev => ({ ...prev, [k]: text }));
+        }
+        catch (e) {
+            setExpandedRaw(prev => ({ ...prev, [k]: `error: ${e}` }));
+        }
+    }, [apiFetch, expandedRaw]);
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => {
         fetchLimits();
@@ -176,10 +193,12 @@ export function BridgeUsage() {
     }, [harnessGroups]);
     return (_jsxs("div", { className: "bu-container", children: [_jsxs("div", { className: "bu-header", children: [_jsx("h2", { children: "Bridge Usage" }), _jsx("div", { className: "bu-period-tabs", children: ['day', 'week', 'month'].map(p => (_jsx("button", { className: `bu-tab ${period === p ? 'bu-tab-active' : ''}`, onClick: () => setPeriod(p), children: p === 'day' ? '24h' : p === 'week' ? '7d' : '30d' }, p))) })] }), spend && (_jsx("div", { className: "bu-spend-section", children: ['anthropic', 'openai'].map(provider => {
                     const p = spend[provider];
-                    return (_jsxs("div", { className: "bu-spend-provider", children: [_jsxs("div", { className: "bu-spend-header", children: [_jsx("span", { className: "bu-spend-title", children: SPEND_PROVIDER_LABELS[provider] }), !p.configured && _jsx("span", { className: "bu-spend-unconfigured", children: "admin key not configured" })] }), p.configured ? (_jsx("div", { className: "bu-spend-grid", children: ['day', 'week', 'month'].map(w => {
-                                    const snap = p.windows[w];
-                                    return (_jsxs("div", { className: "bu-spend-cell", children: [_jsx("span", { className: "bu-spend-window", children: SPEND_WINDOW_LABELS[w] }), _jsx("span", { className: "bu-spend-amount", children: snap ? `$${snap.total_usd.toFixed(2)}` : '—' }), snap && (_jsxs("span", { className: "bu-spend-fetched", title: new Date(snap.fetched_at * 1000).toLocaleString(), children: ["as of ", new Date(snap.fetched_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })] }))] }, w));
-                                }) })) : (_jsxs("div", { className: "bu-spend-hint", children: ["Set ", _jsxs("code", { children: ["USAGE_STORE_", provider === 'anthropic' ? 'ANTHROPIC' : 'OPENAI', "_ADMIN_CRED_ID"] }), " on usage-store after storing an admin key in auth-store."] }))] }, provider));
+                    return (_jsxs("div", { className: "bu-spend-provider", children: [_jsxs("div", { className: "bu-spend-header", children: [_jsx("span", { className: "bu-spend-title", children: SPEND_PROVIDER_LABELS[provider] }), !p.configured && _jsx("span", { className: "bu-spend-unconfigured", children: "admin key not configured" }), p.configured && p.keys.length === 0 && _jsx("span", { className: "bu-spend-unconfigured", children: "no keys yet (refresh pending)" })] }), p.keys.length > 0 && (_jsxs("table", { className: "bu-spend-table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "Key" }), _jsx("th", { className: "bu-spend-num", children: "24h" }), _jsx("th", { className: "bu-spend-num", children: "7d" }), _jsx("th", { className: "bu-spend-num", children: "30d" }), _jsx("th", {})] }) }), _jsx("tbody", { children: p.keys.map(k => {
+                                            const rawKey = `${k.provider}:${k.api_key_id}`;
+                                            const raw = expandedRaw[rawKey];
+                                            const isOpen = raw !== undefined;
+                                            return (_jsxs(Fragment, { children: [_jsxs("tr", { className: k.api_key_status !== 'active' ? 'bu-spend-row-inactive' : '', children: [_jsxs("td", { children: [_jsx("div", { className: "bu-spend-keyname", children: k.api_key_name || k.api_key_id }), _jsxs("div", { className: "bu-spend-keyhint", children: [_jsx("code", { children: k.api_key_hint }), k.api_key_status !== 'active' && _jsxs("span", { className: "bu-spend-keystatus", children: [" \u00B7 ", k.api_key_status] })] })] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_24h.toFixed(2)] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_7d.toFixed(2)] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_30d.toFixed(2)] }), _jsx("td", { children: _jsx("button", { className: "bu-spend-toggle", onClick: () => toggleRaw(k.provider, k.api_key_id), children: isOpen ? 'hide raw' : 'raw' }) })] }), isOpen && (_jsx("tr", { className: "bu-spend-raw-row", children: _jsx("td", { colSpan: 5, children: _jsx("pre", { className: "bu-spend-raw", children: raw === 'loading' ? 'loading...' : raw }) }) }))] }, rawKey));
+                                        }) })] }))] }, provider));
                 }) })), limits && (_jsx("div", { className: "bu-limits-section", children: Object.entries(limits).map(([provider, p]) => {
                     if (!p)
                         return null;
