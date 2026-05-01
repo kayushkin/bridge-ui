@@ -201,17 +201,25 @@ export function BridgeChat() {
         if (!harnessInfo?.available)
             return;
         const frontendId = generateFrontendId();
+        const defaults = bridgePrefs.getDefaults(harness);
+        // permission_mode has to land on the harness at start (it maps to
+        // --permission-mode), so pass it via harness_config rather than the
+        // post-create config endpoint. Bridge-server merges harness_config
+        // into start params before the harness spawns.
+        const harnessConfig = {};
+        if (defaults.permission_mode)
+            harnessConfig.permission_mode = defaults.permission_mode;
         const sess = await bridge.createSession({
             harness,
             instance_id: instanceId,
             display_name: '',
             client_id: frontendId,
+            ...(Object.keys(harnessConfig).length ? { harness_config: harnessConfig } : {}),
         });
         if (!sess)
             return;
         bridgePrefs.setLastInstanceId(instanceId);
         bridgePrefs.setLastSession(instanceId, sess.bridge_id);
-        const defaults = bridgePrefs.getDefaults(harness);
         if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
             bridge.sendConfig({
                 model: defaults.model,
