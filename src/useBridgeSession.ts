@@ -962,6 +962,24 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
   }, [fetchFn, basePath, activeSessionId])
 
+  const setPermissionMode = useCallback(async (mode: string) => {
+    if (!activeSessionId) return
+    if (!mode) return
+    try {
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/permission-mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
+      if (!res.ok) {
+        const errText = await res.text()
+        setError(`Set permission mode failed: ${errText}`)
+      }
+    } catch (err) {
+      setError(`Set permission mode failed: ${err}`)
+    }
+  }, [fetchFn, basePath, activeSessionId])
+
   const resolveHook = useCallback(async (input: {
     requestId: string
     behavior: 'allow' | 'deny'
@@ -1041,6 +1059,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     fork: forkSession,
     renameSession,
     sendConfig,
+    setPermissionMode,
     refreshSessions,
     pendingHooks: pendingHooksList,
     resolveHook,
@@ -1065,6 +1084,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     forkSession,
     renameSession,
     sendConfig,
+    setPermissionMode,
     refreshSessions,
     pendingHooksList,
     resolveHook,

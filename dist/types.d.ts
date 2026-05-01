@@ -111,6 +111,7 @@ export interface UseBridgeSessionReturn {
         disabled_tools?: string[];
         max_budget?: number;
     }) => void;
+    setPermissionMode: (mode: string) => Promise<void>;
     refreshSessions: () => void;
     pendingHooks: HookEvent[];
     resolveHook: (input: {
