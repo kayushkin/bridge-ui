@@ -1,5 +1,5 @@
-import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
-export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
+import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
@@ -33,7 +33,7 @@ export interface Message {
     sessionId?: string;
 }
 export type LogRowActor = 'user' | 'assistant' | 'system';
-export type LogRowKind = 'user_message' | 'text' | 'thinking' | 'tool' | 'result' | 'error' | 'system' | 'session_state' | 'session_info' | 'plan' | 'approval' | 'stream' | 'block' | 'other';
+export type LogRowKind = 'user_message' | 'text' | 'thinking' | 'tool' | 'result' | 'error' | 'system' | 'session_state' | 'session_info' | 'plan' | 'approval' | 'hook' | 'stream' | 'block' | 'other';
 export interface LogRow {
     key: string;
     clientId?: string;
@@ -62,6 +62,7 @@ export interface LogRow {
     };
     sessionInfo?: SessionInfo;
     errorMessage?: string;
+    hook?: HookEvent;
     events: Array<Record<string, unknown>>;
     done?: boolean;
 }
@@ -111,5 +112,13 @@ export interface UseBridgeSessionReturn {
         max_budget?: number;
     }) => void;
     refreshSessions: () => void;
+    pendingHooks: HookEvent[];
+    resolveHook: (input: {
+        requestId: string;
+        behavior: 'allow' | 'deny';
+        updatedInput?: unknown;
+        message?: string;
+        resolvedBy?: string;
+    }) => Promise<void>;
 }
 //# sourceMappingURL=types.d.ts.map

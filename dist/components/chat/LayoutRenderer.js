@@ -22,7 +22,7 @@ function ViewLeaf({ viewType, style }) {
             return (_jsxs("div", { className: "bc-split-pane bc-split-pane-thread", style: style, "data-pane": "thread", children: [_jsxs("div", { className: "bc-split-pane-header bc-header-clickable", onClick: () => ws.togglePane('thread'), onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             ws.togglePane('thread');
-                        } }, role: "button", tabIndex: 0, title: "Hide thread", "aria-label": "Hide thread", children: [_jsx("span", { className: "bc-split-pane-title", children: "Thread" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsx(Thread, { rows: ws.rows, loading: ws.loading, error: ws.error, agent: agent, sessionId: sessionId })] }));
+                        } }, role: "button", tabIndex: 0, title: "Hide thread", "aria-label": "Hide thread", children: [_jsx("span", { className: "bc-split-pane-title", children: "Thread" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsx(Thread, { rows: ws.rows, loading: ws.loading, error: ws.error, agent: agent, sessionId: sessionId, onResolveHook: ws.resolveHook })] }));
         case 'timeline':
             return (_jsx(Timeline, { rows: ws.rows, onToggleCollapse: () => ws.togglePane('timeline'), style: style, paneKey: "timeline" }));
         case 'git':

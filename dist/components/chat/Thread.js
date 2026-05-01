@@ -6,7 +6,7 @@ import { FilterBar } from './FilterBar';
 import { LogRowView, TurnGroupView, groupRowsByTurn } from './LogRowView';
 import { loadHiddenTypes, saveHiddenTypes } from './persistence';
 import { typesInRow } from './utils';
-export function Thread({ rows, loading, error, agent, sessionId }) {
+export function Thread({ rows, loading, error, agent, sessionId, onResolveHook }) {
     const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const [hidden, setHidden] = useState(() => loadHiddenTypes());
     const allTypes = useMemo(() => {
@@ -38,7 +38,7 @@ export function Thread({ rows, loading, error, agent, sessionId }) {
     if (rows.length === 0 && !error)
         return _jsx("div", { className: "bc-thread", children: _jsx("div", { className: "bc-empty", children: "Send a message to start" }) });
     return (_jsx(ToolContext.Provider, { value: { sessionId }, children: _jsxs("div", { className: "bc-thread-wrap", children: [_jsxs("div", { ref: containerRef, className: "bc-thread", children: [_jsx(FilterBar, { types: allTypes, hidden: hidden, onToggle: toggleType }), error && _jsx("div", { className: "bridge-error", children: error }), blocks.map((b, i) => b.kind === 'turn'
-                            ? _jsx(TurnGroupView, { turnId: b.turnId, rows: b.rows, agent: agent }, `turn_${b.turnId}`)
-                            : _jsx(LogRowView, { row: b.row, agent: agent }, `row_${b.row.key}_${i}`)), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }) }));
+                            ? _jsx(TurnGroupView, { turnId: b.turnId, rows: b.rows, agent: agent, onResolveHook: onResolveHook }, `turn_${b.turnId}`)
+                            : _jsx(LogRowView, { row: b.row, agent: agent, onResolveHook: onResolveHook }, `row_${b.row.key}_${i}`)), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }) }));
 }
 //# sourceMappingURL=Thread.js.map

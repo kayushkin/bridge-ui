@@ -298,6 +298,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         gitReposLoading,
         gitReposError,
         refreshGitRepos,
+        pendingHooks: bridge.pendingHooks,
+        resolveHook: bridge.resolveHook,
       }}>
         <LayoutRenderer tree={workspace.layout} />
       </WorkspaceProvider>

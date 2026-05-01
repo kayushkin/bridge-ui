@@ -49,6 +49,7 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
             error={ws.error}
             agent={agent}
             sessionId={sessionId}
+            onResolveHook={ws.resolveHook}
           />
         </div>
       )

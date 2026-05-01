@@ -25,6 +25,8 @@ import type {
   SessionInfo,
   ToolInfo,
   MCPServerInfo,
+  HookEvent,
+  HookResolution,
   CreateSessionRequest,
   CreateMachineRequest,
   UpdateMachineRequest,
@@ -48,6 +50,8 @@ export type {
   SessionInfo,
   ToolInfo,
   MCPServerInfo,
+  HookEvent,
+  HookResolution,
   CreateSessionRequest,
   CreateMachineRequest,
   UpdateMachineRequest,
@@ -131,7 +135,8 @@ export type LogRowKind =
   | 'session_state'
   | 'session_info'
   | 'plan'
-  | 'approval'
+  | 'approval'    // deprecated — emitted by legacy ApprovalEvent path; see 'hook' below
+  | 'hook'        // canonical permission/observation surface (HookEvent)
   | 'stream'      // stream events with no delta (block-boundary markers)
   | 'block'       // finished content blocks not specialized to text/thinking (e.g. images, refusals)
   | 'other'
@@ -170,6 +175,7 @@ export interface LogRow {
   stateTransition?: { from?: string; to: string; reason?: string }
   sessionInfo?: SessionInfo
   errorMessage?: string
+  hook?: HookEvent           // populated for kind='hook' rows; carries phase, decision, resolution
 
   // Raw events that composed this row (for "show raw" expand).
   events: Array<Record<string, unknown>>
@@ -221,4 +227,20 @@ export interface UseBridgeSessionReturn {
   renameSession: (bridgeID: string, displayName: string) => Promise<void>
   sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => void
   refreshSessions: () => void
+
+  // Awaiting-resolution HookEvents for the active session: events whose
+  // phase="awaiting_resolution" has not yet been closed by a matching
+  // phase="completed". Hydrated on session select via /hooks/pending and
+  // kept in sync via the SSE stream.
+  pendingHooks: HookEvent[]
+  // resolveHook posts a decision to the bridge-server's
+  // /sessions/{id}/hooks/{request_id}/resolve endpoint and clears the
+  // matching pendingHook entry optimistically.
+  resolveHook: (input: {
+    requestId: string
+    behavior: 'allow' | 'deny'
+    updatedInput?: unknown
+    message?: string
+    resolvedBy?: string
+  }) => Promise<void>
 }

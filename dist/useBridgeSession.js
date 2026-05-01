@@ -72,6 +72,7 @@ function rowKindOf(ev) {
         case 'session_info': return 'session_info';
         case 'plan': return 'plan';
         case 'approval': return 'approval';
+        case 'hook': return 'hook';
         default: return 'other';
     }
 }
@@ -82,6 +83,13 @@ function groupKeyFor(ev) {
     if (kind === 'tool') {
         const toolId = ev.data.tool_call?.tool_id || ev.data.tool_result?.tool_id;
         return toolId ? `tool_${toolId}` : null;
+    }
+    // Hook lifecycle events (started → progress → awaiting_resolution → completed)
+    // pair by request_id so a single row carries the latest phase + resolution.
+    // Hooks without a request_id (most observation hooks) stand alone.
+    if (kind === 'hook') {
+        const rid = ev.data.hook?.request_id;
+        return rid ? `hook_${rid}` : null;
     }
     const msgId = ev.data.message_id;
     if (!msgId)
@@ -216,6 +224,20 @@ function applyDelta(row, ev) {
             const info = ev.data.info;
             return { ...base, sessionInfo: info, done: true };
         }
+        case 'hook': {
+            const hook = ev.data.hook;
+            if (!hook)
+                return base;
+            // Coalesce awaiting_resolution → completed under the same row by
+            // overwriting hook (later phase wins). 'done' flips on completed so
+            // the row collapses out of the active set.
+            return {
+                ...base,
+                hook,
+                toolUseId: row.toolUseId,
+                done: hook.phase === 'completed',
+            };
+        }
         default:
             return base;
     }
@@ -322,6 +344,10 @@ export function useBridgeSession() {
     const [activity, setActivity] = useState({ kind: 'idle' });
     const [compacting, setCompacting] = useState(false);
     const [interruptedIds, setInterruptedIds] = useState(loadInterruptedIds);
+    // pendingHooks is keyed by request_id so SSE updates can patch in O(1).
+    // Sourced from /hooks/pending on session select; updated by EventHook
+    // awaiting_resolution (insert) and completed (delete).
+    const [pendingHooks, setPendingHooks] = useState({});
     const sseAbort = useRef(null);
     const lastEventId = useRef(undefined);
     const activeSessionRef = useRef(null);
@@ -572,6 +598,24 @@ export function useBridgeSession() {
                     refreshSessions();
                     break;
                 }
+                case 'hook': {
+                    const hook = data.hook;
+                    if (!hook || !hook.request_id)
+                        break;
+                    if (hook.phase === 'awaiting_resolution') {
+                        setPendingHooks(prev => ({ ...prev, [hook.request_id]: hook }));
+                    }
+                    else if (hook.phase === 'completed') {
+                        setPendingHooks(prev => {
+                            if (!(hook.request_id in prev))
+                                return prev;
+                            const next = { ...prev };
+                            delete next[hook.request_id];
+                            return next;
+                        });
+                    }
+                    break;
+                }
                 case 'close':
                     setActivity({ kind: 'idle' });
                     patchSessionState(sessId, 'completed');
@@ -632,6 +676,7 @@ export function useBridgeSession() {
         if (!id) {
             setActiveSessionId(null);
             setLogRows([]);
+            setPendingHooks({});
             return;
         }
         // Only wipe rows when actually switching sessions. A re-select of the
@@ -643,6 +688,7 @@ export function useBridgeSession() {
         activeSessionIdRef.current = id;
         if (switching) {
             setLogRows([]);
+            setPendingHooks({});
             lastEventId.current = undefined;
         }
         ;
@@ -655,6 +701,27 @@ export function useBridgeSession() {
                 await refreshSessionsImpl();
             }
             await loadHistory(id);
+            // Hydrate pending-hook banner state. Bridge-server's /hooks/pending
+            // returns the awaiting_resolution events that haven't yet been closed
+            // — required because Last-Event-ID replay only fires when we connect
+            // to SSE, and the SSE attach is conditional on running state below.
+            try {
+                const res = await fetchFn(`${basePath}/sessions/${id}/hooks/pending`);
+                if (res.ok && activeSessionIdRef.current === id) {
+                    const events = await res.json();
+                    const next = {};
+                    for (const ev of events) {
+                        const h = ev.hook;
+                        if (h?.request_id && h.phase === 'awaiting_resolution') {
+                            next[h.request_id] = h;
+                        }
+                    }
+                    setPendingHooks(next);
+                }
+            }
+            catch {
+                // Non-fatal: banner just won't pre-populate.
+            }
             // Read the latest sessions list at resolution time, not the value
             // captured when this callback was created — the session may have been
             // freshly created and not yet present in the closure snapshot.
@@ -911,6 +978,48 @@ export function useBridgeSession() {
             setError(`Config update failed: ${err}`);
         }
     }, [fetchFn, basePath, activeSessionId]);
+    const resolveHook = useCallback(async (input) => {
+        if (!activeSessionId) {
+            setError('resolve hook: no active session');
+            return;
+        }
+        if (!input.requestId) {
+            setError('resolve hook: request_id required');
+            return;
+        }
+        // Optimistic clear — the matching phase=completed SSE event will
+        // arrive shortly and is idempotent with this map update.
+        setPendingHooks(prev => {
+            if (!(input.requestId in prev))
+                return prev;
+            const next = { ...prev };
+            delete next[input.requestId];
+            return next;
+        });
+        try {
+            const body = {
+                behavior: input.behavior,
+                resolved_by: input.resolvedBy || 'user',
+            };
+            if (input.updatedInput !== undefined)
+                body.updated_input = input.updatedInput;
+            if (input.message)
+                body.message = input.message;
+            const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/hooks/${encodeURIComponent(input.requestId)}/resolve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                const errText = await res.text();
+                setError(`Resolve hook failed: ${errText}`);
+            }
+        }
+        catch (err) {
+            setError(`Resolve hook failed: ${err}`);
+        }
+    }, [fetchFn, basePath, activeSessionId]);
+    const pendingHooksList = useMemo(() => Object.values(pendingHooks), [pendingHooks]);
     useEffect(() => () => {
         closeSSE();
         debouncedRefresh.cancel();
@@ -939,6 +1048,8 @@ export function useBridgeSession() {
         renameSession,
         sendConfig,
         refreshSessions,
+        pendingHooks: pendingHooksList,
+        resolveHook,
     }), [
         sessions,
         activeSession,
@@ -961,6 +1072,8 @@ export function useBridgeSession() {
         renameSession,
         sendConfig,
         refreshSessions,
+        pendingHooksList,
+        resolveHook,
     ]);
 }
 //# sourceMappingURL=useBridgeSession.js.map
