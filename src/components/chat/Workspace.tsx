@@ -11,7 +11,22 @@ import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
 import { WorkspaceProvider } from './WorkspaceContext'
 import type { GitRepo } from './WorkspaceContext'
-import type { ChatSession, PaneKey, PaneSizes, StoreModel, WorkspaceState } from './types'
+import type { ChatSession, InnerNode, PaneKey, PaneSizes, StoreModel, WorkspaceState } from './types'
+
+// Returns the PaneKey leaves of the split that contains `key` as a direct child,
+// so togglePane can reset just that sibling group without disturbing other splits.
+function findPaneSplitGroup(node: InnerNode, key: PaneKey): PaneKey[] | null {
+  if (node.kind === 'leaf') return null
+  const directLeafKeys = node.children.flatMap(c => c.kind === 'leaf' ? [c.viewType] : [])
+  if (directLeafKeys.includes(key)) return directLeafKeys
+  for (const c of node.children) {
+    if (c.kind === 'split') {
+      const sub = findPaneSplitGroup(c, key)
+      if (sub) return sub
+    }
+  }
+  return null
+}
 
 interface WorkspaceProps {
   workspace: WorkspaceState
@@ -172,7 +187,16 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   }, [configModel, configEffort, harnessDefaults.model, harnessDefaults.effort])
 
   const togglePane = useCallback((key: PaneKey) => {
-    onUpdate(w => ({ ...w, panesHidden: { ...w.panesHidden, [key]: !w.panesHidden[key] } }))
+    onUpdate(w => {
+      const group = findPaneSplitGroup(w.layout, key) ?? [key]
+      const paneSizes = { ...w.paneSizes }
+      for (const k of group) paneSizes[k] = 1
+      return {
+        ...w,
+        panesHidden: { ...w.panesHidden, [key]: !w.panesHidden[key] },
+        paneSizes,
+      }
+    })
   }, [onUpdate])
 
   const setPaneSizes = useCallback((updater: PaneSizes | ((prev: PaneSizes) => PaneSizes)) => {
