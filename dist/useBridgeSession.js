@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
-import { connectSSE } from './bridgeSSE';
+import { connectSSE, connectSessionListSSE } from './bridgeSSE';
 // --- Event envelope ---
 //
 // Unified shape for both live SSE events and history-replayed events. History
@@ -382,6 +382,58 @@ export function useBridgeSession() {
         debouncedRefresh();
     }, [debouncedRefresh]);
     useEffect(() => { refreshSessionsImpl(); }, [refreshSessionsImpl]);
+    // Global session-list SSE subscription. The initial fetch above seeds the
+    // list; this stream then patches it in place on every server-side mutation
+    // (create / state / rename / folder / delete), so the sidebar stays live
+    // without re-fetching `/sessions`. Reconnects with backoff on disconnect.
+    useEffect(() => {
+        let cancelled = false;
+        let abort = null;
+        let retryDelay = 1000;
+        const run = async () => {
+            while (!cancelled) {
+                abort = new AbortController();
+                try {
+                    const stream = connectSessionListSSE(fetchFn, basePath, abort.signal);
+                    for await (const frame of stream) {
+                        if (cancelled)
+                            return;
+                        if (frame.type === 'hello') {
+                            retryDelay = 1000;
+                            continue;
+                        }
+                        if (frame.type === 'upsert') {
+                            const incoming = frame.session;
+                            setSessions(prev => {
+                                const i = prev.findIndex(s => s.bridge_id === incoming.bridge_id);
+                                if (i === -1)
+                                    return [incoming, ...prev];
+                                const next = prev.slice();
+                                next[i] = { ...next[i], ...incoming };
+                                return next;
+                            });
+                        }
+                        else if (frame.type === 'delete') {
+                            setSessions(prev => prev.filter(s => s.bridge_id !== frame.bridge_id));
+                        }
+                    }
+                }
+                catch {
+                    if (cancelled || abort?.signal.aborted)
+                        return;
+                }
+                if (cancelled)
+                    return;
+                await new Promise(r => setTimeout(r, retryDelay));
+                retryDelay = Math.min(retryDelay * 2, 30000);
+            }
+        };
+        run();
+        return () => {
+            cancelled = true;
+            abort?.abort();
+        };
+    }, [fetchFn, basePath]);
     // --- Derived state ---
     const activeSession = sessions.find(s => s.bridge_id === activeSessionId) || null;
     activeSessionRef.current = activeSession;
