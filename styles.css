@@ -1465,6 +1465,29 @@
 .bu-instance-label { padding: 1px 6px; border-radius: 4px; background: #1a1a2a; font-size: 0.9em; }
 .bu-session-model { color: var(--text-dim); min-width: 80px; }
 
+/* BridgeUsage — API spend (admin cost_report) */
+.bu-spend-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.bu-spend-provider {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px;
+}
+.bu-spend-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bu-spend-title { font-size: 0.9em; font-weight: 600; }
+.bu-spend-unconfigured {
+  font-size: 0.7em; color: var(--text-dim);
+  padding: 2px 8px; border-radius: 6px; background: var(--border);
+}
+.bu-spend-grid { display: flex; gap: 16px; flex-wrap: wrap; }
+.bu-spend-cell {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1; min-width: 100px;
+}
+.bu-spend-window { font-size: 0.7em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.bu-spend-amount { font-size: 1.3em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bu-spend-fetched { font-size: 0.65em; color: var(--text-dim); }
+.bu-spend-hint { font-size: 0.75em; color: var(--text-dim); }
+.bu-spend-hint code { padding: 1px 5px; border-radius: 4px; background: var(--border); font-size: 0.95em; }
+
 /* BridgeUsage — subscription limits */
 .bu-limits-section { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
 .bu-limits-provider {

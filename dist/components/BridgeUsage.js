@@ -17,6 +17,15 @@ const PROVIDER_LABELS = {
     anthropic: 'Claude',
     codex: 'Codex',
 };
+const SPEND_PROVIDER_LABELS = {
+    anthropic: 'Anthropic API',
+    openai: 'OpenAI / Codex API',
+};
+const SPEND_WINDOW_LABELS = {
+    day: '24h',
+    week: '7d',
+    month: '30d',
+};
 function formatTimeUntil(unixSec) {
     const diffMs = unixSec * 1000 - Date.now();
     if (diffMs <= 0)
@@ -46,6 +55,7 @@ export function BridgeUsage() {
     const [sessions, setSessions] = useState([]);
     const [usageMap, setUsageMap] = useState(new Map());
     const [limits, setLimits] = useState(null);
+    const [spend, setSpend] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadingUsage, setLoadingUsage] = useState(false);
     const [period, setPeriod] = useState('day');
@@ -71,12 +81,27 @@ export function BridgeUsage() {
         }
         catch { /* ignore */ }
     }, [apiFetch]);
+    // API spend (Anthropic admin cost_report + OpenAI admin costs). Refreshed
+    // hourly on the server; the UI just reads the latest snapshot.
+    const fetchSpend = useCallback(async () => {
+        try {
+            const res = await apiFetch('/api/usage/spend');
+            if (res.ok)
+                setSpend(await res.json());
+        }
+        catch { /* ignore */ }
+    }, [apiFetch]);
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
     useEffect(() => {
         fetchLimits();
         const t = setInterval(fetchLimits, 60000);
         return () => clearInterval(t);
     }, [fetchLimits]);
+    useEffect(() => {
+        fetchSpend();
+        const t = setInterval(fetchSpend, 5 * 60_000);
+        return () => clearInterval(t);
+    }, [fetchSpend]);
     const periodSessions = useMemo(() => {
         const cutoff = periodCutoff(period);
         return sessions.filter(s => s.created_at >= cutoff);
@@ -149,7 +174,13 @@ export function BridgeUsage() {
         }
         return { input, output, cost, duration, count };
     }, [harnessGroups]);
-    return (_jsxs("div", { className: "bu-container", children: [_jsxs("div", { className: "bu-header", children: [_jsx("h2", { children: "Bridge Usage" }), _jsx("div", { className: "bu-period-tabs", children: ['day', 'week', 'month'].map(p => (_jsx("button", { className: `bu-tab ${period === p ? 'bu-tab-active' : ''}`, onClick: () => setPeriod(p), children: p === 'day' ? '24h' : p === 'week' ? '7d' : '30d' }, p))) })] }), limits && (_jsx("div", { className: "bu-limits-section", children: Object.entries(limits).map(([provider, p]) => {
+    return (_jsxs("div", { className: "bu-container", children: [_jsxs("div", { className: "bu-header", children: [_jsx("h2", { children: "Bridge Usage" }), _jsx("div", { className: "bu-period-tabs", children: ['day', 'week', 'month'].map(p => (_jsx("button", { className: `bu-tab ${period === p ? 'bu-tab-active' : ''}`, onClick: () => setPeriod(p), children: p === 'day' ? '24h' : p === 'week' ? '7d' : '30d' }, p))) })] }), spend && (_jsx("div", { className: "bu-spend-section", children: ['anthropic', 'openai'].map(provider => {
+                    const p = spend[provider];
+                    return (_jsxs("div", { className: "bu-spend-provider", children: [_jsxs("div", { className: "bu-spend-header", children: [_jsx("span", { className: "bu-spend-title", children: SPEND_PROVIDER_LABELS[provider] }), !p.configured && _jsx("span", { className: "bu-spend-unconfigured", children: "admin key not configured" })] }), p.configured ? (_jsx("div", { className: "bu-spend-grid", children: ['day', 'week', 'month'].map(w => {
+                                    const snap = p.windows[w];
+                                    return (_jsxs("div", { className: "bu-spend-cell", children: [_jsx("span", { className: "bu-spend-window", children: SPEND_WINDOW_LABELS[w] }), _jsx("span", { className: "bu-spend-amount", children: snap ? `$${snap.total_usd.toFixed(2)}` : '—' }), snap && (_jsxs("span", { className: "bu-spend-fetched", title: new Date(snap.fetched_at * 1000).toLocaleString(), children: ["as of ", new Date(snap.fetched_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })] }))] }, w));
+                                }) })) : (_jsxs("div", { className: "bu-spend-hint", children: ["Set ", _jsxs("code", { children: ["USAGE_STORE_", provider === 'anthropic' ? 'ANTHROPIC' : 'OPENAI', "_ADMIN_CRED_ID"] }), " on usage-store after storing an admin key in auth-store."] }))] }, provider));
+                }) })), limits && (_jsx("div", { className: "bu-limits-section", children: Object.entries(limits).map(([provider, p]) => {
                     if (!p)
                         return null;
                     const stale = p.stale_after != null && Date.now() / 1000 > p.stale_after;

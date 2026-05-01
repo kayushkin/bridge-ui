@@ -34,6 +34,27 @@ interface ProviderLimits {
 
 type LimitsResponse = Record<string, ProviderLimits | null>
 
+interface SpendSnapshot {
+  provider: string
+  window: 'day' | 'week' | 'month'
+  period_start: number
+  period_end: number
+  total_usd: number
+  currency: string
+  fetched_at: number
+  source: string
+}
+
+interface SpendProvider {
+  configured: boolean
+  windows: Record<string, SpendSnapshot | null>
+}
+
+interface SpendResponse {
+  anthropic: SpendProvider
+  openai: SpendProvider
+}
+
 type Period = 'day' | 'week' | 'month'
 
 const WINDOW_LABELS: Record<string, string> = {
@@ -50,6 +71,17 @@ const WINDOW_LABELS: Record<string, string> = {
 const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Claude',
   codex: 'Codex',
+}
+
+const SPEND_PROVIDER_LABELS: Record<keyof SpendResponse, string> = {
+  anthropic: 'Anthropic API',
+  openai: 'OpenAI / Codex API',
+}
+
+const SPEND_WINDOW_LABELS: Record<Period, string> = {
+  day: '24h',
+  week: '7d',
+  month: '30d',
 }
 
 function formatTimeUntil(unixSec: number): string {
@@ -94,6 +126,7 @@ export function BridgeUsage() {
   const [sessions, setSessions] = useState<BridgeSession[]>([])
   const [usageMap, setUsageMap] = useState<Map<string, SessionUsage>>(new Map())
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
+  const [spend, setSpend] = useState<SpendResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingUsage, setLoadingUsage] = useState(false)
   const [period, setPeriod] = useState<Period>('day')
@@ -116,12 +149,26 @@ export function BridgeUsage() {
     } catch { /* ignore */ }
   }, [apiFetch])
 
+  // API spend (Anthropic admin cost_report + OpenAI admin costs). Refreshed
+  // hourly on the server; the UI just reads the latest snapshot.
+  const fetchSpend = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/usage/spend')
+      if (res.ok) setSpend(await res.json())
+    } catch { /* ignore */ }
+  }, [apiFetch])
+
   useEffect(() => { fetchSessions() }, [fetchSessions])
   useEffect(() => {
     fetchLimits()
     const t = setInterval(fetchLimits, 60000)
     return () => clearInterval(t)
   }, [fetchLimits])
+  useEffect(() => {
+    fetchSpend()
+    const t = setInterval(fetchSpend, 5 * 60_000)
+    return () => clearInterval(t)
+  }, [fetchSpend])
 
   const periodSessions = useMemo(() => {
     const cutoff = periodCutoff(period)
@@ -205,6 +252,46 @@ export function BridgeUsage() {
           ))}
         </div>
       </div>
+
+      {spend && (
+        <div className="bu-spend-section">
+          {(['anthropic', 'openai'] as Array<keyof SpendResponse>).map(provider => {
+            const p = spend[provider]
+            return (
+              <div key={provider} className="bu-spend-provider">
+                <div className="bu-spend-header">
+                  <span className="bu-spend-title">{SPEND_PROVIDER_LABELS[provider]}</span>
+                  {!p.configured && <span className="bu-spend-unconfigured">admin key not configured</span>}
+                </div>
+                {p.configured ? (
+                  <div className="bu-spend-grid">
+                    {(['day', 'week', 'month'] as Period[]).map(w => {
+                      const snap = p.windows[w]
+                      return (
+                        <div key={w} className="bu-spend-cell">
+                          <span className="bu-spend-window">{SPEND_WINDOW_LABELS[w]}</span>
+                          <span className="bu-spend-amount">
+                            {snap ? `$${snap.total_usd.toFixed(2)}` : '—'}
+                          </span>
+                          {snap && (
+                            <span className="bu-spend-fetched" title={new Date(snap.fetched_at * 1000).toLocaleString()}>
+                              as of {new Date(snap.fetched_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="bu-spend-hint">
+                    Set <code>USAGE_STORE_{provider === 'anthropic' ? 'ANTHROPIC' : 'OPENAI'}_ADMIN_CRED_ID</code> on usage-store after storing an admin key in auth-store.
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {limits && (
         <div className="bu-limits-section">
