@@ -1465,18 +1465,79 @@
 .bu-instance-label { padding: 1px 6px; border-radius: 4px; background: #1a1a2a; font-size: 0.9em; }
 .bu-session-model { color: var(--text-dim); min-width: 80px; }
 
-/* BridgeUsage — per-API-key spend */
+/* BridgeUsage — per-API-key spend with account parent */
 .bu-spend-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-.bu-spend-provider {
+.bu-spend-account {
   background: var(--bg-surface); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 16px;
+  border-radius: 10px; padding: 14px 16px;
 }
-.bu-spend-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.bu-spend-title { font-size: 0.9em; font-weight: 600; }
+.bu-spend-account-row {
+  display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+}
+.bu-spend-account-id { flex: 1 1 200px; min-width: 200px; }
+.bu-spend-account-name { font-size: 1em; font-weight: 600; }
+.bu-spend-account-hint { font-size: 0.8em; color: var(--text-dim); margin-top: 3px; }
+.bu-spend-account-hint code { font-family: monospace; }
+.bu-spend-account-totals {
+  display: flex; gap: 24px; flex-wrap: wrap;
+}
+.bu-spend-balance .bu-spend-amount { color: #66bb6a; }
+.bu-spend-add-btn {
+  font-size: 0.8em; padding: 6px 12px;
+  background: var(--border); border: 1px solid transparent; border-radius: 6px;
+  color: var(--text); cursor: pointer; align-self: flex-start;
+}
+.bu-spend-add-btn:hover { background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4); }
+.bu-spend-addform {
+  margin-top: 12px; padding: 10px; background: var(--bg-base, #0a0a14);
+  border-radius: 6px; display: flex; gap: 8px; flex-wrap: wrap;
+}
+.bu-spend-addform input {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; color: var(--text); font-size: 0.85em;
+}
+.bu-spend-addform input[type="number"] { width: 110px; }
+.bu-spend-addform input[type="date"] { width: 140px; }
+.bu-spend-addform input[type="text"] { flex: 1; min-width: 100px; }
+.bu-spend-addform button {
+  padding: 4px 14px; background: rgba(99, 102, 241, 0.4);
+  border: 1px solid rgba(99, 102, 241, 0.6); border-radius: 4px;
+  color: var(--text); font-size: 0.85em; cursor: pointer;
+}
+.bu-spend-addform button:hover { background: rgba(99, 102, 241, 0.6); }
+.bu-spend-topups {
+  margin-top: 10px; display: flex; flex-direction: column; gap: 4px;
+  font-size: 0.8em;
+}
+.bu-spend-topup {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 10px; background: var(--bg-base, #0a0a14);
+  border-radius: 4px;
+}
+.bu-spend-topup-amount { color: #66bb6a; font-weight: 600; min-width: 60px; }
+.bu-spend-topup-date { color: var(--text-muted); }
+.bu-spend-topup-note { color: var(--text-dim); flex: 1; font-style: italic; }
+.bu-spend-topup-del {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 1.1em; padding: 0 4px;
+}
+.bu-spend-topup-del:hover { color: #ef5350; }
+.bu-spend-keys { margin-top: 12px; }
+.bu-spend-keys-toggle {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 0.85em; cursor: pointer; padding: 4px 0;
+}
+.bu-spend-keys-toggle:hover { color: var(--text); }
 .bu-spend-unconfigured {
   font-size: 0.7em; color: var(--text-dim);
   padding: 2px 8px; border-radius: 6px; background: var(--border);
 }
+.bu-spend-cell {
+  display: flex; flex-direction: column; gap: 2px; min-width: 80px;
+}
+.bu-spend-window { font-size: 0.7em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.bu-spend-amount { font-size: 1.2em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bu-spend-fetched { font-size: 0.65em; color: var(--text-dim); }
 .bu-spend-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
 .bu-spend-table th {
   text-align: left; font-weight: 500; color: var(--text-muted);

@@ -34,8 +34,7 @@ interface ProviderLimits {
 
 type LimitsResponse = Record<string, ProviderLimits | null>
 
-interface KeySpend {
-  provider: string
+interface KeyRow {
   api_key_id: string
   api_key_name: string
   api_key_hint: string
@@ -46,14 +45,32 @@ interface KeySpend {
   fetched_at: number
 }
 
-interface ProviderKeys {
+interface Topup {
+  id: number
+  provider: string
+  amount_usd: number
+  occurred_at: number
+  note: string
+  created_at: number
+}
+
+interface ProviderAccount {
   configured: boolean
-  keys: KeySpend[]
+  admin_key_hint: string
+  total_usd_24h: number
+  total_usd_7d: number
+  total_usd_30d: number
+  topups: Topup[]
+  topups_total_usd: number
+  spend_since_baseline: number
+  remaining_usd: number | null
+  balance_since: number | null
+  keys: KeyRow[]
 }
 
 interface SpendKeysResponse {
-  anthropic: ProviderKeys
-  openai: ProviderKeys
+  anthropic: ProviderAccount
+  openai: ProviderAccount
 }
 
 type Period = 'day' | 'week' | 'month'
@@ -123,6 +140,9 @@ export function BridgeUsage() {
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
   const [spend, setSpend] = useState<SpendKeysResponse | null>(null)
   const [expandedRaw, setExpandedRaw] = useState<Record<string, string | 'loading' | 'error' | undefined>>({})
+  const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({})
+  const [addCreditOpen, setAddCreditOpen] = useState<string | null>(null)
+  const [addCreditDraft, setAddCreditDraft] = useState({ amount: '', date: '', note: '' })
   const [loading, setLoading] = useState(true)
   const [loadingUsage, setLoadingUsage] = useState(false)
   const [period, setPeriod] = useState<Period>('day')
@@ -153,6 +173,33 @@ export function BridgeUsage() {
       if (res.ok) setSpend(await res.json())
     } catch { /* ignore */ }
   }, [apiFetch])
+
+  const submitTopup = useCallback(async (provider: string) => {
+    const amount = parseFloat(addCreditDraft.amount)
+    if (!isFinite(amount) || amount <= 0) return
+    const body: Record<string, unknown> = { provider, amount_usd: amount, note: addCreditDraft.note }
+    if (addCreditDraft.date) body.occurred_at_str = addCreditDraft.date
+    try {
+      const res = await apiFetch('/api/usage/spend/topups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        setAddCreditOpen(null)
+        setAddCreditDraft({ amount: '', date: '', note: '' })
+        fetchSpend()
+      }
+    } catch { /* ignore */ }
+  }, [apiFetch, addCreditDraft, fetchSpend])
+
+  const deleteTopup = useCallback(async (id: number) => {
+    if (!confirm('Delete this top-up?')) return
+    try {
+      const res = await apiFetch(`/api/usage/spend/topups/${id}`, { method: 'DELETE' })
+      if (res.ok) fetchSpend()
+    } catch { /* ignore */ }
+  }, [apiFetch, fetchSpend])
 
   const toggleRaw = useCallback(async (provider: string, apiKeyID: string) => {
     const k = `${provider}:${apiKeyID}`
@@ -273,62 +320,146 @@ export function BridgeUsage() {
         <div className="bu-spend-section">
           {(['anthropic', 'openai'] as Array<keyof SpendKeysResponse>).map(provider => {
             const p = spend[provider]
+            const keysOpen = expandedKeys[provider] ?? false
+            const addOpen = addCreditOpen === provider
             return (
-              <div key={provider} className="bu-spend-provider">
-                <div className="bu-spend-header">
-                  <span className="bu-spend-title">{SPEND_PROVIDER_LABELS[provider]}</span>
-                  {!p.configured && <span className="bu-spend-unconfigured">admin key not configured</span>}
-                  {p.configured && p.keys.length === 0 && <span className="bu-spend-unconfigured">no keys yet (refresh pending)</span>}
+              <div key={provider} className="bu-spend-account">
+                <div className="bu-spend-account-row">
+                  <div className="bu-spend-account-id">
+                    <div className="bu-spend-account-name">{SPEND_PROVIDER_LABELS[provider]}</div>
+                    <div className="bu-spend-account-hint">
+                      {p.configured ? (
+                        <code>{p.admin_key_hint || 'pending first refresh…'}</code>
+                      ) : (
+                        <span className="bu-spend-unconfigured">admin key not configured</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bu-spend-account-totals">
+                    <div className="bu-spend-cell">
+                      <span className="bu-spend-window">24h</span>
+                      <span className="bu-spend-amount">${p.total_usd_24h.toFixed(2)}</span>
+                    </div>
+                    <div className="bu-spend-cell">
+                      <span className="bu-spend-window">7d</span>
+                      <span className="bu-spend-amount">${p.total_usd_7d.toFixed(2)}</span>
+                    </div>
+                    <div className="bu-spend-cell">
+                      <span className="bu-spend-window">30d</span>
+                      <span className="bu-spend-amount">${p.total_usd_30d.toFixed(2)}</span>
+                    </div>
+                    <div className="bu-spend-cell bu-spend-balance">
+                      <span className="bu-spend-window">Balance</span>
+                      <span className="bu-spend-amount">
+                        {p.remaining_usd != null ? `$${p.remaining_usd.toFixed(2)}` : '—'}
+                      </span>
+                      {p.remaining_usd != null && p.balance_since && (
+                        <span className="bu-spend-fetched">
+                          ${p.topups_total_usd.toFixed(2)} added · ${p.spend_since_baseline.toFixed(2)} spent
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {p.configured && (
+                    <button className="bu-spend-add-btn" onClick={() => setAddCreditOpen(addOpen ? null : provider)}>
+                      {addOpen ? '×' : '+ Add credit'}
+                    </button>
+                  )}
                 </div>
+
+                {addOpen && (
+                  <div className="bu-spend-addform">
+                    <input
+                      type="number" step="0.01" placeholder="Amount (USD)" autoFocus
+                      value={addCreditDraft.amount}
+                      onChange={e => setAddCreditDraft(d => ({ ...d, amount: e.target.value }))}
+                    />
+                    <input
+                      type="date" placeholder="Date (UTC)"
+                      value={addCreditDraft.date}
+                      onChange={e => setAddCreditDraft(d => ({ ...d, date: e.target.value }))}
+                    />
+                    <input
+                      type="text" placeholder="Note (optional)"
+                      value={addCreditDraft.note}
+                      onChange={e => setAddCreditDraft(d => ({ ...d, note: e.target.value }))}
+                    />
+                    <button onClick={() => submitTopup(provider)}>Save</button>
+                  </div>
+                )}
+
+                {p.topups.length > 0 && (
+                  <div className="bu-spend-topups">
+                    {p.topups.map(t => (
+                      <div key={t.id} className="bu-spend-topup">
+                        <span className="bu-spend-topup-amount">+${t.amount_usd.toFixed(2)}</span>
+                        <span className="bu-spend-topup-date">{new Date(t.occurred_at * 1000).toLocaleDateString()}</span>
+                        {t.note && <span className="bu-spend-topup-note">{t.note}</span>}
+                        <button className="bu-spend-topup-del" onClick={() => deleteTopup(t.id)} title="Delete">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {p.keys.length > 0 && (
-                  <table className="bu-spend-table">
-                    <thead>
-                      <tr>
-                        <th>Key</th>
-                        <th className="bu-spend-num">24h</th>
-                        <th className="bu-spend-num">7d</th>
-                        <th className="bu-spend-num">30d</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {p.keys.map(k => {
-                        const rawKey = `${k.provider}:${k.api_key_id}`
-                        const raw = expandedRaw[rawKey]
-                        const isOpen = raw !== undefined
-                        return (
-                          <Fragment key={rawKey}>
-                            <tr className={k.api_key_status !== 'active' ? 'bu-spend-row-inactive' : ''}>
-                              <td>
-                                <div className="bu-spend-keyname">{k.api_key_name || k.api_key_id}</div>
-                                <div className="bu-spend-keyhint">
-                                  <code>{k.api_key_hint}</code>
-                                  {k.api_key_status !== 'active' && <span className="bu-spend-keystatus"> · {k.api_key_status}</span>}
-                                </div>
-                              </td>
-                              <td className="bu-spend-num">${k.total_usd_24h.toFixed(2)}</td>
-                              <td className="bu-spend-num">${k.total_usd_7d.toFixed(2)}</td>
-                              <td className="bu-spend-num">${k.total_usd_30d.toFixed(2)}</td>
-                              <td>
-                                <button className="bu-spend-toggle" onClick={() => toggleRaw(k.provider, k.api_key_id)}>
-                                  {isOpen ? 'hide raw' : 'raw'}
-                                </button>
-                              </td>
-                            </tr>
-                            {isOpen && (
-                              <tr className="bu-spend-raw-row">
-                                <td colSpan={5}>
-                                  <pre className="bu-spend-raw">
-                                    {raw === 'loading' ? 'loading...' : raw}
-                                  </pre>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="bu-spend-keys">
+                    <button
+                      className="bu-spend-keys-toggle"
+                      onClick={() => setExpandedKeys(prev => ({ ...prev, [provider]: !keysOpen }))}
+                    >
+                      {keysOpen ? '▼' : '▶'} {p.keys.length} API key{p.keys.length === 1 ? '' : 's'}
+                    </button>
+                    {keysOpen && (
+                      <table className="bu-spend-table">
+                        <thead>
+                          <tr>
+                            <th>Key</th>
+                            <th className="bu-spend-num">24h</th>
+                            <th className="bu-spend-num">7d</th>
+                            <th className="bu-spend-num">30d</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {p.keys.map(k => {
+                            const rawKey = `${provider}:${k.api_key_id}`
+                            const raw = expandedRaw[rawKey]
+                            const isOpen = raw !== undefined
+                            return (
+                              <Fragment key={rawKey}>
+                                <tr className={k.api_key_status !== 'active' ? 'bu-spend-row-inactive' : ''}>
+                                  <td>
+                                    <div className="bu-spend-keyname">{k.api_key_name || k.api_key_id}</div>
+                                    <div className="bu-spend-keyhint">
+                                      <code>{k.api_key_hint}</code>
+                                      {k.api_key_status !== 'active' && <span className="bu-spend-keystatus"> · {k.api_key_status}</span>}
+                                    </div>
+                                  </td>
+                                  <td className="bu-spend-num">${k.total_usd_24h.toFixed(2)}</td>
+                                  <td className="bu-spend-num">${k.total_usd_7d.toFixed(2)}</td>
+                                  <td className="bu-spend-num">${k.total_usd_30d.toFixed(2)}</td>
+                                  <td>
+                                    <button className="bu-spend-toggle" onClick={() => toggleRaw(provider, k.api_key_id)}>
+                                      {isOpen ? 'hide raw' : 'raw'}
+                                    </button>
+                                  </td>
+                                </tr>
+                                {isOpen && (
+                                  <tr className="bu-spend-raw-row">
+                                    <td colSpan={5}>
+                                      <pre className="bu-spend-raw">
+                                        {raw === 'loading' ? 'loading...' : raw}
+                                      </pre>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 )}
               </div>
             )

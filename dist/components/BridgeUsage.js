@@ -52,6 +52,9 @@ export function BridgeUsage() {
     const [limits, setLimits] = useState(null);
     const [spend, setSpend] = useState(null);
     const [expandedRaw, setExpandedRaw] = useState({});
+    const [expandedKeys, setExpandedKeys] = useState({});
+    const [addCreditOpen, setAddCreditOpen] = useState(null);
+    const [addCreditDraft, setAddCreditDraft] = useState({ amount: '', date: '', note: '' });
     const [loading, setLoading] = useState(true);
     const [loadingUsage, setLoadingUsage] = useState(false);
     const [period, setPeriod] = useState('day');
@@ -87,6 +90,37 @@ export function BridgeUsage() {
         }
         catch { /* ignore */ }
     }, [apiFetch]);
+    const submitTopup = useCallback(async (provider) => {
+        const amount = parseFloat(addCreditDraft.amount);
+        if (!isFinite(amount) || amount <= 0)
+            return;
+        const body = { provider, amount_usd: amount, note: addCreditDraft.note };
+        if (addCreditDraft.date)
+            body.occurred_at_str = addCreditDraft.date;
+        try {
+            const res = await apiFetch('/api/usage/spend/topups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (res.ok) {
+                setAddCreditOpen(null);
+                setAddCreditDraft({ amount: '', date: '', note: '' });
+                fetchSpend();
+            }
+        }
+        catch { /* ignore */ }
+    }, [apiFetch, addCreditDraft, fetchSpend]);
+    const deleteTopup = useCallback(async (id) => {
+        if (!confirm('Delete this top-up?'))
+            return;
+        try {
+            const res = await apiFetch(`/api/usage/spend/topups/${id}`, { method: 'DELETE' });
+            if (res.ok)
+                fetchSpend();
+        }
+        catch { /* ignore */ }
+    }, [apiFetch, fetchSpend]);
     const toggleRaw = useCallback(async (provider, apiKeyID) => {
         const k = `${provider}:${apiKeyID}`;
         setExpandedRaw(prev => {
@@ -193,12 +227,14 @@ export function BridgeUsage() {
     }, [harnessGroups]);
     return (_jsxs("div", { className: "bu-container", children: [_jsxs("div", { className: "bu-header", children: [_jsx("h2", { children: "Bridge Usage" }), _jsx("div", { className: "bu-period-tabs", children: ['day', 'week', 'month'].map(p => (_jsx("button", { className: `bu-tab ${period === p ? 'bu-tab-active' : ''}`, onClick: () => setPeriod(p), children: p === 'day' ? '24h' : p === 'week' ? '7d' : '30d' }, p))) })] }), spend && (_jsx("div", { className: "bu-spend-section", children: ['anthropic', 'openai'].map(provider => {
                     const p = spend[provider];
-                    return (_jsxs("div", { className: "bu-spend-provider", children: [_jsxs("div", { className: "bu-spend-header", children: [_jsx("span", { className: "bu-spend-title", children: SPEND_PROVIDER_LABELS[provider] }), !p.configured && _jsx("span", { className: "bu-spend-unconfigured", children: "admin key not configured" }), p.configured && p.keys.length === 0 && _jsx("span", { className: "bu-spend-unconfigured", children: "no keys yet (refresh pending)" })] }), p.keys.length > 0 && (_jsxs("table", { className: "bu-spend-table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "Key" }), _jsx("th", { className: "bu-spend-num", children: "24h" }), _jsx("th", { className: "bu-spend-num", children: "7d" }), _jsx("th", { className: "bu-spend-num", children: "30d" }), _jsx("th", {})] }) }), _jsx("tbody", { children: p.keys.map(k => {
-                                            const rawKey = `${k.provider}:${k.api_key_id}`;
-                                            const raw = expandedRaw[rawKey];
-                                            const isOpen = raw !== undefined;
-                                            return (_jsxs(Fragment, { children: [_jsxs("tr", { className: k.api_key_status !== 'active' ? 'bu-spend-row-inactive' : '', children: [_jsxs("td", { children: [_jsx("div", { className: "bu-spend-keyname", children: k.api_key_name || k.api_key_id }), _jsxs("div", { className: "bu-spend-keyhint", children: [_jsx("code", { children: k.api_key_hint }), k.api_key_status !== 'active' && _jsxs("span", { className: "bu-spend-keystatus", children: [" \u00B7 ", k.api_key_status] })] })] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_24h.toFixed(2)] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_7d.toFixed(2)] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_30d.toFixed(2)] }), _jsx("td", { children: _jsx("button", { className: "bu-spend-toggle", onClick: () => toggleRaw(k.provider, k.api_key_id), children: isOpen ? 'hide raw' : 'raw' }) })] }), isOpen && (_jsx("tr", { className: "bu-spend-raw-row", children: _jsx("td", { colSpan: 5, children: _jsx("pre", { className: "bu-spend-raw", children: raw === 'loading' ? 'loading...' : raw }) }) }))] }, rawKey));
-                                        }) })] }))] }, provider));
+                    const keysOpen = expandedKeys[provider] ?? false;
+                    const addOpen = addCreditOpen === provider;
+                    return (_jsxs("div", { className: "bu-spend-account", children: [_jsxs("div", { className: "bu-spend-account-row", children: [_jsxs("div", { className: "bu-spend-account-id", children: [_jsx("div", { className: "bu-spend-account-name", children: SPEND_PROVIDER_LABELS[provider] }), _jsx("div", { className: "bu-spend-account-hint", children: p.configured ? (_jsx("code", { children: p.admin_key_hint || 'pending first refresh…' })) : (_jsx("span", { className: "bu-spend-unconfigured", children: "admin key not configured" })) })] }), _jsxs("div", { className: "bu-spend-account-totals", children: [_jsxs("div", { className: "bu-spend-cell", children: [_jsx("span", { className: "bu-spend-window", children: "24h" }), _jsxs("span", { className: "bu-spend-amount", children: ["$", p.total_usd_24h.toFixed(2)] })] }), _jsxs("div", { className: "bu-spend-cell", children: [_jsx("span", { className: "bu-spend-window", children: "7d" }), _jsxs("span", { className: "bu-spend-amount", children: ["$", p.total_usd_7d.toFixed(2)] })] }), _jsxs("div", { className: "bu-spend-cell", children: [_jsx("span", { className: "bu-spend-window", children: "30d" }), _jsxs("span", { className: "bu-spend-amount", children: ["$", p.total_usd_30d.toFixed(2)] })] }), _jsxs("div", { className: "bu-spend-cell bu-spend-balance", children: [_jsx("span", { className: "bu-spend-window", children: "Balance" }), _jsx("span", { className: "bu-spend-amount", children: p.remaining_usd != null ? `$${p.remaining_usd.toFixed(2)}` : '—' }), p.remaining_usd != null && p.balance_since && (_jsxs("span", { className: "bu-spend-fetched", children: ["$", p.topups_total_usd.toFixed(2), " added \u00B7 $", p.spend_since_baseline.toFixed(2), " spent"] }))] })] }), p.configured && (_jsx("button", { className: "bu-spend-add-btn", onClick: () => setAddCreditOpen(addOpen ? null : provider), children: addOpen ? '×' : '+ Add credit' }))] }), addOpen && (_jsxs("div", { className: "bu-spend-addform", children: [_jsx("input", { type: "number", step: "0.01", placeholder: "Amount (USD)", autoFocus: true, value: addCreditDraft.amount, onChange: e => setAddCreditDraft(d => ({ ...d, amount: e.target.value })) }), _jsx("input", { type: "date", placeholder: "Date (UTC)", value: addCreditDraft.date, onChange: e => setAddCreditDraft(d => ({ ...d, date: e.target.value })) }), _jsx("input", { type: "text", placeholder: "Note (optional)", value: addCreditDraft.note, onChange: e => setAddCreditDraft(d => ({ ...d, note: e.target.value })) }), _jsx("button", { onClick: () => submitTopup(provider), children: "Save" })] })), p.topups.length > 0 && (_jsx("div", { className: "bu-spend-topups", children: p.topups.map(t => (_jsxs("div", { className: "bu-spend-topup", children: [_jsxs("span", { className: "bu-spend-topup-amount", children: ["+$", t.amount_usd.toFixed(2)] }), _jsx("span", { className: "bu-spend-topup-date", children: new Date(t.occurred_at * 1000).toLocaleDateString() }), t.note && _jsx("span", { className: "bu-spend-topup-note", children: t.note }), _jsx("button", { className: "bu-spend-topup-del", onClick: () => deleteTopup(t.id), title: "Delete", children: "\u00D7" })] }, t.id))) })), p.keys.length > 0 && (_jsxs("div", { className: "bu-spend-keys", children: [_jsxs("button", { className: "bu-spend-keys-toggle", onClick: () => setExpandedKeys(prev => ({ ...prev, [provider]: !keysOpen })), children: [keysOpen ? '▼' : '▶', " ", p.keys.length, " API key", p.keys.length === 1 ? '' : 's'] }), keysOpen && (_jsxs("table", { className: "bu-spend-table", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { children: "Key" }), _jsx("th", { className: "bu-spend-num", children: "24h" }), _jsx("th", { className: "bu-spend-num", children: "7d" }), _jsx("th", { className: "bu-spend-num", children: "30d" }), _jsx("th", {})] }) }), _jsx("tbody", { children: p.keys.map(k => {
+                                                    const rawKey = `${provider}:${k.api_key_id}`;
+                                                    const raw = expandedRaw[rawKey];
+                                                    const isOpen = raw !== undefined;
+                                                    return (_jsxs(Fragment, { children: [_jsxs("tr", { className: k.api_key_status !== 'active' ? 'bu-spend-row-inactive' : '', children: [_jsxs("td", { children: [_jsx("div", { className: "bu-spend-keyname", children: k.api_key_name || k.api_key_id }), _jsxs("div", { className: "bu-spend-keyhint", children: [_jsx("code", { children: k.api_key_hint }), k.api_key_status !== 'active' && _jsxs("span", { className: "bu-spend-keystatus", children: [" \u00B7 ", k.api_key_status] })] })] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_24h.toFixed(2)] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_7d.toFixed(2)] }), _jsxs("td", { className: "bu-spend-num", children: ["$", k.total_usd_30d.toFixed(2)] }), _jsx("td", { children: _jsx("button", { className: "bu-spend-toggle", onClick: () => toggleRaw(provider, k.api_key_id), children: isOpen ? 'hide raw' : 'raw' }) })] }), isOpen && (_jsx("tr", { className: "bu-spend-raw-row", children: _jsx("td", { colSpan: 5, children: _jsx("pre", { className: "bu-spend-raw", children: raw === 'loading' ? 'loading...' : raw }) }) }))] }, rawKey));
+                                                }) })] }))] }))] }, provider));
                 }) })), limits && (_jsx("div", { className: "bu-limits-section", children: Object.entries(limits).map(([provider, p]) => {
                     if (!p)
                         return null;
