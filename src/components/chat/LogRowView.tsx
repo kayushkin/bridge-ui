@@ -6,19 +6,7 @@ import { UsageLine } from './UsageLine'
 import { formatHMS, groupEventsByType, idTail, shouldExpandByDefault } from './utils'
 import type { TurnBlock } from './types'
 
-// ResolveHookFn is the optional callback Workspace passes down so a row
-// rendering an awaiting_resolution hook can post a decision back to the
-// bridge-server without each row reaching for a useBridgeSession instance
-// (which would spawn a duplicate SSE state tree per row).
-export type ResolveHookFn = (input: {
-  requestId: string
-  behavior: 'allow' | 'deny'
-  updatedInput?: unknown
-  message?: string
-  resolvedBy?: string
-}) => Promise<void>
-
-export function LogRowView({ row, agent, onResolveHook }: { row: LogRow; agent: string; onResolveHook?: ResolveHookFn }) {
+export function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
   const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent
   const typeLabel = row.subtype ? `${row.kind}.${row.subtype}` : row.kind
   const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
@@ -77,9 +65,6 @@ export function LogRowView({ row, agent, onResolveHook }: { row: LogRow; agent: 
             </details>
           )}
           {row.errorMessage && <div className="bc-row-error">{row.errorMessage}</div>}
-          {row.hook && (
-            <HookPanel hook={row.hook} onResolve={onResolveHook} />
-          )}
           {hasRaw && (
             <div className="bc-row-raw-wrap">
               <button className="bc-row-raw-toggle" onClick={e => { e.stopPropagation(); setShowRaw(s => !s) }}>
@@ -99,105 +84,6 @@ export function LogRowView({ row, agent, onResolveHook }: { row: LogRow; agent: 
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-// HookPanel renders the awaiting_resolution UI (allow/deny + optional input
-// editor) for HookEvents whose phase is still pending. For completed hooks
-// it shows a compact summary of the decision.
-function HookPanel({ hook, onResolve }: { hook: NonNullable<LogRow['hook']>; onResolve?: ResolveHookFn }) {
-  const phase = hook.phase
-  const requestID = hook.request_id || ''
-  const initialInput = useMemo(
-    () => hook.input ? JSON.stringify(hook.input, null, 2) : '',
-    [hook.input],
-  )
-  const [edited, setEdited] = useState(initialInput)
-  const [busy, setBusy] = useState(false)
-  const [showEdit, setShowEdit] = useState(false)
-  const isPending = phase === 'awaiting_resolution' && !!requestID && !!onResolve
-
-  const submit = async (behavior: 'allow' | 'deny') => {
-    if (!onResolve || !requestID) return
-    setBusy(true)
-    try {
-      let updatedInput: unknown | undefined
-      if (showEdit && edited.trim() && edited.trim() !== initialInput.trim()) {
-        try {
-          updatedInput = JSON.parse(edited)
-        } catch (err) {
-          alert('Edited input is not valid JSON: ' + (err as Error).message)
-          setBusy(false)
-          return
-        }
-      }
-      await onResolve({ requestId: requestID, behavior, updatedInput, resolvedBy: 'user' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!isPending) {
-    return (
-      <div className="bc-row-hook bc-row-hook-completed">
-        <span className="bc-row-hook-label">{phase}</span>
-        {hook.event && <code className="bc-row-hook-event">{hook.event}</code>}
-        {hook.tool_name && <code className="bc-row-hook-tool">{hook.tool_name}</code>}
-        {hook.decision && <strong className="bc-row-hook-decision">{hook.decision}</strong>}
-        {hook.resolution?.message && (
-          <span className="bc-row-hook-msg">{hook.resolution.message}</span>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="bc-row-hook bc-row-hook-pending">
-      <div className="bc-row-hook-header">
-        <strong className="bc-row-hook-label">awaiting approval</strong>
-        {hook.source && <code className="bc-row-hook-source">{hook.source}</code>}
-        {hook.event && <code className="bc-row-hook-event">{hook.event}</code>}
-        {hook.tool_name && <code className="bc-row-hook-tool">{hook.tool_name}</code>}
-      </div>
-      {initialInput && (
-        <details
-          className="bc-row-hook-input"
-          open={showEdit}
-          onToggle={(e) => setShowEdit((e.target as HTMLDetailsElement).open)}
-        >
-          <summary>tool input ({showEdit ? 'editable' : 'view'})</summary>
-          {showEdit ? (
-            <textarea
-              className="bc-row-hook-editor"
-              value={edited}
-              onChange={(e) => setEdited(e.target.value)}
-              spellCheck={false}
-              rows={Math.min(20, Math.max(4, edited.split('\n').length))}
-            />
-          ) : (
-            <pre className="bc-row-json">{initialInput}</pre>
-          )}
-        </details>
-      )}
-      <div className="bc-row-hook-actions">
-        <button
-          type="button"
-          className="bc-row-hook-allow"
-          disabled={busy}
-          onClick={() => submit('allow')}
-        >
-          {busy ? '…' : 'Allow'}
-        </button>
-        <button
-          type="button"
-          className="bc-row-hook-deny"
-          disabled={busy}
-          onClick={() => submit('deny')}
-        >
-          {busy ? '…' : 'Deny'}
-        </button>
-      </div>
     </div>
   )
 }
@@ -237,7 +123,7 @@ function turnSummary(rows: LogRow[]): { userText?: string; toolCount: number; do
   return { userText, toolCount, done, errored, totalUsage }
 }
 
-export function TurnGroupView({ turnId, rows, agent, onResolveHook }: { turnId: string; rows: LogRow[]; agent: string; onResolveHook?: ResolveHookFn }) {
+export function TurnGroupView({ turnId, rows, agent }: { turnId: string; rows: LogRow[]; agent: string }) {
   const [collapsed, setCollapsed] = useState(false)
   const summary = useMemo(() => turnSummary(rows), [rows])
   const snippet = summary.userText
@@ -259,7 +145,7 @@ export function TurnGroupView({ turnId, rows, agent, onResolveHook }: { turnId: 
       </div>
       {!collapsed && (
         <div className="bc-turn-body">
-          {rows.map(row => <LogRowView key={row.key} row={row} agent={agent} onResolveHook={onResolveHook} />)}
+          {rows.map(row => <LogRowView key={row.key} row={row} agent={agent} />)}
         </div>
       )}
     </div>

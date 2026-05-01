@@ -3,17 +3,16 @@ import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { ToolContext } from '../tools'
 import { FilterBar } from './FilterBar'
-import { LogRowView, TurnGroupView, groupRowsByTurn, type ResolveHookFn } from './LogRowView'
+import { LogRowView, TurnGroupView, groupRowsByTurn } from './LogRowView'
 import { loadHiddenTypes, saveHiddenTypes } from './persistence'
 import { typesInRow } from './utils'
 
-export function Thread({ rows, loading, error, agent, sessionId, onResolveHook }: {
+export function Thread({ rows, loading, error, agent, sessionId }: {
   rows: LogRow[]
   loading: boolean
   error: string | null
   agent: string
   sessionId: string
-  onResolveHook?: ResolveHookFn
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
@@ -50,8 +49,8 @@ export function Thread({ rows, loading, error, agent, sessionId, onResolveHook }
         <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
         {error && <div className="bridge-error">{error}</div>}
         {blocks.map((b, i) => b.kind === 'turn'
-          ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} onResolveHook={onResolveHook} />
-          : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} onResolveHook={onResolveHook} />
+          ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} />
+          : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} />
         )}
         <div ref={endRef} />
       </div>

@@ -1,7 +1,6 @@
 import { createContext, useContext } from 'react'
-import type { ActivityKind, HookEvent, LogRow, SessionUIState } from '../../types'
+import type { ActivityKind, LogRow, SessionUIState } from '../../types'
 import type { ChatSession, PaneKey, PaneSizes, PanesHidden } from './types'
-import type { ResolveHookFn } from './LogRowView'
 
 export interface GitRepo {
   path: string
@@ -27,10 +26,6 @@ export interface WorkspaceValue {
   gitReposLoading: boolean
   gitReposError: string | null
   refreshGitRepos: () => void
-  // Permission / approval hooks awaiting human decision for the active
-  // session. Drives the inline allow/deny UI inside Thread/Turns.
-  pendingHooks: HookEvent[]
-  resolveHook: ResolveHookFn
 }
 
 export const WorkspaceContext = createContext<WorkspaceValue | null>(null)

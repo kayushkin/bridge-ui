@@ -4,7 +4,7 @@ import { connectSSE, connectSessionListSSE } from './bridgeSSE'
 import type {
   BridgeEvent, EventData, ManagedSession, SessionUIState, ActivityKind,
   LogRow, LogRowActor, LogRowKind, ToolEvent, CreateSessionRequest, UseBridgeSessionReturn,
-  SessionInfo, MessageMeta, HookEvent,
+  SessionInfo, MessageMeta,
 } from './types'
 
 // --- Event envelope ---
@@ -336,10 +336,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const [activity, setActivity] = useState<ActivityKind>({ kind: 'idle' })
   const [compacting, setCompacting] = useState(false)
   const [interruptedIds, setInterruptedIds] = useState<Set<string>>(loadInterruptedIds)
-  // pendingHooks is keyed by request_id so SSE updates can patch in O(1).
-  // Sourced from /hooks/pending on session select; updated by EventHook
-  // awaiting_resolution (insert) and completed (delete).
-  const [pendingHooks, setPendingHooks] = useState<Record<string, HookEvent>>({})
 
   const sseAbort = useRef<AbortController | null>(null)
   const lastEventId = useRef<string | undefined>(undefined)
@@ -584,21 +580,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
           refreshSessions()
           break
         }
-        case 'hook': {
-          const hook = data.hook
-          if (!hook || !hook.request_id) break
-          if (hook.phase === 'awaiting_resolution') {
-            setPendingHooks(prev => ({ ...prev, [hook.request_id!]: hook }))
-          } else if (hook.phase === 'completed') {
-            setPendingHooks(prev => {
-              if (!(hook.request_id! in prev)) return prev
-              const next = { ...prev }
-              delete next[hook.request_id!]
-              return next
-            })
-          }
-          break
-        }
         case 'close':
           setActivity({ kind: 'idle' })
           patchSessionState(sessId, 'completed')
@@ -660,7 +641,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     if (!id) {
       setActiveSessionId(null)
       setLogRows([])
-      setPendingHooks({})
       return
     }
 
@@ -673,7 +653,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     activeSessionIdRef.current = id
     if (switching) {
       setLogRows([])
-      setPendingHooks({})
       lastEventId.current = undefined
     }
 
@@ -686,26 +665,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         await refreshSessionsImpl()
       }
       await loadHistory(id)
-      // Hydrate pending-hook banner state. Bridge-server's /hooks/pending
-      // returns the awaiting_resolution events that haven't yet been closed
-      // — required because Last-Event-ID replay only fires when we connect
-      // to SSE, and the SSE attach is conditional on running state below.
-      try {
-        const res = await fetchFn(`${basePath}/sessions/${id}/hooks/pending`)
-        if (res.ok && activeSessionIdRef.current === id) {
-          const events = await res.json() as Array<{ hook?: HookEvent }>
-          const next: Record<string, HookEvent> = {}
-          for (const ev of events) {
-            const h = ev.hook
-            if (h?.request_id && h.phase === 'awaiting_resolution') {
-              next[h.request_id] = h
-            }
-          }
-          setPendingHooks(next)
-        }
-      } catch {
-        // Non-fatal: banner just won't pre-populate.
-      }
       // Read the latest sessions list at resolution time, not the value
       // captured when this callback was created — the session may have been
       // freshly created and not yet present in the closure snapshot.
@@ -962,76 +921,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
   }, [fetchFn, basePath, activeSessionId])
 
-  const setPermissionMode = useCallback(async (mode: string) => {
-    if (!activeSessionId) return
-    if (!mode) return
-    try {
-      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/permission-mode`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      })
-      if (!res.ok) {
-        const errText = await res.text()
-        setError(`Set permission mode failed: ${errText}`)
-      }
-    } catch (err) {
-      setError(`Set permission mode failed: ${err}`)
-    }
-  }, [fetchFn, basePath, activeSessionId])
-
-  const resolveHook = useCallback(async (input: {
-    requestId: string
-    behavior: 'allow' | 'deny'
-    updatedInput?: unknown
-    message?: string
-    resolvedBy?: string
-  }) => {
-    if (!activeSessionId) {
-      setError('resolve hook: no active session')
-      return
-    }
-    if (!input.requestId) {
-      setError('resolve hook: request_id required')
-      return
-    }
-    // Optimistic clear — the matching phase=completed SSE event will
-    // arrive shortly and is idempotent with this map update.
-    setPendingHooks(prev => {
-      if (!(input.requestId in prev)) return prev
-      const next = { ...prev }
-      delete next[input.requestId]
-      return next
-    })
-    try {
-      const body: Record<string, unknown> = {
-        behavior: input.behavior,
-        resolved_by: input.resolvedBy || 'user',
-      }
-      if (input.updatedInput !== undefined) body.updated_input = input.updatedInput
-      if (input.message) body.message = input.message
-      const res = await fetchFn(
-        `${basePath}/sessions/${activeSessionId}/hooks/${encodeURIComponent(input.requestId)}/resolve`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      )
-      if (!res.ok) {
-        const errText = await res.text()
-        setError(`Resolve hook failed: ${errText}`)
-      }
-    } catch (err) {
-      setError(`Resolve hook failed: ${err}`)
-    }
-  }, [fetchFn, basePath, activeSessionId])
-
-  const pendingHooksList = useMemo<HookEvent[]>(
-    () => Object.values(pendingHooks),
-    [pendingHooks],
-  )
-
   useEffect(() => () => {
     closeSSE()
     debouncedRefresh.cancel()
@@ -1059,10 +948,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     fork: forkSession,
     renameSession,
     sendConfig,
-    setPermissionMode,
     refreshSessions,
-    pendingHooks: pendingHooksList,
-    resolveHook,
   }), [
     sessions,
     activeSession,
@@ -1084,9 +970,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     forkSession,
     renameSession,
     sendConfig,
-    setPermissionMode,
     refreshSessions,
-    pendingHooksList,
-    resolveHook,
   ])
 }

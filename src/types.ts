@@ -226,27 +226,5 @@ export interface UseBridgeSessionReturn {
   fork: (displayName?: string) => void
   renameSession: (bridgeID: string, displayName: string) => Promise<void>
   sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => void
-  // setPermissionMode flips the harness's runtime permission mode. For
-  // Claude Code: "default" engages the bridge's permission-prompt flow
-  // (bridge-ui surfaces each tool call); "bypassPermissions" auto-approves
-  // everything; "acceptEdits" / "plan" pass through. Mid-session change
-  // requires no respawn — the harness wires the prompt callback at start.
-  setPermissionMode: (mode: string) => Promise<void>
   refreshSessions: () => void
-
-  // Awaiting-resolution HookEvents for the active session: events whose
-  // phase="awaiting_resolution" has not yet been closed by a matching
-  // phase="completed". Hydrated on session select via /hooks/pending and
-  // kept in sync via the SSE stream.
-  pendingHooks: HookEvent[]
-  // resolveHook posts a decision to the bridge-server's
-  // /sessions/{id}/hooks/{request_id}/resolve endpoint and clears the
-  // matching pendingHook entry optimistically.
-  resolveHook: (input: {
-    requestId: string
-    behavior: 'allow' | 'deny'
-    updatedInput?: unknown
-    message?: string
-    resolvedBy?: string
-  }) => Promise<void>
 }

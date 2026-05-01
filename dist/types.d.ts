@@ -111,15 +111,6 @@ export interface UseBridgeSessionReturn {
         disabled_tools?: string[];
         max_budget?: number;
     }) => void;
-    setPermissionMode: (mode: string) => Promise<void>;
     refreshSessions: () => void;
-    pendingHooks: HookEvent[];
-    resolveHook: (input: {
-        requestId: string;
-        behavior: 'allow' | 'deny';
-        updatedInput?: unknown;
-        message?: string;
-        resolvedBy?: string;
-    }) => Promise<void>;
 }
 //# sourceMappingURL=types.d.ts.map

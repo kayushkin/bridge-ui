@@ -16,13 +16,6 @@ interface ModelInfo {
 
 const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max']
 
-// Claude Code permission modes — wired through to the harness's
-// --permission-mode flag at session start. "default" means CC asks via the
-// bridge's permission-prompt MCP for each tool call; "bypassPermissions"
-// auto-approves everything; "acceptEdits" / "plan" pass through to CC's
-// own modes. Mode can still be flipped mid-session from the chat UI.
-const PERMISSION_MODE_OPTIONS = ['default', 'acceptEdits', 'plan', 'bypassPermissions']
-
 const COMMON_TOOLS = [
   'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Agent', 'WebFetch', 'WebSearch',
   'NotebookEdit', 'TodoWrite', 'AskUserQuestion',
@@ -72,7 +65,6 @@ export function BridgeSettings() {
     if (defaults.effort) cleaned.effort = defaults.effort
     if (defaults.max_budget !== undefined && defaults.max_budget > 0) cleaned.max_budget = defaults.max_budget
     if (defaults.disabled_tools?.length) cleaned.disabled_tools = defaults.disabled_tools
-    if (defaults.permission_mode) cleaned.permission_mode = defaults.permission_mode
     bridgePrefs.setHarnessDefaults(harness, cleaned)
     setTimeout(() => setSaving(null), 500)
   }, [localDefaults, bridgePrefs])
@@ -124,16 +116,6 @@ export function BridgeSettings() {
                       <select value={defaults.effort || ''} onChange={e => updateLocal(h.name, 'effort', e.target.value)}>
                         <option value="">&mdash; Default &mdash;</option>
                         {EFFORT_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                      </select>
-                    </div>
-                  )}
-
-                  {hasCapability(h, 'permission_mode') && (
-                    <div className="bset-field">
-                      <label>Permission Mode</label>
-                      <select value={defaults.permission_mode || ''} onChange={e => updateLocal(h.name, 'permission_mode', e.target.value)}>
-                        <option value="">&mdash; Harness default &mdash;</option>
-                        {PERMISSION_MODE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                   )}

@@ -222,16 +222,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   const handleCompact = useCallback(() => bridge.compact(), [bridge])
   const handleFork = useCallback(() => bridge.fork(), [bridge])
 
-  // Auto-approve toggle: bypassPermissions = no UI prompts; default =
-  // bridge-ui consults on every tool call. Source of truth is the
-  // harness's last init/SessionInfo; we send the new mode and rely on the
-  // next init/SessionInfo to confirm.
-  const permissionMode = bridge.activeSession?.info?.permission_mode || ''
-  const autoApprove = permissionMode === 'bypassPermissions'
-  const toggleAutoApprove = useCallback(() => {
-    bridge.setPermissionMode(autoApprove ? 'default' : 'bypassPermissions')
-  }, [bridge, autoApprove])
-
   const contextInfo = useMemo(() => {
     for (let i = bridge.logRows.length - 1; i >= 0; i--) {
       const r = bridge.logRows[i]
@@ -309,8 +299,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         gitReposLoading,
         gitReposError,
         refreshGitRepos,
-        pendingHooks: bridge.pendingHooks,
-        resolveHook: bridge.resolveHook,
       }}>
         <LayoutRenderer tree={workspace.layout} />
       </WorkspaceProvider>
@@ -349,22 +337,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
             )}
             {capabilities.has('fork') && (
               <button className="bc-ctrl-btn" onClick={handleFork} title="Fork session">Fork</button>
-            )}
-            {capabilities.has('permission_mode') && (
-              <button
-                className={`bc-ctrl-btn bc-ctrl-btn-approval ${autoApprove ? 'bc-ctrl-btn-approval-auto' : 'bc-ctrl-btn-approval-review'}`}
-                onClick={toggleAutoApprove}
-                disabled={!bridge.activeSession.info}
-                title={
-                  !bridge.activeSession.info
-                    ? 'Permission mode will be available after the session starts'
-                    : autoApprove
-                      ? 'Auto-approve: every tool call runs without asking. Click to switch to review.'
-                      : 'Review: every tool call surfaces in the thread for allow/deny. Click to switch to auto-approve.'
-                }
-              >
-                {autoApprove ? 'Auto-approve' : 'Review'}
-              </button>
             )}
             {capabilities.has('system_prompt') && (
               <button
