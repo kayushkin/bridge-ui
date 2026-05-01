@@ -50,7 +50,7 @@ export function BridgeAuth() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showAddKey, setShowAddKey] = useState(false);
-    const [addForm, setAddForm] = useState({ name: '', provider: 'anthropic', api_key: '' });
+    const [addForm, setAddForm] = useState({ name: '', provider: 'anthropic', owner: '', api_key: '' });
     const [saving, setSaving] = useState(false);
     const instances = useBridgeInstances();
     const [bindingsCache, setBindingsCache] = useState({});
@@ -107,20 +107,20 @@ export function BridgeAuth() {
         catch { /* ignore */ }
     }, [apiFetch, basePath]);
     const handleAddKey = useCallback(async () => {
-        if (!addForm.name.trim() || !addForm.api_key.trim())
+        if (!addForm.name.trim() || !addForm.owner.trim() || !addForm.api_key.trim())
             return;
         setSaving(true);
         try {
             const res = await apiFetch(`${basePath}/credentials`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: addForm.name.trim(), provider: addForm.provider, type: 'api_key', key: addForm.api_key.trim() }),
+                body: JSON.stringify({ name: addForm.name.trim(), provider: addForm.provider, owner: addForm.owner.trim(), type: 'api_key', key: addForm.api_key.trim() }),
             });
             if (!res.ok) {
                 setError(`Failed to add key: ${res.statusText}`);
                 return;
             }
-            setAddForm({ name: '', provider: 'anthropic', api_key: '' });
+            setAddForm({ name: '', provider: 'anthropic', owner: '', api_key: '' });
             setShowAddKey(false);
             await fetchCredentials();
         }
@@ -173,7 +173,7 @@ export function BridgeAuth() {
         }
     }, [instances]);
     const isExpired = (expiresAt) => expiresAt > 0 && expiresAt < Date.now();
-    return (_jsxs("div", { className: "ba-container", children: [_jsxs("div", { className: "ba-header", children: [_jsx("h2", { children: "Auth Management" }), _jsx("button", { className: "ba-add-btn", onClick: () => setShowAddKey(true), children: "+ Add API Key" })] }), error && _jsxs("div", { className: "bridge-error", children: [error, " ", _jsx("button", { className: "ba-dismiss", onClick: () => setError(null), children: "dismiss" })] }), showAddKey && (_jsxs("div", { className: "ba-form-card", children: [_jsx("h3", { children: "Add API Key" }), _jsxs("div", { className: "ba-form-grid", children: [_jsxs("label", { children: [_jsx("span", { children: "Name / Label" }), _jsx("input", { value: addForm.name, onChange: e => setAddForm(f => ({ ...f, name: e.target.value })), placeholder: "my-anthropic-key" })] }), _jsxs("label", { children: [_jsx("span", { children: "Provider" }), _jsx("select", { value: addForm.provider, onChange: e => setAddForm(f => ({ ...f, provider: e.target.value })), children: PROVIDERS.map(p => _jsx("option", { value: p.id, children: p.label }, p.id)) })] }), _jsxs("label", { className: "ba-span-full", children: [_jsx("span", { children: "API Key" }), _jsx("input", { type: "password", value: addForm.api_key, onChange: e => setAddForm(f => ({ ...f, api_key: e.target.value })), placeholder: "sk-ant-..." })] })] }), _jsxs("div", { className: "ba-form-actions", children: [_jsx("button", { className: "ba-save-btn", onClick: handleAddKey, disabled: saving || !addForm.name.trim() || !addForm.api_key.trim(), children: saving ? 'Saving...' : 'Save' }), _jsx("button", { className: "ba-cancel-btn", onClick: () => { setShowAddKey(false); setAddForm({ name: '', provider: 'anthropic', api_key: '' }); }, children: "Cancel" })] })] })), loading ? (_jsx("div", { className: "ba-loading", children: "Loading credentials..." })) : credentials.length === 0 ? (_jsx("div", { className: "ba-empty", children: "No credentials configured. Add an API key to get started." })) : (_jsx("div", { className: "ba-cred-grid", children: credentials.map(cred => {
+    return (_jsxs("div", { className: "ba-container", children: [_jsxs("div", { className: "ba-header", children: [_jsx("h2", { children: "Auth Management" }), _jsx("button", { className: "ba-add-btn", onClick: () => setShowAddKey(true), children: "+ Add API Key" })] }), error && _jsxs("div", { className: "bridge-error", children: [error, " ", _jsx("button", { className: "ba-dismiss", onClick: () => setError(null), children: "dismiss" })] }), showAddKey && (_jsxs("div", { className: "ba-form-card", children: [_jsx("h3", { children: "Add API Key" }), _jsxs("div", { className: "ba-form-grid", children: [_jsxs("label", { children: [_jsx("span", { children: "Name / Label" }), _jsx("input", { value: addForm.name, onChange: e => setAddForm(f => ({ ...f, name: e.target.value })), placeholder: "my-anthropic-key" })] }), _jsxs("label", { children: [_jsx("span", { children: "Provider" }), _jsx("select", { value: addForm.provider, onChange: e => setAddForm(f => ({ ...f, provider: e.target.value })), children: PROVIDERS.map(p => _jsx("option", { value: p.id, children: p.label }, p.id)) })] }), _jsxs("label", { children: [_jsx("span", { children: "Owner" }), _jsx("input", { value: addForm.owner, onChange: e => setAddForm(f => ({ ...f, owner: e.target.value })), placeholder: "you@example.com" })] }), _jsxs("label", { className: "ba-span-full", children: [_jsx("span", { children: "API Key" }), _jsx("input", { type: "password", value: addForm.api_key, onChange: e => setAddForm(f => ({ ...f, api_key: e.target.value })), placeholder: "sk-ant-..." })] })] }), _jsxs("div", { className: "ba-form-actions", children: [_jsx("button", { className: "ba-save-btn", onClick: handleAddKey, disabled: saving || !addForm.name.trim() || !addForm.owner.trim() || !addForm.api_key.trim(), children: saving ? 'Saving...' : 'Save' }), _jsx("button", { className: "ba-cancel-btn", onClick: () => { setShowAddKey(false); setAddForm({ name: '', provider: 'anthropic', owner: '', api_key: '' }); }, children: "Cancel" })] })] })), loading ? (_jsx("div", { className: "ba-loading", children: "Loading credentials..." })) : credentials.length === 0 ? (_jsx("div", { className: "ba-empty", children: "No credentials configured. Add an API key to get started." })) : (_jsx("div", { className: "ba-cred-grid", children: credentials.map(cred => {
                     const bindings = credentialBindings(cred.id);
                     const isExp = isExpired(cred.expires_at);
                     const expanded = expandedCred === cred.id;

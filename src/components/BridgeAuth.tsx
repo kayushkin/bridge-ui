@@ -85,7 +85,7 @@ export function BridgeAuth() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddKey, setShowAddKey] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', provider: 'anthropic', api_key: '' })
+  const [addForm, setAddForm] = useState({ name: '', provider: 'anthropic', owner: '', api_key: '' })
   const [saving, setSaving] = useState(false)
   const instances = useBridgeInstances()
   const [bindingsCache, setBindingsCache] = useState<Record<string, InstanceCredential[]>>({})
@@ -137,16 +137,16 @@ export function BridgeAuth() {
   }, [apiFetch, basePath])
 
   const handleAddKey = useCallback(async () => {
-    if (!addForm.name.trim() || !addForm.api_key.trim()) return
+    if (!addForm.name.trim() || !addForm.owner.trim() || !addForm.api_key.trim()) return
     setSaving(true)
     try {
       const res = await apiFetch(`${basePath}/credentials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: addForm.name.trim(), provider: addForm.provider, type: 'api_key', key: addForm.api_key.trim() }),
+        body: JSON.stringify({ name: addForm.name.trim(), provider: addForm.provider, owner: addForm.owner.trim(), type: 'api_key', key: addForm.api_key.trim() }),
       })
       if (!res.ok) { setError(`Failed to add key: ${res.statusText}`); return }
-      setAddForm({ name: '', provider: 'anthropic', api_key: '' })
+      setAddForm({ name: '', provider: 'anthropic', owner: '', api_key: '' })
       setShowAddKey(false)
       await fetchCredentials()
     } catch (err) { setError(`Failed to add key: ${err}`) }
@@ -211,11 +211,12 @@ export function BridgeAuth() {
                 {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
             </label>
+            <label><span>Owner</span><input value={addForm.owner} onChange={e => setAddForm(f => ({ ...f, owner: e.target.value }))} placeholder="you@example.com" /></label>
             <label className="ba-span-full"><span>API Key</span><input type="password" value={addForm.api_key} onChange={e => setAddForm(f => ({ ...f, api_key: e.target.value }))} placeholder="sk-ant-..." /></label>
           </div>
           <div className="ba-form-actions">
-            <button className="ba-save-btn" onClick={handleAddKey} disabled={saving || !addForm.name.trim() || !addForm.api_key.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-            <button className="ba-cancel-btn" onClick={() => { setShowAddKey(false); setAddForm({ name: '', provider: 'anthropic', api_key: '' }) }}>Cancel</button>
+            <button className="ba-save-btn" onClick={handleAddKey} disabled={saving || !addForm.name.trim() || !addForm.owner.trim() || !addForm.api_key.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+            <button className="ba-cancel-btn" onClick={() => { setShowAddKey(false); setAddForm({ name: '', provider: 'anthropic', owner: '', api_key: '' }) }}>Cancel</button>
           </div>
         </div>
       )}
