@@ -26,6 +26,7 @@ export { BridgeUsage } from './components/BridgeUsage';
 export { BridgeConformance } from './components/BridgeConformance';
 export { BridgeSkills } from './components/BridgeSkills';
 export { BridgeTools } from './components/BridgeTools';
+export { BridgePermissions } from './components/BridgePermissions';
 export { BridgeAgents } from './components/BridgeAgents';
 export { BridgeFiles } from './components/BridgeFiles';
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';

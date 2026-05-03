@@ -1103,6 +1103,69 @@
   outline: none; min-width: 60px;
 }
 
+/* Permissions page */
+.bperm-container { padding: 16px 24px; max-width: 1200px; }
+.bperm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.bperm-tab {
+  background: none; border: none; padding: 8px 16px; cursor: pointer; color: var(--text-muted);
+  border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+}
+.bperm-tab:hover { color: var(--text); }
+.bperm-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+.bperm-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.bperm-toolbar input, .bperm-toolbar label { font-size: 0.85em; }
+.bperm-count { color: var(--text-muted); font-size: 0.82em; margin-left: auto; }
+.bperm-btn-primary {
+  padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent);
+  background: var(--accent); color: white; cursor: pointer; font-size: 0.85em;
+}
+.bperm-btn-primary:hover { opacity: 0.9; }
+.bperm-btn-primary:disabled { opacity: 0.4; cursor: default; }
+.bperm-scope-block { margin-bottom: 24px; }
+.bperm-scope-title { font-size: 0.95em; color: var(--text-muted); margin: 12px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.bperm-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.bperm-table th { text-align: left; padding: 6px 10px; color: var(--text-muted); font-weight: normal; border-bottom: 1px solid var(--border); }
+.bperm-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.bperm-table code { font-size: 0.95em; }
+.bperm-row-disabled { opacity: 0.45; }
+.bperm-rule-id code { color: var(--text-muted); font-size: 0.85em; }
+.bperm-outcome { font-weight: 600; text-transform: uppercase; font-size: 0.78em; }
+.bperm-outcome-allow { color: #4caf50; }
+.bperm-outcome-deny { color: #e57373; }
+.bperm-outcome-ask { color: #ffb74d; }
+.bperm-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bperm-actions button {
+  padding: 3px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: none; color: var(--text); cursor: pointer; font-size: 0.78em;
+}
+.bperm-actions button:hover { border-color: var(--accent); }
+.bperm-toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 0.82em; cursor: pointer; }
+.bperm-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+.bperm-modal {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 20px; width: 480px; max-width: 90vw;
+}
+.bperm-modal h3 { margin: 0 0 16px; font-size: 1em; }
+.bperm-form { display: flex; flex-direction: column; gap: 10px; }
+.bperm-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--text-muted); }
+.bperm-form input, .bperm-form select, .bperm-form textarea {
+  padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--bg-elevated, var(--bg-surface)); color: var(--text); font-size: 0.95em;
+}
+.bperm-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.bperm-modal-actions button {
+  padding: 6px 14px; border-radius: 5px; border: 1px solid var(--border);
+  background: none; color: var(--text); cursor: pointer; font-size: 0.85em;
+}
+.bperm-loading, .bperm-subtitle { color: var(--text-muted); font-size: 0.85em; }
+.bperm-error { color: #e57373; font-size: 0.85em; margin: 8px 0; }
+.bperm-test-result { margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.bperm-test-result h4 { margin: 12px 0 6px; font-size: 0.88em; }
+.bperm-pre { background: var(--bg-elevated, var(--bg-surface)); padding: 8px 10px; border-radius: 4px; overflow: auto; font-size: 0.78em; max-height: 320px; margin: 0; }
+
 /* Pending permissions banner — sticky-at-top approval surface for
    awaiting_resolution HookEvents emitted by bridge_perm. Renders empty
    when no hooks are pending. */
