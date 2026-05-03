@@ -79,7 +79,7 @@ function SessionDetailsPanel({ session }) {
         return Number.isNaN(d.getTime()) ? v : d.toLocaleString();
     };
     const rows = [
-        ['source', session.source || 'interactive'],
+        ['source', fmt(session.source)],
         ['folder', fmt(session.folder_name)],
         ['state', fmt(session.state)],
         ['mode', session.mode || 'events'],
