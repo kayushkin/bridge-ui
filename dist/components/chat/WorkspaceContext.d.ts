@@ -1,5 +1,12 @@
-import type { ActivityKind, LogRow, SessionUIState } from '../../types';
+import type { ActivityKind, HookEvent, LogRow, SessionUIState } from '../../types';
 import type { ChatSession, PaneKey, PaneSizes, PanesHidden } from './types';
+export type ResolveHookFn = (input: {
+    requestId: string;
+    behavior: 'allow' | 'deny';
+    updatedInput?: unknown;
+    message?: string;
+    resolvedBy?: string;
+}) => Promise<void>;
 export interface GitRepo {
     path: string;
     name: string;
@@ -21,6 +28,8 @@ export interface WorkspaceValue {
     gitReposLoading: boolean;
     gitReposError: string | null;
     refreshGitRepos: () => void;
+    pendingHooks: HookEvent[];
+    resolveHook: ResolveHookFn;
 }
 export declare const WorkspaceContext: import("react").Context<WorkspaceValue | null>;
 export declare function useWorkspace(): WorkspaceValue;

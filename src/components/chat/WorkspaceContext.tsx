@@ -1,6 +1,16 @@
 import { createContext, useContext } from 'react'
-import type { ActivityKind, LogRow, SessionUIState } from '../../types'
+import type { ActivityKind, HookEvent, LogRow, SessionUIState } from '../../types'
 import type { ChatSession, PaneKey, PaneSizes, PanesHidden } from './types'
+
+// ResolveHookFn matches useBridgeSession's resolveHook signature; the
+// banner uses it to settle pending awaiting_resolution events.
+export type ResolveHookFn = (input: {
+  requestId: string
+  behavior: 'allow' | 'deny'
+  updatedInput?: unknown
+  message?: string
+  resolvedBy?: string
+}) => Promise<void>
 
 export interface GitRepo {
   path: string
@@ -26,6 +36,10 @@ export interface WorkspaceValue {
   gitReposLoading: boolean
   gitReposError: string | null
   refreshGitRepos: () => void
+  // Pending awaiting_resolution hooks for the active session — drives the
+  // PendingPermissionsBanner. Empty array when nothing's pending.
+  pendingHooks: HookEvent[]
+  resolveHook: ResolveHookFn
 }
 
 export const WorkspaceContext = createContext<WorkspaceValue | null>(null)

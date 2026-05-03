@@ -112,5 +112,13 @@ export interface UseBridgeSessionReturn {
         max_budget?: number;
     }) => void;
     refreshSessions: () => void;
+    pendingHooks: HookEvent[];
+    resolveHook: (input: {
+        requestId: string;
+        behavior: 'allow' | 'deny';
+        updatedInput?: unknown;
+        message?: string;
+        resolvedBy?: string;
+    }) => Promise<void>;
 }
 //# sourceMappingURL=types.d.ts.map

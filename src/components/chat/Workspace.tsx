@@ -5,6 +5,7 @@ import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
+import { PendingPermissionsBanner } from './PendingPermissionsBanner'
 import { SessionHeader } from './SessionHeader'
 import { StatusDot } from './StatusDot'
 import { SystemPromptModal } from './SystemPromptModal'
@@ -323,7 +324,10 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         gitReposLoading,
         gitReposError,
         refreshGitRepos,
+        pendingHooks: bridge.pendingHooks,
+        resolveHook: bridge.resolveHook,
       }}>
+        <PendingPermissionsBanner />
         <LayoutRenderer tree={workspace.layout} />
       </WorkspaceProvider>
       <div className="bc-controls-bar">

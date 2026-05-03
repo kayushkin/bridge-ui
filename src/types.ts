@@ -227,4 +227,20 @@ export interface UseBridgeSessionReturn {
   renameSession: (bridgeID: string, displayName: string) => Promise<void>
   sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => void
   refreshSessions: () => void
+
+  // Awaiting-resolution HookEvents for the active session: events whose
+  // phase="awaiting_resolution" has not yet been closed by a matching
+  // phase="completed". Hydrated on session select via /hooks/pending and
+  // kept in sync by the SSE stream. Drives the sticky permission banner.
+  pendingHooks: HookEvent[]
+  // resolveHook posts a decision to the bridge-server's
+  // /sessions/{id}/hooks/{request_id}/resolve endpoint and clears the
+  // matching pendingHook entry optimistically.
+  resolveHook: (input: {
+    requestId: string
+    behavior: 'allow' | 'deny'
+    updatedInput?: unknown
+    message?: string
+    resolvedBy?: string
+  }) => Promise<void>
 }
