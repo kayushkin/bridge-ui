@@ -56,7 +56,7 @@ export function BridgeSettings() {
         setTimeout(() => setSaving(null), 500);
     }, [localDefaults, bridgePrefs]);
     const hasCapability = (harness, cap) => harness.capabilities?.includes(cap);
-    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
+    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx(PermissionsBypassToggle, { apiFetch: apiFetch, basePath: basePath }), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
                     const defaults = localDefaults[h.name] || {};
                     const isExpanded = expanded[h.name];
                     const label = h.label || h.name;
@@ -66,5 +66,67 @@ export function BridgeSettings() {
                                                     return (_jsx("button", { type: "button", className: `bset-tool-chip ${disabled ? 'bset-tool-disabled' : ''}`, onClick: () => toggleTool(h.name, tool), children: tool }, tool));
                                                 }) })] })), _jsxs("div", { className: "bset-caps-info", children: [_jsx("span", { className: "bset-caps-label", children: "Capabilities:" }), h.capabilities?.map(c => _jsx("span", { className: "bset-cap-badge", children: c }, c))] }), _jsx("button", { className: "bset-save-btn", onClick: () => saveDefaults(h.name), disabled: saving === h.name, children: saving === h.name ? 'Saved!' : 'Save Defaults' }), h.name === 'inber' && _jsx(InberAgentsConfig, {})] }))] }, h.name));
                 }) })] }));
+}
+// PermissionsBypassToggle is the global "skip permission MCP" switch. When
+// off (default), every Bash/tool call goes through bridge_perm →
+// permission-store rule engine. When on, new sessions launch with
+// --permission-mode bypassPermissions (CC never calls our MCP) and every
+// running harness has its MCP flipped into always-allow via a single
+// /bridge/bypass-permissions broadcast. Saved as bridge-prefs
+// .bypass_permissions; the dedicated endpoint takes care of both the
+// pref write and the live fan-out.
+function PermissionsBypassToggle({ apiFetch, basePath }) {
+    const [enabled, setEnabled] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    const [activeSessions, setActiveSessions] = useState(null);
+    // Load current state on mount.
+    useEffect(() => {
+        let cancelled = false;
+        apiFetch(`${basePath}/bridge-prefs`)
+            .then(r => r.ok ? r.json() : null)
+            .then((prefs) => {
+            if (!cancelled && prefs)
+                setEnabled(!!prefs.bypass_permissions);
+        })
+            .catch(() => { if (!cancelled)
+            setEnabled(false); });
+        return () => { cancelled = true; };
+    }, [apiFetch, basePath]);
+    const toggle = useCallback(async () => {
+        if (enabled === null)
+            return;
+        setBusy(true);
+        setError(null);
+        const next = !enabled;
+        try {
+            const res = await apiFetch(`${basePath}/bridge/bypass-permissions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next }),
+            });
+            if (!res.ok)
+                throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setEnabled(next);
+            setActiveSessions(data.active_sessions ?? null);
+            const failures = Object.keys(data.failures ?? {});
+            if (failures.length > 0) {
+                setError(`broadcast partial: ${failures.length} session(s) failed`);
+            }
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+        }
+        finally {
+            setBusy(false);
+        }
+    }, [enabled, apiFetch, basePath]);
+    if (enabled === null) {
+        return null; // initial fetch in flight
+    }
+    return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-bypass-toggle", children: [_jsx("input", { type: "checkbox", checked: enabled, disabled: busy, onChange: toggle }), _jsxs("span", { children: [_jsx("strong", { children: "Bypass permission MCP" }), " \u2014 skip all rules; every tool call auto-approves"] })] }) }), _jsx("p", { className: "bset-subtitle", children: enabled
+                    ? 'Bypass is ON. New sessions launch in bypassPermissions mode; running sessions have their MCP set to always-allow. Permission rules in /permissions are ignored until you turn this off.'
+                    : 'Bypass is OFF. Every tool call routes through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.' }), activeSessions !== null && (_jsxs("p", { className: "bset-subtitle", children: ["Last broadcast reached ", activeSessions, " active session", activeSessions === 1 ? '' : 's', "."] })), error && _jsx("p", { className: "bset-error", children: error })] }));
 }
 //# sourceMappingURL=BridgeSettings.js.map

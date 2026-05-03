@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
-import type { HarnessDefaults, HarnessInfo } from '../types'
+import type { FetchFn, HarnessDefaults, HarnessInfo } from '../types'
 import { SourceFoldersEditor } from './SourceFoldersEditor'
 import { InberAgentsConfig } from './InberAgentsConfig'
 
@@ -74,6 +74,8 @@ export function BridgeSettings() {
   return (
     <div className="bset-container">
       <SourceFoldersEditor />
+
+      <PermissionsBypassToggle apiFetch={apiFetch} basePath={basePath} />
 
       <h2 className="bset-title">Harness Defaults</h2>
       <p className="bset-subtitle">Configure default settings for each harness type. These are applied when creating new sessions.</p>
@@ -159,6 +161,84 @@ export function BridgeSettings() {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// PermissionsBypassToggle is the global "skip permission MCP" switch. When
+// off (default), every Bash/tool call goes through bridge_perm →
+// permission-store rule engine. When on, new sessions launch with
+// --permission-mode bypassPermissions (CC never calls our MCP) and every
+// running harness has its MCP flipped into always-allow via a single
+// /bridge/bypass-permissions broadcast. Saved as bridge-prefs
+// .bypass_permissions; the dedicated endpoint takes care of both the
+// pref write and the live fan-out.
+function PermissionsBypassToggle({ apiFetch, basePath }: { apiFetch: FetchFn; basePath: string }) {
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [activeSessions, setActiveSessions] = useState<number | null>(null)
+
+  // Load current state on mount.
+  useEffect(() => {
+    let cancelled = false
+    apiFetch(`${basePath}/bridge-prefs`)
+      .then(r => r.ok ? r.json() : null)
+      .then((prefs: { bypass_permissions?: boolean } | null) => {
+        if (!cancelled && prefs) setEnabled(!!prefs.bypass_permissions)
+      })
+      .catch(() => { if (!cancelled) setEnabled(false) })
+    return () => { cancelled = true }
+  }, [apiFetch, basePath])
+
+  const toggle = useCallback(async () => {
+    if (enabled === null) return
+    setBusy(true)
+    setError(null)
+    const next = !enabled
+    try {
+      const res = await apiFetch(`${basePath}/bridge/bypass-permissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { active_sessions?: number; failures?: Record<string, string> }
+      setEnabled(next)
+      setActiveSessions(data.active_sessions ?? null)
+      const failures = Object.keys(data.failures ?? {})
+      if (failures.length > 0) {
+        setError(`broadcast partial: ${failures.length} session(s) failed`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [enabled, apiFetch, basePath])
+
+  if (enabled === null) {
+    return null // initial fetch in flight
+  }
+
+  return (
+    <div className="bset-bypass-card">
+      <h2 className="bset-title">Permissions</h2>
+      <div className="bset-bypass-row">
+        <label className="bset-bypass-toggle">
+          <input type="checkbox" checked={enabled} disabled={busy} onChange={toggle} />
+          <span><strong>Bypass permission MCP</strong> — skip all rules; every tool call auto-approves</span>
+        </label>
+      </div>
+      <p className="bset-subtitle">
+        {enabled
+          ? 'Bypass is ON. New sessions launch in bypassPermissions mode; running sessions have their MCP set to always-allow. Permission rules in /permissions are ignored until you turn this off.'
+          : 'Bypass is OFF. Every tool call routes through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.'}
+      </p>
+      {activeSessions !== null && (
+        <p className="bset-subtitle">Last broadcast reached {activeSessions} active session{activeSessions === 1 ? '' : 's'}.</p>
+      )}
+      {error && <p className="bset-error">{error}</p>}
     </div>
   )
 }

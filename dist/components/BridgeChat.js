@@ -206,10 +206,15 @@ export function BridgeChat() {
         // --permission-mode), so pass it via harness_config rather than the
         // post-create config endpoint. Bridge-server merges harness_config
         // into start params before the harness spawns.
-        // The frontend approval UI was ripped 2026-05-01 pending a redesign;
-        // until then sessions launch in bypassPermissions so the harness never
-        // parks on a prompt with no UI to resolve it.
-        const harnessConfig = { permission_mode: 'bypassPermissions' };
+        //
+        // bypass_permissions pref drives the choice: when on, sessions launch
+        // in bypassPermissions so CC never calls our MCP. When off, sessions
+        // launch in default mode and every tool call goes through bridge_perm
+        // → permission-store. Toggle lives on dash /settings.
+        const bypass = bridgePrefs.prefs.bypass_permissions ?? false;
+        const harnessConfig = {
+            permission_mode: bypass ? 'bypassPermissions' : 'default',
+        };
         const sess = await bridge.createSession({
             harness,
             instance_id: instanceId,

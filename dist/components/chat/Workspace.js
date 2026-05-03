@@ -10,10 +10,8 @@ import { StatusDot } from './StatusDot';
 import { SystemPromptModal } from './SystemPromptModal';
 import { ToolsPanel } from './ToolsPanel';
 import { WorkspaceProvider } from './WorkspaceContext';
-// Walk the pane layout to find the split node that contains `key` as a direct
-// leaf, and return all PaneKey leaves of that split. Hidden-pane toggles use
-// this to reset persisted sizes for the affected sibling group only — ratios
-// in other splits are preserved.
+// Returns the PaneKey leaves of the split that contains `key` as a direct child,
+// so togglePane can reset just that sibling group without disturbing other splits.
 function findPaneSplitGroup(node, key) {
     if (node.kind === 'leaf')
         return null;
