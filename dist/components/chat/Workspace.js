@@ -32,7 +32,7 @@ function findPaneSplitGroup(node, key) {
 }
 export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, instances, machines, storeModels, bridgePrefs }) {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
-    const { minimal, controlsSlot } = useMinimalChrome();
+    const { minimal, controlsSlot, mobilePane } = useMinimalChrome();
     const bridge = useBridgeSession();
     const [activeChat, setActiveChat] = useState(null);
     const [configModel, setConfigModel] = useState('');
@@ -282,7 +282,13 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     uiState: bridge.uiState,
                     activity: bridge.activity,
                     error: bridge.error,
-                    panesHidden: workspace.panesHidden,
+                    // In minimal (mobile) mode, force the per-workspace pane state to
+                    // show only the user's currently-selected mobilePane. The
+                    // workspace's persisted panesHidden/layout are left untouched —
+                    // the user keeps their split layout when they return to full mode.
+                    panesHidden: minimal
+                        ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git' }
+                        : workspace.panesHidden,
                     paneSizes: workspace.paneSizes,
                     togglePane,
                     setPaneSizes,
@@ -294,7 +300,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     refreshGitRepos,
                     pendingHooks: bridge.pendingHooks,
                     resolveHook: bridge.resolveHook,
-                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(LayoutRenderer, { tree: workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.bridge_id ?? null, connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.bridge_id ?? null, connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 function StatusChip({ uiState, activity, compacting }) {
     if (compacting) {

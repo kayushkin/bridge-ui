@@ -1,10 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { PaneKey } from '../chat/types'
 
 export type ChromeOverride = 'minimal' | 'full' | null
 
 const STORAGE_KEY = 'bridge-chrome-override'
+const PANE_KEY = 'bridge-mobile-pane'
 const MOBILE_BREAKPOINT = 640
+const VALID_PANES: readonly PaneKey[] = ['turns', 'thread', 'timeline', 'git']
+
+function loadMobilePane(): PaneKey {
+  if (typeof window === 'undefined') return 'turns'
+  const v = window.localStorage.getItem(PANE_KEY)
+  if (v && (VALID_PANES as readonly string[]).includes(v)) return v as PaneKey
+  return 'turns'
+}
+
+function saveMobilePane(pane: PaneKey) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(PANE_KEY, pane)
+}
 
 function loadOverride(): ChromeOverride {
   if (typeof window === 'undefined') return null
@@ -29,6 +44,8 @@ interface MinimalChromeValue {
   setSheetOpen: (v: boolean) => void
   controlsSlot: HTMLElement | null
   registerControlsSlot: (el: HTMLElement | null) => void
+  mobilePane: PaneKey
+  setMobilePane: (pane: PaneKey) => void
 }
 
 const MinimalChromeContext = createContext<MinimalChromeValue | null>(null)
@@ -46,6 +63,8 @@ export function useMinimalChrome(): MinimalChromeValue {
       setSheetOpen: () => {},
       controlsSlot: null,
       registerControlsSlot: () => {},
+      mobilePane: 'turns',
+      setMobilePane: () => {},
     }
   }
   return ctx
@@ -57,6 +76,7 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpenState] = useState(false)
   const [sheetOpen, setSheetOpenState] = useState(false)
   const [controlsSlot, setControlsSlot] = useState<HTMLElement | null>(null)
+  const [mobilePane, setMobilePaneState] = useState<PaneKey>(() => loadMobilePane())
   const slotRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -98,6 +118,10 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
 
   const setDrawerOpen = useCallback((v: boolean) => setDrawerOpenState(v), [])
   const setSheetOpen = useCallback((v: boolean) => setSheetOpenState(v), [])
+  const setMobilePane = useCallback((pane: PaneKey) => {
+    setMobilePaneState(pane)
+    saveMobilePane(pane)
+  }, [])
 
   const value = useMemo<MinimalChromeValue>(() => ({
     minimal,
@@ -109,7 +133,9 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
     setSheetOpen,
     controlsSlot,
     registerControlsSlot,
-  }), [minimal, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot])
+    mobilePane,
+    setMobilePane,
+  }), [minimal, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot, mobilePane, setMobilePane])
 
   return (
     <MinimalChromeContext.Provider value={value}>

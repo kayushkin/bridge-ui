@@ -11,6 +11,7 @@ import { Workspace } from './chat/Workspace'
 import { WorkspaceLayout } from './chat/WorkspaceLayout'
 import { useMinimalChrome } from './minimal/MinimalChromeContext'
 import { MinimalTopBar } from './minimal/MinimalTopBar'
+import { MinimalPaneSwitch } from './minimal/MinimalPaneSwitch'
 import { SessionDrawer } from './minimal/SessionDrawer'
 import { ChromeSheet } from './minimal/ChromeSheet'
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
@@ -319,6 +320,7 @@ export function BridgeChat() {
   return (
     <div className={`bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''} ${minimal ? 'bc-minimal' : ''}`}>
       {minimal && <MinimalTopBar title={minimalTitle} />}
+      {minimal && <MinimalPaneSwitch />}
       <div className="bc-main">
         {!minimal && (collapseState.sessionList ? (
           <button className="bc-sidebar-strip" onClick={toggleSessionList} title="Show sessions" aria-label="Show sessions">

@@ -3550,6 +3550,34 @@
   margin-top: 1px;
 }
 
+/* Pane switcher row — sits directly under the top pill, lets the user
+   swap between turns / thread / timeline / git without opening the sheet
+   or escaping minimal mode. ~32px tall. */
+.bc-mc-paneswitch {
+  display: flex;
+  gap: 0;
+  padding: 4px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.bc-mc-paneswitch-btn {
+  flex: 1;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.78em;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.bc-mc-paneswitch-btn-active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+.bc-mc-paneswitch-btn:active { background: var(--border); }
+
 /* In minimal mode the main flex collapses — sidebar is hidden, only
    workspaces remain. */
 .bc-minimal .bc-main { flex: 1; min-height: 0; flex-direction: column; }
