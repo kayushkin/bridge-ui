@@ -223,8 +223,8 @@ function PermissionsBypassToggle({ apiFetch, basePath }: { apiFetch: FetchFn; ba
       </div>
       <p className="bset-subtitle">
         {enabled
-          ? 'Bypass is ON. Every tool call auto-approves immediately. Permission rules in /permissions are ignored until you turn this off.'
-          : 'Bypass is OFF. Every tool call routes through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.'}
+          ? 'Bypass is ON. Every Claude Code tool call auto-approves immediately, and every Codex session launches with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored until you turn this off.'
+          : 'Bypass is OFF. Claude Code tool calls route through permission-store rules; Codex runs in its default sandbox. Manage rules at /permissions; pending prompts surface inline in chat.'}
       </p>
       {error && <p className="bset-error">{error}</p>}
     </div>
