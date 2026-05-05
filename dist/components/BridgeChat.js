@@ -206,25 +206,16 @@ export function BridgeChat() {
             return;
         const frontendId = generateFrontendId();
         const defaults = bridgePrefs.getDefaults(harness);
-        // permission_mode has to land on the harness at start (it maps to
-        // --permission-mode), so pass it via harness_config rather than the
-        // post-create config endpoint. Bridge-server merges harness_config
-        // into start params before the harness spawns.
-        //
-        // bypass_permissions pref drives the choice: when on, sessions launch
-        // in bypassPermissions so CC never calls our MCP. When off, sessions
-        // launch in default mode and every tool call goes through bridge_perm
-        // → permission-store. Toggle lives on dash /settings.
-        const bypass = bridgePrefs.prefs.bypass_permissions ?? false;
-        const harnessConfig = {
-            permission_mode: bypass ? 'bypassPermissions' : 'default',
-        };
+        // Permission gating runs as a PreToolUse HTTP hook injected by
+        // bridge-server (--settings → /permission/cc-prehook). The bypass
+        // pref is read on every prehook call, so no per-session
+        // permission_mode flag is needed — the harness always launches in
+        // bypassPermissions to disable CC's own gate.
         const sess = await bridge.createSession({
             harness,
             instance_id: instanceId,
             display_name: '',
             client_id: frontendId,
-            ...(Object.keys(harnessConfig).length ? { harness_config: harnessConfig } : {}),
         });
         if (!sess)
             return;

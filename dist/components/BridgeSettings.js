@@ -67,19 +67,16 @@ export function BridgeSettings() {
                                                 }) })] })), _jsxs("div", { className: "bset-caps-info", children: [_jsx("span", { className: "bset-caps-label", children: "Capabilities:" }), h.capabilities?.map(c => _jsx("span", { className: "bset-cap-badge", children: c }, c))] }), _jsx("button", { className: "bset-save-btn", onClick: () => saveDefaults(h.name), disabled: saving === h.name, children: saving === h.name ? 'Saved!' : 'Save Defaults' }), h.name === 'inber' && _jsx(InberAgentsConfig, {})] }))] }, h.name));
                 }) })] }));
 }
-// PermissionsBypassToggle is the global "skip permission MCP" switch. When
-// off (default), every Bash/tool call goes through bridge_perm →
-// permission-store rule engine. When on, new sessions launch with
-// --permission-mode bypassPermissions (CC never calls our MCP) and every
-// running harness has its MCP flipped into always-allow via a single
-// /bridge/bypass-permissions broadcast. Saved as bridge-prefs
-// .bypass_permissions; the dedicated endpoint takes care of both the
-// pref write and the live fan-out.
+// PermissionsBypassToggle is the global permission-bypass switch. When off
+// (default), every tool call routes through the PreToolUse hook to
+// permission-store's rule engine. When on, the prehook short-circuits to
+// allow without consulting permission-store. Saved as bridge-prefs
+// .bypass_permissions; bridge-server reads it on every prehook call so the
+// toggle takes effect immediately for every active and future session.
 function PermissionsBypassToggle({ apiFetch, basePath }) {
     const [enabled, setEnabled] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    const [activeSessions, setActiveSessions] = useState(null);
     // Load current state on mount.
     useEffect(() => {
         let cancelled = false;
@@ -107,13 +104,7 @@ function PermissionsBypassToggle({ apiFetch, basePath }) {
             });
             if (!res.ok)
                 throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
             setEnabled(next);
-            setActiveSessions(data.active_sessions ?? null);
-            const failures = Object.keys(data.failures ?? {});
-            if (failures.length > 0) {
-                setError(`broadcast partial: ${failures.length} session(s) failed`);
-            }
         }
         catch (err) {
             setError(err instanceof Error ? err.message : String(err));
@@ -125,8 +116,8 @@ function PermissionsBypassToggle({ apiFetch, basePath }) {
     if (enabled === null) {
         return null; // initial fetch in flight
     }
-    return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-bypass-toggle", children: [_jsx("input", { type: "checkbox", checked: enabled, disabled: busy, onChange: toggle }), _jsxs("span", { children: [_jsx("strong", { children: "Bypass permission MCP" }), " \u2014 skip all rules; every tool call auto-approves"] })] }) }), _jsx("p", { className: "bset-subtitle", children: enabled
-                    ? 'Bypass is ON. New sessions launch in bypassPermissions mode; running sessions have their MCP set to always-allow. Permission rules in /permissions are ignored until you turn this off.'
-                    : 'Bypass is OFF. Every tool call routes through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.' }), activeSessions !== null && (_jsxs("p", { className: "bset-subtitle", children: ["Last broadcast reached ", activeSessions, " active session", activeSessions === 1 ? '' : 's', "."] })), error && _jsx("p", { className: "bset-error", children: error })] }));
+    return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-bypass-toggle", children: [_jsx("input", { type: "checkbox", checked: enabled, disabled: busy, onChange: toggle }), _jsxs("span", { children: [_jsx("strong", { children: "Bypass permissions" }), " \u2014 skip all rules; every tool call auto-approves"] })] }) }), _jsx("p", { className: "bset-subtitle", children: enabled
+                    ? 'Bypass is ON. Every tool call auto-approves immediately. Permission rules in /permissions are ignored until you turn this off.'
+                    : 'Bypass is OFF. Every tool call routes through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.' }), error && _jsx("p", { className: "bset-error", children: error })] }));
 }
 //# sourceMappingURL=BridgeSettings.js.map
