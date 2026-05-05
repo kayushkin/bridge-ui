@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from '../context';
 import { useBridgeSession } from '../useBridgeSession';
@@ -9,6 +9,10 @@ import { useBridgeFolders } from '../useBridgeFolders';
 import { SessionList } from './chat/SessionList';
 import { Workspace } from './chat/Workspace';
 import { WorkspaceLayout } from './chat/WorkspaceLayout';
+import { useMinimalChrome } from './minimal/MinimalChromeContext';
+import { MinimalTopBar } from './minimal/MinimalTopBar';
+import { SessionDrawer } from './minimal/SessionDrawer';
+import { ChromeSheet } from './minimal/ChromeSheet';
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence';
 import { splitModeAxis } from './chat/types';
 import { generateFrontendId } from './chat/utils';
@@ -253,6 +257,17 @@ export function BridgeChat() {
         return ws?.sessionId ?? null;
     }, [workspaces, focusedWorkspaceId]);
     const defaultInstanceId = bridgePrefs.prefs.last_instance_id;
+    const { minimal, setDrawerOpen } = useMinimalChrome();
+    const focusedSession = useMemo(() => {
+        if (!focusedSessionId)
+            return null;
+        return bridge.sessions.find(s => s.bridge_id === focusedSessionId) ?? null;
+    }, [bridge.sessions, focusedSessionId]);
+    const minimalTitle = focusedSession ? getDisplayName(focusedSession) : '';
+    const handleSelectSessionMinimal = useCallback((id) => {
+        handleSelectSession(id);
+        setDrawerOpen(false);
+    }, [handleSelectSession, setDrawerOpen]);
     const renderLeaf = useCallback((workspaceId) => {
         const w = workspaces.find(ws => ws.id === workspaceId);
         if (!w)
@@ -263,7 +278,8 @@ export function BridgeChat() {
                 setLastSession: bridgePrefs.setLastSession,
             } }));
     }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace]);
-    return (_jsx("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`, children: _jsxs("div", { className: "bc-main", children: [collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: handleSelectSession, onOpenInSplit: handleOpenSessionInSplit, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, getSessionUIState: bridge.getSessionUIState, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList })), _jsx("div", { className: "bc-workspaces", children: !layout ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (_jsx(WorkspaceLayout, { node: layout, renderLeaf: renderLeaf, onResize: (path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev) })) })] }) }));
+    const sessionListEl = (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: minimal ? handleSelectSessionMinimal : handleSelectSession, onOpenInSplit: handleOpenSessionInSplit, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, getSessionUIState: bridge.getSessionUIState, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList }));
+    return (_jsxs("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''} ${minimal ? 'bc-minimal' : ''}`, children: [minimal && _jsx(MinimalTopBar, { title: minimalTitle }), _jsxs("div", { className: "bc-main", children: [!minimal && (collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : sessionListEl), _jsx("div", { className: "bc-workspaces", children: !layout ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (_jsx(WorkspaceLayout, { node: layout, renderLeaf: renderLeaf, onResize: (path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev) })) })] }), minimal && (_jsxs(_Fragment, { children: [_jsx(SessionDrawer, { children: sessionListEl }), _jsx(ChromeSheet, {})] }))] }));
 }
 function applySizes(node, path, sizes) {
     if (path.length === 0) {

@@ -33,4 +33,10 @@ export { BridgeFiles } from './components/BridgeFiles';
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
 // Shared status dot — used by header, sidebar, and composer status chip
 export { StatusDot } from './components/chat/StatusDot';
+// Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
+// `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
+// so consumers don't need to mount it manually. The body gets a
+// `bridge-minimal-chrome` class while minimal mode is active — host apps
+// (dash, llmux) can use it to hide their own site chrome via plain CSS.
+export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 //# sourceMappingURL=index.js.map

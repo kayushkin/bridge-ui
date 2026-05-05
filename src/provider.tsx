@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useMemo } from 'react'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES, type BridgeConfig, type BridgeRoutes } from './context'
 import type { FetchFn } from './types'
+import { MinimalChromeProvider } from './components/minimal/MinimalChromeContext'
 
 interface BridgeProviderProps {
   /** Auth'd fetch function */
@@ -37,5 +38,9 @@ export function BridgeProvider({
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
   }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, routes])
 
-  return <BridgeContext value={config}>{children}</BridgeContext>
+  return (
+    <BridgeContext value={config}>
+      <MinimalChromeProvider>{children}</MinimalChromeProvider>
+    </BridgeContext>
+  )
 }

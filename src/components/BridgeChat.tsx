@@ -9,6 +9,10 @@ import type { HarnessInfo } from '../types'
 import { SessionList } from './chat/SessionList'
 import { Workspace } from './chat/Workspace'
 import { WorkspaceLayout } from './chat/WorkspaceLayout'
+import { useMinimalChrome } from './minimal/MinimalChromeContext'
+import { MinimalTopBar } from './minimal/MinimalTopBar'
+import { SessionDrawer } from './minimal/SessionDrawer'
+import { ChromeSheet } from './minimal/ChromeSheet'
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
 import type { CollapseState, InnerNode, PaneSizes, PanesHidden, SplitMode, StoreModel, WorkspaceLayoutNode, WorkspaceState } from './chat/types'
 import { splitModeAxis } from './chat/types'
@@ -260,6 +264,20 @@ export function BridgeChat() {
 
   const defaultInstanceId = bridgePrefs.prefs.last_instance_id
 
+  const { minimal, setDrawerOpen } = useMinimalChrome()
+
+  const focusedSession = useMemo(() => {
+    if (!focusedSessionId) return null
+    return bridge.sessions.find(s => s.bridge_id === focusedSessionId) ?? null
+  }, [bridge.sessions, focusedSessionId])
+
+  const minimalTitle = focusedSession ? getDisplayName(focusedSession) : ''
+
+  const handleSelectSessionMinimal = useCallback((id: string) => {
+    handleSelectSession(id)
+    setDrawerOpen(false)
+  }, [handleSelectSession, setDrawerOpen])
+
   const renderLeaf = useCallback((workspaceId: string) => {
     const w = workspaces.find(ws => ws.id === workspaceId)
     if (!w) return null
@@ -283,37 +301,40 @@ export function BridgeChat() {
     )
   }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace])
 
+  const sessionListEl = (
+    <SessionList
+      sessions={bridge.sessions}
+      instances={instances.instances}
+      machines={machines.machines}
+      harnesses={harnesses}
+      basePath={basePath}
+      instancesPath={routes.instances}
+      defaultInstanceId={defaultInstanceId}
+      openSessionIds={openSessionIds}
+      focusedSessionId={focusedSessionId}
+      onSelect={minimal ? handleSelectSessionMinimal : handleSelectSession}
+      onOpenInSplit={handleOpenSessionInSplit}
+      onNewSession={handleCreateForInstance}
+      connected={bridge.connected}
+      getDisplayName={getDisplayName}
+      getSessionUIState={bridge.getSessionUIState}
+      onRename={handleRenameSession}
+      folders={folders}
+      onAfterFolderChange={bridge.refreshSessions}
+      onToggleCollapse={toggleSessionList}
+    />
+  )
+
   return (
-    <div className={`bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''}`}>
+    <div className={`bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''} ${minimal ? 'bc-minimal' : ''}`}>
+      {minimal && <MinimalTopBar title={minimalTitle} />}
       <div className="bc-main">
-        {collapseState.sessionList ? (
+        {!minimal && (collapseState.sessionList ? (
           <button className="bc-sidebar-strip" onClick={toggleSessionList} title="Show sessions" aria-label="Show sessions">
             <span className="bc-sidebar-strip-chevron">▸</span>
             <span className="bc-sidebar-strip-label">Sessions</span>
           </button>
-        ) : (
-          <SessionList
-            sessions={bridge.sessions}
-            instances={instances.instances}
-            machines={machines.machines}
-            harnesses={harnesses}
-            basePath={basePath}
-            instancesPath={routes.instances}
-            defaultInstanceId={defaultInstanceId}
-            openSessionIds={openSessionIds}
-            focusedSessionId={focusedSessionId}
-            onSelect={handleSelectSession}
-            onOpenInSplit={handleOpenSessionInSplit}
-            onNewSession={handleCreateForInstance}
-            connected={bridge.connected}
-            getDisplayName={getDisplayName}
-            getSessionUIState={bridge.getSessionUIState}
-            onRename={handleRenameSession}
-            folders={folders}
-            onAfterFolderChange={bridge.refreshSessions}
-            onToggleCollapse={toggleSessionList}
-          />
-        )}
+        ) : sessionListEl)}
         <div className="bc-workspaces">
           {!layout ? (
             <div className="bc-workspaces-empty">
@@ -330,6 +351,12 @@ export function BridgeChat() {
           )}
         </div>
       </div>
+      {minimal && (
+        <>
+          <SessionDrawer>{sessionListEl}</SessionDrawer>
+          <ChromeSheet />
+        </>
+      )}
     </div>
   )
 }

@@ -33,4 +33,6 @@ export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from
 export type { ToolRendererProps } from './components/tools';
 export { StatusDot } from './components/chat/StatusDot';
 export type { StatusDotState } from './components/chat/StatusDot';
+export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
+export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
 //# sourceMappingURL=index.d.ts.map

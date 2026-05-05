@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
+import { useMinimalChrome } from './minimal/MinimalChromeContext'
 
 interface BridgeLayoutProps {
   /** If true, include the Conformance tab. Default: true. */
@@ -8,6 +9,7 @@ interface BridgeLayoutProps {
 
 export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
   const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath } = useBridgeConfig()
+  const { minimal } = useMinimalChrome()
   const tabs = [
     { to: routes.chat, label: 'Chat', end: true },
     { to: routes.instances, label: 'Instances', end: false },
@@ -24,8 +26,8 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
   ]
 
   return (
-    <div className="bridge-layout">
-      <nav className="bridge-nav">
+    <div className={`bridge-layout ${minimal ? 'bridge-layout-minimal' : ''}`}>
+      {!minimal && <nav className="bridge-nav">
         {tabs.map(t => (
           <NavLink
             key={t.to}
@@ -38,7 +40,7 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
             {t.label}
           </NavLink>
         ))}
-      </nav>
+      </nav>}
       <div className="bridge-content">
         <Outlet />
       </div>

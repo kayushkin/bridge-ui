@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types'
 import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
@@ -11,6 +12,7 @@ import { StatusDot } from './StatusDot'
 import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
 import { WorkspaceProvider } from './WorkspaceContext'
+import { useMinimalChrome } from '../minimal/MinimalChromeContext'
 import type { GitRepo } from './WorkspaceContext'
 import type { ChatSession, InnerNode, PaneKey, PaneSizes, StoreModel, WorkspaceState } from './types'
 
@@ -48,6 +50,7 @@ interface WorkspaceProps {
 
 export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps) {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
+  const { minimal, controlsSlot } = useMinimalChrome()
   const bridge = useBridgeSession()
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null)
   const [configModel, setConfigModel] = useState('')
@@ -277,13 +280,81 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     if (activeChat?.sessionId) bridge.renameSession(activeChat.sessionId, name)
   }, [bridge, activeChat])
 
+  const controlsBar = (
+    <div className="bc-controls-bar">
+      {bridge.activeSession && (
+        <>
+          <StatusChip uiState={bridge.uiState} activity={bridge.activity} compacting={bridge.compacting} />
+          {capabilities.has('model') && harnessModels.length > 0 && (
+            <select className="bc-ctrl-select" value={configModel} onChange={e => setConfigModel(e.target.value)} title="Model">
+              <option value="">Model</option>
+              {harnessModels.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          )}
+          {capabilities.has('effort') && (
+            <select className="bc-ctrl-select" value={configEffort} onChange={e => setConfigEffort(e.target.value)} title="Effort">
+              <option value="">Effort</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="xhigh">XHigh</option>
+              <option value="max">Max</option>
+            </select>
+          )}
+          {capabilities.has('compact') && (
+            <button
+              className={`bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`}
+              onClick={handleCompact}
+              title={contextInfo.tokens && contextInfo.limit
+                ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
+                : 'Compact context'}
+              style={{ ['--ctx-pct' as string]: `${contextInfo.pct}%` }}
+            >
+              <span className="bc-ctrl-btn-bar" aria-hidden />
+              <span className="bc-ctrl-btn-text">Compact{contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''}</span>
+            </button>
+          )}
+          {capabilities.has('fork') && (
+            <button className="bc-ctrl-btn" onClick={handleFork} title="Fork session">Fork</button>
+          )}
+          {capabilities.has('system_prompt') && (
+            <button
+              className="bc-ctrl-btn"
+              onClick={() => setShowSystemPrompt(true)}
+              disabled={!bridge.activeSession.info}
+              title={bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts'}
+            >System Prompt</button>
+          )}
+          {capabilities.has('tools') && (
+            <button
+              className={`bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`}
+              onClick={() => setShowTools(s => !s)}
+              disabled={!bridge.activeSession.info}
+              title={bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts'}
+            >Tools{bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''}</button>
+          )}
+        </>
+      )}
+    </div>
+  )
+
+  // In minimal mode, the focused workspace's controls go into the bottom
+  // sheet via a portal. Non-focused workspaces hide their controls
+  // entirely on mobile (only the focused one is reachable). In normal
+  // mode every workspace renders its controls inline.
+  const renderControls = (() => {
+    if (!minimal) return controlsBar
+    if (focused && controlsSlot) return createPortal(controlsBar, controlsSlot)
+    return null
+  })()
+
   return (
     <div
-      className={`bc-workspace${focused ? ' bc-workspace-focused' : ''}`}
+      className={`bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`}
       onMouseDownCapture={onFocus}
       onFocusCapture={onFocus}
     >
-      <SessionHeader
+      {!minimal && <SessionHeader
         chat={activeChat}
         session={bridge.activeSession}
         harnessInfo={activeHarnessInfo}
@@ -306,7 +377,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         gitRepos={gitRepos}
         selectedRepo={selectedRepo}
         onSelectRepo={setSelectedRepo}
-      />
+      />}
       <WorkspaceProvider value={{
         chat: activeChat,
         rows: bridge.logRows,
@@ -330,61 +401,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         <PendingPermissionsBanner />
         <LayoutRenderer tree={workspace.layout} />
       </WorkspaceProvider>
-      <div className="bc-controls-bar">
-        {bridge.activeSession && (
-          <>
-            <StatusChip uiState={bridge.uiState} activity={bridge.activity} compacting={bridge.compacting} />
-            {capabilities.has('model') && harnessModels.length > 0 && (
-              <select className="bc-ctrl-select" value={configModel} onChange={e => setConfigModel(e.target.value)} title="Model">
-                <option value="">Model</option>
-                {harnessModels.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-            )}
-            {capabilities.has('effort') && (
-              <select className="bc-ctrl-select" value={configEffort} onChange={e => setConfigEffort(e.target.value)} title="Effort">
-                <option value="">Effort</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="xhigh">XHigh</option>
-                <option value="max">Max</option>
-              </select>
-            )}
-            {capabilities.has('compact') && (
-              <button
-                className={`bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`}
-                onClick={handleCompact}
-                title={contextInfo.tokens && contextInfo.limit
-                  ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
-                  : 'Compact context'}
-                style={{ ['--ctx-pct' as string]: `${contextInfo.pct}%` }}
-              >
-                <span className="bc-ctrl-btn-bar" aria-hidden />
-                <span className="bc-ctrl-btn-text">Compact{contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''}</span>
-              </button>
-            )}
-            {capabilities.has('fork') && (
-              <button className="bc-ctrl-btn" onClick={handleFork} title="Fork session">Fork</button>
-            )}
-            {capabilities.has('system_prompt') && (
-              <button
-                className="bc-ctrl-btn"
-                onClick={() => setShowSystemPrompt(true)}
-                disabled={!bridge.activeSession.info}
-                title={bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts'}
-              >System Prompt</button>
-            )}
-            {capabilities.has('tools') && (
-              <button
-                className={`bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`}
-                onClick={() => setShowTools(s => !s)}
-                disabled={!bridge.activeSession.info}
-                title={bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts'}
-              >Tools{bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''}</button>
-            )}
-          </>
-        )}
-      </div>
+      {renderControls}
       {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
       <Composer
         sessionId={bridge.activeSession?.bridge_id ?? null}

@@ -1,0 +1,1 @@
+{"version":3,"file":"StatusDot.js","sourceRoot":"","sources":["../../../src/components/chat/StatusDot.tsx"],"names":[],"mappings":";AAIA,MAAM,UAAU,SAAS,CAAC,EAAE,KAAK,EAAE,KAAK,EAAE,SAAS,EAIlD;IACC,OAAO,CACL,eACE,SAAS,EAAE,+BAA+B,KAAK,GAAG,SAAS,CAAC,CAAC,CAAC,IAAI,SAAS,EAAE,CAAC,CAAC,CAAC,EAAE,EAAE,EACpF,KAAK,EAAE,KAAK,gBACA,KAAK,GACjB,CACH,CAAA;AACH,CAAC"}

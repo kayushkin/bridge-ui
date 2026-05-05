@@ -1,0 +1,1 @@
+{"version":3,"file":"useBridgeMachines.d.ts","sourceRoot":"","sources":["../src/useBridgeMachines.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,OAAO,EAAE,oBAAoB,EAAE,oBAAoB,EAAE,MAAM,SAAS,CAAA;AAKlF,wBAAgB,iBAAiB;;;;;0BAqChB,oBAAoB,KAAG,OAAO,CAAC,OAAO,GAAG,IAAI,CAAC;wBAmBhD,MAAM,QAAQ,oBAAoB,KAAG,OAAO,CAAC,OAAO,CAAC;wBAoBrD,MAAM,KAAG,OAAO,CAAC,OAAO,CAAC;;EAkCvC"}
