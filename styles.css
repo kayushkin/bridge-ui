@@ -3777,3 +3777,23 @@
 }
 .bc-mc-close:hover { background: var(--border); color: var(--text); }
 
+/* Re-engage pill — only visible when the user has overridden to "full"
+   on a viewport that would otherwise auto-engage minimal mode. Lets
+   them flip back without digging into localStorage. */
+.bc-mc-reengage {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  background: var(--accent);
+  color: var(--accent-on, #fff);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 0.85em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.bc-mc-reengage:hover { filter: brightness(1.1); }
+

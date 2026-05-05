@@ -256,7 +256,15 @@ export function BridgeChat() {
 
   const defaultInstanceId = bridgePrefs.prefs.last_instance_id
 
-  const { minimal, setDrawerOpen } = useMinimalChrome()
+  const { minimal, setDrawerOpen, override, setOverride } = useMinimalChrome()
+  const [vw, setVw] = useState<number>(() => typeof window === 'undefined' ? 1024 : window.innerWidth)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onResize = () => setVw(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const showReengage = !minimal && override === 'full' && vw < 640
 
   const focusedSession = useMemo(() => {
     if (!focusedSessionId) return null
@@ -349,6 +357,14 @@ export function BridgeChat() {
           <SessionDrawer>{sessionListEl}</SessionDrawer>
           <ChromeSheet />
         </>
+      )}
+      {showReengage && (
+        <button
+          type="button"
+          className="bc-mc-reengage"
+          onClick={() => setOverride(null)}
+          aria-label="Switch to mobile layout"
+        >Use mobile layout</button>
       )}
     </div>
   )

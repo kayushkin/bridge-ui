@@ -249,7 +249,16 @@ export function BridgeChat() {
         return ws?.sessionId ?? null;
     }, [workspaces, focusedWorkspaceId]);
     const defaultInstanceId = bridgePrefs.prefs.last_instance_id;
-    const { minimal, setDrawerOpen } = useMinimalChrome();
+    const { minimal, setDrawerOpen, override, setOverride } = useMinimalChrome();
+    const [vw, setVw] = useState(() => typeof window === 'undefined' ? 1024 : window.innerWidth);
+    useEffect(() => {
+        if (typeof window === 'undefined')
+            return;
+        const onResize = () => setVw(window.innerWidth);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+    const showReengage = !minimal && override === 'full' && vw < 640;
     const focusedSession = useMemo(() => {
         if (!focusedSessionId)
             return null;
@@ -271,7 +280,7 @@ export function BridgeChat() {
             } }));
     }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace]);
     const sessionListEl = (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: minimal ? handleSelectSessionMinimal : handleSelectSession, onOpenInSplit: handleOpenSessionInSplit, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, getSessionUIState: bridge.getSessionUIState, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList }));
-    return (_jsxs("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''} ${minimal ? 'bc-minimal' : ''}`, children: [minimal && _jsx(MinimalTopBar, { title: minimalTitle }), minimal && _jsx(MinimalPaneSwitch, {}), _jsxs("div", { className: "bc-main", children: [!minimal && (collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : sessionListEl), _jsx("div", { className: "bc-workspaces", children: !layout ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (_jsx(WorkspaceLayout, { node: layout, renderLeaf: renderLeaf, onResize: (path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev) })) })] }), minimal && (_jsxs(_Fragment, { children: [_jsx(SessionDrawer, { children: sessionListEl }), _jsx(ChromeSheet, {})] }))] }));
+    return (_jsxs("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''} ${minimal ? 'bc-minimal' : ''}`, children: [minimal && _jsx(MinimalTopBar, { title: minimalTitle }), minimal && _jsx(MinimalPaneSwitch, {}), _jsxs("div", { className: "bc-main", children: [!minimal && (collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : sessionListEl), _jsx("div", { className: "bc-workspaces", children: !layout ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (_jsx(WorkspaceLayout, { node: layout, renderLeaf: renderLeaf, onResize: (path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev) })) })] }), minimal && (_jsxs(_Fragment, { children: [_jsx(SessionDrawer, { children: sessionListEl }), _jsx(ChromeSheet, {})] })), showReengage && (_jsx("button", { type: "button", className: "bc-mc-reengage", onClick: () => setOverride(null), "aria-label": "Switch to mobile layout", children: "Use mobile layout" }))] }));
 }
 function applySizes(node, path, sizes) {
     if (path.length === 0) {
