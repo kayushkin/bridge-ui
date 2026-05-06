@@ -316,9 +316,19 @@ function saveInterruptedIds(s: Set<string>) {
 }
 
 function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>): SessionUIState {
-  if (session.state === 'running') return 'running'
-  if (session.state === 'idle' && interrupted.has(session.bridge_id)) return 'paused'
-  if (session.state === 'idle') return 'idle'
+  // Local interrupt override: until manager-side SessionPaused emission
+  // lands, the only signal that the user hit the pause button is the
+  // client-side interrupted Set. Honor it for any non-terminal state.
+  if (interrupted.has(session.bridge_id)) {
+    const s = session.state
+    if (s === 'idle' || s === 'tool_running' || s === 'model_generating' || s === 'running') {
+      return 'paused'
+    }
+  }
+  // Map deprecated values written by sessions on the old vocabulary.
+  if (session.state === 'running') return 'tool_running'
+  if (session.state === 'waiting_on_approval') return 'awaiting_permission'
+  // Pass through every other value verbatim — server is authoritative.
   return session.state as SessionUIState
 }
 

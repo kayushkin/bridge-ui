@@ -365,23 +365,138 @@
  * Wraps as a single unit so the close button never gets orphaned off-screen
  * when the header is narrow (e.g. multiple workspaces open side-by-side). */
 .bc-header-right { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
-/* Unified status dot — used in header (compact) and as a glyph in the composer status row */
+/* Unified status dot — keyed on the canonical msg.SessionState (13 values
+   plus 'empty' / 'placeholder' UI-only). Default is an 8px disc; states
+   with a glyph grow to 14px and render the glyph centered via ::before.
+   Colors group by operator-action category (active=green, action-required=
+   red/amber, terminal=red/grey, self-healing-wait=blue), animations signal
+   "something is happening right now". */
 .bc-status-dot {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #555;
-  display: inline-block;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; line-height: 1; font-weight: 700;
 }
+
+/* --- Quiet --- */
 .bc-status-dot-idle { background: #60a5fa; }
-.bc-status-dot-running { background: #22c55e; animation: bc-pulse-anim 1.5s ease-in-out infinite; }
-.bc-status-dot-paused { background: #f59e0b; }
-.bc-status-dot-completed { background: #888; }
-.bc-status-dot-error, .bc-status-dot-aborted { background: #ef4444; }
+.bc-status-dot-empty,
 .bc-status-dot-placeholder { background: var(--border); }
+
+/* --- Pre-flight --- */
+.bc-status-dot-starting {
+  background: #f59e0b;
+  animation: bc-pulse-anim 1.5s ease-in-out infinite;
+}
+
+/* --- Active (agent is working) --- */
+.bc-status-dot-running,            /* deprecated; render like tool_running */
+.bc-status-dot-tool_running {
+  width: 14px; height: 14px;
+  background: #22c55e;
+  font-size: 11px;
+  animation: bc-spin-anim 2.4s linear infinite;
+}
+.bc-status-dot-running::before,
+.bc-status-dot-tool_running::before { content: '\2699'; color: #0a0f1a; }
+
+/* model_generating renders three staggered dots (typing-indicator wave). */
+.bc-status-dot-model_generating {
+  width: 22px; height: 8px; border-radius: 6px;
+  background: transparent;
+  justify-content: space-between;
+  padding: 0 1px;
+}
+.bc-status-dot-blip {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #22c55e;
+  animation: bc-typing-anim 1.2s ease-in-out infinite;
+}
+.bc-status-dot-model_generating .bc-status-dot-blip:nth-child(1) { animation-delay: 0s; }
+.bc-status-dot-model_generating .bc-status-dot-blip:nth-child(2) { animation-delay: 0.2s; }
+.bc-status-dot-model_generating .bc-status-dot-blip:nth-child(3) { animation-delay: 0.4s; }
+
+/* compacting: vertical bar that squishes — visualizes context compression. */
+.bc-status-dot-compacting {
+  width: 6px; height: 14px; border-radius: 2px;
+  background: #a78bfa;
+  animation: bc-compact-anim 1.4s ease-in-out infinite;
+}
+
+/* --- Blocked on user (action required) --- */
+.bc-status-dot-awaiting_permission {
+  width: 14px; height: 14px;
+  background: #ef4444;
+  font-size: 10px;
+  animation: bc-pulse-anim 1.0s ease-in-out infinite;
+}
+.bc-status-dot-awaiting_permission::before { content: '!'; color: #fff; }
+
+.bc-status-dot-awaiting_user,
+.bc-status-dot-waiting_on_approval {        /* deprecated; render like awaiting_permission */
+  width: 14px; height: 14px;
+  background: #f59e0b;
+  font-size: 10px;
+  animation: bc-pulse-anim 2.0s ease-in-out infinite;
+}
+.bc-status-dot-awaiting_user::before,
+.bc-status-dot-waiting_on_approval::before { content: '?'; color: #1a1208; }
+
+/* --- Self-healing wait --- */
+.bc-status-dot-rate_limited {
+  width: 14px; height: 14px;
+  background: #60a5fa;
+  font-size: 11px;
+}
+.bc-status-dot-rate_limited::before { content: '\29D7'; color: #0a1422; }  /* hourglass ⧗ */
+
+.bc-status-dot-paused {
+  width: 14px; height: 14px;
+  background: #f59e0b;
+  font-size: 9px;
+}
+.bc-status-dot-paused::before { content: '\23F8'; color: #1a1208; }  /* pause ⏸ */
+
+/* --- Terminal --- */
+.bc-status-dot-completed {
+  width: 14px; height: 14px;
+  background: #888;
+  font-size: 10px;
+}
+.bc-status-dot-completed::before { content: '\2713'; color: #0f1419; }  /* check ✓ */
+
+.bc-status-dot-error {
+  width: 14px; height: 14px;
+  background: #ef4444;
+  font-size: 10px;
+}
+.bc-status-dot-error::before { content: '\2715'; color: #fff; }  /* x ✕ */
+
+.bc-status-dot-aborted {
+  width: 12px; height: 12px;
+  background: #888;
+  border-radius: 2px;
+}
+
+.bc-status-dot-disconnected {
+  width: 12px; height: 12px;
+  background: transparent;
+  border: 2px solid #888;
+}
 .bc-pulse {
   width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
   animation: bc-pulse-anim 1.5s ease-in-out infinite;
   display: inline-block;
 }
 @keyframes bc-pulse-anim { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes bc-spin-anim { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes bc-typing-anim {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1px); }
+}
+@keyframes bc-compact-anim {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.4); }
+}
 .bc-session-name-empty { color: var(--text-dim); font-style: italic; }
 .bc-session-name { font-weight: 500; color: var(--text); }
 .bc-spacer { flex: 1; }
@@ -1353,7 +1468,7 @@
 .bc-status-chip-error .bc-status-chip-label,
 .bc-status-chip-aborted .bc-status-chip-label { color: #ef4444; }
 .bc-status-chip-compacting .bc-status-chip-label { color: #a78bfa; }
-.bc-status-dot-compacting { background: #a78bfa; animation: bc-pulse-anim 1.5s ease-in-out infinite; }
+/* compacting dot styling lives in the unified block above. */
 
 /* ===== BridgeInstances ===== */
 .bi-container { max-width: 1000px; }
@@ -2672,13 +2787,22 @@
   border-radius: 999px;
   font-weight: 600;
 }
-.bc-status-dot { width: 8px; height: 8px; }
-.bc-status-dot-running {
+/* Glass-theme halos on the dots that should glow against the translucent
+   sidebar. Sized states (with glyphs) keep their 14px from the unified
+   block above — this just adds the colored halo. */
+.bc-status-dot-running,
+.bc-status-dot-tool_running,
+.bc-status-dot-model_generating .bc-status-dot-blip {
   box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 22%, transparent),
               0 0 12px color-mix(in srgb, #22c55e 70%, transparent);
 }
 .bc-status-dot-idle  { box-shadow: 0 0 10px color-mix(in srgb, #60a5fa 60%, transparent); }
-.bc-status-dot-paused { box-shadow: 0 0 10px color-mix(in srgb, #f59e0b 60%, transparent); }
+.bc-status-dot-paused,
+.bc-status-dot-awaiting_user { box-shadow: 0 0 10px color-mix(in srgb, #f59e0b 60%, transparent); }
+.bc-status-dot-awaiting_permission { box-shadow: 0 0 14px color-mix(in srgb, #ef4444 70%, transparent); }
+.bc-status-dot-error { box-shadow: 0 0 10px color-mix(in srgb, #ef4444 50%, transparent); }
+.bc-status-dot-rate_limited { box-shadow: 0 0 10px color-mix(in srgb, #60a5fa 50%, transparent); }
+.bc-status-dot-compacting { box-shadow: 0 0 10px color-mix(in srgb, #a78bfa 60%, transparent); }
 
 /* Workspaces become floating glass cards */
 .bc-workspaces { gap: 14px; }

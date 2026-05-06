@@ -66,7 +66,7 @@ export interface LogRow {
     events: Array<Record<string, unknown>>;
     done?: boolean;
 }
-export type SessionUIState = 'empty' | 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'aborted';
+export type SessionUIState = 'empty' | 'placeholder' | 'starting' | 'model_generating' | 'tool_running' | 'compacting' | 'awaiting_permission' | 'awaiting_user' | 'rate_limited' | 'paused' | 'idle' | 'completed' | 'error' | 'aborted' | 'disconnected' | 'running' | 'waiting_on_approval';
 export type ActivityKind = {
     kind: 'idle';
 } | {

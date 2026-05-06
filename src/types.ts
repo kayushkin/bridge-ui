@@ -183,7 +183,37 @@ export interface LogRow {
   done?: boolean              // terminal row (result, error, user_message)
 }
 
-export type SessionUIState = 'empty' | 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'aborted'
+// SessionUIState mirrors the canonical msg.SessionState enum from llm-bridge,
+// with two UI-only additions: 'empty' (no session selected) and 'placeholder'
+// (skeleton row). The deprecated 'running' is still accepted for back-compat
+// with sessions whose row was last written by the pre-2026-05-06 schema, and
+// gets projected to 'tool_running' at render time.
+export type SessionUIState =
+  | 'empty'
+  | 'placeholder'
+  // Pre-flight.
+  | 'starting'
+  // Active.
+  | 'model_generating'
+  | 'tool_running'
+  | 'compacting'
+  // Blocked on user.
+  | 'awaiting_permission'
+  | 'awaiting_user'
+  // Self-healing wait.
+  | 'rate_limited'
+  | 'paused'
+  // Quiet.
+  | 'idle'
+  // Terminal.
+  | 'completed'
+  | 'error'
+  | 'aborted'
+  | 'disconnected'
+  // Deprecated — still emitted by sessions on the old vocabulary; rendered
+  // as 'tool_running'/'awaiting_permission' until the row gets rewritten.
+  | 'running'
+  | 'waiting_on_approval'
 
 export type ActivityKind =
   | { kind: 'idle' }

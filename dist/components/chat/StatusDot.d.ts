@@ -1,5 +1,5 @@
 import type { SessionUIState } from '../../types';
-export type StatusDotState = SessionUIState | 'placeholder' | 'compacting' | (string & {});
+export type StatusDotState = SessionUIState | (string & {});
 export declare function StatusDot({ state, title, className }: {
     state: StatusDotState;
     title?: string;
