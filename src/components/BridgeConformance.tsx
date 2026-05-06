@@ -4,46 +4,72 @@ import { useBridgeConfig } from '../context'
 import type { HarnessInfo } from '../types'
 import type { ConformanceMatrix, ConformanceHarnessResult, ConformanceTestResult } from '@kayushkin/llm-bridge-types'
 
-const ALL_FEATURES = [
-  'start', 'message', 'resume', 'fork', 'compact', 'config',
-  'discover', 'import', 'streaming', 'tool_calls', 'thinking', 'errors',
-  'reasoning', 'system_prompt', 'context_used',
+// Feature groups mirror the categories in
+// ~/repos/llm-bridge-server/conformance/matrix.go's AllFeatures slice.
+// Each feature names the EventType(s) (or control-plane operation) it
+// exercises so the matrix doubles as documentation of which message types
+// in the protocol are covered, and which harnesses send them.
+const FEATURE_GROUPS: { label: string; features: string[] }[] = [
+  { label: 'Lifecycle', features: ['start', 'resume', 'fork', 'compact', 'config', 'discover', 'import'] },
+  { label: 'Message round-trip', features: ['message', 'streaming'] },
+  { label: 'Content blocks', features: ['block', 'tool_calls', 'thinking', 'plan'] },
+  { label: 'Session metadata', features: ['session_info', 'user_message', 'context_used', 'system_prompt', 'reasoning'] },
+  { label: 'Hooks / errors', features: ['hook', 'errors'] },
+  { label: 'Convenience (server-derived)', features: ['usage_total', 'turn_complete'] },
 ]
+
+const ALL_FEATURES = FEATURE_GROUPS.flatMap(g => g.features)
 
 const FEATURE_LABELS: Record<string, string> = {
   start: 'Start',
-  message: 'Message',
   resume: 'Resume',
   fork: 'Fork',
   compact: 'Compact',
   config: 'Config',
   discover: 'Discover',
   import: 'Import',
+  message: 'Message',
   streaming: 'Streaming',
+  block: 'Block',
   tool_calls: 'Tool Calls',
   thinking: 'Thinking',
-  errors: 'Errors',
-  reasoning: 'Reasoning',
-  system_prompt: 'System Prompt',
+  plan: 'Plan',
+  session_info: 'Session Info',
+  user_message: 'User Message',
   context_used: 'Context Used',
+  system_prompt: 'System Prompt',
+  reasoning: 'Reasoning',
+  hook: 'Hook',
+  errors: 'Errors',
+  usage_total: 'Usage Total',
+  turn_complete: 'Turn Complete',
 }
 
+// Each description names the canonical EventType(s) the feature exercises so
+// the matrix ties every test to the message it asserts on.
 const FEATURE_DESCRIPTIONS: Record<string, string> = {
-  start: 'Start a new session. Sends the "start" JSON-RPC command and expects an EventSessionState with state=running.',
-  message: 'Send a user message and receive a non-empty text result (EventResult).',
-  resume: 'Resume a previously saved session by ID. Sends "start" with resume=true and expects a running session.',
-  fork: 'Branch a new session from an existing one. Sends "start" with a fork param and expects a running session.',
-  compact: 'Ask the harness to compact conversation history (summarize earlier turns). Expects an EventSystem response.',
-  config: 'Apply runtime config (e.g. model, temperature) mid-session. Sends "config:<json>" and expects EventSystem.',
-  discover: 'Run the harness binary with -discover and verify it prints a valid JSON array describing its capabilities.',
-  import: 'Check that the binary supports -import-history for importing prior conversation history (exit code 2 = unsupported).',
-  streaming: 'Verify incremental EventStream events arrive before the final EventResult, not just a single blob.',
-  tool_calls: 'Model-emitted tool calls are executed and their results fed back into the conversation.',
-  thinking: 'Extended-thinking / reasoning blocks are emitted as distinct events, separate from the final answer.',
-  errors: 'Errors surface as EventError events rather than crashes or silent failures. Verified via MOCK_HARNESS_EMIT_ERROR=true.',
-  reasoning: 'Harness accepts a reasoning-effort config and passes it through to the model.',
-  system_prompt: 'Harness accepts a system_prompt param on session start and applies it to the conversation.',
-  context_used: 'Result events include token usage fields (input/output/context window).',
+  start: 'EventSessionState — start a new session. Sends the "start" JSON-RPC command and expects EventSessionState with state=running.',
+  resume: 'EventSessionState — resume a previously saved session by ID. Sends "start" with resume=true and expects a running session.',
+  fork: 'EventSessionState — branch a new session from an existing one. Sends "start" with a fork param and expects a running session.',
+  compact: 'EventSystem — ask the harness to compact conversation history. Expects an EventSystem response.',
+  config: 'EventSystem — apply runtime config (e.g. model, temperature) mid-session via "config:<json>". Expects EventSystem.',
+  discover: 'Out-of-band: runs the harness binary with -discover and verifies it prints a valid JSON array of on-disk sessions. Not part of the EventType protocol.',
+  import: 'Out-of-band: checks that the binary supports -import-history (exit code 2 = unsupported, 0 = no-op pass). Not part of the EventType protocol.',
+  message: 'EventResult — send a user message and receive a non-empty text result.',
+  streaming: 'EventStream — incremental delta events arrive before the final EventResult, not just a single blob.',
+  block: 'EventBlock — whole finished content blocks (text, thinking, tool_use, …) emitted alongside or instead of EventStream deltas.',
+  tool_calls: 'EventToolCall / EventToolResult — model-emitted tool calls are executed and their results fed back into the conversation. Skipped — requires a real LLM.',
+  thinking: 'EventThinking — extended-thinking / reasoning blocks emitted as distinct events, separate from the final answer. Skipped — requires a real LLM.',
+  plan: 'EventPlan — structured task-planning event distinct from thinking. Scenario-specific; emitted only when the underlying agent uses a plan tool, so most harnesses skip.',
+  session_info: 'EventSessionInfo — emitted at start with the harness\'s initial metadata: system prompt, working dir, model, tools, slash commands, agents, MCP servers.',
+  user_message: 'EventUserMessage — the harness echoes the caller\'s input back through the event stream so consumers have a single source of truth for what was sent.',
+  context_used: 'EventResult.usage — result events include token usage fields (input/output/context window).',
+  system_prompt: 'Control-plane: harness accepts a system_prompt param on session start and applies it to the conversation. Verified via EventSessionState.',
+  reasoning: 'Control-plane: harness accepts a reasoning-effort config and passes it through to the model. Verified via EventSystem.',
+  hook: 'EventHook — lifecycle events (PreToolUse, PostToolUse, UserPromptSubmit, …). Requires hook config in the underlying agent; scenario-specific, so most harnesses skip.',
+  errors: 'EventError — errors surface as discrete events rather than crashes or silent failures. Verified via MOCK_HARNESS_EMIT_ERROR=true.',
+  usage_total: 'EventUsageTotal — server-derived convenience event. Emitted by llm-bridge-server (not the harness) — cumulative session usage across every result event. The conformance runner spawns harnesses directly, so it always Skips here.',
+  turn_complete: 'EventTurnComplete — server-derived convenience event. Emitted by llm-bridge-server (not the harness) — coalesced turn summary fired immediately after the terminating result/error. The conformance runner spawns harnesses directly, so it always Skips here.',
 }
 
 const STATUS_DESCRIPTIONS: Record<string, string> = {
@@ -155,14 +181,36 @@ export function BridgeConformance() {
         <div className="cf-table-wrapper">
           <table className="cf-table cf-table-flipped">
             <thead>
-              <tr>
-                <th className="cf-th-harness-col">Harness</th>
-                {ALL_FEATURES.map(feature => (
-                  <th key={feature} className="cf-th-feature-col">
-                    <span className="cf-feature-label">{FEATURE_LABELS[feature] || feature}</span>
-                    <InfoTip text={FEATURE_DESCRIPTIONS[feature] || ''} />
+              <tr className="cf-th-group-row">
+                <th className="cf-th-harness-col cf-th-group-empty" />
+                {FEATURE_GROUPS.map(g => (
+                  <th
+                    key={g.label}
+                    className="cf-th-group"
+                    colSpan={g.features.length}
+                    title={g.label}
+                  >
+                    {g.label}
                   </th>
                 ))}
+                <th className="cf-th-summary-col cf-th-group-empty" />
+              </tr>
+              <tr>
+                <th className="cf-th-harness-col">Harness</th>
+                {FEATURE_GROUPS.map((g, gi) =>
+                  g.features.map((feature, fi) => (
+                    <th
+                      key={feature}
+                      className={
+                        'cf-th-feature-col' +
+                        (fi === 0 && gi > 0 ? ' cf-th-group-start' : '')
+                      }
+                    >
+                      <span className="cf-feature-label">{FEATURE_LABELS[feature] || feature}</span>
+                      <InfoTip text={FEATURE_DESCRIPTIONS[feature] || ''} />
+                    </th>
+                  ))
+                )}
                 <th className="cf-th-summary-col">Summary</th>
               </tr>
             </thead>
@@ -216,9 +264,24 @@ export function BridgeConformance() {
           command and waits up to 10 seconds for an event matching a predicate (e.g. <code>EventSessionState</code>
           with <code>state=running</code>, a non-empty <code>EventResult</code>, or an <code>EventError</code>).
           A match is a <strong>Pass</strong>; a wrong/missing event or timeout is a <strong>Fail</strong>; a harness
-          that declares the feature unsupported yields a <strong>Skip</strong>. <code>discover</code> and <code>import</code>
-          are exceptions — they run the binary with <code>-discover</code> / <code>-import-history</code> flags
-          and inspect exit code and stdout rather than speaking the JSON-RPC protocol.
+          that declares the feature unsupported (or simply doesn't emit the optional event type) yields a <strong>Skip</strong>.
+        </p>
+        <p>
+          Features are grouped by the part of the protocol they exercise: lifecycle commands
+          (<code>start</code>, <code>resume</code>, <code>fork</code>, <code>compact</code>, <code>config</code>);
+          the message round-trip pair (<code>message</code> ↔ <code>EventResult</code>, <code>streaming</code> ↔ <code>EventStream</code>);
+          content-block events (<code>EventBlock</code>, <code>EventToolCall</code>/<code>EventToolResult</code>, <code>EventThinking</code>, <code>EventPlan</code>);
+          session metadata (<code>EventSessionInfo</code>, <code>EventUserMessage</code>, token-usage fields, system-prompt and reasoning-effort config);
+          and hook / error signalling (<code>EventHook</code>, <code>EventError</code>).
+        </p>
+        <p>
+          Two events are special: <code>discover</code> and <code>import</code> run the binary with <code>-discover</code> /
+          <code>-import-history</code> flags and inspect exit code + stdout rather than speaking the JSON-RPC protocol.
+          <code>usage_total</code> and <code>turn_complete</code> are <em>server-derived</em> convenience events:
+          llm-bridge-server synthesizes them from the raw event stream and broadcasts them to subscribers — harnesses
+          themselves never emit them. The conformance runner spawns harnesses directly (no server in the loop), so
+          those two always show <strong>Skip</strong> here. They appear in the matrix purely so every event type in the
+          protocol has a row.
         </p>
       </details>
     </div>
@@ -275,14 +338,21 @@ function HarnessRow({
   return (
     <tr className={`cf-row-expanded cf-row-state-${state}`}>
       {nameCell}
-      {ALL_FEATURES.map(feature => {
-        const tr = result?.results?.find((r: ConformanceTestResult) => r.feature === feature)
-        return (
-          <td key={feature} className="cf-td-result" title={tr?.error || ''}>
-            <CellBadge result={tr} tested={!!result} />
-          </td>
-        )
-      })}
+      {FEATURE_GROUPS.map((g, gi) =>
+        g.features.map((feature, fi) => {
+          const tr = result?.results?.find((r: ConformanceTestResult) => r.feature === feature)
+          const groupStart = fi === 0 && gi > 0
+          return (
+            <td
+              key={feature}
+              className={'cf-td-result' + (groupStart ? ' cf-td-group-start' : '')}
+              title={tr?.error || ''}
+            >
+              <CellBadge result={tr} tested={!!result} />
+            </td>
+          )
+        })
+      )}
       <td className="cf-td-summary-col">
         <SummaryCell result={result} />
       </td>

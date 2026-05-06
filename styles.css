@@ -366,32 +366,39 @@
  * when the header is narrow (e.g. multiple workspaces open side-by-side). */
 .bc-header-right { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
 /* Unified status dot — keyed on the canonical msg.SessionState (13 values
-   plus 'empty' / 'placeholder' UI-only). Default is an 8px disc; states
-   with a glyph grow to 14px and render the glyph centered via ::before.
-   Colors group by operator-action category (active=green, action-required=
-   red/amber, terminal=red/grey, self-healing-wait=blue), animations signal
-   "something is happening right now". */
+   plus 'empty' / 'placeholder' UI-only). Outer bounding box is always
+   14×14 so row text aligns regardless of state. Visible content varies:
+   small disc states (idle, empty) paint an 8px circle inside the box via
+   radial-gradient; full-fill states paint the whole box; model_generating
+   renders three blip children. Colors group by operator-action category
+   (active=green, action-required=red/amber, terminal=red/grey, self-
+   healing-wait=blue); animations signal "something is happening". */
 .bc-status-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #555;
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  background: transparent;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 10px; line-height: 1; font-weight: 700;
+  box-sizing: border-box;
 }
 
-/* --- Quiet --- */
-.bc-status-dot-idle { background: #60a5fa; }
+/* Small-disc states: 8px colored circle centered in 14px transparent box. */
+.bc-status-dot-idle {
+  background: radial-gradient(circle 4px at center, #60a5fa 100%, transparent 100%);
+}
 .bc-status-dot-empty,
-.bc-status-dot-placeholder { background: var(--border); }
+.bc-status-dot-placeholder {
+  background: radial-gradient(circle 4px at center, var(--border) 100%, transparent 100%);
+}
 
 /* --- Pre-flight --- */
 .bc-status-dot-starting {
-  background: #f59e0b;
+  background: radial-gradient(circle 4px at center, #f59e0b 100%, transparent 100%);
   animation: bc-pulse-anim 1.5s ease-in-out infinite;
 }
 
 /* --- Active (agent is working) --- */
 .bc-status-dot-running,            /* deprecated; render like tool_running */
 .bc-status-dot-tool_running {
-  width: 14px; height: 14px;
   background: #22c55e;
   font-size: 11px;
   animation: bc-spin-anim 2.4s linear infinite;
@@ -399,15 +406,15 @@
 .bc-status-dot-running::before,
 .bc-status-dot-tool_running::before { content: '\2699'; color: #0a0f1a; }
 
-/* model_generating renders three staggered dots (typing-indicator wave). */
+/* model_generating renders three staggered blips (typing-indicator wave)
+   inside the standard 14×14 bounding box. */
 .bc-status-dot-model_generating {
-  width: 22px; height: 8px; border-radius: 6px;
   background: transparent;
   justify-content: space-between;
   padding: 0 1px;
 }
 .bc-status-dot-blip {
-  width: 5px; height: 5px; border-radius: 50%;
+  width: 3px; height: 3px; border-radius: 50%;
   background: #22c55e;
   animation: bc-typing-anim 1.2s ease-in-out infinite;
 }
@@ -415,16 +422,21 @@
 .bc-status-dot-model_generating .bc-status-dot-blip:nth-child(2) { animation-delay: 0.2s; }
 .bc-status-dot-model_generating .bc-status-dot-blip:nth-child(3) { animation-delay: 0.4s; }
 
-/* compacting: vertical bar that squishes — visualizes context compression. */
+/* compacting: vertical violet bar that squishes — visualizes context
+   compression. Uses an inner ::before so the outer bounding box stays
+   the standard 14×14. */
 .bc-status-dot-compacting {
-  width: 6px; height: 14px; border-radius: 2px;
+  background: transparent;
+  border-radius: 0;
+}
+.bc-status-dot-compacting::before {
+  content: ''; width: 6px; height: 12px; border-radius: 2px;
   background: #a78bfa;
   animation: bc-compact-anim 1.4s ease-in-out infinite;
 }
 
 /* --- Blocked on user (action required) --- */
 .bc-status-dot-awaiting_permission {
-  width: 14px; height: 14px;
   background: #ef4444;
   font-size: 10px;
   animation: bc-pulse-anim 1.0s ease-in-out infinite;
@@ -433,7 +445,6 @@
 
 .bc-status-dot-awaiting_user,
 .bc-status-dot-waiting_on_approval {        /* deprecated; render like awaiting_permission */
-  width: 14px; height: 14px;
   background: #f59e0b;
   font-size: 10px;
   animation: bc-pulse-anim 2.0s ease-in-out infinite;
@@ -443,14 +454,12 @@
 
 /* --- Self-healing wait --- */
 .bc-status-dot-rate_limited {
-  width: 14px; height: 14px;
   background: #60a5fa;
   font-size: 11px;
 }
 .bc-status-dot-rate_limited::before { content: '\29D7'; color: #0a1422; }  /* hourglass ⧗ */
 
 .bc-status-dot-paused {
-  width: 14px; height: 14px;
   background: #f59e0b;
   font-size: 9px;
 }
@@ -458,29 +467,36 @@
 
 /* --- Terminal --- */
 .bc-status-dot-completed {
-  width: 14px; height: 14px;
   background: #888;
   font-size: 10px;
 }
 .bc-status-dot-completed::before { content: '\2713'; color: #0f1419; }  /* check ✓ */
 
 .bc-status-dot-error {
-  width: 14px; height: 14px;
   background: #ef4444;
   font-size: 10px;
 }
 .bc-status-dot-error::before { content: '\2715'; color: #fff; }  /* x ✕ */
 
+/* aborted: muted grey rounded square — hard stop. Uses ::before so the
+   outer bounding box stays a 14×14 circle (consistent spacing) while the
+   visible inner shape is square. */
 .bc-status-dot-aborted {
-  width: 12px; height: 12px;
-  background: #888;
-  border-radius: 2px;
+  background: transparent;
+  border-radius: 0;
+}
+.bc-status-dot-aborted::before {
+  content: ''; width: 10px; height: 10px; border-radius: 2px; background: #888;
 }
 
+/* disconnected: hollow grey ring — process gone, not by our hand. */
 .bc-status-dot-disconnected {
-  width: 12px; height: 12px;
   background: transparent;
-  border: 2px solid #888;
+  border-radius: 0;
+}
+.bc-status-dot-disconnected::before {
+  content: ''; width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid #888; box-sizing: border-box;
 }
 .bc-pulse {
   width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
@@ -2140,6 +2156,28 @@
 }
 
 .cf-feature-label { margin-right: 4px; }
+
+.cf-th-group-row { background: #0a0a14; }
+.cf-th-group {
+  font-weight: 600;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: #0a0a14;
+}
+.cf-th-group:first-of-type { border-left: none; }
+.cf-th-group-empty {
+  background: #0a0a14;
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+}
+
+.cf-th-group-start { border-left: 1px solid var(--border); }
+.cf-td-group-start { border-left: 1px solid var(--border); }
 
 .cf-info-icon {
   display: inline-flex;
