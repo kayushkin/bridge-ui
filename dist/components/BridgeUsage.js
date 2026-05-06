@@ -3,6 +3,55 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useBridgeConfig } from '../context';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { formatTokens, formatDuration } from '../utils';
+const SOURCE_LABELS = {
+    '': 'Interactive',
+    scheduler: 'Scheduler',
+    autoworker: 'Autoworker',
+    renamer: 'Renamer',
+    'harness-watch': 'Harness watch',
+    healthcheck: 'Healthcheck',
+    conformance: 'Conformance',
+};
+// Distinct, color-blind-friendly palette used by both pie charts and the
+// per-source/harness chips. Indexed by hash-like position so colors stay
+// stable across renders for a given key.
+const PIE_COLORS = [
+    '#60a5fa', '#f59e0b', '#a78bfa', '#34d399', '#f472b6',
+    '#fbbf24', '#22d3ee', '#fb7185', '#4ade80', '#c084fc',
+    '#fca5a5', '#93c5fd',
+];
+function colorFor(index) {
+    return PIE_COLORS[index % PIE_COLORS.length];
+}
+function PieChart({ title, slices, valueFmt }) {
+    const total = slices.reduce((s, x) => s + x.value, 0);
+    if (total <= 0)
+        return null;
+    const r = 60;
+    const cx = 70;
+    const cy = 70;
+    let acc = 0;
+    const paths = slices.map(s => {
+        const start = (acc / total) * Math.PI * 2 - Math.PI / 2;
+        acc += s.value;
+        const end = (acc / total) * Math.PI * 2 - Math.PI / 2;
+        const x1 = cx + r * Math.cos(start);
+        const y1 = cy + r * Math.sin(start);
+        const x2 = cx + r * Math.cos(end);
+        const y2 = cy + r * Math.sin(end);
+        const large = end - start > Math.PI ? 1 : 0;
+        // Single-slice (whole pie) — render as a full circle so the path doesn't
+        // collapse to a zero-length arc.
+        if (slices.length === 1) {
+            return { key: s.key, color: s.color, d: `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0` };
+        }
+        return { key: s.key, color: s.color, d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z` };
+    });
+    return (_jsxs("div", { className: "bu-pie", children: [_jsx("div", { className: "bu-pie-title", children: title }), _jsxs("div", { className: "bu-pie-body", children: [_jsx("svg", { width: 140, height: 140, viewBox: "0 0 140 140", children: paths.map(p => (_jsx("path", { d: p.d, fill: p.color, stroke: "var(--bg-surface)", strokeWidth: 1 }, p.key))) }), _jsx("div", { className: "bu-pie-legend", children: slices.map(s => {
+                            const pct = (s.value / total) * 100;
+                            return (_jsxs("div", { className: "bu-pie-legend-row", children: [_jsx("span", { className: "bu-pie-swatch", style: { background: s.color } }), _jsx("span", { className: "bu-pie-legend-label", children: s.label }), _jsx("span", { className: "bu-pie-legend-value", children: valueFmt(s.value) }), _jsxs("span", { className: "bu-pie-legend-pct", children: [pct.toFixed(0), "%"] })] }, s.key));
+                        }) })] })] }));
+}
 const WINDOW_LABELS = {
     five_hour: '5-Hour',
     seven_day: '7-Day',
@@ -194,23 +243,35 @@ export function BridgeUsage() {
             setLoadingUsage(false);
         })();
     }, [periodSessions, apiFetch, basePath]);
+    const emptyTotals = () => ({ input: 0, output: 0, cost: 0, duration: 0, turns: 0 });
+    const addTotals = (t, u) => {
+        t.input += u.inputTokens;
+        t.output += u.outputTokens;
+        t.cost += u.cost;
+        t.duration += u.durationMs;
+        t.turns += u.turns;
+    };
     const harnessGroups = useMemo(() => {
         const groups = new Map();
         for (const s of periodSessions) {
             const usage = usageMap.get(s.bridge_id);
             if (!usage)
                 continue;
-            let g = groups.get(s.harness);
-            if (!g) {
-                g = { sessions: [], totals: { input: 0, output: 0, cost: 0, duration: 0, turns: 0 } };
-                groups.set(s.harness, g);
+            let h = groups.get(s.harness);
+            if (!h) {
+                h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 };
+                groups.set(s.harness, h);
             }
-            g.sessions.push(usage);
-            g.totals.input += usage.inputTokens;
-            g.totals.output += usage.outputTokens;
-            g.totals.cost += usage.cost;
-            g.totals.duration += usage.durationMs;
-            g.totals.turns += usage.turns;
+            const srcKey = s.source ?? '';
+            let src = h.sources.get(srcKey);
+            if (!src) {
+                src = { source: srcKey, sessions: [], totals: emptyTotals() };
+                h.sources.set(srcKey, src);
+            }
+            src.sessions.push(usage);
+            addTotals(src.totals, usage);
+            addTotals(h.totals, usage);
+            h.sessionCount++;
         }
         return groups;
     }, [periodSessions, usageMap]);
@@ -221,10 +282,45 @@ export function BridgeUsage() {
             output += g.totals.output;
             cost += g.totals.cost;
             duration += g.totals.duration;
-            count += g.sessions.length;
+            count += g.sessionCount;
         }
         return { input, output, cost, duration, count };
     }, [harnessGroups]);
+    const harnessSlices = useMemo(() => {
+        const arr = Array.from(harnessGroups.values())
+            .map((h, i) => ({
+            key: h.harness,
+            label: h.harness,
+            value: h.totals.input + h.totals.output,
+            color: colorFor(i),
+        }))
+            .filter(s => s.value > 0)
+            .sort((a, b) => b.value - a.value);
+        return arr;
+    }, [harnessGroups]);
+    const sourceSlices = useMemo(() => {
+        const sums = new Map();
+        for (const [, h] of harnessGroups) {
+            for (const [, src] of h.sources) {
+                const key = src.source;
+                sums.set(key, (sums.get(key) ?? 0) + src.totals.input + src.totals.output);
+            }
+        }
+        return Array.from(sums.entries())
+            .map(([key, value], i) => ({
+            key: key || '__interactive',
+            label: SOURCE_LABELS[key] ?? (key || 'Interactive'),
+            value,
+            color: colorFor(i),
+        }))
+            .filter(s => s.value > 0)
+            .sort((a, b) => b.value - a.value);
+    }, [harnessGroups]);
+    const [expandedSources, setExpandedSources] = useState({});
+    const toggleSource = useCallback((harness, source) => {
+        const k = `${harness}::${source}`;
+        setExpandedSources(prev => ({ ...prev, [k]: !prev[k] }));
+    }, []);
     return (_jsxs("div", { className: "bu-container", children: [_jsxs("div", { className: "bu-header", children: [_jsx("h2", { children: "Bridge Usage" }), _jsx("div", { className: "bu-period-tabs", children: ['day', 'week', 'month'].map(p => (_jsx("button", { className: `bu-tab ${period === p ? 'bu-tab-active' : ''}`, onClick: () => setPeriod(p), children: p === 'day' ? '24h' : p === 'week' ? '7d' : '30d' }, p))) })] }), spend && (_jsx("div", { className: "bu-spend-section", children: ['anthropic', 'openai'].map(provider => {
                     const p = spend[provider];
                     const keysOpen = expandedKeys[provider] ?? false;
@@ -243,9 +339,19 @@ export function BridgeUsage() {
                     if (windowEntries.length === 0)
                         return null;
                     return (_jsxs("div", { className: "bu-limits-provider", children: [_jsxs("div", { className: "bu-limits-header", children: [_jsx("span", { className: "bu-limits-title", children: PROVIDER_LABELS[provider] ?? provider }), p.plan_type && _jsxs("span", { className: "bu-limits-tier", children: [p.plan_type, p.tier?.includes('20x') ? ' 20x' : p.tier?.includes('5x') ? ' 5x' : ''] }), stale && _jsx("span", { className: "bu-limits-stale", title: `snapshot from ${new Date(p.snapshot_at * 1000).toLocaleString()}`, children: "stale" })] }), _jsx("div", { className: "bu-limits-grid", children: windowEntries.map(([key, win]) => (_jsx(LimitBar, { label: WINDOW_LABELS[key] ?? key, win: win }, key))) })] }, provider));
-                }) })), loading ? (_jsx("div", { className: "bu-loading", children: "Loading..." })) : (_jsxs(_Fragment, { children: [_jsxs("div", { className: "bu-totals-row", children: [_jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Sessions" }), _jsx("span", { className: "bu-total-value", children: totals.count })] }), _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Input" }), _jsx("span", { className: "bu-total-value", children: formatTokens(totals.input) })] }), _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Output" }), _jsx("span", { className: "bu-total-value", children: formatTokens(totals.output) })] }), totals.cost > 0 && _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Cost" }), _jsxs("span", { className: "bu-total-value", children: ["$", totals.cost.toFixed(2)] })] }), _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Time" }), _jsx("span", { className: "bu-total-value", children: formatDuration(totals.duration) })] })] }), loadingUsage && _jsx("div", { className: "bu-loading-small", children: "Loading session details..." }), Array.from(harnessGroups.entries()).map(([harness, group]) => (_jsxs("div", { className: "bu-harness-section", children: [_jsxs("div", { className: "bu-harness-header", children: [_jsx("span", { className: "bu-harness-name", children: harness }), _jsxs("span", { className: "bu-harness-summary", children: [group.sessions.length, " sessions \u00B7 ", formatTokens(group.totals.input + group.totals.output), " tokens", group.totals.cost > 0 && ` \u00B7 $${group.totals.cost.toFixed(2)}`] })] }), _jsxs("div", { className: "bu-token-bar", children: [_jsx("div", { className: "bu-token-bar-in", style: { width: `${(group.totals.input / (group.totals.input + group.totals.output || 1)) * 100}%` } }), _jsx("div", { className: "bu-token-bar-out", style: { width: `${(group.totals.output / (group.totals.input + group.totals.output || 1)) * 100}%` } })] }), _jsx("div", { className: "bu-session-list", children: group.sessions.sort((a, b) => b.cost - a.cost).map(u => {
-                                    const instance = inst.instanceMap.get(u.instanceId);
-                                    return (_jsxs("div", { className: "bu-session-row", children: [_jsx("span", { className: "bu-session-id", children: u.sessionId.slice(0, 16) }), instance && _jsx("span", { className: "bu-instance-label", children: instance.name }), _jsx("span", { className: "bu-session-model", children: u.model?.replace(/^claude-/, '').replace(/\[.*$/, '') }), _jsxs("span", { children: [u.turns, " turns"] }), _jsxs("span", { children: [formatTokens(u.inputTokens), " in"] }), _jsxs("span", { children: [formatTokens(u.outputTokens), " out"] }), u.cost > 0 && _jsxs("span", { children: ["$", u.cost.toFixed(3)] }), u.durationMs > 0 && _jsx("span", { children: formatDuration(u.durationMs) })] }, u.sessionId));
-                                }) })] }, harness))), harnessGroups.size === 0 && !loadingUsage && (_jsx("div", { className: "bu-empty", children: "No usage data for this period" }))] }))] }));
+                }) })), loading ? (_jsx("div", { className: "bu-loading", children: "Loading..." })) : (_jsxs(_Fragment, { children: [_jsxs("div", { className: "bu-totals-row", children: [_jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Sessions" }), _jsx("span", { className: "bu-total-value", children: totals.count })] }), _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Input" }), _jsx("span", { className: "bu-total-value", children: formatTokens(totals.input) })] }), _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Output" }), _jsx("span", { className: "bu-total-value", children: formatTokens(totals.output) })] }), totals.cost > 0 && _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Cost" }), _jsxs("span", { className: "bu-total-value", children: ["$", totals.cost.toFixed(2)] })] }), _jsxs("div", { className: "bu-total-card", children: [_jsx("span", { className: "bu-total-label", children: "Time" }), _jsx("span", { className: "bu-total-value", children: formatDuration(totals.duration) })] })] }), (harnessSlices.length > 0 || sourceSlices.length > 0) && (_jsxs("div", { className: "bu-pies-row", children: [_jsx(PieChart, { title: "By harness", slices: harnessSlices, valueFmt: formatTokens }), _jsx(PieChart, { title: "By source", slices: sourceSlices, valueFmt: formatTokens })] })), loadingUsage && _jsx("div", { className: "bu-loading-small", children: "Loading session details..." }), Array.from(harnessGroups.entries()).map(([harness, group]) => {
+                        const sources = Array.from(group.sources.values())
+                            .sort((a, b) => (b.totals.input + b.totals.output) - (a.totals.input + a.totals.output));
+                        const totalTok = group.totals.input + group.totals.output || 1;
+                        return (_jsxs("div", { className: "bu-harness-section", children: [_jsxs("div", { className: "bu-harness-header", children: [_jsx("span", { className: "bu-harness-name", children: harness }), _jsxs("span", { className: "bu-harness-summary", children: [group.sessionCount, " sessions \u00B7 ", formatTokens(group.totals.input + group.totals.output), " tokens", group.totals.cost > 0 && ` \u00B7 $${group.totals.cost.toFixed(2)}`] })] }), _jsxs("div", { className: "bu-token-bar", children: [_jsx("div", { className: "bu-token-bar-in", style: { width: `${(group.totals.input / totalTok) * 100}%` } }), _jsx("div", { className: "bu-token-bar-out", style: { width: `${(group.totals.output / totalTok) * 100}%` } })] }), _jsx("div", { className: "bu-source-list", children: sources.map(src => {
+                                        const k = `${harness}::${src.source}`;
+                                        const open = !!expandedSources[k];
+                                        const label = SOURCE_LABELS[src.source] ?? (src.source || 'Interactive');
+                                        return (_jsxs("div", { className: "bu-source-group", children: [_jsxs("button", { type: "button", className: "bu-source-row", onClick: () => toggleSource(harness, src.source), "aria-expanded": open, children: [_jsx("span", { className: "bu-source-toggle", children: open ? '\u25BC' : '\u25B6' }), _jsx("span", { className: "bu-source-label", children: label }), _jsxs("span", { className: "bu-source-count", children: [src.sessions.length, " session", src.sessions.length === 1 ? '' : 's'] }), _jsxs("span", { className: "bu-source-tokens", children: [formatTokens(src.totals.input), " in \u00B7 ", formatTokens(src.totals.output), " out"] }), src.totals.cost > 0 && _jsxs("span", { className: "bu-source-cost", children: ["$", src.totals.cost.toFixed(2)] }), src.totals.duration > 0 && _jsx("span", { className: "bu-source-duration", children: formatDuration(src.totals.duration) })] }), open && (_jsx("div", { className: "bu-session-list", children: src.sessions.slice().sort((a, b) => b.cost - a.cost).map(u => {
+                                                        const instance = inst.instanceMap.get(u.instanceId);
+                                                        return (_jsxs("div", { className: "bu-session-row", children: [_jsx("span", { className: "bu-session-id", children: u.sessionId.slice(0, 16) }), instance && _jsx("span", { className: "bu-instance-label", children: instance.name }), _jsx("span", { className: "bu-session-model", children: u.model?.replace(/^claude-/, '').replace(/\[.*$/, '') }), _jsxs("span", { children: [u.turns, " turns"] }), _jsxs("span", { children: [formatTokens(u.inputTokens), " in"] }), _jsxs("span", { children: [formatTokens(u.outputTokens), " out"] }), u.cost > 0 && _jsxs("span", { children: ["$", u.cost.toFixed(3)] }), u.durationMs > 0 && _jsx("span", { children: formatDuration(u.durationMs) })] }, u.sessionId));
+                                                    }) }))] }, k));
+                                    }) })] }, harness));
+                    }), harnessGroups.size === 0 && !loadingUsage && (_jsx("div", { className: "bu-empty", children: "No usage data for this period" }))] }))] }));
 }
 //# sourceMappingURL=BridgeUsage.js.map

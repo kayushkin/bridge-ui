@@ -1565,6 +1565,40 @@
 .bu-instance-label { padding: 1px 6px; border-radius: 4px; background: #1a1a2a; font-size: 0.9em; }
 .bu-session-model { color: var(--text-dim); min-width: 80px; }
 
+/* BridgeUsage — source sub-groups under harnesses */
+.bu-source-list { display: flex; flex-direction: column; gap: 4px; }
+.bu-source-group { display: flex; flex-direction: column; }
+.bu-source-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  font-size: 0.85em; color: var(--text); background: var(--bg-surface);
+  border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; text-align: left; width: 100%;
+  font-family: inherit;
+}
+.bu-source-row:hover { background: rgba(99, 102, 241, 0.07); }
+.bu-source-toggle { color: var(--text-dim); width: 12px; }
+.bu-source-label { font-weight: 500; min-width: 110px; }
+.bu-source-count { color: var(--text-dim); min-width: 90px; }
+.bu-source-tokens { color: var(--text-muted); margin-right: auto; }
+.bu-source-cost { color: var(--text); font-variant-numeric: tabular-nums; }
+.bu-source-duration { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.bu-source-group .bu-session-list { margin: 4px 0 8px 24px; }
+
+/* BridgeUsage — pie charts */
+.bu-pies-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 24px; }
+.bu-pie {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; flex: 1; min-width: 320px;
+}
+.bu-pie-title { font-size: 0.85em; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.bu-pie-body { display: flex; align-items: center; gap: 16px; }
+.bu-pie-legend { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.bu-pie-legend-row { display: flex; align-items: center; gap: 8px; font-size: 0.85em; }
+.bu-pie-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.bu-pie-legend-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bu-pie-legend-value { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.bu-pie-legend-pct { color: var(--text-dim); min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* BridgeUsage — per-API-key spend with account parent */
 .bu-spend-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
 .bu-spend-account {

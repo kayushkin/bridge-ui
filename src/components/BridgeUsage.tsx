@@ -75,6 +75,86 @@ interface SpendKeysResponse {
 
 type Period = 'day' | 'week' | 'month'
 
+const SOURCE_LABELS: Record<string, string> = {
+  '': 'Interactive',
+  scheduler: 'Scheduler',
+  autoworker: 'Autoworker',
+  renamer: 'Renamer',
+  'harness-watch': 'Harness watch',
+  healthcheck: 'Healthcheck',
+  conformance: 'Conformance',
+}
+
+// Distinct, color-blind-friendly palette used by both pie charts and the
+// per-source/harness chips. Indexed by hash-like position so colors stay
+// stable across renders for a given key.
+const PIE_COLORS = [
+  '#60a5fa', '#f59e0b', '#a78bfa', '#34d399', '#f472b6',
+  '#fbbf24', '#22d3ee', '#fb7185', '#4ade80', '#c084fc',
+  '#fca5a5', '#93c5fd',
+]
+
+function colorFor(index: number): string {
+  return PIE_COLORS[index % PIE_COLORS.length]
+}
+
+interface PieSlice {
+  key: string
+  label: string
+  value: number
+  color: string
+}
+
+function PieChart({ title, slices, valueFmt }: { title: string; slices: PieSlice[]; valueFmt: (v: number) => string }) {
+  const total = slices.reduce((s, x) => s + x.value, 0)
+  if (total <= 0) return null
+  const r = 60
+  const cx = 70
+  const cy = 70
+  let acc = 0
+  const paths = slices.map(s => {
+    const start = (acc / total) * Math.PI * 2 - Math.PI / 2
+    acc += s.value
+    const end = (acc / total) * Math.PI * 2 - Math.PI / 2
+    const x1 = cx + r * Math.cos(start)
+    const y1 = cy + r * Math.sin(start)
+    const x2 = cx + r * Math.cos(end)
+    const y2 = cy + r * Math.sin(end)
+    const large = end - start > Math.PI ? 1 : 0
+    // Single-slice (whole pie) — render as a full circle so the path doesn't
+    // collapse to a zero-length arc.
+    if (slices.length === 1) {
+      return { key: s.key, color: s.color, d: `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0` }
+    }
+    return { key: s.key, color: s.color, d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z` }
+  })
+  return (
+    <div className="bu-pie">
+      <div className="bu-pie-title">{title}</div>
+      <div className="bu-pie-body">
+        <svg width={140} height={140} viewBox="0 0 140 140">
+          {paths.map(p => (
+            <path key={p.key} d={p.d} fill={p.color} stroke="var(--bg-surface)" strokeWidth={1} />
+          ))}
+        </svg>
+        <div className="bu-pie-legend">
+          {slices.map(s => {
+            const pct = (s.value / total) * 100
+            return (
+              <div key={s.key} className="bu-pie-legend-row">
+                <span className="bu-pie-swatch" style={{ background: s.color }} />
+                <span className="bu-pie-legend-label">{s.label}</span>
+                <span className="bu-pie-legend-value">{valueFmt(s.value)}</span>
+                <span className="bu-pie-legend-pct">{pct.toFixed(0)}%</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const WINDOW_LABELS: Record<string, string> = {
   five_hour: '5-Hour',
   seven_day: '7-Day',
@@ -277,19 +357,30 @@ export function BridgeUsage() {
     })()
   }, [periodSessions, apiFetch, basePath])
 
+  type Totals = { input: number; output: number; cost: number; duration: number; turns: number }
+  type SourceGroup = { source: string; sessions: SessionUsage[]; totals: Totals }
+  type HarnessGroup = { harness: string; sources: Map<string, SourceGroup>; totals: Totals; sessionCount: number }
+
+  const emptyTotals = (): Totals => ({ input: 0, output: 0, cost: 0, duration: 0, turns: 0 })
+  const addTotals = (t: Totals, u: SessionUsage) => {
+    t.input += u.inputTokens; t.output += u.outputTokens
+    t.cost += u.cost; t.duration += u.durationMs; t.turns += u.turns
+  }
+
   const harnessGroups = useMemo(() => {
-    const groups = new Map<string, { sessions: SessionUsage[]; totals: { input: number; output: number; cost: number; duration: number; turns: number } }>()
+    const groups = new Map<string, HarnessGroup>()
     for (const s of periodSessions) {
       const usage = usageMap.get(s.bridge_id)
       if (!usage) continue
-      let g = groups.get(s.harness)
-      if (!g) { g = { sessions: [], totals: { input: 0, output: 0, cost: 0, duration: 0, turns: 0 } }; groups.set(s.harness, g) }
-      g.sessions.push(usage)
-      g.totals.input += usage.inputTokens
-      g.totals.output += usage.outputTokens
-      g.totals.cost += usage.cost
-      g.totals.duration += usage.durationMs
-      g.totals.turns += usage.turns
+      let h = groups.get(s.harness)
+      if (!h) { h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(s.harness, h) }
+      const srcKey = s.source ?? ''
+      let src = h.sources.get(srcKey)
+      if (!src) { src = { source: srcKey, sessions: [], totals: emptyTotals() }; h.sources.set(srcKey, src) }
+      src.sessions.push(usage)
+      addTotals(src.totals, usage)
+      addTotals(h.totals, usage)
+      h.sessionCount++
     }
     return groups
   }, [periodSessions, usageMap])
@@ -298,10 +389,48 @@ export function BridgeUsage() {
     let input = 0, output = 0, cost = 0, duration = 0, count = 0
     for (const [, g] of harnessGroups) {
       input += g.totals.input; output += g.totals.output; cost += g.totals.cost
-      duration += g.totals.duration; count += g.sessions.length
+      duration += g.totals.duration; count += g.sessionCount
     }
     return { input, output, cost, duration, count }
   }, [harnessGroups])
+
+  const harnessSlices = useMemo<PieSlice[]>(() => {
+    const arr = Array.from(harnessGroups.values())
+      .map((h, i) => ({
+        key: h.harness,
+        label: h.harness,
+        value: h.totals.input + h.totals.output,
+        color: colorFor(i),
+      }))
+      .filter(s => s.value > 0)
+      .sort((a, b) => b.value - a.value)
+    return arr
+  }, [harnessGroups])
+
+  const sourceSlices = useMemo<PieSlice[]>(() => {
+    const sums = new Map<string, number>()
+    for (const [, h] of harnessGroups) {
+      for (const [, src] of h.sources) {
+        const key = src.source
+        sums.set(key, (sums.get(key) ?? 0) + src.totals.input + src.totals.output)
+      }
+    }
+    return Array.from(sums.entries())
+      .map(([key, value], i) => ({
+        key: key || '__interactive',
+        label: SOURCE_LABELS[key] ?? (key || 'Interactive'),
+        value,
+        color: colorFor(i),
+      }))
+      .filter(s => s.value > 0)
+      .sort((a, b) => b.value - a.value)
+  }, [harnessGroups])
+
+  const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({})
+  const toggleSource = useCallback((harness: string, source: string) => {
+    const k = `${harness}::${source}`
+    setExpandedSources(prev => ({ ...prev, [k]: !prev[k] }))
+  }, [])
 
   return (
     <div className="bu-container">
@@ -504,40 +633,78 @@ export function BridgeUsage() {
             <div className="bu-total-card"><span className="bu-total-label">Time</span><span className="bu-total-value">{formatDuration(totals.duration)}</span></div>
           </div>
 
+          {(harnessSlices.length > 0 || sourceSlices.length > 0) && (
+            <div className="bu-pies-row">
+              <PieChart title="By harness" slices={harnessSlices} valueFmt={formatTokens} />
+              <PieChart title="By source" slices={sourceSlices} valueFmt={formatTokens} />
+            </div>
+          )}
+
           {loadingUsage && <div className="bu-loading-small">Loading session details...</div>}
 
-          {Array.from(harnessGroups.entries()).map(([harness, group]) => (
-            <div key={harness} className="bu-harness-section">
-              <div className="bu-harness-header">
-                <span className="bu-harness-name">{harness}</span>
-                <span className="bu-harness-summary">
-                  {group.sessions.length} sessions &middot; {formatTokens(group.totals.input + group.totals.output)} tokens
-                  {group.totals.cost > 0 && ` \u00B7 $${group.totals.cost.toFixed(2)}`}
-                </span>
+          {Array.from(harnessGroups.entries()).map(([harness, group]) => {
+            const sources = Array.from(group.sources.values())
+              .sort((a, b) => (b.totals.input + b.totals.output) - (a.totals.input + a.totals.output))
+            const totalTok = group.totals.input + group.totals.output || 1
+            return (
+              <div key={harness} className="bu-harness-section">
+                <div className="bu-harness-header">
+                  <span className="bu-harness-name">{harness}</span>
+                  <span className="bu-harness-summary">
+                    {group.sessionCount} sessions &middot; {formatTokens(group.totals.input + group.totals.output)} tokens
+                    {group.totals.cost > 0 && ` \u00B7 $${group.totals.cost.toFixed(2)}`}
+                  </span>
+                </div>
+                <div className="bu-token-bar">
+                  <div className="bu-token-bar-in" style={{ width: `${(group.totals.input / totalTok) * 100}%` }} />
+                  <div className="bu-token-bar-out" style={{ width: `${(group.totals.output / totalTok) * 100}%` }} />
+                </div>
+                <div className="bu-source-list">
+                  {sources.map(src => {
+                    const k = `${harness}::${src.source}`
+                    const open = !!expandedSources[k]
+                    const label = SOURCE_LABELS[src.source] ?? (src.source || 'Interactive')
+                    return (
+                      <div key={k} className="bu-source-group">
+                        <button
+                          type="button"
+                          className="bu-source-row"
+                          onClick={() => toggleSource(harness, src.source)}
+                          aria-expanded={open}
+                        >
+                          <span className="bu-source-toggle">{open ? '\u25BC' : '\u25B6'}</span>
+                          <span className="bu-source-label">{label}</span>
+                          <span className="bu-source-count">{src.sessions.length} session{src.sessions.length === 1 ? '' : 's'}</span>
+                          <span className="bu-source-tokens">{formatTokens(src.totals.input)} in &middot; {formatTokens(src.totals.output)} out</span>
+                          {src.totals.cost > 0 && <span className="bu-source-cost">${src.totals.cost.toFixed(2)}</span>}
+                          {src.totals.duration > 0 && <span className="bu-source-duration">{formatDuration(src.totals.duration)}</span>}
+                        </button>
+                        {open && (
+                          <div className="bu-session-list">
+                            {src.sessions.slice().sort((a, b) => b.cost - a.cost).map(u => {
+                              const instance = inst.instanceMap.get(u.instanceId)
+                              return (
+                                <div key={u.sessionId} className="bu-session-row">
+                                  <span className="bu-session-id">{u.sessionId.slice(0, 16)}</span>
+                                  {instance && <span className="bu-instance-label">{instance.name}</span>}
+                                  <span className="bu-session-model">{u.model?.replace(/^claude-/, '').replace(/\[.*$/, '')}</span>
+                                  <span>{u.turns} turns</span>
+                                  <span>{formatTokens(u.inputTokens)} in</span>
+                                  <span>{formatTokens(u.outputTokens)} out</span>
+                                  {u.cost > 0 && <span>${u.cost.toFixed(3)}</span>}
+                                  {u.durationMs > 0 && <span>{formatDuration(u.durationMs)}</span>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="bu-token-bar">
-                <div className="bu-token-bar-in" style={{ width: `${(group.totals.input / (group.totals.input + group.totals.output || 1)) * 100}%` }} />
-                <div className="bu-token-bar-out" style={{ width: `${(group.totals.output / (group.totals.input + group.totals.output || 1)) * 100}%` }} />
-              </div>
-              <div className="bu-session-list">
-                {group.sessions.sort((a, b) => b.cost - a.cost).map(u => {
-                  const instance = inst.instanceMap.get(u.instanceId)
-                  return (
-                    <div key={u.sessionId} className="bu-session-row">
-                      <span className="bu-session-id">{u.sessionId.slice(0, 16)}</span>
-                      {instance && <span className="bu-instance-label">{instance.name}</span>}
-                      <span className="bu-session-model">{u.model?.replace(/^claude-/, '').replace(/\[.*$/, '')}</span>
-                      <span>{u.turns} turns</span>
-                      <span>{formatTokens(u.inputTokens)} in</span>
-                      <span>{formatTokens(u.outputTokens)} out</span>
-                      {u.cost > 0 && <span>${u.cost.toFixed(3)}</span>}
-                      {u.durationMs > 0 && <span>{formatDuration(u.durationMs)}</span>}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+            )
+          })}
 
           {harnessGroups.size === 0 && !loadingUsage && (
             <div className="bu-empty">No usage data for this period</div>

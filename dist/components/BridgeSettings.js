@@ -117,7 +117,7 @@ function PermissionsBypassToggle({ apiFetch, basePath }) {
         return null; // initial fetch in flight
     }
     return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-bypass-toggle", children: [_jsx("input", { type: "checkbox", checked: enabled, disabled: busy, onChange: toggle }), _jsxs("span", { children: [_jsx("strong", { children: "Bypass permissions" }), " \u2014 skip all rules; every tool call auto-approves"] })] }) }), _jsx("p", { className: "bset-subtitle", children: enabled
-                    ? 'Bypass is ON. Every tool call auto-approves immediately. Permission rules in /permissions are ignored until you turn this off.'
-                    : 'Bypass is OFF. Every tool call routes through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.' }), error && _jsx("p", { className: "bset-error", children: error })] }));
+                    ? 'Bypass is ON. Every Claude Code tool call auto-approves immediately, and every Codex session launches with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored until you turn this off.'
+                    : 'Bypass is OFF. Claude Code tool calls route through permission-store rules; Codex runs in its default sandbox. Manage rules at /permissions; pending prompts surface inline in chat.' }), error && _jsx("p", { className: "bset-error", children: error })] }));
 }
 //# sourceMappingURL=BridgeSettings.js.map
