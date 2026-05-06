@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
-import type { UseBridgeFoldersReturn } from '../../useBridgeFolders'
+import { ARCHIVE_FOLDER, type UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
 import { HarnessFilterBar } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
@@ -157,6 +157,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     onAfterFolderChange()
   }
 
+  const handleMarkDone = async (sessionId: string, done: boolean) => {
+    setCtxMenu(null); setShowNewFolder(false)
+    await folders.markSessionDone(sessionId, done)
+    onAfterFolderChange()
+  }
+
   const handleCreateFolder = async () => {
     const name = newFolderName.trim()
     if (!name) return
@@ -307,13 +313,21 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         >
           {ctxMenu.type === 'session' && (
             <>
-              <div className="bc-ctx-menu-label">Move to folder</div>
               {(() => {
                 const sess = sessions.find(s => s.bridge_id === ctxMenu.id)
                 const current = sess?.folder_name ?? ''
+                const isDone = current === ARCHIVE_FOLDER
                 return (
                   <>
-                    {current && (
+                    <button
+                      className="bc-ctx-menu-item"
+                      onClick={() => handleMarkDone(ctxMenu.id, !isDone)}
+                    >
+                      {isDone ? '↺ Unmark / unarchive' : '✓ Mark done'}
+                    </button>
+                    <div className="bc-ctx-menu-divider" />
+                    <div className="bc-ctx-menu-label">Move to folder</div>
+                    {current && !isDone && (
                       <button className="bc-ctx-menu-item" onClick={() => moveToFolder(ctxMenu.id, '')}>
                         ↩ Remove from folder
                       </button>

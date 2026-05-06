@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from './context'
 import type { FolderList } from '@kayushkin/llm-bridge-types'
 
+// ARCHIVE_FOLDER is the canonical folder a session moves into when marked
+// done. Mirrors the server-side store.ArchiveFolder constant. Auto-created
+// by the server on first use.
+export const ARCHIVE_FOLDER = 'Archive'
+
 export interface UseBridgeFoldersReturn {
   folderOrder: string[]
   refresh: () => Promise<void>
@@ -9,6 +14,10 @@ export interface UseBridgeFoldersReturn {
   deleteFolder: (name: string) => Promise<void>
   renameFolder: (oldName: string, newName: string) => Promise<void>
   setSessionFolder: (sessionId: string, folder: string) => Promise<void>
+  // markSessionDone toggles between "done" (state=completed, folder=Archive)
+  // and "active" (state=idle, folder cleared). Atomic on the server side —
+  // both halves succeed or fail together.
+  markSessionDone: (sessionId: string, done: boolean) => Promise<void>
 }
 
 export function useBridgeFolders(): UseBridgeFoldersReturn {
@@ -65,6 +74,17 @@ export function useBridgeFolders(): UseBridgeFoldersReturn {
     })
   }, [fetchFn, basePath, folderOrder])
 
+  const markSessionDone = useCallback(async (sessionId: string, done: boolean) => {
+    if (done && !folderOrder.includes(ARCHIVE_FOLDER)) {
+      setFolderOrder(prev => prev.includes(ARCHIVE_FOLDER) ? prev : [...prev, ARCHIVE_FOLDER])
+    }
+    await fetchFn(`${basePath}/sessions/${sessionId}/mark-done`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ done }),
+    })
+  }, [fetchFn, basePath, folderOrder])
+
   return useMemo(() => ({
     folderOrder,
     refresh,
@@ -72,5 +92,6 @@ export function useBridgeFolders(): UseBridgeFoldersReturn {
     deleteFolder,
     renameFolder,
     setSessionFolder,
-  }), [folderOrder, refresh, createFolder, deleteFolder, renameFolder, setSessionFolder])
+    markSessionDone,
+  }), [folderOrder, refresh, createFolder, deleteFolder, renameFolder, setSessionFolder, markSessionDone])
 }

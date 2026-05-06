@@ -316,6 +316,7 @@
 .bc-ctx-menu-item-active { color: var(--accent); }
 .bc-ctx-menu-item-danger { color: #ef4444; }
 .bc-ctx-menu-item-danger:hover { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.bc-ctx-menu-divider { height: 1px; background: var(--border); margin: 4px 0; opacity: 0.5; }
 .bc-ctx-new-folder {
   display: flex;
   gap: 4px;

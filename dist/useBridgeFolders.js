@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBridgeConfig } from './context';
+// ARCHIVE_FOLDER is the canonical folder a session moves into when marked
+// done. Mirrors the server-side store.ArchiveFolder constant. Auto-created
+// by the server on first use.
+export const ARCHIVE_FOLDER = 'Archive';
 export function useBridgeFolders() {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
     const [folderOrder, setFolderOrder] = useState([]);
@@ -51,6 +55,16 @@ export function useBridgeFolders() {
             body: JSON.stringify({ folder }),
         });
     }, [fetchFn, basePath, folderOrder]);
+    const markSessionDone = useCallback(async (sessionId, done) => {
+        if (done && !folderOrder.includes(ARCHIVE_FOLDER)) {
+            setFolderOrder(prev => prev.includes(ARCHIVE_FOLDER) ? prev : [...prev, ARCHIVE_FOLDER]);
+        }
+        await fetchFn(`${basePath}/sessions/${sessionId}/mark-done`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ done }),
+        });
+    }, [fetchFn, basePath, folderOrder]);
     return useMemo(() => ({
         folderOrder,
         refresh,
@@ -58,6 +72,7 @@ export function useBridgeFolders() {
         deleteFolder,
         renameFolder,
         setSessionFolder,
-    }), [folderOrder, refresh, createFolder, deleteFolder, renameFolder, setSessionFolder]);
+        markSessionDone,
+    }), [folderOrder, refresh, createFolder, deleteFolder, renameFolder, setSessionFolder, markSessionDone]);
 }
 //# sourceMappingURL=useBridgeFolders.js.map

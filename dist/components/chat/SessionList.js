@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ARCHIVE_FOLDER } from '../../useBridgeFolders';
 import { EditableName } from './EditableName';
 import { HarnessFilterBar } from './HarnessFilterBar';
 import { NewSessionMenu } from './NewSessionMenu';
@@ -128,6 +129,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         await folders.setSessionFolder(sessionId, folder);
         onAfterFolderChange();
     };
+    const handleMarkDone = async (sessionId, done) => {
+        setCtxMenu(null);
+        setShowNewFolder(false);
+        await folders.markSessionDone(sessionId, done);
+        onAfterFolderChange();
+    };
     const handleCreateFolder = async () => {
         const name = newFolderName.trim();
         if (!name)
@@ -173,10 +180,11 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                 const isCollapsed = collapsed[name] ?? false;
                 const hasActive = entries.some(s => openSessionIds.has(s.bridge_id));
                 return (_jsxs("div", { children: [_jsxs("button", { className: `bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`, onClick: () => toggleFolder(name), onContextMenu: e => openFolderMenu(e, name), children: [_jsx("span", { className: "bc-folder-chevron", children: isCollapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-folder-icon", children: "\uD83D\uDCC1" }), _jsx("span", { className: "bc-folder-name", children: name }), _jsx("span", { className: "bc-folder-count", children: entries.length })] }), !isCollapsed && entries.map(renderSession)] }, name));
-            }), ctxMenu && (_jsxs("div", { className: "bc-ctx-menu", style: { top: ctxMenu.y, left: ctxMenu.x }, onClick: e => e.stopPropagation(), children: [ctxMenu.type === 'session' && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ctx-menu-label", children: "Move to folder" }), (() => {
+            }), ctxMenu && (_jsxs("div", { className: "bc-ctx-menu", style: { top: ctxMenu.y, left: ctxMenu.x }, onClick: e => e.stopPropagation(), children: [ctxMenu.type === 'session' && (_jsxs(_Fragment, { children: [(() => {
                                 const sess = sessions.find(s => s.bridge_id === ctxMenu.id);
                                 const current = sess?.folder_name ?? '';
-                                return (_jsxs(_Fragment, { children: [current && (_jsx("button", { className: "bc-ctx-menu-item", onClick: () => moveToFolder(ctxMenu.id, ''), children: "\u21A9 Remove from folder" })), folders.folderOrder.map(f => (_jsxs("button", { className: `bc-ctx-menu-item ${current === f ? 'bc-ctx-menu-item-active' : ''}`, onClick: () => moveToFolder(ctxMenu.id, f), children: ["\uD83D\uDCC1 ", f] }, f)))] }));
+                                const isDone = current === ARCHIVE_FOLDER;
+                                return (_jsxs(_Fragment, { children: [_jsx("button", { className: "bc-ctx-menu-item", onClick: () => handleMarkDone(ctxMenu.id, !isDone), children: isDone ? '↺ Unmark / unarchive' : '✓ Mark done' }), _jsx("div", { className: "bc-ctx-menu-divider" }), _jsx("div", { className: "bc-ctx-menu-label", children: "Move to folder" }), current && !isDone && (_jsx("button", { className: "bc-ctx-menu-item", onClick: () => moveToFolder(ctxMenu.id, ''), children: "\u21A9 Remove from folder" })), folders.folderOrder.map(f => (_jsxs("button", { className: `bc-ctx-menu-item ${current === f ? 'bc-ctx-menu-item-active' : ''}`, onClick: () => moveToFolder(ctxMenu.id, f), children: ["\uD83D\uDCC1 ", f] }, f)))] }));
                             })(), showNewFolder ? (_jsxs("div", { className: "bc-ctx-new-folder", children: [_jsx("input", { ref: newFolderRef, className: "bc-ctx-new-folder-input", value: newFolderName, onChange: e => setNewFolderName(e.target.value), onKeyDown: e => {
                                             if (e.key === 'Enter')
                                                 handleCreateFolder();
