@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useBridgeConfig } from '../context';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { formatTokens, formatDuration } from '../utils';
@@ -97,7 +97,7 @@ function periodCutoff(period) {
 export function BridgeUsage() {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
     const [sessions, setSessions] = useState([]);
-    const [usageMap, setUsageMap] = useState(new Map());
+    const [aggregates, setAggregates] = useState(new Map());
     const [limits, setLimits] = useState(null);
     const [spend, setSpend] = useState(null);
     const [expandedRaw, setExpandedRaw] = useState({});
@@ -117,6 +117,26 @@ export function BridgeUsage() {
         catch { /* ignore */ }
         finally {
             setLoading(false);
+        }
+    }, [apiFetch, basePath]);
+    // Pull all per-session token/cost totals in one shot from log-store
+    // (proxied via bridge-server). Replaces the prior per-session messages
+    // fan-out that summed input/output/cost/duration in the browser.
+    const fetchAggregates = useCallback(async () => {
+        setLoadingUsage(true);
+        try {
+            const res = await apiFetch(`${basePath}/sessions/aggregates`);
+            if (!res.ok)
+                return;
+            const rows = await res.json() ?? [];
+            const map = new Map();
+            for (const r of rows)
+                map.set(r.session_id, r);
+            setAggregates(map);
+        }
+        catch { /* ignore */ }
+        finally {
+            setLoadingUsage(false);
         }
     }, [apiFetch, basePath]);
     // Subscription limits live on usage-store (via dash proxy at /api/usage/limits).
@@ -192,6 +212,7 @@ export function BridgeUsage() {
         }
     }, [apiFetch, expandedRaw]);
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
+    useEffect(() => { fetchAggregates(); }, [fetchAggregates]);
     useEffect(() => {
         fetchLimits();
         const t = setInterval(fetchLimits, 60000);
@@ -206,43 +227,6 @@ export function BridgeUsage() {
         const cutoff = periodCutoff(period);
         return sessions.filter(s => s.created_at >= cutoff);
     }, [sessions, period]);
-    const usageMapRef = useRef(usageMap);
-    usageMapRef.current = usageMap;
-    useEffect(() => {
-        const current = usageMapRef.current;
-        const toLoad = periodSessions.filter(s => (s.state === 'completed' || s.state === 'idle' || s.state === 'running') && !current.has(s.bridge_id)).slice(0, 20);
-        if (toLoad.length === 0)
-            return;
-        setLoadingUsage(true);
-        (async () => {
-            const newEntries = new Map(current);
-            for (const s of toLoad) {
-                try {
-                    const res = await apiFetch(`${basePath}/sessions/${s.bridge_id}/messages`);
-                    if (!res.ok)
-                        continue;
-                    const msgs = await res.json() ?? [];
-                    let input = 0, output = 0, cost = 0, duration = 0, turns = 0;
-                    let model = '';
-                    for (const m of msgs) {
-                        if (m.role === 'assistant' && m.meta) {
-                            input += m.meta.usage?.input_tokens || 0;
-                            output += m.meta.usage?.output_tokens || 0;
-                            cost += m.meta.cost?.total_usd || 0;
-                            duration += m.meta.duration_ms || 0;
-                            turns++;
-                            if (m.meta.model)
-                                model = m.meta.model;
-                        }
-                    }
-                    newEntries.set(s.bridge_id, { sessionId: s.bridge_id, harness: s.harness, instanceId: s.instance_id ?? '', inputTokens: input, outputTokens: output, cost, durationMs: duration, model, turns });
-                }
-                catch { /* skip */ }
-            }
-            setUsageMap(newEntries);
-            setLoadingUsage(false);
-        })();
-    }, [periodSessions, apiFetch, basePath]);
     const emptyTotals = () => ({ input: 0, output: 0, cost: 0, duration: 0, turns: 0 });
     const addTotals = (t, u) => {
         t.input += u.inputTokens;
@@ -254,9 +238,20 @@ export function BridgeUsage() {
     const harnessGroups = useMemo(() => {
         const groups = new Map();
         for (const s of periodSessions) {
-            const usage = usageMap.get(s.bridge_id);
-            if (!usage)
+            const agg = aggregates.get(s.bridge_id);
+            if (!agg)
                 continue;
+            const usage = {
+                sessionId: s.bridge_id,
+                harness: s.harness,
+                instanceId: s.instance_id ?? '',
+                inputTokens: agg.input_tokens,
+                outputTokens: agg.output_tokens,
+                cost: agg.cost_usd,
+                durationMs: agg.duration_ms,
+                model: agg.model ?? '',
+                turns: agg.turns,
+            };
             let h = groups.get(s.harness);
             if (!h) {
                 h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 };
@@ -274,7 +269,7 @@ export function BridgeUsage() {
             h.sessionCount++;
         }
         return groups;
-    }, [periodSessions, usageMap]);
+    }, [periodSessions, aggregates]);
     const totals = useMemo(() => {
         let input = 0, output = 0, cost = 0, duration = 0, count = 0;
         for (const [, g] of harnessGroups) {

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { formatTokens, formatDuration } from '../utils'
@@ -14,6 +14,19 @@ interface SessionUsage {
   durationMs: number
   model: string
   turns: number
+}
+
+// Server-side per-session aggregate from GET /sessions/aggregates.
+// Mirrors msg.SessionAggregate. Computed by SUMming result events in
+// log-store, replacing the per-session message-fetch fan-out.
+interface SessionAggregate {
+  session_id: string
+  turns: number
+  input_tokens: number
+  output_tokens: number
+  cost_usd: number
+  duration_ms: number
+  model?: string
 }
 
 interface LimitWindow {
@@ -216,7 +229,7 @@ function periodCutoff(period: Period): string {
 export function BridgeUsage() {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const [sessions, setSessions] = useState<BridgeSession[]>([])
-  const [usageMap, setUsageMap] = useState<Map<string, SessionUsage>>(new Map())
+  const [aggregates, setAggregates] = useState<Map<string, SessionAggregate>>(new Map())
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
   const [spend, setSpend] = useState<SpendKeysResponse | null>(null)
   const [expandedRaw, setExpandedRaw] = useState<Record<string, string | 'loading' | 'error' | undefined>>({})
@@ -234,6 +247,22 @@ export function BridgeUsage() {
       if (res.ok) setSessions(await res.json() ?? [])
     } catch { /* ignore */ }
     finally { setLoading(false) }
+  }, [apiFetch, basePath])
+
+  // Pull all per-session token/cost totals in one shot from log-store
+  // (proxied via bridge-server). Replaces the prior per-session messages
+  // fan-out that summed input/output/cost/duration in the browser.
+  const fetchAggregates = useCallback(async () => {
+    setLoadingUsage(true)
+    try {
+      const res = await apiFetch(`${basePath}/sessions/aggregates`)
+      if (!res.ok) return
+      const rows: SessionAggregate[] = await res.json() ?? []
+      const map = new Map<string, SessionAggregate>()
+      for (const r of rows) map.set(r.session_id, r)
+      setAggregates(map)
+    } catch { /* ignore */ }
+    finally { setLoadingUsage(false) }
   }, [apiFetch, basePath])
 
   // Subscription limits live on usage-store (via dash proxy at /api/usage/limits).
@@ -302,6 +331,7 @@ export function BridgeUsage() {
   }, [apiFetch, expandedRaw])
 
   useEffect(() => { fetchSessions() }, [fetchSessions])
+  useEffect(() => { fetchAggregates() }, [fetchAggregates])
   useEffect(() => {
     fetchLimits()
     const t = setInterval(fetchLimits, 60000)
@@ -318,45 +348,6 @@ export function BridgeUsage() {
     return sessions.filter(s => s.created_at >= cutoff)
   }, [sessions, period])
 
-  const usageMapRef = useRef(usageMap)
-  usageMapRef.current = usageMap
-
-  useEffect(() => {
-    const current = usageMapRef.current
-    const toLoad = periodSessions.filter(s =>
-      (s.state === 'completed' || s.state === 'idle' || s.state === 'running') && !current.has(s.bridge_id)
-    ).slice(0, 20)
-
-    if (toLoad.length === 0) return
-    setLoadingUsage(true)
-
-    ;(async () => {
-      const newEntries = new Map(current)
-      for (const s of toLoad) {
-        try {
-          const res = await apiFetch(`${basePath}/sessions/${s.bridge_id}/messages`)
-          if (!res.ok) continue
-          const msgs: Array<{ role: string; meta?: { usage?: Record<string, number>; cost?: Record<string, number>; duration_ms?: number; model?: string } }> = await res.json() ?? []
-          let input = 0, output = 0, cost = 0, duration = 0, turns = 0
-          let model = ''
-          for (const m of msgs) {
-            if (m.role === 'assistant' && m.meta) {
-              input += m.meta.usage?.input_tokens || 0
-              output += m.meta.usage?.output_tokens || 0
-              cost += m.meta.cost?.total_usd || 0
-              duration += m.meta.duration_ms || 0
-              turns++
-              if (m.meta.model) model = m.meta.model
-            }
-          }
-          newEntries.set(s.bridge_id, { sessionId: s.bridge_id, harness: s.harness, instanceId: s.instance_id ?? '', inputTokens: input, outputTokens: output, cost, durationMs: duration, model, turns })
-        } catch { /* skip */ }
-      }
-      setUsageMap(newEntries)
-      setLoadingUsage(false)
-    })()
-  }, [periodSessions, apiFetch, basePath])
-
   type Totals = { input: number; output: number; cost: number; duration: number; turns: number }
   type SourceGroup = { source: string; sessions: SessionUsage[]; totals: Totals }
   type HarnessGroup = { harness: string; sources: Map<string, SourceGroup>; totals: Totals; sessionCount: number }
@@ -370,8 +361,19 @@ export function BridgeUsage() {
   const harnessGroups = useMemo(() => {
     const groups = new Map<string, HarnessGroup>()
     for (const s of periodSessions) {
-      const usage = usageMap.get(s.bridge_id)
-      if (!usage) continue
+      const agg = aggregates.get(s.bridge_id)
+      if (!agg) continue
+      const usage: SessionUsage = {
+        sessionId: s.bridge_id,
+        harness: s.harness,
+        instanceId: s.instance_id ?? '',
+        inputTokens: agg.input_tokens,
+        outputTokens: agg.output_tokens,
+        cost: agg.cost_usd,
+        durationMs: agg.duration_ms,
+        model: agg.model ?? '',
+        turns: agg.turns,
+      }
       let h = groups.get(s.harness)
       if (!h) { h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(s.harness, h) }
       const srcKey = s.source ?? ''
@@ -383,7 +385,7 @@ export function BridgeUsage() {
       h.sessionCount++
     }
     return groups
-  }, [periodSessions, usageMap])
+  }, [periodSessions, aggregates])
 
   const totals = useMemo(() => {
     let input = 0, output = 0, cost = 0, duration = 0, count = 0
