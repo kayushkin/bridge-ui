@@ -12,10 +12,12 @@ interface BridgeProviderProps {
     toolStoreBasePath?: string;
     /** Base path for permission-store API. If omitted, the Permissions tab is hidden. */
     permissionStoreBasePath?: string;
+    /** Base path for kanban-store API. If omitted, the Kanban tab is hidden. */
+    kanbanStoreBasePath?: string;
     /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES. */
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map

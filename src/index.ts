@@ -53,6 +53,20 @@ export { useBridgeFolders } from './useBridgeFolders'
 export type { UseBridgeFoldersReturn } from './useBridgeFolders'
 export { useBridgeTools } from './useBridgeTools'
 export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools'
+export { useKanban } from './useKanban'
+export type {
+  Board,
+  Column,
+  Placement,
+  CardLink,
+  EntityTag,
+  CardView,
+  ColumnView,
+  BoardView,
+  NoteboardItem,
+  EntityTypeInfo,
+  TagCount,
+} from './types-kanban'
 export { useStickyBottomScroll } from './useStickyBottomScroll'
 export type { StickyBottomScroll } from './useStickyBottomScroll'
 
@@ -73,6 +87,7 @@ export { BridgeTools } from './components/BridgeTools'
 export { BridgePermissions } from './components/BridgePermissions'
 export { BridgeAgents } from './components/BridgeAgents'
 export { BridgeFiles } from './components/BridgeFiles'
+export { BridgeKanban } from './components/BridgeKanban'
 
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools'

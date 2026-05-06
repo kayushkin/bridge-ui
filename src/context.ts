@@ -14,6 +14,7 @@ export interface BridgeRoutes {
   tools: string
   permissions: string
   conformance: string
+  kanban: string
 }
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
@@ -29,6 +30,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   tools: '/bridge/tools',
   permissions: '/bridge/permissions',
   conformance: '/bridge/conformance',
+  kanban: '/bridge/kanban',
 }
 
 export interface BridgeConfig {
@@ -45,6 +47,9 @@ export interface BridgeConfig {
   /** Base path for permission-store API (e.g. "/api/permission-store"). No
    * trailing slash. If empty, the Permissions tab is hidden. */
   permissionStoreBasePath: string
+  /** Base path for kanban-store API (e.g. "/api/kanban"). No trailing slash.
+   * If empty, the Kanban tab is hidden. */
+  kanbanStoreBasePath: string
   /** Route paths for navigation between bridge pages. */
   routes: BridgeRoutes
 }

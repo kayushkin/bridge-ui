@@ -1,1 +1,1 @@
-{"version":3,"file":"BridgeLayout.d.ts","sourceRoot":"","sources":["../../src/components/BridgeLayout.tsx"],"names":[],"mappings":"AAIA,UAAU,iBAAiB;IACzB,2DAA2D;IAC3D,eAAe,CAAC,EAAE,OAAO,CAAA;CAC1B;AAED,wBAAgB,YAAY,CAAC,EAAE,eAAsB,EAAE,EAAE,iBAAiB,2CAuCzE"}
+{"version":3,"file":"BridgeLayout.d.ts","sourceRoot":"","sources":["../../src/components/BridgeLayout.tsx"],"names":[],"mappings":"AAIA,UAAU,iBAAiB;IACzB,2DAA2D;IAC3D,eAAe,CAAC,EAAE,OAAO,CAAA;CAC1B;AAED,wBAAgB,YAAY,CAAC,EAAE,eAAsB,EAAE,EAAE,iBAAiB,2CAwCzE"}

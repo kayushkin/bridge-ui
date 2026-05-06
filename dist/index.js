@@ -12,6 +12,7 @@ export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
 export { useBridgeTools } from './useBridgeTools';
+export { useKanban } from './useKanban';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
@@ -29,6 +30,7 @@ export { BridgeTools } from './components/BridgeTools';
 export { BridgePermissions } from './components/BridgePermissions';
 export { BridgeAgents } from './components/BridgeAgents';
 export { BridgeFiles } from './components/BridgeFiles';
+export { BridgeKanban } from './components/BridgeKanban';
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
 // Shared status dot — used by header, sidebar, and composer status chip

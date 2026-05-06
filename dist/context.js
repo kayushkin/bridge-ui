@@ -12,6 +12,7 @@ export const DEFAULT_BRIDGE_ROUTES = {
     tools: '/bridge/tools',
     permissions: '/bridge/permissions',
     conformance: '/bridge/conformance',
+    kanban: '/bridge/kanban',
 };
 export const BridgeContext = createContext(null);
 export function useBridgeConfig() {
