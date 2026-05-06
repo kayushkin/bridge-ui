@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useBridgeConfig } from '../../context'
 import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types'
 import { formatCost, formatTokens } from '../../utils'
 import { EditableName } from './EditableName'
@@ -233,6 +234,7 @@ function SessionDetailsPanel({ session }: { session: ManagedSession }) {
   ]
   return (
     <div className="bc-details-panel" role="dialog" aria-label="Session details">
+      <SessionBypassToggle session={session} />
       <dl className="bc-details-list">
         {rows.map(([k, v, mono]) => (
           <div className="bc-details-row" key={k}>
@@ -241,6 +243,64 @@ function SessionDetailsPanel({ session }: { session: ManagedSession }) {
           </div>
         ))}
       </dl>
+    </div>
+  )
+}
+
+// SessionBypassToggle is the per-session permission-bypass switch surfaced
+// inside the session details dropdown. The session inherits the global
+// toggle state (settings page) at creation; flipping this per-session
+// switch overrides the global for THIS session only — see the snapshot/
+// override semantics in llm-bridge-server/internal/server/bypass_inject.go.
+//
+// Persists via PUT /sessions/{id}/bypass-permissions; the new value lands
+// in session.harness_config.bypass_permissions. Read live by the CC
+// PreToolUse prehook (takes effect on the next tool call), forwarded to
+// non-CC harnesses on next start/resume.
+function SessionBypassToggle({ session }: { session: ManagedSession }) {
+  const { fetch: apiFetch, basePath } = useBridgeConfig()
+  const cfg = session.harness_config as Record<string, unknown> | undefined
+  const initial = typeof cfg?.bypass_permissions === 'boolean' ? cfg.bypass_permissions : false
+  const [enabled, setEnabled] = useState<boolean>(initial)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Re-sync if the upstream session prop changes (e.g. another tab toggled it).
+  useEffect(() => { setEnabled(initial) }, [initial])
+
+  const toggle = useCallback(async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    const next = !enabled
+    setEnabled(next) // optimistic
+    try {
+      const res = await apiFetch(`${basePath}/sessions/${session.bridge_id}/bypass-permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    } catch (err) {
+      setEnabled(!next) // roll back on failure
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [apiFetch, basePath, session.bridge_id, enabled, busy])
+
+  return (
+    <div className="bc-details-bypass">
+      <label className="bc-details-bypass-row">
+        <input type="checkbox" checked={enabled} onChange={toggle} disabled={busy} />
+        <span className="bc-details-bypass-label">
+          <strong>Bypass permissions</strong>
+          <span className="bc-details-bypass-hint">
+            {enabled ? 'this session auto-approves every tool call' : 'this session honors permission rules'}
+          </span>
+        </span>
+      </label>
+      {error && <div className="bc-details-bypass-err">{error}</div>}
     </div>
   )
 }
