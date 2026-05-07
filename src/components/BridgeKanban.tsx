@@ -2,11 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kanban'
 
+const LAYOUT_KEY = 'bk:layout'
+const LAST_BOARD_KEY = 'bk:lastBoardId'
+const DEFAULT_BOARD_NAME = 'Agent runs'
+
+type Layout = 'horizontal' | 'vertical'
+
 /**
- * Kanban page. Sidebar lists boards. Main pane shows the selected board's
- * columns side-by-side with cards stacked beneath each. Card click opens a
- * drawer with body, status, links, and entity-link/tag editors. v1 uses a
- * dropdown to move cards (drag-and-drop is a follow-up).
+ * Kanban page. The header carries a board selector and a layout toggle so the
+ * column flow can run side-by-side (landscape) or stacked (portrait). Card
+ * click opens a drawer with body, status, links, and entity-link/tag editors.
  */
 export function BridgeKanban() {
   const [selectedBoardID, setSelectedBoardID] = useState<string | null>(null)
@@ -14,13 +19,36 @@ export function BridgeKanban() {
   const [showNewBoard, setShowNewBoard] = useState(false)
   const [showNewColumn, setShowNewColumn] = useState(false)
   const [composeColumn, setComposeColumn] = useState<string | null>(null)
+  const [layout, setLayout] = useState<Layout>(() => {
+    if (typeof localStorage === 'undefined') return 'horizontal'
+    return localStorage.getItem(LAYOUT_KEY) === 'vertical' ? 'vertical' : 'horizontal'
+  })
 
   const k = useKanban(selectedBoardID)
 
-  // Auto-select the first board on load.
+  useEffect(() => {
+    localStorage.setItem(LAYOUT_KEY, layout)
+  }, [layout])
+
+  useEffect(() => {
+    if (selectedBoardID) localStorage.setItem(LAST_BOARD_KEY, selectedBoardID)
+  }, [selectedBoardID])
+
+  // Pick the initial board: last-opened (if it still exists) → Agent Runs → first.
   useEffect(() => {
     if (selectedBoardID) return
-    if (k.boards.length > 0) setSelectedBoardID(k.boards[0].id)
+    if (k.boards.length === 0) return
+    const last = localStorage.getItem(LAST_BOARD_KEY)
+    if (last && k.boards.some(b => b.id === last)) {
+      setSelectedBoardID(last)
+      return
+    }
+    const named = k.boards.find(b => b.name === DEFAULT_BOARD_NAME)
+    if (named) {
+      setSelectedBoardID(named.id)
+      return
+    }
+    setSelectedBoardID(k.boards[0].id)
   }, [k.boards, selectedBoardID])
 
   const drawerCard: CardView | null = useMemo(() => {
@@ -35,52 +63,38 @@ export function BridgeKanban() {
 
   return (
     <div className="bk-container">
-      <aside className="bk-sidebar">
-        <div className="bk-sidebar-head">
-          <span>Boards</span>
-          <button className="bi-add-btn" onClick={() => setShowNewBoard(s => !s)}>+ New</button>
-        </div>
-        {showNewBoard && (
-          <NewBoardForm
-            onCreate={async (args) => {
-              const b = await k.createBoard(args)
-              if (b) { setSelectedBoardID(b.id); setShowNewBoard(false) }
-            }}
-            onCancel={() => setShowNewBoard(false)}
-          />
-        )}
-        <ul className="bk-board-list">
-          {k.boards.map(b => (
-            <li
-              key={b.id}
-              className={`bk-board-item ${b.id === selectedBoardID ? 'bk-board-item-active' : ''}`}
-              onClick={() => setSelectedBoardID(b.id)}
-            >
-              <span>{b.name}</span>
-              {b.archived && <span className="bk-tag-archived">archived</span>}
-            </li>
-          ))}
-          {k.boards.length === 0 && !k.loading && (
-            <li className="bi-empty">No boards. Create one to start.</li>
-          )}
-        </ul>
-      </aside>
-
       <main className="bk-main">
         {k.error && <div className="bridge-error">{k.error}</div>}
 
-        {!selectedBoardID ? (
-          <div className="bi-empty">Select a board.</div>
-        ) : !k.view ? (
-          <div className="bi-loading">Loading…</div>
-        ) : (
-          <>
-            <div className="bk-board-header">
-              <div>
-                <h2>{k.view.board.name}</h2>
-                {k.view.board.description && <p className="bk-board-desc">{k.view.board.description}</p>}
-              </div>
-              <div className="bk-board-actions">
+        <div className="bk-board-header">
+          <div className="bk-board-header-main">
+            <select
+              className="bk-board-select"
+              value={selectedBoardID ?? ''}
+              onChange={e => setSelectedBoardID(e.target.value || null)}
+            >
+              {!selectedBoardID && <option value="">— select board —</option>}
+              {k.boards.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.name}{b.archived ? ' (archived)' : ''}
+                </option>
+              ))}
+            </select>
+            <button className="bi-add-btn" onClick={() => setShowNewBoard(s => !s)}>+ New Board</button>
+            {k.view?.board.description && (
+              <p className="bk-board-desc">{k.view.board.description}</p>
+            )}
+          </div>
+          <div className="bk-board-actions">
+            <button
+              className="bi-add-btn"
+              onClick={() => setLayout(l => l === 'horizontal' ? 'vertical' : 'horizontal')}
+              title={layout === 'horizontal' ? 'Switch to vertical (stacked) columns' : 'Switch to horizontal (side-by-side) columns'}
+            >
+              {layout === 'horizontal' ? 'Vertical layout' : 'Horizontal layout'}
+            </button>
+            {selectedBoardID && k.view && (
+              <>
                 <button className="bi-add-btn" onClick={() => setShowNewColumn(s => !s)}>+ Column</button>
                 <button
                   className="bi-add-btn"
@@ -90,9 +104,29 @@ export function BridgeKanban() {
                     if (ok) setSelectedBoardID(null)
                   }}
                 >Delete board</button>
-              </div>
-            </div>
+              </>
+            )}
+          </div>
+        </div>
 
+        {showNewBoard && (
+          <NewBoardForm
+            onCreate={async (args) => {
+              const b = await k.createBoard(args)
+              if (b) { setSelectedBoardID(b.id); setShowNewBoard(false) }
+            }}
+            onCancel={() => setShowNewBoard(false)}
+          />
+        )}
+
+        {!selectedBoardID ? (
+          k.boards.length === 0 && !k.loading
+            ? <div className="bi-empty">No boards. Create one to start.</div>
+            : <div className="bi-empty">Select a board.</div>
+        ) : !k.view ? (
+          <div className="bi-loading">Loading…</div>
+        ) : (
+          <>
             {showNewColumn && (
               <NewColumnForm
                 onCreate={async (args) => {
@@ -103,7 +137,7 @@ export function BridgeKanban() {
               />
             )}
 
-            <div className="bk-columns">
+            <div className={`bk-columns bk-columns-${layout}`}>
               {k.view.columns.map(cv => (
                 <ColumnPane
                   key={cv.column.id}
@@ -511,4 +545,3 @@ function AddLinkForm({
     </form>
   )
 }
-

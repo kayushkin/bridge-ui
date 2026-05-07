@@ -3999,58 +3999,43 @@
 /* ============================ Kanban (BridgeKanban) ============================ */
 
 .bk-container {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 16px;
+  display: block;
   height: 100%;
   min-height: 0;
 }
 
-.bk-sidebar {
-  border-right: 1px solid var(--border);
-  padding: 12px;
-  overflow-y: auto;
-}
-.bk-sidebar-head {
-  display: flex; align-items: center; justify-content: space-between;
-  font-weight: 600; margin-bottom: 8px;
-}
-.bk-board-list { list-style: none; padding: 0; margin: 0; }
-.bk-board-item {
-  padding: 6px 8px; border-radius: 4px; cursor: pointer;
-  display: flex; align-items: center; justify-content: space-between; gap: 6px;
-}
-.bk-board-item:hover { background: var(--surface-hover, rgba(127,127,127,0.08)); }
-.bk-board-item-active {
-  background: var(--accent-soft, rgba(99,102,241,0.12));
-  color: var(--accent);
-}
-
-.bk-tag-archived {
-  font-size: 0.7em;
-  background: var(--border);
-  padding: 1px 6px;
-  border-radius: 3px;
-  opacity: 0.7;
-}
-
-.bk-main { padding: 0 12px 16px 0; min-width: 0; overflow: auto; }
+.bk-main { padding: 0 12px 16px 12px; min-width: 0; overflow: auto; height: 100%; }
 .bk-board-header {
   display: flex; align-items: flex-start; justify-content: space-between;
-  margin-bottom: 12px; gap: 12px;
+  margin-bottom: 12px; gap: 12px; flex-wrap: wrap;
 }
-.bk-board-header h2 { font-size: 1.3em; font-weight: 600; }
-.bk-board-desc { font-size: 0.9em; opacity: 0.75; margin-top: 2px; }
-.bk-board-actions { display: flex; gap: 8px; }
+.bk-board-header-main {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;
+}
+.bk-board-select {
+  font-size: 1.1em; font-weight: 600;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; color: inherit;
+  max-width: 100%;
+}
+.bk-board-desc { font-size: 0.9em; opacity: 0.75; flex-basis: 100%; margin-top: 2px; }
+.bk-board-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .bk-columns {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 320px);
   gap: 12px;
   align-items: start;
-  overflow-x: auto;
   padding-bottom: 8px;
+}
+.bk-columns-horizontal {
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 320px);
+  overflow-x: auto;
+}
+.bk-columns-vertical {
+  grid-auto-flow: row;
+  grid-template-columns: 1fr;
+  overflow-x: visible;
 }
 
 .bk-column {
