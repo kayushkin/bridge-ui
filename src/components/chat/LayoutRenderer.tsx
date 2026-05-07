@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { GitPanel } from '../GitPanel'
+import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { SplitResizer } from './SplitResizer'
 import { Thread } from './Thread'
 import { Timeline } from './Timeline'
@@ -71,6 +72,15 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           paneKey="git"
         />
       )
+    case 'kanban':
+      return (
+        <LinkedKanbanPanel
+          sessionId={sessionId}
+          onToggleCollapse={() => ws.togglePane('kanban')}
+          style={style}
+          paneKey="kanban"
+        />
+      )
   }
 }
 
@@ -126,13 +136,14 @@ export function LayoutRenderer({ tree }: { tree: InnerNode }) {
   if (ws.panesHidden.thread) hidden.add('thread')
   if (ws.panesHidden.timeline) hidden.add('timeline')
   if (ws.panesHidden.git) hidden.add('git')
+  if (ws.panesHidden.kanban) hidden.add('kanban')
 
   if (!hasVisibleLeaf(tree, hidden)) {
     return (
       <div className="bc-chat-split">
         <div className="bc-split-empty">
           <div className="bc-split-empty-hint">
-            All panes hidden. Use the toggles above to show Turns, Thread, Timeline, or Git.
+            All panes hidden. Use the toggles above to show Turns, Thread, Timeline, Git, or Kanban.
           </div>
         </div>
       </div>

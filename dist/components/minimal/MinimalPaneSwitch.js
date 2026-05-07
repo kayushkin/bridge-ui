@@ -5,6 +5,7 @@ const PANES = [
     { key: 'thread', label: 'Thread' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'git', label: 'Git' },
+    { key: 'kanban', label: 'Kanban' },
 ];
 export function MinimalPaneSwitch() {
     const { mobilePane, setMobilePane } = useMinimalChrome();

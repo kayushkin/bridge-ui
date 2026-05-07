@@ -7,7 +7,7 @@ export type ChromeOverride = 'minimal' | 'full' | null
 const STORAGE_KEY = 'bridge-chrome-override'
 const PANE_KEY = 'bridge-mobile-pane'
 const MOBILE_BREAKPOINT = 640
-const VALID_PANES: readonly PaneKey[] = ['turns', 'thread', 'timeline', 'git']
+const VALID_PANES: readonly PaneKey[] = ['turns', 'thread', 'timeline', 'git', 'kanban']
 
 function loadMobilePane(): PaneKey {
   if (typeof window === 'undefined') return 'turns'

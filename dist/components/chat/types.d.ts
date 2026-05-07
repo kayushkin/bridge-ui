@@ -25,7 +25,7 @@ export interface CollapseState {
 export interface AppCollapseState {
     sessionList: boolean;
 }
-export type PaneKey = 'turns' | 'thread' | 'timeline' | 'git';
+export type PaneKey = 'turns' | 'thread' | 'timeline' | 'git' | 'kanban';
 export type PanesHidden = Record<PaneKey, boolean>;
 export type PaneSizes = Record<PaneKey, number>;
 export interface WorkspaceState {

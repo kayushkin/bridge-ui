@@ -28,11 +28,32 @@ const DEFAULT_INNER_TREE: InnerNode = {
     { kind: 'leaf', viewType: 'thread' },
     { kind: 'leaf', viewType: 'timeline' },
     { kind: 'leaf', viewType: 'git' },
+    { kind: 'leaf', viewType: 'kanban' },
   ],
 }
 
-const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: true, timeline: true, git: true }
-const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1 }
+const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: true, timeline: true, git: true, kanban: true }
+const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1 }
+
+// Backfill missing PaneKey leaves into a persisted workspace's inner layout
+// tree. New PaneKeys (e.g. 'kanban' added 2026-05-07) need to be present in
+// the tree of pre-existing workspaces so their toggle has something to show.
+function ensurePaneLeaves(node: InnerNode): InnerNode {
+  const present = new Set<string>()
+  const walk = (n: InnerNode) => {
+    if (n.kind === 'leaf') { present.add(n.viewType); return }
+    n.children.forEach(walk)
+  }
+  walk(node)
+  const missing: InnerNode[] = (['turns', 'thread', 'timeline', 'git', 'kanban'] as const)
+    .filter(k => !present.has(k))
+    .map(k => ({ kind: 'leaf', viewType: k }))
+  if (missing.length === 0) return node
+  if (node.kind === 'leaf') {
+    return { kind: 'split', direction: 'h', children: [node, ...missing] }
+  }
+  return { ...node, children: [...node.children, ...missing] }
+}
 
 // Resolve a SplitMode to a concrete axis + position. 'split-auto' looks at
 // the currently focused workspace pane and picks the longer side; ties and
@@ -78,7 +99,14 @@ export function BridgeChat() {
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
   const initialState = useRef(loadWorkspacesState())
-  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => initialState.current.workspaces)
+  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() =>
+    initialState.current.workspaces.map(w => ({
+      ...w,
+      panesHidden: { ...DEFAULT_PANES_HIDDEN, ...w.panesHidden },
+      paneSizes: { ...DEFAULT_PANE_SIZES, ...w.paneSizes },
+      layout: ensurePaneLeaves(w.layout),
+    }))
+  )
   const [layout, setLayout] = useState<WorkspaceLayoutNode | null>(() => initialState.current.layout)
   const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(() => initialState.current.focusedWorkspaceId)
   const bootstrappedRef = useRef(false)

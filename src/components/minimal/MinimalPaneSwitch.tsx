@@ -6,6 +6,7 @@ const PANES: { key: PaneKey; label: string }[] = [
   { key: 'thread', label: 'Thread' },
   { key: 'timeline', label: 'Timeline' },
   { key: 'git', label: 'Git' },
+  { key: 'kanban', label: 'Kanban' },
 ]
 
 export function MinimalPaneSwitch() {

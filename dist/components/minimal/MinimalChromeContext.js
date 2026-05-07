@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 const STORAGE_KEY = 'bridge-chrome-override';
 const PANE_KEY = 'bridge-mobile-pane';
 const MOBILE_BREAKPOINT = 640;
-const VALID_PANES = ['turns', 'thread', 'timeline', 'git'];
+const VALID_PANES = ['turns', 'thread', 'timeline', 'git', 'kanban'];
 function loadMobilePane() {
     if (typeof window === 'undefined')
         return 'turns';

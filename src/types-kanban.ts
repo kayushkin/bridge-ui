@@ -56,6 +56,11 @@ export interface CardView {
   links?: CardLink[]
 }
 
+export interface EntityCardView {
+  card_id: string
+  item: NoteboardItem | null
+}
+
 export interface ColumnView {
   column: Column
   cards: CardView[] | null

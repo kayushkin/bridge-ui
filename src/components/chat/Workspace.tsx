@@ -375,6 +375,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         onToggleThread={() => togglePane('thread')}
         onToggleTimeline={() => togglePane('timeline')}
         onToggleGit={() => togglePane('git')}
+        onToggleKanban={() => togglePane('kanban')}
         onCloseWorkspace={onClose}
         gitRepos={gitRepos}
         selectedRepo={selectedRepo}
@@ -392,7 +393,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         // workspace's persisted panesHidden/layout are left untouched —
         // the user keeps their split layout when they return to full mode.
         panesHidden: minimal
-          ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git' }
+          ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban' }
           : workspace.panesHidden,
         paneSizes: workspace.paneSizes,
         togglePane,

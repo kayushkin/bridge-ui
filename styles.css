@@ -1438,6 +1438,81 @@
   font-size: 0.75em;
 }
 
+.bc-split-pane-kanban { display: flex; flex-direction: column; min-height: 0; }
+.bc-linked-kanban-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.bc-linked-kanban-summary { font-size: 0.86em; color: var(--text); }
+.bc-linked-kanban-btn,
+.bc-linked-kanban-link {
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.76em;
+  text-decoration: none;
+}
+.bc-linked-kanban-btn { cursor: pointer; }
+.bc-linked-kanban-btn-active {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--border));
+  color: #f59e0b;
+}
+.bc-linked-kanban-note {
+  font-size: 0.8em;
+  color: #f59e0b;
+}
+.bc-linked-kanban-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.bc-linked-kanban-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.bc-linked-kanban-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bc-linked-kanban-card-title { font-size: 0.86em; font-weight: 600; color: var(--text); }
+.bc-linked-kanban-card-summary {
+  font-size: 0.8em;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.bc-linked-kanban-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.bc-linked-kanban-card-id {
+  font-family: ui-monospace, monospace;
+  font-size: 0.74em;
+  color: var(--text-dim);
+}
+.bc-linked-kanban-chip {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+  font-size: 0.72em;
+}
+
 /* Composer */
 .bc-composer-wrap {
   display: flex; flex-direction: column;
@@ -3184,6 +3259,19 @@
 .bc-composer-wrap {
   background: transparent;
   padding: 0;
+}
+.bc-linked-kanban-btn,
+.bc-linked-kanban-link,
+.bc-linked-kanban-card {
+  border-color: var(--bc-edge);
+}
+.bc-linked-kanban-btn:hover,
+.bc-linked-kanban-link:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: color-mix(in srgb, white 5%, transparent);
+}
+.bc-linked-kanban-card {
+  background: color-mix(in srgb, white 3%, transparent);
 }
 .bc-composer {
   padding: 10px 16px 14px;

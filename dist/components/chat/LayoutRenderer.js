@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useRef } from 'react';
 import { GitPanel } from '../GitPanel';
+import { LinkedKanbanPanel } from './LinkedKanbanPanel';
 import { SplitResizer } from './SplitResizer';
 import { Thread } from './Thread';
 import { Timeline } from './Timeline';
@@ -27,6 +28,8 @@ function ViewLeaf({ viewType, style }) {
             return (_jsx(Timeline, { rows: ws.rows, onToggleCollapse: () => ws.togglePane('timeline'), style: style, paneKey: "timeline" }));
         case 'git':
             return (_jsx(GitPanel, { sessionId: sessionId, uiState: ws.uiState, onToggleCollapse: () => ws.togglePane('git'), style: style, paneKey: "git" }));
+        case 'kanban':
+            return (_jsx(LinkedKanbanPanel, { sessionId: sessionId, onToggleCollapse: () => ws.togglePane('kanban'), style: style, paneKey: "kanban" }));
     }
 }
 function SplitView({ node, hidden }) {
@@ -75,8 +78,10 @@ export function LayoutRenderer({ tree }) {
         hidden.add('timeline');
     if (ws.panesHidden.git)
         hidden.add('git');
+    if (ws.panesHidden.kanban)
+        hidden.add('kanban');
     if (!hasVisibleLeaf(tree, hidden)) {
-        return (_jsx("div", { className: "bc-chat-split", children: _jsx("div", { className: "bc-split-empty", children: _jsx("div", { className: "bc-split-empty-hint", children: "All panes hidden. Use the toggles above to show Turns, Thread, Timeline, or Git." }) }) }));
+        return (_jsx("div", { className: "bc-chat-split", children: _jsx("div", { className: "bc-split-empty", children: _jsx("div", { className: "bc-split-empty-hint", children: "All panes hidden. Use the toggles above to show Turns, Thread, Timeline, Git, or Kanban." }) }) }));
     }
     if (tree.kind === 'leaf') {
         return _jsx(ViewLeaf, { viewType: tree.viewType });
