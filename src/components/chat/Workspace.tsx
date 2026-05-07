@@ -7,6 +7,7 @@ import { formatTokens } from '../../utils'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
 import { PendingPermissionsBanner } from './PendingPermissionsBanner'
+import { SessionBypassToggle } from './SessionBypassToggle'
 import { SessionHeader } from './SessionHeader'
 import { StatusDot } from './StatusDot'
 import { SystemPromptModal } from './SystemPromptModal'
@@ -333,6 +334,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
               title={bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts'}
             >Tools{bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''}</button>
           )}
+          <SessionBypassToggle session={bridge.activeSession} />
         </>
       )}
     </div>
