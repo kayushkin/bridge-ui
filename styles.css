@@ -4022,21 +4022,36 @@
 .bk-board-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .bk-columns {
-  display: grid;
+  display: flex;
   gap: 12px;
-  align-items: start;
   padding-bottom: 8px;
 }
 .bk-columns-horizontal {
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 320px);
+  flex-direction: row;
+  align-items: flex-start;
   overflow-x: auto;
 }
-.bk-columns-vertical {
-  grid-auto-flow: row;
-  grid-template-columns: 1fr;
-  overflow-x: visible;
+.bk-columns-horizontal .bk-column {
+  flex: 0 0 280px;
+  max-width: 320px;
 }
+.bk-columns-horizontal .bk-column-collapsed {
+  flex: 0 0 auto;
+  max-width: none;
+}
+.bk-columns-vertical {
+  flex-direction: column;
+}
+.bk-columns-vertical .bk-column { width: 100%; }
+
+.bk-column-collapse-btn {
+  background: none; border: none; padding: 0 4px 0 0;
+  font-size: 0.85em; opacity: 0.65; cursor: pointer; color: inherit;
+  line-height: 1;
+}
+.bk-column-collapse-btn:hover { opacity: 1; }
+.bk-column-collapsed { padding: 6px 10px; gap: 0; }
+.bk-column-collapsed .bk-column-head { padding-top: 0; flex-wrap: nowrap; }
 
 .bk-column {
   background: var(--surface, rgba(127,127,127,0.04));

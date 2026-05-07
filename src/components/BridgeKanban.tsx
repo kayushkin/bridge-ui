@@ -4,9 +4,22 @@ import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kan
 
 const LAYOUT_KEY = 'bk:layout'
 const LAST_BOARD_KEY = 'bk:lastBoardId'
+const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns'
 const DEFAULT_BOARD_NAME = 'Agent runs'
 
 type Layout = 'horizontal' | 'vertical'
+
+function loadCollapsedColumns(): Set<string> {
+  if (typeof localStorage === 'undefined') return new Set()
+  try {
+    const raw = localStorage.getItem(COLLAPSED_COLUMNS_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? new Set(arr.filter((x): x is string => typeof x === 'string')) : new Set()
+  } catch {
+    return new Set()
+  }
+}
 
 /**
  * Kanban page. The header carries a board selector and a layout toggle so the
@@ -23,12 +36,25 @@ export function BridgeKanban() {
     if (typeof localStorage === 'undefined') return 'horizontal'
     return localStorage.getItem(LAYOUT_KEY) === 'vertical' ? 'vertical' : 'horizontal'
   })
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(loadCollapsedColumns)
 
   const k = useKanban(selectedBoardID)
 
   useEffect(() => {
     localStorage.setItem(LAYOUT_KEY, layout)
   }, [layout])
+
+  useEffect(() => {
+    localStorage.setItem(COLLAPSED_COLUMNS_KEY, JSON.stringify([...collapsedColumns]))
+  }, [collapsedColumns])
+
+  const toggleColumnCollapsed = (columnID: string) => {
+    setCollapsedColumns(prev => {
+      const next = new Set(prev)
+      if (next.has(columnID)) next.delete(columnID); else next.add(columnID)
+      return next
+    })
+  }
 
   useEffect(() => {
     if (selectedBoardID) localStorage.setItem(LAST_BOARD_KEY, selectedBoardID)
@@ -143,6 +169,8 @@ export function BridgeKanban() {
                   key={cv.column.id}
                   cv={cv}
                   boardColumns={k.view!.columns.map(c => c.column)}
+                  collapsed={collapsedColumns.has(cv.column.id)}
+                  onToggleCollapse={() => toggleColumnCollapsed(cv.column.id)}
                   onCompose={() => setComposeColumn(cv.column.id)}
                   composeOpen={composeColumn === cv.column.id}
                   onCancelCompose={() => setComposeColumn(null)}
@@ -262,6 +290,8 @@ function NewColumnForm({
 function ColumnPane({
   cv,
   boardColumns,
+  collapsed,
+  onToggleCollapse,
   onCompose,
   composeOpen,
   onCancelCompose,
@@ -272,6 +302,8 @@ function ColumnPane({
 }: {
   cv: ColumnView
   boardColumns: { id: string; name: string }[]
+  collapsed: boolean
+  onToggleCollapse: () => void
   onCompose: () => void
   composeOpen: boolean
   onCancelCompose: () => void
@@ -283,43 +315,60 @@ function ColumnPane({
   const cards = cv.cards ?? []
   const wip = cv.column.wip_limit
   const overWIP = wip != null && cards.length > wip
+  const className = [
+    'bk-column',
+    overWIP ? 'bk-column-over-wip' : '',
+    collapsed ? 'bk-column-collapsed' : '',
+  ].filter(Boolean).join(' ')
   return (
-    <section className={`bk-column ${overWIP ? 'bk-column-over-wip' : ''}`}>
+    <section className={className}>
       <header className="bk-column-head" style={cv.column.color ? { borderTopColor: cv.column.color } : undefined}>
         <div className="bk-column-title">
+          <button
+            className="bk-column-collapse-btn"
+            onClick={onToggleCollapse}
+            title={collapsed ? 'Expand column' : 'Collapse column'}
+            aria-label={collapsed ? 'Expand column' : 'Collapse column'}
+          >
+            {collapsed ? '▸' : '▾'}
+          </button>
           <strong>{cv.column.name}</strong>
           <span className="bk-column-count">
             {cards.length}{wip != null ? ` / ${wip}` : ''}
           </span>
         </div>
-        <div className="bk-column-actions">
-          <button className="bi-add-btn" onClick={onCompose}>+</button>
-          <button className="bi-add-btn" onClick={onDeleteColumn} title="Delete column">×</button>
-        </div>
-        {cv.column.auto_status && (
+        {!collapsed && (
+          <div className="bk-column-actions">
+            <button className="bi-add-btn" onClick={onCompose}>+</button>
+            <button className="bi-add-btn" onClick={onDeleteColumn} title="Delete column">×</button>
+          </div>
+        )}
+        {cv.column.auto_status && !collapsed && (
           <div className="bk-column-meta">auto-status: {cv.column.auto_status}</div>
         )}
       </header>
 
-      {composeOpen && (
+      {!collapsed && composeOpen && (
         <NewCardForm onCreate={onCreateCard} onCancel={onCancelCompose} />
       )}
 
-      <div className="bk-card-list">
-        {cards.map(c => (
-          <CardTile
-            key={c.placement.card_id}
-            card={c}
-            currentColumn={cv.column.id}
-            boardColumns={boardColumns}
-            onMove={onMoveCard}
-            onOpen={() => onOpenCard(c.placement.card_id)}
-          />
-        ))}
-        {cards.length === 0 && (
-          <div className="bk-card-empty">no cards</div>
-        )}
-      </div>
+      {!collapsed && (
+        <div className="bk-card-list">
+          {cards.map(c => (
+            <CardTile
+              key={c.placement.card_id}
+              card={c}
+              currentColumn={cv.column.id}
+              boardColumns={boardColumns}
+              onMove={onMoveCard}
+              onOpen={() => onOpenCard(c.placement.card_id)}
+            />
+          ))}
+          {cards.length === 0 && (
+            <div className="bk-card-empty">no cards</div>
+          )}
+        </div>
+      )}
     </section>
   )
 }
