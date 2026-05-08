@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { useBridgeSession } from '../useBridgeSession'
 import { useBridgePrefs } from '../useBridgePrefs'
@@ -217,6 +218,24 @@ export function BridgeChat() {
       setFocusedWorkspaceId(ws.id)
     }
   }, [bridgePrefs, instances.loading, instances.instanceMap, workspaces.length])
+
+  // Deeplink support: ?session=<bridge_id> opens that session and clears the
+  // param. Used by kanban cards (and BridgeSessions) to send the user into
+  // chat focused on a specific session. Runs once; takes precedence over the
+  // last-used-session bootstrap above.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deeplinkConsumedRef = useRef(false)
+  useEffect(() => {
+    if (deeplinkConsumedRef.current) return
+    const id = searchParams.get('session')
+    if (!id) return
+    deeplinkConsumedRef.current = true
+    bootstrappedRef.current = true
+    handleSelectSession(id)
+    const next = new URLSearchParams(searchParams)
+    next.delete('session')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, handleSelectSession])
 
   useEffect(() => {
     apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => {})

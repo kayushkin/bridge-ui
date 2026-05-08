@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useBridgeConfig } from '../context'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kanban'
+
+// Pulls the first session link off a card if one exists. Cards from the
+// classifier carry entity_type='session' with the bridge_id as ref, so this
+// is enough to deeplink into BridgeChat (?session=<bridge_id>). Autoworker-
+// created cards use entity_type='bus_session' and need a separate lookup —
+// not supported yet.
+function sessionLinkBridgeId(card: CardView): string | null {
+  for (const l of card.links ?? []) {
+    if (l.entity_type === 'session' && l.entity_ref) return l.entity_ref
+  }
+  return null
+}
 
 const LAYOUT_KEY = 'bk:layout'
 const LAST_BOARD_KEY = 'bk:lastBoardId'
@@ -37,6 +51,12 @@ export function BridgeKanban() {
     return localStorage.getItem(LAYOUT_KEY) === 'vertical' ? 'vertical' : 'horizontal'
   })
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(loadCollapsedColumns)
+
+  const { routes } = useBridgeConfig()
+  const navigate = useNavigate()
+  const openSessionInChat = (bridgeID: string) => {
+    navigate(`${routes.chat}?session=${encodeURIComponent(bridgeID)}`)
+  }
 
   const k = useKanban(selectedBoardID)
 
@@ -180,6 +200,7 @@ export function BridgeKanban() {
                   }}
                   onMoveCard={(cardID, columnID) => k.moveCard(cardID, columnID)}
                   onOpenCard={(cardID) => setDrawerCardID(cardID)}
+                  onOpenChat={openSessionInChat}
                   onDeleteColumn={async () => {
                     if ((cv.cards?.length ?? 0) > 0) {
                       if (!confirm(`Column "${cv.column.name}" has ${cv.cards!.length} cards. Delete column AND detach those cards?`)) return
@@ -216,6 +237,7 @@ export function BridgeKanban() {
           }}
           onAddLink={(et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label)}
           onDeleteLink={(linkID) => k.deleteCardLink(linkID)}
+          onOpenChat={openSessionInChat}
         />
       )}
     </div>
@@ -298,6 +320,7 @@ function ColumnPane({
   onCreateCard,
   onMoveCard,
   onOpenCard,
+  onOpenChat,
   onDeleteColumn,
 }: {
   cv: ColumnView
@@ -310,6 +333,7 @@ function ColumnPane({
   onCreateCard: (args: { title: string; body?: string; tags?: string[] }) => void | Promise<void>
   onMoveCard: (cardID: string, columnID: string) => Promise<boolean>
   onOpenCard: (cardID: string) => void
+  onOpenChat: (bridgeID: string) => void
   onDeleteColumn: () => void
 }) {
   const cards = cv.cards ?? []
@@ -362,6 +386,7 @@ function ColumnPane({
               boardColumns={boardColumns}
               onMove={onMoveCard}
               onOpen={() => onOpenCard(c.placement.card_id)}
+              onOpenChat={onOpenChat}
             />
           ))}
           {cards.length === 0 && (
@@ -413,12 +438,14 @@ function CardTile({
   boardColumns,
   onMove,
   onOpen,
+  onOpenChat,
 }: {
   card: CardView
   currentColumn: string
   boardColumns: { id: string; name: string }[]
   onMove: (cardID: string, columnID: string) => Promise<boolean>
   onOpen: () => void
+  onOpenChat: (bridgeID: string) => void
 }) {
   const item = card.item
   if (!item) {
@@ -431,6 +458,7 @@ function CardTile({
   }
   const tags: string[] = Array.isArray(item.tags) ? item.tags : []
   const status = item.status as string
+  const sessionID = sessionLinkBridgeId(card)
   return (
     <div className="bk-card" onClick={onOpen}>
       <div className="bk-card-title">{item.title}</div>
@@ -441,6 +469,14 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
+        {sessionID && (
+          <button
+            type="button"
+            className="bk-card-chat"
+            title={`Open chat session ${sessionID}`}
+            onClick={e => { e.stopPropagation(); onOpenChat(sessionID) }}
+          >chat ↗</button>
+        )}
         <select
           value={currentColumn}
           onClick={e => e.stopPropagation()}
@@ -465,6 +501,7 @@ function CardDrawer({
   onDelete,
   onAddLink,
   onDeleteLink,
+  onOpenChat,
 }: {
   card: CardView
   boardID: string
@@ -474,6 +511,7 @@ function CardDrawer({
   onDelete: (hard: boolean) => void | Promise<void>
   onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
   onDeleteLink: (linkID: string) => Promise<boolean>
+  onOpenChat: (bridgeID: string) => void
 }) {
   const item = card.item as NoteboardItem | null
   const [title, setTitle] = useState(item?.title ?? '')
@@ -550,7 +588,16 @@ function CardDrawer({
               {links.map(l => (
                 <li key={l.id}>
                   <span className="bk-link-type">{l.entity_type}</span>
-                  <span className="bk-link-ref">{l.entity_ref}</span>
+                  {l.entity_type === 'session' && l.entity_ref ? (
+                    <button
+                      type="button"
+                      className="bk-link-ref bk-link-ref-action"
+                      title={`Open chat session ${l.entity_ref}`}
+                      onClick={() => onOpenChat(l.entity_ref)}
+                    >{l.entity_ref} ↗</button>
+                  ) : (
+                    <span className="bk-link-ref">{l.entity_ref}</span>
+                  )}
                   {l.label && <span className="bk-link-label">{l.label}</span>}
                   <button className="bk-link-del" onClick={() => onDeleteLink(l.id)}>×</button>
                 </li>
