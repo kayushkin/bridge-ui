@@ -4,14 +4,19 @@ import { useBridgeConfig } from '../context'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kanban'
 
-// Pulls the first session link off a card if one exists. Cards from the
-// classifier carry entity_type='session' with the bridge_id as ref, so this
-// is enough to deeplink into BridgeChat (?session=<bridge_id>). Autoworker-
-// created cards use entity_type='bus_session' and need a separate lookup —
-// not supported yet.
-function sessionLinkBridgeId(card: CardView): string | null {
+// Pulls the first session-shaped link off a card. Classifier cards carry
+// entity_type='session' with the bridge_id as ref (direct deeplink). Autoworker
+// cards carry entity_type='bus_session' with a bus_session_id — that needs an
+// async lookup against the llm-bridge-adapter to recover the bridge_id, which
+// happens in openSessionInChat below.
+type SessionLinkRef = { type: 'session' | 'bus_session'; ref: string }
+type OpenChatFn = (link: SessionLinkRef) => Promise<boolean>
+
+function sessionLink(card: CardView): SessionLinkRef | null {
   for (const l of card.links ?? []) {
-    if (l.entity_type === 'session' && l.entity_ref) return l.entity_ref
+    if (!l.entity_ref) continue
+    if (l.entity_type === 'session') return { type: 'session', ref: l.entity_ref }
+    if (l.entity_type === 'bus_session') return { type: 'bus_session', ref: l.entity_ref }
   }
   return null
 }
@@ -52,10 +57,32 @@ export function BridgeKanban() {
   })
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(loadCollapsedColumns)
 
-  const { routes } = useBridgeConfig()
+  const { routes, fetch: bridgeFetch, bridgeAdapterBasePath } = useBridgeConfig()
   const navigate = useNavigate()
-  const openSessionInChat = (bridgeID: string) => {
+  const openSessionByBridgeID = (bridgeID: string) => {
     navigate(`${routes.chat}?session=${encodeURIComponent(bridgeID)}`)
+  }
+  // Resolves either a direct session link (bridge_id) or a bus_session link
+  // (needs an async lookup via llm-bridge-adapter) and navigates to the chat.
+  // Returns false when a bus_session link can't be resolved (no proxy
+  // configured, lookup 404, or network error) — callers can use that to
+  // display feedback.
+  const openSessionLink = async (link: { type: 'session' | 'bus_session'; ref: string }): Promise<boolean> => {
+    if (link.type === 'session') {
+      openSessionByBridgeID(link.ref)
+      return true
+    }
+    if (!bridgeAdapterBasePath) return false
+    try {
+      const resp = await bridgeFetch(`${bridgeAdapterBasePath}/sessions/by-bus/${encodeURIComponent(link.ref)}`)
+      if (!resp.ok) return false
+      const data = await resp.json() as { bridge_id?: string }
+      if (!data.bridge_id) return false
+      openSessionByBridgeID(data.bridge_id)
+      return true
+    } catch {
+      return false
+    }
   }
 
   const k = useKanban(selectedBoardID)
@@ -200,7 +227,7 @@ export function BridgeKanban() {
                   }}
                   onMoveCard={(cardID, columnID) => k.moveCard(cardID, columnID)}
                   onOpenCard={(cardID) => setDrawerCardID(cardID)}
-                  onOpenChat={openSessionInChat}
+                  onOpenChat={openSessionLink}
                   onDeleteColumn={async () => {
                     if ((cv.cards?.length ?? 0) > 0) {
                       if (!confirm(`Column "${cv.column.name}" has ${cv.cards!.length} cards. Delete column AND detach those cards?`)) return
@@ -237,7 +264,7 @@ export function BridgeKanban() {
           }}
           onAddLink={(et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label)}
           onDeleteLink={(linkID) => k.deleteCardLink(linkID)}
-          onOpenChat={openSessionInChat}
+          onOpenChat={openSessionLink}
         />
       )}
     </div>
@@ -333,7 +360,7 @@ function ColumnPane({
   onCreateCard: (args: { title: string; body?: string; tags?: string[] }) => void | Promise<void>
   onMoveCard: (cardID: string, columnID: string) => Promise<boolean>
   onOpenCard: (cardID: string) => void
-  onOpenChat: (bridgeID: string) => void
+  onOpenChat: OpenChatFn
   onDeleteColumn: () => void
 }) {
   const cards = cv.cards ?? []
@@ -445,7 +472,7 @@ function CardTile({
   boardColumns: { id: string; name: string }[]
   onMove: (cardID: string, columnID: string) => Promise<boolean>
   onOpen: () => void
-  onOpenChat: (bridgeID: string) => void
+  onOpenChat: OpenChatFn
 }) {
   const item = card.item
   if (!item) {
@@ -458,7 +485,7 @@ function CardTile({
   }
   const tags: string[] = Array.isArray(item.tags) ? item.tags : []
   const status = item.status as string
-  const sessionID = sessionLinkBridgeId(card)
+  const session = sessionLink(card)
   return (
     <div className="bk-card" onClick={onOpen}>
       <div className="bk-card-title">{item.title}</div>
@@ -469,12 +496,14 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
-        {sessionID && (
+        {session && (
           <button
             type="button"
             className="bk-card-chat"
-            title={`Open chat session ${sessionID}`}
-            onClick={e => { e.stopPropagation(); onOpenChat(sessionID) }}
+            title={session.type === 'session'
+              ? `Open chat session ${session.ref}`
+              : `Open chat session for bus_session ${session.ref}`}
+            onClick={e => { e.stopPropagation(); void onOpenChat(session) }}
           >chat ↗</button>
         )}
         <select
@@ -511,7 +540,7 @@ function CardDrawer({
   onDelete: (hard: boolean) => void | Promise<void>
   onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
   onDeleteLink: (linkID: string) => Promise<boolean>
-  onOpenChat: (bridgeID: string) => void
+  onOpenChat: OpenChatFn
 }) {
   const item = card.item as NoteboardItem | null
   const [title, setTitle] = useState(item?.title ?? '')
@@ -585,23 +614,32 @@ function CardDrawer({
 
             <h4>Entity links</h4>
             <ul className="bk-link-list">
-              {links.map(l => (
-                <li key={l.id}>
-                  <span className="bk-link-type">{l.entity_type}</span>
-                  {l.entity_type === 'session' && l.entity_ref ? (
-                    <button
-                      type="button"
-                      className="bk-link-ref bk-link-ref-action"
-                      title={`Open chat session ${l.entity_ref}`}
-                      onClick={() => onOpenChat(l.entity_ref)}
-                    >{l.entity_ref} ↗</button>
-                  ) : (
-                    <span className="bk-link-ref">{l.entity_ref}</span>
-                  )}
-                  {l.label && <span className="bk-link-label">{l.label}</span>}
-                  <button className="bk-link-del" onClick={() => onDeleteLink(l.id)}>×</button>
-                </li>
-              ))}
+              {links.map(l => {
+                const isSessionLink =
+                  (l.entity_type === 'session' || l.entity_type === 'bus_session') && !!l.entity_ref
+                return (
+                  <li key={l.id}>
+                    <span className="bk-link-type">{l.entity_type}</span>
+                    {isSessionLink ? (
+                      <button
+                        type="button"
+                        className="bk-link-ref bk-link-ref-action"
+                        title={l.entity_type === 'session'
+                          ? `Open chat session ${l.entity_ref}`
+                          : `Open chat session for bus_session ${l.entity_ref}`}
+                        onClick={() => void onOpenChat({
+                          type: l.entity_type as 'session' | 'bus_session',
+                          ref: l.entity_ref,
+                        })}
+                      >{l.entity_ref} ↗</button>
+                    ) : (
+                      <span className="bk-link-ref">{l.entity_ref}</span>
+                    )}
+                    {l.label && <span className="bk-link-label">{l.label}</span>}
+                    <button className="bk-link-del" onClick={() => onDeleteLink(l.id)}>×</button>
+                  </li>
+                )
+              })}
               {links.length === 0 && <li className="bi-empty">No links yet.</li>}
             </ul>
             <AddLinkForm entityTypes={entityTypes} onAdd={onAddLink} />

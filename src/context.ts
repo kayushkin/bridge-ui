@@ -50,6 +50,11 @@ export interface BridgeConfig {
   /** Base path for kanban-store API (e.g. "/api/kanban"). No trailing slash.
    * If empty, the Kanban tab is hidden. */
   kanbanStoreBasePath: string
+  /** Base path for llm-bridge-adapter API (e.g. "/api/llm-bridge-adapter"). No
+   * trailing slash. Used to resolve bus_session_id → bridge_id when a kanban
+   * card is linked by entity_type=bus_session. If empty, those cards' chat
+   * deeplinks are disabled. */
+  bridgeAdapterBasePath: string
   /** Route paths for navigation between bridge pages. */
   routes: BridgeRoutes
 }

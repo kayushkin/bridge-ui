@@ -14,10 +14,13 @@ interface BridgeProviderProps {
     permissionStoreBasePath?: string;
     /** Base path for kanban-store API. If omitted, the Kanban tab is hidden. */
     kanbanStoreBasePath?: string;
+    /** Base path for llm-bridge-adapter API. If omitted, bus_session links can't
+     * resolve to a bridge_id and the chat button on those cards stays disabled. */
+    bridgeAdapterBasePath?: string;
     /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES. */
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, bridgeAdapterBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map
