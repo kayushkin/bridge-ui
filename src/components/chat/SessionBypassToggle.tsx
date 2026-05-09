@@ -28,7 +28,7 @@ export function SessionBypassToggle({ session }: { session: ManagedSession }) {
     const next = !enabled
     setEnabled(next) // optimistic
     try {
-      const res = await apiFetch(`${basePath}/sessions/${session.bridge_id}/bypass-permissions`, {
+      const res = await apiFetch(`${basePath}/sessions/${session.session_id}/bypass-permissions`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: next }),
@@ -39,7 +39,7 @@ export function SessionBypassToggle({ session }: { session: ManagedSession }) {
     } finally {
       setBusy(false)
     }
-  }, [apiFetch, basePath, session.bridge_id, enabled, busy])
+  }, [apiFetch, basePath, session.session_id, enabled, busy])
 
   return (
     <button

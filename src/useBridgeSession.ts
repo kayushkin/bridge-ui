@@ -319,7 +319,7 @@ function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>)
   // Local interrupt override: until manager-side SessionPaused emission
   // lands, the only signal that the user hit the pause button is the
   // client-side interrupted Set. Honor it for any non-terminal state.
-  if (interrupted.has(session.bridge_id)) {
+  if (interrupted.has(session.session_id)) {
     const s = session.state
     if (s === 'idle' || s === 'tool_running' || s === 'model_generating' || s === 'running') {
       return 'paused'
@@ -442,14 +442,14 @@ export function useBridgeSession(): UseBridgeSessionReturn {
             if (frame.type === 'upsert') {
               const incoming = frame.session
               setSessions(prev => {
-                const i = prev.findIndex(s => s.bridge_id === incoming.bridge_id)
+                const i = prev.findIndex(s => s.session_id === incoming.session_id)
                 if (i === -1) return [incoming, ...prev]
                 const next = prev.slice()
                 next[i] = { ...next[i], ...incoming }
                 return next
               })
             } else if (frame.type === 'delete') {
-              setSessions(prev => prev.filter(s => s.bridge_id !== frame.bridge_id))
+              setSessions(prev => prev.filter(s => s.session_id !== frame.bridge_id))
             }
           }
         } catch {
@@ -470,12 +470,12 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   // --- Derived state ---
 
-  const activeSession = sessions.find(s => s.bridge_id === activeSessionId) || null
+  const activeSession = sessions.find(s => s.session_id === activeSessionId) || null
   activeSessionRef.current = activeSession
 
   const patchSessionState = useCallback((sessionId: string, state: string) => {
     setSessions(prev => prev.map(s =>
-      s.bridge_id === sessionId ? { ...s, state } : s,
+      s.session_id === sessionId ? { ...s, state } : s,
     ))
   }, [])
 
@@ -499,7 +499,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       if (prev.size === 0) return prev
       const next = new Set<string>()
       for (const s of sessions) {
-        if (s.state === 'idle' && prev.has(s.bridge_id)) next.add(s.bridge_id)
+        if (s.state === 'idle' && prev.has(s.session_id)) next.add(s.session_id)
       }
       if (next.size === prev.size) {
         let same = true
@@ -695,7 +695,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       // just created via a *different* useBridgeSession instance), refresh
       // the list so derived state — activeSession, machine, harness info —
       // populates immediately instead of waiting for the next event.
-      if (!sessionsRef.current.find(s => s.bridge_id === id)) {
+      if (!sessionsRef.current.find(s => s.session_id === id)) {
         await refreshSessionsImpl()
       }
       await loadHistory(id)
@@ -722,7 +722,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       // Read the latest sessions list at resolution time, not the value
       // captured when this callback was created — the session may have been
       // freshly created and not yet present in the closure snapshot.
-      const session = sessionsRef.current.find(s => s.bridge_id === id)
+      const session = sessionsRef.current.find(s => s.session_id === id)
       if (session?.state === 'running') {
         startSSE(id)
       }
@@ -731,9 +731,9 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   useEffect(() => {
     if (activeSession?.state === 'running' && !sseAbort.current) {
-      startSSE(activeSession.bridge_id)
+      startSSE(activeSession.session_id)
     }
-  }, [activeSession?.state, activeSession?.bridge_id, startSSE])
+  }, [activeSession?.state, activeSession?.session_id, startSSE])
 
   // --- Stuck-running reconciler ---
   //
@@ -790,7 +790,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       const sess: ManagedSession = await res.json()
       await refreshSessionsImpl()
-      selectSession(sess.bridge_id)
+      selectSession(sess.session_id)
       return sess
     } catch (err) {
       setError(`Failed to create session: ${err}`)
@@ -945,7 +945,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       }
       const forked: ManagedSession = await res.json()
       await refreshSessionsImpl()
-      selectSession(forked.bridge_id)
+      selectSession(forked.session_id)
     } catch (err) {
       setError(`Fork failed: ${err}`)
     }

@@ -361,10 +361,10 @@ export function BridgeUsage() {
   const harnessGroups = useMemo(() => {
     const groups = new Map<string, HarnessGroup>()
     for (const s of periodSessions) {
-      const agg = aggregates.get(s.bridge_id)
+      const agg = aggregates.get(s.session_id)
       if (!agg) continue
       const usage: SessionUsage = {
-        sessionId: s.bridge_id,
+        sessionId: s.session_id,
         harness: s.harness,
         instanceId: s.instance_id ?? '',
         inputTokens: agg.input_tokens,

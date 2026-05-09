@@ -187,8 +187,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   }
 
   const renderSession = (s: ManagedSession) => {
-    const isOpen = openSessionIds.has(s.bridge_id)
-    const isFocused = focusedSessionId === s.bridge_id
+    const isOpen = openSessionIds.has(s.session_id)
+    const isFocused = focusedSessionId === s.session_id
     const tierClass = isFocused
       ? 'bc-session-item-selected'
       : isOpen
@@ -201,11 +201,11 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     const sessTitle = sessUIState.charAt(0).toUpperCase() + sessUIState.slice(1)
     return (
       <div
-        key={s.bridge_id}
+        key={s.session_id}
         className={`bc-session-item ${tierClass}`}
-        onContextMenu={e => openSessionMenu(e, s.bridge_id)}
+        onContextMenu={e => openSessionMenu(e, s.session_id)}
       >
-        <button className="bc-session-item-main" onClick={() => onSelect(s.bridge_id)}>
+        <button className="bc-session-item-main" onClick={() => onSelect(s.session_id)}>
           <span className="bc-session-harness" title={harnessTitle}>
             {hinfo?.image
               ? <img src={`${basePath}${hinfo.image}`} alt="" />
@@ -214,12 +214,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
           <StatusDot state={sessUIState} title={sessTitle} />
           <EditableName
             value={getDisplayName(s)}
-            onSave={name => onRename(s.bridge_id, name)}
+            onSave={name => onRename(s.session_id, name)}
             className="bc-session-label"
           />
         </button>
         <SplitButtons
-          onSplit={mode => onOpenInSplit(s.bridge_id, mode)}
+          onSplit={mode => onOpenInSplit(s.session_id, mode)}
           autoTitle="Open session in a new split (auto direction)"
           chooseTitle="Choose split direction for this session"
         />
@@ -227,7 +227,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
           className="bc-session-menu-btn"
           role="button"
           tabIndex={0}
-          onClick={e => openSessionMenu(e, s.bridge_id)}
+          onClick={e => openSessionMenu(e, s.session_id)}
           title="Move to folder"
         >⋯</span>
       </div>
@@ -287,7 +287,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
 
       {grouped.map(({ name, sessions: entries }) => {
         const isCollapsed = collapsed[name] ?? false
-        const hasActive = entries.some(s => openSessionIds.has(s.bridge_id))
+        const hasActive = entries.some(s => openSessionIds.has(s.session_id))
         return (
           <div key={name}>
             <button
@@ -314,7 +314,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
           {ctxMenu.type === 'session' && (
             <>
               {(() => {
-                const sess = sessions.find(s => s.bridge_id === ctxMenu.id)
+                const sess = sessions.find(s => s.session_id === ctxMenu.id)
                 const current = sess?.folder_name ?? ''
                 const isDone = current === ARCHIVE_FOLDER
                 return (

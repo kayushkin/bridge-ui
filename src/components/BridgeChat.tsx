@@ -177,7 +177,7 @@ export function BridgeChat() {
     } else {
       addWorkspace(id, 'replace')
     }
-    const session = bridge.sessions.find(s => s.bridge_id === id)
+    const session = bridge.sessions.find(s => s.session_id === id)
     if (session?.instance_id) {
       bridgePrefs.setLastSession(session.instance_id, id)
       bridgePrefs.setLastInstanceId(session.instance_id)
@@ -188,7 +188,7 @@ export function BridgeChat() {
   const handleOpenSessionInSplit = useCallback((id: string, mode: SplitMode) => {
     if (!id) return
     addWorkspace(id, mode)
-    const session = bridge.sessions.find(s => s.bridge_id === id)
+    const session = bridge.sessions.find(s => s.session_id === id)
     if (session?.instance_id) {
       bridgePrefs.setLastSession(session.instance_id, id)
       bridgePrefs.setLastInstanceId(session.instance_id)
@@ -269,7 +269,7 @@ export function BridgeChat() {
     })
     if (!sess) return
     bridgePrefs.setLastInstanceId(instanceId)
-    bridgePrefs.setLastSession(instanceId, sess.bridge_id)
+    bridgePrefs.setLastSession(instanceId, sess.session_id)
     if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
       bridge.sendConfig({
         model: defaults.model,
@@ -282,9 +282,9 @@ export function BridgeChat() {
     // workspace if the user chose split-h/-v or no workspace is focused.
     const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId)
     if (mode === 'replace' && focused) {
-      setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.bridge_id } : w))
+      setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.session_id } : w))
     } else {
-      addWorkspace(sess.bridge_id, mode === 'replace' ? 'replace' : mode)
+      addWorkspace(sess.session_id, mode === 'replace' ? 'replace' : mode)
     }
   }, [bridge, bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, addWorkspace])
 
@@ -315,7 +315,7 @@ export function BridgeChat() {
 
   const focusedSession = useMemo(() => {
     if (!focusedSessionId) return null
-    return bridge.sessions.find(s => s.bridge_id === focusedSessionId) ?? null
+    return bridge.sessions.find(s => s.session_id === focusedSessionId) ?? null
   }, [bridge.sessions, focusedSessionId])
 
   const minimalTitle = focusedSession ? getDisplayName(focusedSession) : ''

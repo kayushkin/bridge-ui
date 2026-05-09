@@ -71,7 +71,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   const [gitRefreshTick, setGitRefreshTick] = useState(0)
   const refreshGitRepos = useCallback(() => setGitRefreshTick(t => t + 1), [])
 
-  const sessionId = bridge.activeSession?.bridge_id
+  const sessionId = bridge.activeSession?.session_id
   useEffect(() => {
     if (!sessionId) {
       setGitRepos([])
@@ -109,7 +109,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
   // Bind this workspace's bridge instance to its assigned session id.
   useEffect(() => {
     const target = workspace.sessionId ?? ''
-    if (bridge.activeSession?.bridge_id !== target) {
+    if (bridge.activeSession?.session_id !== target) {
       bridge.selectSession(target)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,8 +123,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     }
     const agent = sess.agent_id || ''
     setActiveChat({
-      frontendId: sess.client_id || `fe_${sess.bridge_id}`,
-      sessionId: sess.bridge_id,
+      frontendId: sess.client_id || `fe_${sess.session_id}`,
+      sessionId: sess.session_id,
       harness: sess.harness,
       agent,
       displayName: sess.display_name || agent,
@@ -217,23 +217,23 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }, [bridge.sessions, instanceId])
   const navIndex = useMemo(() => {
-    const id = bridge.activeSession?.bridge_id
+    const id = bridge.activeSession?.session_id
     if (!id) return -1
-    return navOrder.findIndex(s => s.bridge_id === id)
+    return navOrder.findIndex(s => s.session_id === id)
   }, [navOrder, bridge.activeSession])
 
   const handlePrevSession = useCallback(() => {
     if (navIndex <= 0) return
     const target = navOrder[navIndex - 1]
-    onUpdate(w => ({ ...w, sessionId: target.bridge_id }))
-    if (instanceId) bridgePrefs.setLastSession(instanceId, target.bridge_id)
+    onUpdate(w => ({ ...w, sessionId: target.session_id }))
+    if (instanceId) bridgePrefs.setLastSession(instanceId, target.session_id)
   }, [navIndex, navOrder, instanceId, onUpdate, bridgePrefs])
 
   const handleNextSession = useCallback(() => {
     if (navIndex < 0 || navIndex >= navOrder.length - 1) return
     const target = navOrder[navIndex + 1]
-    onUpdate(w => ({ ...w, sessionId: target.bridge_id }))
-    if (instanceId) bridgePrefs.setLastSession(instanceId, target.bridge_id)
+    onUpdate(w => ({ ...w, sessionId: target.session_id }))
+    if (instanceId) bridgePrefs.setLastSession(instanceId, target.session_id)
   }, [navIndex, navOrder, instanceId, onUpdate, bridgePrefs])
 
   const capabilities = useMemo(() => {
@@ -413,7 +413,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       {renderControls}
       {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
       <Composer
-        sessionId={bridge.activeSession?.bridge_id ?? null}
+        sessionId={bridge.activeSession?.session_id ?? null}
         connected={bridge.connected && !!bridge.activeSession}
         streaming={bridge.uiState === 'running'}
         paused={bridge.uiState === 'paused'}

@@ -224,7 +224,7 @@ function SessionDetailsPanel({ session }: { session: ManagedSession }) {
     ['harness', fmt(session.harness)],
     ['agent', fmt(session.agent_id)],
     ['instance', fmt(session.instance_id), true],
-    ['bridge id', fmt(session.bridge_id), true],
+    ['session id', fmt(session.session_id), true],
     ['harness session', fmt(session.harness_session_id), true],
     ['client id', fmt(session.client_id), true],
     ['parent', fmt(session.parent_id), true],

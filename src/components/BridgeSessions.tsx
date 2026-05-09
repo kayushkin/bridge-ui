@@ -84,7 +84,7 @@ export function BridgeSessions() {
     if (filterHarness) list = list.filter(s => s.harness === filterHarness)
     if (filterState) list = list.filter(s => s.state === filterState)
     if (filterInstance) list = list.filter(s => s.instance_id === filterInstance)
-    if (searchHits) list = list.filter(s => searchHits.has(s.bridge_id))
+    if (searchHits) list = list.filter(s => searchHits.has(s.session_id))
     return list.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }, [sessions, filterHarness, filterState, filterInstance, searchHits])
 
@@ -93,7 +93,7 @@ export function BridgeSessions() {
 
   useEffect(() => {
     const current = tokensMapRef.current
-    const toLoad = filtered.filter(s => s.state !== 'empty' && !current.has(s.bridge_id)).slice(0, 30)
+    const toLoad = filtered.filter(s => s.state !== 'empty' && !current.has(s.session_id)).slice(0, 30)
     if (toLoad.length === 0) return
 
     let cancelled = false
@@ -101,7 +101,7 @@ export function BridgeSessions() {
       const next = new Map(current)
       for (const s of toLoad) {
         try {
-          const res = await apiFetch(`${basePath}/sessions/${s.bridge_id}/messages`)
+          const res = await apiFetch(`${basePath}/sessions/${s.session_id}/messages`)
           if (!res.ok) continue
           const msgs: Array<{ role: string; meta?: { usage?: Record<string, number> } }> = await res.json() ?? []
           let input = 0, output = 0
@@ -111,7 +111,7 @@ export function BridgeSessions() {
               output += m.meta.usage.output_tokens || 0
             }
           }
-          next.set(s.bridge_id, { input, output })
+          next.set(s.session_id, { input, output })
         } catch { /* skip */ }
       }
       if (!cancelled) setTokensMap(next)
@@ -120,7 +120,7 @@ export function BridgeSessions() {
   }, [filtered, apiFetch, basePath])
 
   const handleClick = (session: BridgeSession) => {
-    navigate(routes.chat, { state: { selectSession: session.bridge_id } })
+    navigate(routes.chat, { state: { selectSession: session.session_id } })
   }
 
   const counts = useMemo(() => {
@@ -176,12 +176,12 @@ export function BridgeSessions() {
         <ul className="bs-list">
           {filtered.map(s => {
             const instance = s.instance_id ? inst.instanceMap.get(s.instance_id) : undefined
-            const matchCount = searchHits?.get(s.bridge_id)
+            const matchCount = searchHits?.get(s.session_id)
             const hinfo = harnessMap.get(s.harness)
-            const tokens = tokensMap.get(s.bridge_id)
+            const tokens = tokensMap.get(s.session_id)
             const totalTokens = tokens ? tokens.input + tokens.output : undefined
             return (
-              <li key={s.bridge_id}>
+              <li key={s.session_id}>
                 <button className="bs-row" onClick={() => handleClick(s)}>
                   <span className="bs-row-harness" title={hinfo?.label || s.harness}>
                     {hinfo?.image
@@ -189,7 +189,7 @@ export function BridgeSessions() {
                       : <span className="bs-row-emoji">{hinfo?.emoji || '·'}</span>}
                   </span>
                   <span className="bs-state-dot" style={{ background: STATE_COLORS[s.state] || '#888' }} />
-                  <span className="bs-row-name">{s.display_name || s.bridge_id.slice(0, 16)}</span>
+                  <span className="bs-row-name">{s.display_name || s.session_id.slice(0, 16)}</span>
                   {instance && <span className="bs-row-instance">{instance.name}</span>}
                   <span className="bs-row-tokens">
                     {totalTokens !== undefined && totalTokens > 0 ? `${formatTokens(totalTokens)} tok` : ''}
