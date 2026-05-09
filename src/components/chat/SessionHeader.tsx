@@ -90,7 +90,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
     }
   }, [detailsOpen])
 
-  const sourceLabel = session?.source || 'interactive'
+  const sourceLabel = session?.purpose || 'chat'
 
   return (
     <div className="bc-header" style={headerStyle} data-harness={harness || undefined}>
@@ -140,7 +140,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
               type="button"
               className={`bc-source-chip${detailsOpen ? ' bc-source-chip-open' : ''}`}
               onClick={() => setDetailsOpen(o => !o)}
-              data-source={session.source || 'interactive'}
+              data-source={session.purpose || 'chat'}
               title={`source: ${sourceLabel}\nclick for full session details`}
               aria-expanded={detailsOpen}
               aria-label="Session details"
@@ -217,7 +217,9 @@ function SessionDetailsPanel({ session }: { session: ManagedSession }) {
     return Number.isNaN(d.getTime()) ? v : d.toLocaleString()
   }
   const rows: Array<[string, string, boolean?]> = [
-    ['source', fmt(session.source)],
+    ['type', fmt(session.type)],
+    ['purpose', fmt(session.purpose)],
+    ['origin', fmt(session.origin)],
     ['folder', fmt(session.folder_name)],
     ['state', fmt(session.state)],
     ['mode', session.mode || 'events'],

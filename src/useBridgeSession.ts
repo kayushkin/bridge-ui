@@ -772,12 +772,17 @@ export function useBridgeSession(): UseBridgeSessionReturn {
 
   // --- Actions ---
 
-  const createSession = useCallback(async (opts: CreateSessionRequest): Promise<ManagedSession | null> => {
+  // Type / purpose / origin are required on the wire but the frontend
+  // defaults them so call sites don't have to know about classification.
+  // Callers can override by providing any of the three explicitly.
+  const createSession = useCallback(async (opts: Partial<CreateSessionRequest> & Pick<CreateSessionRequest, 'harness'>): Promise<ManagedSession | null> => {
     try {
       const body: CreateSessionRequest = {
+        type: 'interactive',
+        purpose: 'chat',
+        origin: 'frontend',
         ...opts,
-        session_type: opts.session_type ?? 'interactive',
-      }
+      } as CreateSessionRequest
       const res = await fetchFn(`${basePath}/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -934,7 +939,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           display_name: displayName || '',
-          session_type: 'interactive',
+          type: 'interactive',
         }),
       })
       if (!res.ok) {

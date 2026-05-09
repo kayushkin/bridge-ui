@@ -376,7 +376,7 @@ export function BridgeUsage() {
       }
       let h = groups.get(s.harness)
       if (!h) { h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(s.harness, h) }
-      const srcKey = s.source ?? ''
+      const srcKey = s.purpose ?? ''
       let src = h.sources.get(srcKey)
       if (!src) { src = { source: srcKey, sessions: [], totals: emptyTotals() }; h.sources.set(srcKey, src) }
       src.sessions.push(usage)
