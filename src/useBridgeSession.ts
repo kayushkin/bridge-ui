@@ -449,7 +449,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
                 return next
               })
             } else if (frame.type === 'delete') {
-              setSessions(prev => prev.filter(s => s.session_id !== frame.bridge_id))
+              setSessions(prev => prev.filter(s => s.session_id !== frame.session_id))
             }
           }
         } catch {

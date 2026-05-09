@@ -76,9 +76,9 @@ export function BridgeKanban() {
     try {
       const resp = await bridgeFetch(`${bridgeAdapterBasePath}/sessions/by-bus/${encodeURIComponent(link.ref)}`)
       if (!resp.ok) return false
-      const data = await resp.json() as { bridge_id?: string }
-      if (!data.bridge_id) return false
-      openSessionByBridgeID(data.bridge_id)
+      const data = await resp.json() as { session_id?: string }
+      if (!data.session_id) return false
+      openSessionByBridgeID(data.session_id)
       return true
     } catch {
       return false

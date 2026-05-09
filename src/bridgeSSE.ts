@@ -4,7 +4,7 @@ import type { FetchFn, BridgeEvent, ManagedSession } from './types'
 export type SessionListFrame =
   | { type: 'hello' }
   | { type: 'upsert'; session: ManagedSession }
-  | { type: 'delete'; bridge_id: string }
+  | { type: 'delete'; session_id: string }
 
 /**
  * Connect to a bridge session's SSE event stream using fetch + ReadableStream.
@@ -123,8 +123,8 @@ export async function* connectSessionListSSE(
                 yield { type: 'hello' }
               } else if (currentEvent.type === 'upsert' && data.session) {
                 yield { type: 'upsert', session: data.session as ManagedSession }
-              } else if (currentEvent.type === 'delete' && data.bridge_id) {
-                yield { type: 'delete', bridge_id: data.bridge_id as string }
+              } else if (currentEvent.type === 'delete' && data.session_id) {
+                yield { type: 'delete', session_id: data.session_id as string }
               }
             } catch {
               // Skip unparseable frames
