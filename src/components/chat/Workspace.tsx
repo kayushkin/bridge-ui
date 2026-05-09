@@ -123,7 +123,6 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
     }
     const agent = sess.agent_id || ''
     setActiveChat({
-      frontendId: sess.client_id || `fe_${sess.session_id}`,
       sessionId: sess.session_id,
       harness: sess.harness,
       agent,

@@ -1,9 +1,5 @@
 import type { LogRow, ToolEvent } from '../../types'
 
-export function generateFrontendId(): string {
-  return `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-}
-
 export function formatHMS(ts: string): string {
   try {
     const d = new Date(ts)

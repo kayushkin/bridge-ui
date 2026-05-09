@@ -18,7 +18,6 @@ import { ChromeSheet } from './minimal/ChromeSheet'
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence'
 import type { CollapseState, InnerNode, PaneSizes, PanesHidden, SplitMode, StoreModel, WorkspaceLayoutNode, WorkspaceState } from './chat/types'
 import { splitModeAxis } from './chat/types'
-import { generateFrontendId } from './chat/utils'
 import { buildFlatLayout, firstLeafId, iterateLeafIds, removeLeaf, splitLeaf } from './chat/workspaceTree'
 
 const DEFAULT_INNER_TREE: InnerNode = {
@@ -254,7 +253,6 @@ export function BridgeChat() {
     const harness = inst.harness_type
     const harnessInfo = harnesses.find(h => h.name === harness)
     if (!harnessInfo?.available) return
-    const frontendId = generateFrontendId()
     const defaults = bridgePrefs.getDefaults(harness)
     // Permission gating runs as a PreToolUse HTTP hook injected by
     // bridge-server (--settings → /permission/cc-prehook). The bypass
@@ -265,7 +263,6 @@ export function BridgeChat() {
       harness,
       instance_id: instanceId,
       display_name: '',
-      client_id: frontendId,
     })
     if (!sess) return
     bridgePrefs.setLastInstanceId(instanceId)

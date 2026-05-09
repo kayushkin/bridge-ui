@@ -11,7 +11,6 @@ export interface StoreModel {
 }
 
 export interface ChatSession {
-  frontendId: string
   sessionId: string | null
   harness: string
   agent: string

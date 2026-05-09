@@ -776,7 +776,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     try {
       const body: CreateSessionRequest = {
         ...opts,
-        client_id: opts.client_id ?? `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         session_type: opts.session_type ?? 'interactive',
       }
       const res = await fetchFn(`${basePath}/sessions`, {
@@ -935,7 +934,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           display_name: displayName || '',
-          client_id: `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           session_type: 'interactive',
         }),
       })
