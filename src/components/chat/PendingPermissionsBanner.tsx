@@ -4,21 +4,16 @@ import type { HookEvent } from '../../types'
 import { useWorkspace } from './WorkspaceContext'
 
 // PendingPermissionsBanner is the sticky surface for awaiting_resolution
-// HookEvents emitted by bridge_perm when permission-store returned an "ask"
-// outcome. Pinned to the top of the workspace; renders nothing when there
-// are no pending hooks.
+// HookEvents emitted by bridge-server's PreToolUse hook when permission-store
+// returned an "ask" outcome. Pinned to the top of the workspace; renders
+// nothing when there are no pending hooks.
 //
-// Each pending hook gets four buttons:
-//   - Allow once     — POST resolve {behavior: allow}
-//   - Deny           — POST resolve {behavior: deny}
-//   - Always allow   — create a global rule, then resolve allow
-//   - Always deny    — create a global rule, then resolve deny
-//
-// Always-rules are scoped global by design (per the locked spec). For Bash
-// the pattern is derived from the command's first word so re-running the
-// same kind of command (e.g. another `git push`) doesn't re-prompt; for
-// non-Bash tools the rule has no pattern (matches every call of that tool).
-// Users can refine the auto-created rule later in /permissions.
+// Two card flavors:
+//   - PendingHookCard: generic allow/deny + always-rule surface for any tool.
+//   - AskUserQuestionCard: dedicated UI for CC's AskUserQuestion tool. Renders
+//     the question(s) with radio/checkbox option groups and submits the
+//     selections back via updatedInput so CC's tool.call() returns those
+//     answers directly without invoking the interactive CLI prompt.
 export function PendingPermissionsBanner() {
   const ws = useWorkspace()
   const { fetch: apiFetch, basePath } = useBridgeConfig()
@@ -30,15 +25,201 @@ export function PendingPermissionsBanner() {
 
   return (
     <div className="bc-pending-banner" role="region" aria-label="Pending permission prompts">
-      {ws.pendingHooks.map(hook => (
-        <PendingHookCard
-          key={hook.request_id || `nokey-${hook.event}`}
-          hook={hook}
-          onResolve={ws.resolveHook}
-          apiFetch={apiFetch}
-          permStoreBase={permStoreBase}
-        />
-      ))}
+      {ws.pendingHooks.map(hook => {
+        const key = hook.request_id || `nokey-${hook.event}`
+        if (hook.tool_name === 'AskUserQuestion' && isAskUserQuestionInput(hook.input)) {
+          return (
+            <AskUserQuestionCard
+              key={key}
+              hook={hook}
+              onResolve={ws.resolveHook}
+            />
+          )
+        }
+        return (
+          <PendingHookCard
+            key={key}
+            hook={hook}
+            onResolve={ws.resolveHook}
+            apiFetch={apiFetch}
+            permStoreBase={permStoreBase}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+interface AskUserQuestionOption {
+  label: string
+  description?: string
+  preview?: string
+}
+interface AskUserQuestionQuestion {
+  question: string
+  header: string
+  options: AskUserQuestionOption[]
+  multiSelect?: boolean
+}
+interface AskUserQuestionInput {
+  questions: AskUserQuestionQuestion[]
+}
+
+function isAskUserQuestionInput(input: unknown): input is AskUserQuestionInput {
+  if (!input || typeof input !== 'object') return false
+  const qs = (input as { questions?: unknown }).questions
+  return Array.isArray(qs) && qs.length > 0 && qs.every(q =>
+    q && typeof q === 'object'
+    && typeof (q as { question?: unknown }).question === 'string'
+    && Array.isArray((q as { options?: unknown }).options),
+  )
+}
+
+function AskUserQuestionCard({
+  hook,
+  onResolve,
+}: {
+  hook: HookEvent
+  onResolve: ReturnType<typeof useWorkspace>['resolveHook']
+}) {
+  const input = hook.input as unknown as AskUserQuestionInput
+  const questions = input.questions
+  const requestId = hook.request_id || ''
+
+  // Per-question selection state: index map -> set of selected option indices.
+  // Set is sized 1 for single-select questions, N for multiSelect.
+  const [selections, setSelections] = useState<Map<number, Set<number>>>(new Map())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const allAnswered = questions.every((_, i) => {
+    const s = selections.get(i)
+    return s && s.size > 0
+  })
+
+  const toggle = useCallback((qi: number, oi: number, multi: boolean) => {
+    setSelections(prev => {
+      const next = new Map(prev)
+      const current = next.get(qi) ?? new Set<number>()
+      if (multi) {
+        const updated = new Set(current)
+        if (updated.has(oi)) updated.delete(oi)
+        else updated.add(oi)
+        next.set(qi, updated)
+      } else {
+        next.set(qi, new Set([oi]))
+      }
+      return next
+    })
+  }, [])
+
+  const submit = useCallback(async () => {
+    if (!requestId || !allAnswered || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      // Build {questionText: answerLabel}. CC's AskUserQuestion accepts a
+      // comma-separated string for multiSelect answers (per its input schema:
+      // E.preprocess that joins string arrays into a comma list).
+      const answers: Record<string, string> = {}
+      questions.forEach((q, qi) => {
+        const chosen = Array.from(selections.get(qi) ?? new Set<number>())
+          .map(oi => q.options[oi]?.label)
+          .filter((label): label is string => Boolean(label))
+        answers[q.question] = chosen.join(', ')
+      })
+      await onResolve({
+        requestId,
+        behavior: 'allow',
+        // Send the full original questions array alongside answers so CC's
+        // tool.call() can pair them up; the hook's updatedInput replaces the
+        // tool input wholesale.
+        updatedInput: { questions, answers },
+        resolvedBy: 'user',
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [requestId, allAnswered, busy, questions, selections, onResolve])
+
+  const decline = useCallback(async () => {
+    if (!requestId || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      // Deny surfaces CC's "User declined to answer questions" branch.
+      await onResolve({ requestId, behavior: 'deny', resolvedBy: 'user' })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [requestId, busy, onResolve])
+
+  return (
+    <div className="bc-pending-card bc-ask-card">
+      <div className="bc-pending-card-header">
+        <strong className="bc-pending-tool">AskUserQuestion</strong>
+        <span className="bc-pending-event">awaiting your answer</span>
+      </div>
+      <div className="bc-ask-questions">
+        {questions.map((q, qi) => {
+          const selected = selections.get(qi) ?? new Set<number>()
+          const multi = Boolean(q.multiSelect)
+          return (
+            <fieldset key={qi} className="bc-ask-question">
+              {q.header && <legend className="bc-ask-header">{q.header}</legend>}
+              <p className="bc-ask-question-text">{q.question}</p>
+              <div className="bc-ask-options">
+                {q.options.map((opt, oi) => {
+                  const isSelected = selected.has(oi)
+                  return (
+                    <label
+                      key={oi}
+                      className={`bc-ask-option${isSelected ? ' bc-ask-option-selected' : ''}`}
+                    >
+                      <input
+                        type={multi ? 'checkbox' : 'radio'}
+                        name={`bc-ask-${requestId}-${qi}`}
+                        checked={isSelected}
+                        disabled={busy}
+                        onChange={() => toggle(qi, oi, multi)}
+                      />
+                      <span className="bc-ask-option-body">
+                        <span className="bc-ask-option-label">{opt.label}</span>
+                        {opt.description && (
+                          <span className="bc-ask-option-desc">{opt.description}</span>
+                        )}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </fieldset>
+          )
+        })}
+      </div>
+      <div className="bc-pending-actions">
+        <button
+          type="button"
+          className="bc-pending-allow"
+          disabled={busy || !allAnswered}
+          onClick={submit}
+        >
+          Submit
+        </button>
+        <button
+          type="button"
+          className="bc-pending-deny"
+          disabled={busy}
+          onClick={decline}
+        >
+          Decline
+        </button>
+      </div>
+      {error && <p className="bc-pending-error">{error}</p>}
     </div>
   )
 }

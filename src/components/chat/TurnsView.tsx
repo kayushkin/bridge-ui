@@ -18,6 +18,10 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
 
   // turnId -> set of message_ids that have a closed `result` row.
   const turnResultMsgIds = new Map<string, Set<string>>()
+  // turnId -> set of message_ids that contained at least one tool call.
+  // Text in those messages is preamble/narration (the model talking before
+  // or between tool invocations), not the final answer.
+  const turnNarrationMsgIds = new Map<string, Set<string>>()
   // Texts of user_message rows that have a canonical messageId. Used to drop
   // orphan optimistic rows when the SSE user_message arrived before /send's
   // response could patch the optimistic row's key into the same group.
@@ -26,6 +30,11 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
     if (r.kind === 'result' && r.done && r.messageId && r.turnId) {
       let s = turnResultMsgIds.get(r.turnId)
       if (!s) { s = new Set(); turnResultMsgIds.set(r.turnId, s) }
+      s.add(r.messageId)
+    }
+    if (r.kind === 'tool' && r.messageId && r.turnId) {
+      let s = turnNarrationMsgIds.get(r.turnId)
+      if (!s) { s = new Set(); turnNarrationMsgIds.set(r.turnId, s) }
       s.add(r.messageId)
     }
     if (r.kind === 'user_message' && r.messageId && r.text) {
@@ -69,7 +78,9 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
       emittedTurns.add(row.turnId)
 
       const dedup = turnResultMsgIds.get(row.turnId) ?? new Set<string>()
+      const narrationMsgIds = turnNarrationMsgIds.get(row.turnId) ?? new Set<string>()
       const parts: string[] = []
+      const narrationParts: string[] = []
       const thinkingParts: string[] = []
       let hasError = false
       let isStreaming = false
@@ -85,7 +96,11 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
           if (r.meta?.is_error) hasError = true
           turnDone = true
         } else if (r.kind === 'text' && r.text && !(r.messageId && dedup.has(r.messageId))) {
-          parts.push(r.text)
+          if (r.messageId && narrationMsgIds.has(r.messageId)) {
+            narrationParts.push(r.text)
+          } else {
+            parts.push(r.text)
+          }
           isStreaming = true
         } else if (r.kind === 'thinking' && r.thinking) {
           thinkingParts.push(r.thinking)
@@ -97,8 +112,9 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
       }
 
       const merged = parts.filter(Boolean).join('\n\n')
+      const narration = narrationParts.filter(Boolean).join('\n\n')
       const thinking = thinkingParts.filter(Boolean).join('\n\n')
-      if (merged || thinking) {
+      if (merged || narration || thinking) {
         out.push({
           key: `tv_turn_${row.turnId}`,
           actor: 'assistant',
@@ -109,6 +125,7 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
           isError: hasError,
           isStreaming,
           thinking: thinking || undefined,
+          narration: narration || undefined,
           turnDone,
         })
       }
@@ -148,6 +165,37 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   }
 
   return out
+}
+
+function TurnsAside({ variant, icon, label, text, live }: {
+  variant: 'reasoning' | 'narration'
+  icon: string
+  label: string
+  text: string
+  live: boolean
+}) {
+  const cls = `bc-turns-aside bc-turns-aside-${variant}${live ? ' bc-turns-aside-live' : ''}`
+  if (live) {
+    return (
+      <div className={cls}>
+        <div className="bc-turns-aside-label">
+          <span className="bc-turns-aside-icon" aria-hidden>{icon}</span>
+          <span>{label}</span>
+          <span className="bc-turns-aside-dots" aria-hidden>…</span>
+        </div>
+        <div className="bc-turns-aside-text">{text}</div>
+      </div>
+    )
+  }
+  return (
+    <details className={cls}>
+      <summary>
+        <span className="bc-turns-aside-icon" aria-hidden>{icon}</span>
+        <span>{label}</span>
+      </summary>
+      <div className="bc-turns-aside-text">{text}</div>
+    </details>
+  )
 }
 
 export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
@@ -193,7 +241,8 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
               </div>
             )
           }
-          const reasoningLive = !!it.thinking && !it.turnDone
+          const hasAside = !!(it.thinking || it.narration)
+          const asideLive = hasAside && !it.turnDone
           return (
             <div
               key={it.key}
@@ -203,28 +252,27 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
                 <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>
                 <span className="bc-turns-ts">{formatHMS(it.ts)}</span>
                 {it.usage && <UsageLine usage={it.usage} />}
-                {reasoningLive && <span className="bc-turns-reasoning-tag">reasoning…</span>}
-                {it.isStreaming && !reasoningLive && <span className="bc-turns-streaming-tag">streaming…</span>}
+                {asideLive && it.thinking && <span className="bc-turns-aside-tag bc-turns-aside-reasoning">reasoning…</span>}
+                {asideLive && it.narration && <span className="bc-turns-aside-tag bc-turns-aside-narration">narration…</span>}
+                {it.isStreaming && !asideLive && <span className="bc-turns-streaming-tag">streaming…</span>}
               </div>
               {it.thinking && (
-                reasoningLive ? (
-                  <div className="bc-turns-reasoning bc-turns-reasoning-live">
-                    <div className="bc-turns-reasoning-label">
-                      <span className="bc-turns-reasoning-icon" aria-hidden>💭</span>
-                      <span>Reasoning</span>
-                      <span className="bc-turns-reasoning-dots" aria-hidden>…</span>
-                    </div>
-                    <div className="bc-turns-reasoning-text">{it.thinking}</div>
-                  </div>
-                ) : (
-                  <details className="bc-turns-reasoning">
-                    <summary>
-                      <span className="bc-turns-reasoning-icon" aria-hidden>💭</span>
-                      <span>Reasoning</span>
-                    </summary>
-                    <div className="bc-turns-reasoning-text">{it.thinking}</div>
-                  </details>
-                )
+                <TurnsAside
+                  variant="reasoning"
+                  icon="💭"
+                  label="Reasoning"
+                  text={it.thinking}
+                  live={asideLive}
+                />
+              )}
+              {it.narration && (
+                <TurnsAside
+                  variant="narration"
+                  icon="💬"
+                  label="Narration"
+                  text={it.narration}
+                  live={asideLive}
+                />
               )}
               {it.text && <div className="bc-turns-text">{it.text}</div>}
             </div>

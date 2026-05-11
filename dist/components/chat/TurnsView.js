@@ -15,6 +15,10 @@ function rowsToTurns(rows) {
     // result text for that message_id.
     // turnId -> set of message_ids that have a closed `result` row.
     const turnResultMsgIds = new Map();
+    // turnId -> set of message_ids that contained at least one tool call.
+    // Text in those messages is preamble/narration (the model talking before
+    // or between tool invocations), not the final answer.
+    const turnNarrationMsgIds = new Map();
     // Texts of user_message rows that have a canonical messageId. Used to drop
     // orphan optimistic rows when the SSE user_message arrived before /send's
     // response could patch the optimistic row's key into the same group.
@@ -25,6 +29,14 @@ function rowsToTurns(rows) {
             if (!s) {
                 s = new Set();
                 turnResultMsgIds.set(r.turnId, s);
+            }
+            s.add(r.messageId);
+        }
+        if (r.kind === 'tool' && r.messageId && r.turnId) {
+            let s = turnNarrationMsgIds.get(r.turnId);
+            if (!s) {
+                s = new Set();
+                turnNarrationMsgIds.set(r.turnId, s);
             }
             s.add(r.messageId);
         }
@@ -66,7 +78,9 @@ function rowsToTurns(rows) {
                 continue;
             emittedTurns.add(row.turnId);
             const dedup = turnResultMsgIds.get(row.turnId) ?? new Set();
+            const narrationMsgIds = turnNarrationMsgIds.get(row.turnId) ?? new Set();
             const parts = [];
+            const narrationParts = [];
             const thinkingParts = [];
             let hasError = false;
             let isStreaming = false;
@@ -86,7 +100,12 @@ function rowsToTurns(rows) {
                     turnDone = true;
                 }
                 else if (r.kind === 'text' && r.text && !(r.messageId && dedup.has(r.messageId))) {
-                    parts.push(r.text);
+                    if (r.messageId && narrationMsgIds.has(r.messageId)) {
+                        narrationParts.push(r.text);
+                    }
+                    else {
+                        parts.push(r.text);
+                    }
                     isStreaming = true;
                 }
                 else if (r.kind === 'thinking' && r.thinking) {
@@ -99,8 +118,9 @@ function rowsToTurns(rows) {
                 }
             }
             const merged = parts.filter(Boolean).join('\n\n');
+            const narration = narrationParts.filter(Boolean).join('\n\n');
             const thinking = thinkingParts.filter(Boolean).join('\n\n');
-            if (merged || thinking) {
+            if (merged || narration || thinking) {
                 out.push({
                     key: `tv_turn_${row.turnId}`,
                     actor: 'assistant',
@@ -111,6 +131,7 @@ function rowsToTurns(rows) {
                     isError: hasError,
                     isStreaming,
                     thinking: thinking || undefined,
+                    narration: narration || undefined,
                     turnDone,
                 });
             }
@@ -151,6 +172,13 @@ function rowsToTurns(rows) {
     }
     return out;
 }
+function TurnsAside({ variant, icon, label, text, live }) {
+    const cls = `bc-turns-aside bc-turns-aside-${variant}${live ? ' bc-turns-aside-live' : ''}`;
+    if (live) {
+        return (_jsxs("div", { className: cls, children: [_jsxs("div", { className: "bc-turns-aside-label", children: [_jsx("span", { className: "bc-turns-aside-icon", "aria-hidden": true, children: icon }), _jsx("span", { children: label }), _jsx("span", { className: "bc-turns-aside-dots", "aria-hidden": true, children: "\u2026" })] }), _jsx("div", { className: "bc-turns-aside-text", children: text })] }));
+    }
+    return (_jsxs("details", { className: cls, children: [_jsxs("summary", { children: [_jsx("span", { className: "bc-turns-aside-icon", "aria-hidden": true, children: icon }), _jsx("span", { children: label })] }), _jsx("div", { className: "bc-turns-aside-text", children: text })] }));
+}
 export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }) {
     const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTurns(rows), [rows]);
@@ -164,8 +192,9 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }) {
                         if (it.isMarker) {
                             return (_jsxs("div", { className: `bc-turns-marker bc-turns-marker-${it.markerKind}`, role: "separator", children: [_jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true }), _jsx("span", { className: "bc-turns-marker-text", children: it.text }), _jsx("span", { className: "bc-turns-marker-ts", children: formatHMS(it.ts) }), _jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true })] }, it.key));
                         }
-                        const reasoningLive = !!it.thinking && !it.turnDone;
-                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), reasoningLive && _jsx("span", { className: "bc-turns-reasoning-tag", children: "reasoning\u2026" }), it.isStreaming && !reasoningLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (reasoningLive ? (_jsxs("div", { className: "bc-turns-reasoning bc-turns-reasoning-live", children: [_jsxs("div", { className: "bc-turns-reasoning-label", children: [_jsx("span", { className: "bc-turns-reasoning-icon", "aria-hidden": true, children: "\uD83D\uDCAD" }), _jsx("span", { children: "Reasoning" }), _jsx("span", { className: "bc-turns-reasoning-dots", "aria-hidden": true, children: "\u2026" })] }), _jsx("div", { className: "bc-turns-reasoning-text", children: it.thinking })] })) : (_jsxs("details", { className: "bc-turns-reasoning", children: [_jsxs("summary", { children: [_jsx("span", { className: "bc-turns-reasoning-icon", "aria-hidden": true, children: "\uD83D\uDCAD" }), _jsx("span", { children: "Reasoning" })] }), _jsx("div", { className: "bc-turns-reasoning-text", children: it.thinking })] }))), it.text && _jsx("div", { className: "bc-turns-text", children: it.text })] }, it.key));
+                        const hasAside = !!(it.thinking || it.narration);
+                        const asideLive = hasAside && !it.turnDone;
+                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), asideLive && it.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && it.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), it.isStreaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: it.thinking, live: asideLive })), it.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: it.narration, live: asideLive })), it.text && _jsx("div", { className: "bc-turns-text", children: it.text })] }, it.key));
                     }), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }));
 }
 //# sourceMappingURL=TurnsView.js.map

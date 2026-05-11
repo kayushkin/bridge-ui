@@ -736,65 +736,72 @@
   font-size: 0.65rem;
   letter-spacing: 0.4px;
 }
-.bc-turns-reasoning-tag {
+.bc-turns-aside-tag {
   font-family: monospace;
-  color: #a78bfa;
   font-size: 0.65rem;
   letter-spacing: 0.4px;
 }
-.bc-turns-reasoning {
+.bc-turns-aside-tag.bc-turns-aside-reasoning { color: #a78bfa; }
+.bc-turns-aside-tag.bc-turns-aside-narration { color: #34d399; }
+
+.bc-turns-aside {
+  --aside-accent: var(--text-dim);
   font-style: italic;
   color: var(--text-dim);
   font-size: 0.82em;
-  border-left: 2px solid color-mix(in srgb, #a78bfa 40%, var(--border));
+  border-left: 2px solid color-mix(in srgb, var(--aside-accent) 40%, var(--border));
   padding: 4px 0 4px 10px;
-  background: color-mix(in srgb, #a78bfa 4%, transparent);
+  background: color-mix(in srgb, var(--aside-accent) 4%, transparent);
   border-radius: 0 4px 4px 0;
 }
-.bc-turns-reasoning summary {
+.bc-turns-aside-reasoning { --aside-accent: #a78bfa; }
+.bc-turns-aside-narration { --aside-accent: #34d399; }
+
+.bc-turns-aside summary {
   cursor: pointer;
   font-style: normal;
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: #a78bfa;
+  color: var(--aside-accent);
   letter-spacing: 0.5px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   list-style: none;
 }
-.bc-turns-reasoning summary::-webkit-details-marker { display: none; }
-.bc-turns-reasoning summary::before {
+.bc-turns-aside summary::-webkit-details-marker { display: none; }
+.bc-turns-aside summary::before {
   content: '▸';
   font-size: 0.7rem;
   transition: transform 0.15s;
 }
-.bc-turns-reasoning[open] summary::before { content: '▾'; }
-.bc-turns-reasoning-label {
+.bc-turns-aside[open] summary::before { content: '▾'; }
+
+.bc-turns-aside-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-style: normal;
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: #a78bfa;
+  color: var(--aside-accent);
   letter-spacing: 0.5px;
 }
-.bc-turns-reasoning-dots {
-  animation: bc-reasoning-pulse 1.2s ease-in-out infinite;
+.bc-turns-aside-dots {
+  animation: bc-aside-pulse 1.2s ease-in-out infinite;
 }
-@keyframes bc-reasoning-pulse {
+@keyframes bc-aside-pulse {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 1; }
 }
-.bc-turns-reasoning-text {
+.bc-turns-aside-text {
   white-space: pre-wrap;
   word-break: break-word;
   margin-top: 4px;
   line-height: 1.45;
 }
-.bc-turns-reasoning-live .bc-turns-reasoning-text {
-  border-top: 1px dashed color-mix(in srgb, #a78bfa 20%, transparent);
+.bc-turns-aside-live .bc-turns-aside-text {
+  border-top: 1px dashed color-mix(in srgb, var(--aside-accent) 20%, transparent);
   padding-top: 4px;
   margin-top: 6px;
 }
@@ -1396,6 +1403,43 @@
 .bc-pending-deny:hover { background: color-mix(in srgb, #e57373 10%, transparent); border-color: #e57373 !important; }
 .bc-pending-always-allow, .bc-pending-always-deny { color: var(--text-muted); }
 .bc-pending-error { color: #e57373; font-size: 0.8em; margin: 6px 0 0; }
+
+/* AskUserQuestion banner card — replaces the generic JSON pre with
+   per-question option groups. Submit posts {questions, answers} back
+   as updatedInput so CC's tool.call() returns the answers directly. */
+.bc-ask-card .bc-ask-questions {
+  display: flex; flex-direction: column; gap: 14px;
+  margin-bottom: 10px;
+}
+.bc-ask-question {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px 10px; margin: 0;
+  background: var(--bg-surface);
+}
+.bc-ask-header {
+  display: inline-block; padding: 2px 6px;
+  font-size: 0.7em; font-weight: 600; text-transform: uppercase;
+  color: var(--text-muted); letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 3px;
+}
+.bc-ask-question-text { margin: 6px 0 8px; font-size: 0.92em; color: var(--text); }
+.bc-ask-options { display: flex; flex-direction: column; gap: 4px; }
+.bc-ask-option {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 6px 8px; border-radius: 4px;
+  border: 1px solid transparent; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.bc-ask-option:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.bc-ask-option-selected {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.bc-ask-option input { margin-top: 3px; flex: 0 0 auto; }
+.bc-ask-option-body { display: flex; flex-direction: column; gap: 2px; }
+.bc-ask-option-label { font-size: 0.88em; color: var(--text); }
+.bc-ask-option-desc { font-size: 0.78em; color: var(--text-muted); }
 
 /* Controls bar */
 .bc-controls-bar { display: flex; gap: 6px; padding: 6px 16px; border-top: 1px solid var(--border); }

@@ -64,6 +64,7 @@ export interface TurnsItem {
   isMarker?: boolean
   markerKind?: 'compact'
   thinking?: string
+  narration?: string
   turnDone?: boolean
 }
 
