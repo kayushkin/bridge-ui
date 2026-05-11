@@ -58,7 +58,7 @@ function rowsToTurns(rows) {
             });
             continue;
         }
-        const isAssistantContent = row.kind === 'text' || row.kind === 'result' || row.kind === 'error';
+        const isAssistantContent = row.kind === 'text' || row.kind === 'result' || row.kind === 'error' || row.kind === 'thinking';
         if (!isAssistantContent)
             continue;
         if (row.turnId) {
@@ -67,8 +67,10 @@ function rowsToTurns(rows) {
             emittedTurns.add(row.turnId);
             const dedup = turnResultMsgIds.get(row.turnId) ?? new Set();
             const parts = [];
+            const thinkingParts = [];
             let hasError = false;
             let isStreaming = false;
+            let turnDone = false;
             let lastUsage;
             for (const r of rows) {
                 if (r.turnId !== row.turnId)
@@ -81,18 +83,24 @@ function rowsToTurns(rows) {
                         lastUsage = r.usage || r.meta?.usage;
                     if (r.meta?.is_error)
                         hasError = true;
+                    turnDone = true;
                 }
                 else if (r.kind === 'text' && r.text && !(r.messageId && dedup.has(r.messageId))) {
                     parts.push(r.text);
                     isStreaming = true;
                 }
+                else if (r.kind === 'thinking' && r.thinking) {
+                    thinkingParts.push(r.thinking);
+                }
                 else if (r.kind === 'error' && r.errorMessage) {
                     parts.push(r.errorMessage);
                     hasError = true;
+                    turnDone = true;
                 }
             }
             const merged = parts.filter(Boolean).join('\n\n');
-            if (merged) {
+            const thinking = thinkingParts.filter(Boolean).join('\n\n');
+            if (merged || thinking) {
                 out.push({
                     key: `tv_turn_${row.turnId}`,
                     actor: 'assistant',
@@ -102,6 +110,8 @@ function rowsToTurns(rows) {
                     usage: lastUsage,
                     isError: hasError,
                     isStreaming,
+                    thinking: thinking || undefined,
+                    turnDone,
                 });
             }
             continue;
@@ -154,7 +164,8 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }) {
                         if (it.isMarker) {
                             return (_jsxs("div", { className: `bc-turns-marker bc-turns-marker-${it.markerKind}`, role: "separator", children: [_jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true }), _jsx("span", { className: "bc-turns-marker-text", children: it.text }), _jsx("span", { className: "bc-turns-marker-ts", children: formatHMS(it.ts) }), _jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true })] }, it.key));
                         }
-                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), it.isStreaming && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), _jsx("div", { className: "bc-turns-text", children: it.text })] }, it.key));
+                        const reasoningLive = !!it.thinking && !it.turnDone;
+                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), reasoningLive && _jsx("span", { className: "bc-turns-reasoning-tag", children: "reasoning\u2026" }), it.isStreaming && !reasoningLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (reasoningLive ? (_jsxs("div", { className: "bc-turns-reasoning bc-turns-reasoning-live", children: [_jsxs("div", { className: "bc-turns-reasoning-label", children: [_jsx("span", { className: "bc-turns-reasoning-icon", "aria-hidden": true, children: "\uD83D\uDCAD" }), _jsx("span", { children: "Reasoning" }), _jsx("span", { className: "bc-turns-reasoning-dots", "aria-hidden": true, children: "\u2026" })] }), _jsx("div", { className: "bc-turns-reasoning-text", children: it.thinking })] })) : (_jsxs("details", { className: "bc-turns-reasoning", children: [_jsxs("summary", { children: [_jsx("span", { className: "bc-turns-reasoning-icon", "aria-hidden": true, children: "\uD83D\uDCAD" }), _jsx("span", { children: "Reasoning" })] }), _jsx("div", { className: "bc-turns-reasoning-text", children: it.thinking })] }))), it.text && _jsx("div", { className: "bc-turns-text", children: it.text })] }, it.key));
                     }), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }));
 }
 //# sourceMappingURL=TurnsView.js.map

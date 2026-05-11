@@ -61,7 +61,7 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
       continue
     }
 
-    const isAssistantContent = row.kind === 'text' || row.kind === 'result' || row.kind === 'error'
+    const isAssistantContent = row.kind === 'text' || row.kind === 'result' || row.kind === 'error' || row.kind === 'thinking'
     if (!isAssistantContent) continue
 
     if (row.turnId) {
@@ -70,8 +70,10 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
 
       const dedup = turnResultMsgIds.get(row.turnId) ?? new Set<string>()
       const parts: string[] = []
+      const thinkingParts: string[] = []
       let hasError = false
       let isStreaming = false
+      let turnDone = false
       let lastUsage: LogRow['usage']
 
       for (const r of rows) {
@@ -81,17 +83,22 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
           if (t) parts.push(t)
           if (r.usage || r.meta?.usage) lastUsage = r.usage || r.meta?.usage
           if (r.meta?.is_error) hasError = true
+          turnDone = true
         } else if (r.kind === 'text' && r.text && !(r.messageId && dedup.has(r.messageId))) {
           parts.push(r.text)
           isStreaming = true
+        } else if (r.kind === 'thinking' && r.thinking) {
+          thinkingParts.push(r.thinking)
         } else if (r.kind === 'error' && r.errorMessage) {
           parts.push(r.errorMessage)
           hasError = true
+          turnDone = true
         }
       }
 
       const merged = parts.filter(Boolean).join('\n\n')
-      if (merged) {
+      const thinking = thinkingParts.filter(Boolean).join('\n\n')
+      if (merged || thinking) {
         out.push({
           key: `tv_turn_${row.turnId}`,
           actor: 'assistant',
@@ -101,6 +108,8 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
           usage: lastUsage,
           isError: hasError,
           isStreaming,
+          thinking: thinking || undefined,
+          turnDone,
         })
       }
       continue
@@ -184,6 +193,7 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
               </div>
             )
           }
+          const reasoningLive = !!it.thinking && !it.turnDone
           return (
             <div
               key={it.key}
@@ -193,9 +203,30 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
                 <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>
                 <span className="bc-turns-ts">{formatHMS(it.ts)}</span>
                 {it.usage && <UsageLine usage={it.usage} />}
-                {it.isStreaming && <span className="bc-turns-streaming-tag">streaming…</span>}
+                {reasoningLive && <span className="bc-turns-reasoning-tag">reasoning…</span>}
+                {it.isStreaming && !reasoningLive && <span className="bc-turns-streaming-tag">streaming…</span>}
               </div>
-              <div className="bc-turns-text">{it.text}</div>
+              {it.thinking && (
+                reasoningLive ? (
+                  <div className="bc-turns-reasoning bc-turns-reasoning-live">
+                    <div className="bc-turns-reasoning-label">
+                      <span className="bc-turns-reasoning-icon" aria-hidden>💭</span>
+                      <span>Reasoning</span>
+                      <span className="bc-turns-reasoning-dots" aria-hidden>…</span>
+                    </div>
+                    <div className="bc-turns-reasoning-text">{it.thinking}</div>
+                  </div>
+                ) : (
+                  <details className="bc-turns-reasoning">
+                    <summary>
+                      <span className="bc-turns-reasoning-icon" aria-hidden>💭</span>
+                      <span>Reasoning</span>
+                    </summary>
+                    <div className="bc-turns-reasoning-text">{it.thinking}</div>
+                  </details>
+                )
+              )}
+              {it.text && <div className="bc-turns-text">{it.text}</div>}
             </div>
           )
         })}

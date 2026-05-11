@@ -63,6 +63,8 @@ export interface TurnsItem {
   isStreaming?: boolean
   isMarker?: boolean
   markerKind?: 'compact'
+  thinking?: string
+  turnDone?: boolean
 }
 
 export interface TimelineItem {
