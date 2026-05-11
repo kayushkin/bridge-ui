@@ -4,19 +4,16 @@ import { useBridgeConfig } from '../context'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kanban'
 
-// Pulls the first session-shaped link off a card. Classifier cards carry
-// entity_type='session' with the bridge_id as ref (direct deeplink). Autoworker
-// cards carry entity_type='bus_session' with a bus_session_id — that needs an
-// async lookup against the llm-bridge-adapter to recover the bridge_id, which
-// happens in openSessionInChat below.
-type SessionLinkRef = { type: 'session' | 'bus_session'; ref: string }
-type OpenChatFn = (link: SessionLinkRef) => Promise<boolean>
+// Pulls the first session link off a card. Post session-consolidation
+// (2026-05-09) every card_link with entity_type='session' carries the
+// canonical llm-bridge-server session_id, which is a direct deeplink target.
+type SessionLinkRef = { ref: string }
+type OpenChatFn = (link: SessionLinkRef) => void
 
 function sessionLink(card: CardView): SessionLinkRef | null {
   for (const l of card.links ?? []) {
     if (!l.entity_ref) continue
-    if (l.entity_type === 'session') return { type: 'session', ref: l.entity_ref }
-    if (l.entity_type === 'bus_session') return { type: 'bus_session', ref: l.entity_ref }
+    if (l.entity_type === 'session') return { ref: l.entity_ref }
   }
   return null
 }
@@ -57,32 +54,10 @@ export function BridgeKanban() {
   })
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(loadCollapsedColumns)
 
-  const { routes, fetch: bridgeFetch, bridgeAdapterBasePath } = useBridgeConfig()
+  const { routes } = useBridgeConfig()
   const navigate = useNavigate()
-  const openSessionByBridgeID = (bridgeID: string) => {
-    navigate(`${routes.chat}?session=${encodeURIComponent(bridgeID)}`)
-  }
-  // Resolves either a direct session link (bridge_id) or a bus_session link
-  // (needs an async lookup via llm-bridge-adapter) and navigates to the chat.
-  // Returns false when a bus_session link can't be resolved (no proxy
-  // configured, lookup 404, or network error) — callers can use that to
-  // display feedback.
-  const openSessionLink = async (link: { type: 'session' | 'bus_session'; ref: string }): Promise<boolean> => {
-    if (link.type === 'session') {
-      openSessionByBridgeID(link.ref)
-      return true
-    }
-    if (!bridgeAdapterBasePath) return false
-    try {
-      const resp = await bridgeFetch(`${bridgeAdapterBasePath}/sessions/by-bus/${encodeURIComponent(link.ref)}`)
-      if (!resp.ok) return false
-      const data = await resp.json() as { session_id?: string }
-      if (!data.session_id) return false
-      openSessionByBridgeID(data.session_id)
-      return true
-    } catch {
-      return false
-    }
+  const openSessionLink = (link: SessionLinkRef) => {
+    navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
   }
 
   const k = useKanban(selectedBoardID)
@@ -500,10 +475,8 @@ function CardTile({
           <button
             type="button"
             className="bk-card-chat"
-            title={session.type === 'session'
-              ? `Open chat session ${session.ref}`
-              : `Open chat session for bus_session ${session.ref}`}
-            onClick={e => { e.stopPropagation(); void onOpenChat(session) }}
+            title={`Open chat session ${session.ref}`}
+            onClick={e => { e.stopPropagation(); onOpenChat(session) }}
           >chat ↗</button>
         )}
         <select
@@ -615,8 +588,7 @@ function CardDrawer({
             <h4>Entity links</h4>
             <ul className="bk-link-list">
               {links.map(l => {
-                const isSessionLink =
-                  (l.entity_type === 'session' || l.entity_type === 'bus_session') && !!l.entity_ref
+                const isSessionLink = l.entity_type === 'session' && !!l.entity_ref
                 return (
                   <li key={l.id}>
                     <span className="bk-link-type">{l.entity_type}</span>
@@ -624,13 +596,8 @@ function CardDrawer({
                       <button
                         type="button"
                         className="bk-link-ref bk-link-ref-action"
-                        title={l.entity_type === 'session'
-                          ? `Open chat session ${l.entity_ref}`
-                          : `Open chat session for bus_session ${l.entity_ref}`}
-                        onClick={() => void onOpenChat({
-                          type: l.entity_type as 'session' | 'bus_session',
-                          ref: l.entity_ref,
-                        })}
+                        title={`Open chat session ${l.entity_ref}`}
+                        onClick={() => onOpenChat({ ref: l.entity_ref })}
                       >{l.entity_ref} ↗</button>
                     ) : (
                       <span className="bk-link-ref">{l.entity_ref}</span>
