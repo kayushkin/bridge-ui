@@ -9,7 +9,6 @@ export interface StoreModel {
     output_cost: number;
 }
 export interface ChatSession {
-    frontendId: string;
     sessionId: string | null;
     harness: string;
     agent: string;

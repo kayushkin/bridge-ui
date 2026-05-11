@@ -96,7 +96,7 @@ export interface UseBridgeSessionReturn {
     compacting: boolean;
     error: string | null;
     loadingHistory: boolean;
-    createSession: (opts: CreateSessionRequest) => Promise<ManagedSession | null>;
+    createSession: (opts: Partial<CreateSessionRequest> & Pick<CreateSessionRequest, 'harness'>) => Promise<ManagedSession | null>;
     selectSession: (id: string) => void;
     send: (text: string) => void;
     interrupt: () => void;

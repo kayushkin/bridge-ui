@@ -81,14 +81,14 @@ export function BridgeSessions() {
         if (filterInstance)
             list = list.filter(s => s.instance_id === filterInstance);
         if (searchHits)
-            list = list.filter(s => searchHits.has(s.bridge_id));
+            list = list.filter(s => searchHits.has(s.session_id));
         return list.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     }, [sessions, filterHarness, filterState, filterInstance, searchHits]);
     const tokensMapRef = useRef(tokensMap);
     tokensMapRef.current = tokensMap;
     useEffect(() => {
         const current = tokensMapRef.current;
-        const toLoad = filtered.filter(s => s.state !== 'empty' && !current.has(s.bridge_id)).slice(0, 30);
+        const toLoad = filtered.filter(s => s.state !== 'empty' && !current.has(s.session_id)).slice(0, 30);
         if (toLoad.length === 0)
             return;
         let cancelled = false;
@@ -96,7 +96,7 @@ export function BridgeSessions() {
             const next = new Map(current);
             for (const s of toLoad) {
                 try {
-                    const res = await apiFetch(`${basePath}/sessions/${s.bridge_id}/messages`);
+                    const res = await apiFetch(`${basePath}/sessions/${s.session_id}/messages`);
                     if (!res.ok)
                         continue;
                     const msgs = await res.json() ?? [];
@@ -107,7 +107,7 @@ export function BridgeSessions() {
                             output += m.meta.usage.output_tokens || 0;
                         }
                     }
-                    next.set(s.bridge_id, { input, output });
+                    next.set(s.session_id, { input, output });
                 }
                 catch { /* skip */ }
             }
@@ -117,7 +117,7 @@ export function BridgeSessions() {
         return () => { cancelled = true; };
     }, [filtered, apiFetch, basePath]);
     const handleClick = (session) => {
-        navigate(routes.chat, { state: { selectSession: session.bridge_id } });
+        navigate(routes.chat, { state: { selectSession: session.session_id } });
     };
     const counts = useMemo(() => {
         const c = {};
@@ -127,13 +127,13 @@ export function BridgeSessions() {
     }, [sessions]);
     return (_jsxs("div", { className: "bs-container", children: [_jsxs("div", { className: "bs-header", children: [_jsx("h2", { children: "All Sessions" }), _jsx("div", { className: "bs-counts", children: Object.entries(counts).map(([state, n]) => (_jsxs("span", { className: "bs-count-badge", style: { color: STATE_COLORS[state] || '#888' }, children: [n, " ", state] }, state))) })] }), _jsxs("div", { className: "bs-filters", children: [_jsx("input", { type: "search", placeholder: "Search message content\u2026", value: searchInput, onChange: e => setSearchInput(e.target.value), className: "bs-search" }), _jsxs("select", { value: filterHarness, onChange: e => setFilterHarness(e.target.value), children: [_jsx("option", { value: "", children: "All harnesses" }), harnessesAvail.map(h => _jsx("option", { value: h, children: h }, h))] }), _jsxs("select", { value: filterState, onChange: e => setFilterState(e.target.value), children: [_jsx("option", { value: "", children: "All states" }), states.map(s => _jsx("option", { value: s, children: s }, s))] }), _jsxs("select", { value: filterInstance, onChange: e => setFilterInstance(e.target.value), children: [_jsx("option", { value: "", children: "All instances" }), inst.instances.map(i => _jsx("option", { value: i.id, children: i.name }, i.id))] }), searching && _jsx("span", { className: "bs-search-status", children: "Searching\u2026" }), !searching && searchHits && (_jsxs("span", { className: "bs-search-status", children: [filtered.length, " match", filtered.length === 1 ? '' : 'es'] }))] }), loading ? (_jsx("div", { className: "bs-loading", children: "Loading..." })) : filtered.length === 0 ? (_jsx("div", { className: "bs-empty", children: "No sessions match filters" })) : (_jsx("ul", { className: "bs-list", children: filtered.map(s => {
                     const instance = s.instance_id ? inst.instanceMap.get(s.instance_id) : undefined;
-                    const matchCount = searchHits?.get(s.bridge_id);
+                    const matchCount = searchHits?.get(s.session_id);
                     const hinfo = harnessMap.get(s.harness);
-                    const tokens = tokensMap.get(s.bridge_id);
+                    const tokens = tokensMap.get(s.session_id);
                     const totalTokens = tokens ? tokens.input + tokens.output : undefined;
                     return (_jsx("li", { children: _jsxs("button", { className: "bs-row", onClick: () => handleClick(s), children: [_jsx("span", { className: "bs-row-harness", title: hinfo?.label || s.harness, children: hinfo?.image
                                         ? _jsx("img", { src: `${basePath}${hinfo.image}`, alt: hinfo.label || s.harness })
-                                        : _jsx("span", { className: "bs-row-emoji", children: hinfo?.emoji || '·' }) }), _jsx("span", { className: "bs-state-dot", style: { background: STATE_COLORS[s.state] || '#888' } }), _jsx("span", { className: "bs-row-name", children: s.display_name || s.bridge_id.slice(0, 16) }), instance && _jsx("span", { className: "bs-row-instance", children: instance.name }), _jsx("span", { className: "bs-row-tokens", children: totalTokens !== undefined && totalTokens > 0 ? `${formatTokens(totalTokens)} tok` : '' }), matchCount !== undefined && (_jsxs("span", { className: "bs-match-badge", children: [matchCount, " match", matchCount === 1 ? '' : 'es'] })), _jsx("span", { className: "bs-row-time", children: timeAgo(s.updated_at) })] }) }, s.bridge_id));
+                                        : _jsx("span", { className: "bs-row-emoji", children: hinfo?.emoji || '·' }) }), _jsx("span", { className: "bs-state-dot", style: { background: STATE_COLORS[s.state] || '#888' } }), _jsx("span", { className: "bs-row-name", children: s.display_name || s.session_id.slice(0, 16) }), instance && _jsx("span", { className: "bs-row-instance", children: instance.name }), _jsx("span", { className: "bs-row-tokens", children: totalTokens !== undefined && totalTokens > 0 ? `${formatTokens(totalTokens)} tok` : '' }), matchCount !== undefined && (_jsxs("span", { className: "bs-match-badge", children: [matchCount, " match", matchCount === 1 ? '' : 'es'] })), _jsx("span", { className: "bs-row-time", children: timeAgo(s.updated_at) })] }) }, s.session_id));
                 }) }))] }));
 }
 //# sourceMappingURL=BridgeSessions.js.map

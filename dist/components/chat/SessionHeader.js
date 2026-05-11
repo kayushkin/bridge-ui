@@ -51,7 +51,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
             document.removeEventListener('keydown', onKey);
         };
     }, [detailsOpen]);
-    const sourceLabel = session?.source || 'interactive';
+    const sourceLabel = session?.purpose || 'chat';
     return (_jsxs("div", { className: "bc-header", style: headerStyle, "data-harness": harness || undefined, children: [_jsxs("div", { className: "bc-header-row", children: [_jsxs("div", { className: "bc-nav-arrows", children: [_jsx("button", { className: "bc-nav-arrow", onClick: onPrev, disabled: !hasPrev, title: "Previous session", "aria-label": "Previous session", children: "\u2039" }), _jsx("button", { className: "bc-nav-arrow", onClick: onNext, disabled: !hasNext, title: "Next session", "aria-label": "Next session", children: "\u203A" })] }), _jsx(StatusDot, { state: dotState, title: dotTitle }), harness && (_jsx("span", { className: "bc-harness-chip", title: harnessLabel, "aria-label": harnessLabel, children: harnessImage
                             ? _jsx("img", { className: "bc-harness-chip-img", src: `${basePath}${harnessImage}`, alt: "" })
                             : harnessEmoji
@@ -66,7 +66,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
                                         ? 'bc-machine-chip-dot-unknown'
                                         : machineReachable
                                             ? 'bc-machine-chip-dot-ok'
-                                            : 'bc-machine-chip-dot-fail'), "aria-hidden": true })] })), session && (_jsxs("div", { className: "bc-details-wrap", ref: detailsRef, children: [_jsxs("button", { type: "button", className: `bc-source-chip${detailsOpen ? ' bc-source-chip-open' : ''}`, onClick: () => setDetailsOpen(o => !o), "data-source": session.source || 'interactive', title: `source: ${sourceLabel}\nclick for full session details`, "aria-expanded": detailsOpen, "aria-label": "Session details", children: [_jsx("span", { className: "bc-source-chip-label", children: sourceLabel }), _jsx("span", { className: "bc-source-chip-caret", "aria-hidden": true, children: "\u25BE" })] }), detailsOpen && _jsx(SessionDetailsPanel, { session: session })] })), chat
+                                            : 'bc-machine-chip-dot-fail'), "aria-hidden": true })] })), session && (_jsxs("div", { className: "bc-details-wrap", ref: detailsRef, children: [_jsxs("button", { type: "button", className: `bc-source-chip${detailsOpen ? ' bc-source-chip-open' : ''}`, onClick: () => setDetailsOpen(o => !o), "data-source": session.purpose || 'chat', title: `source: ${sourceLabel}\nclick for full session details`, "aria-expanded": detailsOpen, "aria-label": "Session details", children: [_jsx("span", { className: "bc-source-chip-label", children: sourceLabel }), _jsx("span", { className: "bc-source-chip-caret", "aria-hidden": true, children: "\u25BE" })] }), detailsOpen && _jsx(SessionDetailsPanel, { session: session })] })), chat
                         ? _jsx(EditableName, { value: chat.displayName, onSave: onRename, className: "bc-session-name" })
                         : _jsx("span", { className: "bc-session-name bc-session-name-empty", children: "\u2014" }), totalCost > 0 && (_jsx("span", { className: "bc-cost", title: contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined, children: formatCost(totalCost) })), repoCount > 0 && currentRepo && (_jsxs("label", { className: "bc-repo-chip", title: `${currentRepo.path}${repoCount > 1 ? ` — ${repoCount} repos discovered` : ''}`, children: [_jsx("span", { className: "bc-repo-chip-icon", "aria-hidden": true, children: "\u25C6" }), _jsx("span", { className: "bc-repo-chip-name", children: currentRepo.name }), repoCount > 1 && _jsxs("span", { className: "bc-repo-chip-count", "aria-hidden": true, children: ["+", repoCount - 1] }), _jsx("select", { className: "bc-repo-chip-select", value: selectedRepo, onChange: e => onSelectRepo(e.target.value), "aria-label": "Switch repository", children: gitRepos.map(r => (_jsx("option", { value: r.path, children: r.name }, r.path))) }), _jsx("span", { className: "bc-repo-chip-caret", "aria-hidden": true, children: "\u25BE" })] })), _jsxs("div", { className: "bc-header-right", children: [_jsx(PaneToggles, { panesHidden: panesHidden, onToggleTurns: onToggleTurns, onToggleThread: onToggleThread, onToggleTimeline: onToggleTimeline, onToggleGit: onToggleGit, onToggleKanban: onToggleKanban }), onCloseWorkspace && (_jsx("button", { className: "bc-workspace-close", onClick: onCloseWorkspace, title: "Close workspace", "aria-label": "Close workspace", children: "\u00D7" }))] })] }), contextTokens > 0 && contextLimit > 0 && (_jsx("div", { className: `bc-header-context ${contextTone ? `bc-header-context-${contextTone}` : ''}`, style: { width: `${contextPct}%` } }))] }));
 }
@@ -79,16 +79,17 @@ function SessionDetailsPanel({ session }) {
         return Number.isNaN(d.getTime()) ? v : d.toLocaleString();
     };
     const rows = [
-        ['source', fmt(session.source)],
+        ['type', fmt(session.type)],
+        ['purpose', fmt(session.purpose)],
+        ['origin', fmt(session.origin)],
         ['folder', fmt(session.folder_name)],
         ['state', fmt(session.state)],
         ['mode', session.mode || 'events'],
         ['harness', fmt(session.harness)],
         ['agent', fmt(session.agent_id)],
         ['instance', fmt(session.instance_id), true],
-        ['bridge id', fmt(session.bridge_id), true],
+        ['session id', fmt(session.session_id), true],
         ['harness session', fmt(session.harness_session_id), true],
-        ['client id', fmt(session.client_id), true],
         ['parent', fmt(session.parent_id), true],
         ['spawner', fmt(session.spawner_id), true],
         ['pid', session.pid ? String(session.pid) : '—'],

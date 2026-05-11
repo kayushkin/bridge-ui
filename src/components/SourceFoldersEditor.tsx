@@ -3,13 +3,15 @@ import type { SourceFolderMapping, SourceFolderApplyResult } from '@kayushkin/ll
 import { useBridgeConfig } from '../context'
 import { useBridgeFolders } from '../useBridgeFolders'
 
-// Editor for the runtime source→folder map. Each row maps a session.source
+// Editor for the runtime purpose→folder map. Each row maps a session.purpose
 // tag (e.g. "scheduler", "conformance") to a folder. Rows with default=true
 // come from LLMBRIDGE_SOURCE_FOLDERS; default=false rows are runtime overrides
 // stored in source_folders. PUT replaces; DELETE reverts to the env default.
+// The env var and table keep the legacy "source" naming for storage
+// internals (llm-bridge-server f03b058); the user-facing axis is "purpose".
 //
 // On Save, the editor offers to rebucket existing sessions whose folder was
-// empty or matched the prior effective folder for that source. Manual moves
+// empty or matched the prior effective folder for that purpose. Manual moves
 // (folder differs from the prior effective) are preserved.
 export function SourceFoldersEditor() {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
@@ -19,7 +21,7 @@ export function SourceFoldersEditor() {
   const [applyToExisting, setApplyToExisting] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
-  const [newSource, setNewSource] = useState('')
+  const [newPurpose, setNewPurpose] = useState('')
   const [newFolder, setNewFolder] = useState('')
 
   const refresh = useCallback(async () => {
@@ -27,16 +29,16 @@ export function SourceFoldersEditor() {
     if (!res.ok) return
     const data: SourceFolderMapping[] = await res.json()
     setRows(data)
-    setDraft(Object.fromEntries(data.map(r => [r.source, r.folder_name])))
+    setDraft(Object.fromEntries(data.map(r => [r.purpose, r.folder_name])))
   }, [apiFetch, basePath])
 
   useEffect(() => { refresh() }, [refresh])
 
-  const save = useCallback(async (source: string) => {
-    const folder = draft[source]?.trim()
+  const save = useCallback(async (purpose: string) => {
+    const folder = draft[purpose]?.trim()
     if (!folder) return
-    setBusy(source); setStatus(null)
-    const res = await apiFetch(`${basePath}/source-folders/${encodeURIComponent(source)}`, {
+    setBusy(purpose); setStatus(null)
+    const res = await apiFetch(`${basePath}/source-folders/${encodeURIComponent(purpose)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folder_name: folder, apply_to_existing: applyToExisting }),
@@ -48,29 +50,29 @@ export function SourceFoldersEditor() {
     }
     const result: SourceFolderApplyResult = await res.json()
     setStatus(applyToExisting
-      ? `${source} → ${folder} (${result.updated} session${result.updated === 1 ? '' : 's'} rebucketed)`
-      : `${source} → ${folder}`)
+      ? `${purpose} → ${folder} (${result.updated} session${result.updated === 1 ? '' : 's'} rebucketed)`
+      : `${purpose} → ${folder}`)
     await refresh()
   }, [apiFetch, basePath, draft, applyToExisting, refresh])
 
-  const revert = useCallback(async (source: string) => {
-    setBusy(source); setStatus(null)
-    const res = await apiFetch(`${basePath}/source-folders/${encodeURIComponent(source)}`, { method: 'DELETE' })
+  const revert = useCallback(async (purpose: string) => {
+    setBusy(purpose); setStatus(null)
+    const res = await apiFetch(`${basePath}/source-folders/${encodeURIComponent(purpose)}`, { method: 'DELETE' })
     setBusy(null)
     if (!res.ok) {
       setStatus(`revert failed: ${await res.text()}`)
       return
     }
-    setStatus(`${source}: reverted to env default`)
+    setStatus(`${purpose}: reverted to env default`)
     await refresh()
   }, [apiFetch, basePath, refresh])
 
   const addNew = useCallback(async () => {
-    const src = newSource.trim()
+    const purpose = newPurpose.trim()
     const fld = newFolder.trim()
-    if (!src || !fld) return
-    setBusy(src); setStatus(null)
-    const res = await apiFetch(`${basePath}/source-folders/${encodeURIComponent(src)}`, {
+    if (!purpose || !fld) return
+    setBusy(purpose); setStatus(null)
+    const res = await apiFetch(`${basePath}/source-folders/${encodeURIComponent(purpose)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folder_name: fld, apply_to_existing: applyToExisting }),
@@ -82,17 +84,17 @@ export function SourceFoldersEditor() {
     }
     const result: SourceFolderApplyResult = await res.json()
     setStatus(applyToExisting
-      ? `+ ${src} → ${fld} (${result.updated} rebucketed)`
-      : `+ ${src} → ${fld}`)
-    setNewSource(''); setNewFolder('')
+      ? `+ ${purpose} → ${fld} (${result.updated} rebucketed)`
+      : `+ ${purpose} → ${fld}`)
+    setNewPurpose(''); setNewFolder('')
     await refresh()
-  }, [apiFetch, basePath, newSource, newFolder, applyToExisting, refresh])
+  }, [apiFetch, basePath, newPurpose, newFolder, applyToExisting, refresh])
 
   return (
     <div className="bset-container">
-      <h2 className="bset-title">Session Source Folders</h2>
+      <h2 className="bset-title">Session Purpose Folders</h2>
       <p className="bset-subtitle">
-        Auto-file new sessions into a sidebar folder based on their <code>source</code> tag
+        Auto-file new sessions into a sidebar folder based on their <code>purpose</code> tag
         (set by the caller — autoworker, scheduler, conformance, etc.). Rows marked <em>default</em>
         come from LLMBRIDGE_SOURCE_FOLDERS; saving over them creates a runtime override.
       </p>
@@ -104,17 +106,17 @@ export function SourceFoldersEditor() {
 
       <table className="bset-sf-table">
         <thead>
-          <tr><th>Source</th><th>Folder</th><th>Origin</th><th></th></tr>
+          <tr><th>Purpose</th><th>Folder</th><th>Origin</th><th></th></tr>
         </thead>
         <tbody>
           {rows.map(r => (
-            <tr key={r.source}>
-              <td><code>{r.source}</code></td>
+            <tr key={r.purpose}>
+              <td><code>{r.purpose}</code></td>
               <td>
                 <select
-                  value={draft[r.source] ?? r.folder_name}
-                  onChange={e => setDraft(prev => ({ ...prev, [r.source]: e.target.value }))}
-                  disabled={busy === r.source}
+                  value={draft[r.purpose] ?? r.folder_name}
+                  onChange={e => setDraft(prev => ({ ...prev, [r.purpose]: e.target.value }))}
+                  disabled={busy === r.purpose}
                 >
                   {folders.folderOrder.map(f => <option key={f} value={f}>{f}</option>)}
                   {!folders.folderOrder.includes(r.folder_name) && (
@@ -126,14 +128,14 @@ export function SourceFoldersEditor() {
               <td>
                 <button
                   className="bset-save-btn"
-                  onClick={() => save(r.source)}
-                  disabled={busy === r.source || (draft[r.source] ?? r.folder_name) === r.folder_name}
+                  onClick={() => save(r.purpose)}
+                  disabled={busy === r.purpose || (draft[r.purpose] ?? r.folder_name) === r.folder_name}
                 >Save</button>
                 {!r.default && (
                   <button
                     className="bset-save-btn"
-                    onClick={() => revert(r.source)}
-                    disabled={busy === r.source}
+                    onClick={() => revert(r.purpose)}
+                    disabled={busy === r.purpose}
                     style={{ marginLeft: '0.5rem' }}
                   >Revert</button>
                 )}
@@ -141,7 +143,7 @@ export function SourceFoldersEditor() {
             </tr>
           ))}
           <tr>
-            <td><input placeholder="new source tag" value={newSource} onChange={e => setNewSource(e.target.value)} /></td>
+            <td><input placeholder="new purpose tag" value={newPurpose} onChange={e => setNewPurpose(e.target.value)} /></td>
             <td>
               <select value={newFolder} onChange={e => setNewFolder(e.target.value)}>
                 <option value="">— pick folder —</option>
@@ -150,7 +152,7 @@ export function SourceFoldersEditor() {
             </td>
             <td></td>
             <td>
-              <button className="bset-save-btn" onClick={addNew} disabled={!newSource.trim() || !newFolder || busy !== null}>
+              <button className="bset-save-btn" onClick={addNew} disabled={!newPurpose.trim() || !newFolder || busy !== null}>
                 Add
               </button>
             </td>

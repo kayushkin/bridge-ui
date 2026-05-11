@@ -238,11 +238,11 @@ export function BridgeUsage() {
     const harnessGroups = useMemo(() => {
         const groups = new Map();
         for (const s of periodSessions) {
-            const agg = aggregates.get(s.bridge_id);
+            const agg = aggregates.get(s.session_id);
             if (!agg)
                 continue;
             const usage = {
-                sessionId: s.bridge_id,
+                sessionId: s.session_id,
                 harness: s.harness,
                 instanceId: s.instance_id ?? '',
                 inputTokens: agg.input_tokens,
@@ -257,7 +257,7 @@ export function BridgeUsage() {
                 h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 };
                 groups.set(s.harness, h);
             }
-            const srcKey = s.source ?? '';
+            const srcKey = s.purpose ?? '';
             let src = h.sources.get(srcKey);
             if (!src) {
                 src = { source: srcKey, sessions: [], totals: emptyTotals() };

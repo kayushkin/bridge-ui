@@ -17,7 +17,6 @@ import { SessionDrawer } from './minimal/SessionDrawer';
 import { ChromeSheet } from './minimal/ChromeSheet';
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence';
 import { splitModeAxis } from './chat/types';
-import { generateFrontendId } from './chat/utils';
 import { buildFlatLayout, firstLeafId, iterateLeafIds, removeLeaf, splitLeaf } from './chat/workspaceTree';
 const DEFAULT_INNER_TREE = {
     kind: 'split',
@@ -175,7 +174,7 @@ export function BridgeChat() {
         else {
             addWorkspace(id, 'replace');
         }
-        const session = bridge.sessions.find(s => s.bridge_id === id);
+        const session = bridge.sessions.find(s => s.session_id === id);
         if (session?.instance_id) {
             bridgePrefs.setLastSession(session.instance_id, id);
             bridgePrefs.setLastInstanceId(session.instance_id);
@@ -186,7 +185,7 @@ export function BridgeChat() {
         if (!id)
             return;
         addWorkspace(id, mode);
-        const session = bridge.sessions.find(s => s.bridge_id === id);
+        const session = bridge.sessions.find(s => s.session_id === id);
         if (session?.instance_id) {
             bridgePrefs.setLastSession(session.instance_id, id);
             bridgePrefs.setLastInstanceId(session.instance_id);
@@ -254,7 +253,6 @@ export function BridgeChat() {
         const harnessInfo = harnesses.find(h => h.name === harness);
         if (!harnessInfo?.available)
             return;
-        const frontendId = generateFrontendId();
         const defaults = bridgePrefs.getDefaults(harness);
         // Permission gating runs as a PreToolUse HTTP hook injected by
         // bridge-server (--settings → /permission/cc-prehook). The bypass
@@ -265,12 +263,11 @@ export function BridgeChat() {
             harness,
             instance_id: instanceId,
             display_name: '',
-            client_id: frontendId,
         });
         if (!sess)
             return;
         bridgePrefs.setLastInstanceId(instanceId);
-        bridgePrefs.setLastSession(instanceId, sess.bridge_id);
+        bridgePrefs.setLastSession(instanceId, sess.session_id);
         if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
             bridge.sendConfig({
                 model: defaults.model,
@@ -283,10 +280,10 @@ export function BridgeChat() {
         // workspace if the user chose split-h/-v or no workspace is focused.
         const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId);
         if (mode === 'replace' && focused) {
-            setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.bridge_id } : w));
+            setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.session_id } : w));
         }
         else {
-            addWorkspace(sess.bridge_id, mode === 'replace' ? 'replace' : mode);
+            addWorkspace(sess.session_id, mode === 'replace' ? 'replace' : mode);
         }
     }, [bridge, bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, addWorkspace]);
     const handleRenameSession = useCallback((id, name) => {
@@ -311,7 +308,7 @@ export function BridgeChat() {
     const focusedSession = useMemo(() => {
         if (!focusedSessionId)
             return null;
-        return bridge.sessions.find(s => s.bridge_id === focusedSessionId) ?? null;
+        return bridge.sessions.find(s => s.session_id === focusedSessionId) ?? null;
     }, [bridge.sessions, focusedSessionId]);
     const minimalTitle = focusedSession ? getDisplayName(focusedSession) : '';
     const handleSelectSessionMinimal = useCallback((id) => {

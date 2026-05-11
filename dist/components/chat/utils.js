@@ -1,6 +1,3 @@
-export function generateFrontendId() {
-    return `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 export function formatHMS(ts) {
     try {
         const d = new Date(ts);

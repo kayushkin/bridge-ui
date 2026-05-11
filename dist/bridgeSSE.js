@@ -102,8 +102,8 @@ export async function* connectSessionListSSE(fetchFn, basePath, signal) {
                             else if (currentEvent.type === 'upsert' && data.session) {
                                 yield { type: 'upsert', session: data.session };
                             }
-                            else if (currentEvent.type === 'delete' && data.bridge_id) {
-                                yield { type: 'delete', bridge_id: data.bridge_id };
+                            else if (currentEvent.type === 'delete' && data.session_id) {
+                                yield { type: 'delete', session_id: data.session_id };
                             }
                         }
                         catch {

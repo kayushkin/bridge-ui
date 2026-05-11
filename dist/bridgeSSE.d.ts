@@ -7,7 +7,7 @@ export type SessionListFrame = {
     session: ManagedSession;
 } | {
     type: 'delete';
-    bridge_id: string;
+    session_id: string;
 };
 /**
  * Connect to a bridge session's SSE event stream using fetch + ReadableStream.
