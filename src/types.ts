@@ -32,6 +32,12 @@ import type {
   UpdateMachineRequest,
 } from '@kayushkin/llm-bridge-types'
 
+export {
+  HookSourceHook,
+  HookSourcePermission,
+  HookSourceUserInput,
+} from '@kayushkin/llm-bridge-types'
+
 // Re-export canonical types for consumers.
 export type {
   TokenUsage,

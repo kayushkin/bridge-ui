@@ -1,4 +1,5 @@
 import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
+export { HookSourceHook, HookSourcePermission, HookSourceUserInput, } from '@kayushkin/llm-bridge-types';
 export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };

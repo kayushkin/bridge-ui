@@ -1,18 +1,19 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useCallback } from 'react';
 import { useBridgeConfig } from '../../context';
+import { HookSourceUserInput } from '../../types';
 import { useWorkspace } from './WorkspaceContext';
 // PendingPermissionsBanner is the sticky surface for awaiting_resolution
-// HookEvents emitted by bridge-server's PreToolUse hook when permission-store
-// returned an "ask" outcome. Pinned to the top of the workspace; renders
-// nothing when there are no pending hooks.
+// HookEvents parked by bridge-server's PreToolUse hook. Renders nothing
+// when there are no pending hooks.
 //
-// Two card flavors:
-//   - PendingHookCard: generic allow/deny + always-rule surface for any tool.
-//   - AskUserQuestionCard: dedicated UI for CC's AskUserQuestion tool. Renders
-//     the question(s) with radio/checkbox option groups and submits the
-//     selections back via updatedInput so CC's tool.call() returns those
-//     answers directly without invoking the interactive CLI prompt.
+// Card flavor is picked by HookEvent.source:
+//   - "user_input" (HookSourceUserInput): the model is asking the human a
+//     structured question (e.g. CC's AskUserQuestion). Renders
+//     AskUserQuestionCard — option groups whose selections post back via
+//     updatedInput, so the model receives the answer directly.
+//   - "permission_prompt" (default for tool-gating asks): renders
+//     PendingHookCard — generic allow/deny + always-rule surface.
 export function PendingPermissionsBanner() {
     const ws = useWorkspace();
     const { fetch: apiFetch, basePath } = useBridgeConfig();
@@ -22,7 +23,7 @@ export function PendingPermissionsBanner() {
     const permStoreBase = basePath.replace(/\/[^/]+$/, '/permission-store');
     return (_jsx("div", { className: "bc-pending-banner", role: "region", "aria-label": "Pending permission prompts", children: ws.pendingHooks.map(hook => {
             const key = hook.request_id || `nokey-${hook.event}`;
-            if (hook.tool_name === 'AskUserQuestion' && isAskUserQuestionInput(hook.input)) {
+            if (hook.source === HookSourceUserInput && isAskUserQuestionInput(hook.input)) {
                 return (_jsx(AskUserQuestionCard, { hook: hook, onResolve: ws.resolveHook }, key));
             }
             return (_jsx(PendingHookCard, { hook: hook, onResolve: ws.resolveHook, apiFetch: apiFetch, permStoreBase: permStoreBase }, key));
