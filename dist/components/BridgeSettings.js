@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState, useCallback } from 'react';
 import { useBridgeConfig } from '../context';
 import { useBridgePrefs } from '../useBridgePrefs';
+import { PermissionModeAsk, PermissionModeAuto, PermissionModeBypass, } from '../types';
 import { SourceFoldersEditor } from './SourceFoldersEditor';
 import { InberAgentsConfig } from './InberAgentsConfig';
 const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -56,7 +57,7 @@ export function BridgeSettings() {
         setTimeout(() => setSaving(null), 500);
     }, [localDefaults, bridgePrefs]);
     const hasCapability = (harness, cap) => harness.capabilities?.includes(cap);
-    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx(PermissionsBypassToggle, { apiFetch: apiFetch, basePath: basePath }), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
+    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx(PermissionsModeSelector, { apiFetch: apiFetch, basePath: basePath }), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
                     const defaults = localDefaults[h.name] || {};
                     const isExpanded = expanded[h.name];
                     const label = h.label || h.name;
@@ -67,57 +68,63 @@ export function BridgeSettings() {
                                                 }) })] })), _jsxs("div", { className: "bset-caps-info", children: [_jsx("span", { className: "bset-caps-label", children: "Capabilities:" }), h.capabilities?.map(c => _jsx("span", { className: "bset-cap-badge", children: c }, c))] }), _jsx("button", { className: "bset-save-btn", onClick: () => saveDefaults(h.name), disabled: saving === h.name, children: saving === h.name ? 'Saved!' : 'Save Defaults' }), h.name === 'inber' && _jsx(InberAgentsConfig, {})] }))] }, h.name));
                 }) })] }));
 }
-// PermissionsBypassToggle is the global permission-bypass switch. When off
-// (default), every tool call routes through the PreToolUse hook to
-// permission-store's rule engine. When on, the prehook short-circuits to
-// allow without consulting permission-store. Saved as bridge-prefs
-// .bypass_permissions; bridge-server reads it on every prehook call so the
-// toggle takes effect immediately for every active and future session.
-function PermissionsBypassToggle({ apiFetch, basePath }) {
-    const [enabled, setEnabled] = useState(null);
+// PermissionsModeSelector is the global permission-mode selector. The
+// selected mode is the default for new sessions (snapshotted into
+// HarnessConfig at create time) and the fallback for legacy sessions
+// without a per-session mode. Saved as bridge-prefs.permission_mode;
+// bridge-server reads it on every prehook call so changes take effect
+// immediately for every active and future session.
+function PermissionsModeSelector({ apiFetch, basePath }) {
+    const [mode, setMode] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    // Load current state on mount.
     useEffect(() => {
         let cancelled = false;
         apiFetch(`${basePath}/bridge-prefs`)
             .then(r => r.ok ? r.json() : null)
             .then((prefs) => {
-            if (!cancelled && prefs)
-                setEnabled(!!prefs.bypass_permissions);
+            if (cancelled || !prefs)
+                return;
+            // Prefer the new field; fall back to legacy bool so older prefs
+            // files migrate visibly on first render.
+            if (prefs.permission_mode)
+                setMode(prefs.permission_mode);
+            else if (prefs.bypass_permissions)
+                setMode(PermissionModeBypass);
+            else
+                setMode(PermissionModeAsk);
         })
             .catch(() => { if (!cancelled)
-            setEnabled(false); });
+            setMode(PermissionModeAsk); });
         return () => { cancelled = true; };
     }, [apiFetch, basePath]);
-    const toggle = useCallback(async () => {
-        if (enabled === null)
+    const handleChange = useCallback(async (next) => {
+        if (mode === null || next === mode)
             return;
         setBusy(true);
         setError(null);
-        const next = !enabled;
+        const prev = mode;
+        setMode(next);
         try {
-            const res = await apiFetch(`${basePath}/bridge/bypass-permissions`, {
+            const res = await apiFetch(`${basePath}/bridge/permission-mode`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: next }),
+                body: JSON.stringify({ mode: next }),
             });
             if (!res.ok)
                 throw new Error(`HTTP ${res.status}`);
-            setEnabled(next);
         }
         catch (err) {
+            setMode(prev);
             setError(err instanceof Error ? err.message : String(err));
         }
         finally {
             setBusy(false);
         }
-    }, [enabled, apiFetch, basePath]);
-    if (enabled === null) {
-        return null; // initial fetch in flight
+    }, [mode, apiFetch, basePath]);
+    if (mode === null) {
+        return null;
     }
-    return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-bypass-toggle", children: [_jsx("input", { type: "checkbox", checked: enabled, disabled: busy, onChange: toggle }), _jsxs("span", { children: [_jsx("strong", { children: "Bypass permissions" }), " \u2014 skip all rules; every tool call auto-approves"] })] }) }), _jsx("p", { className: "bset-subtitle", children: enabled
-                    ? 'Bypass is ON. Every Claude Code tool call auto-approves immediately, and every Codex session launches with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored until you turn this off.'
-                    : 'Bypass is OFF. Claude Code tool calls route through permission-store rules; Codex runs in its default sandbox. Manage rules at /permissions; pending prompts surface inline in chat.' }), error && _jsx("p", { className: "bset-error", children: error })] }));
+    return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-mode-row", children: [_jsx("strong", { children: "Mode:" }), _jsxs("select", { className: "bset-mode-select", value: mode, disabled: busy, onChange: e => handleChange(e.target.value), children: [_jsx("option", { value: PermissionModeAsk, children: "Ask \u2014 gate every novel tool call" }), _jsx("option", { value: PermissionModeAuto, children: "Auto \u2014 allow reads, edits, planning; ask for shell/fetch/agent" }), _jsx("option", { value: PermissionModeBypass, children: "Bypass \u2014 allow every tool call" })] })] }) }), _jsxs("p", { className: "bset-subtitle", children: [mode === PermissionModeBypass && 'Bypass is ON. Every tool call auto-approves immediately; Codex sessions launch with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored. AskUserQuestion still pauses for your answer.', mode === PermissionModeAuto && 'Auto-mode allows the bridge-defined safe-tool set (Read, Glob, Grep, LS, Edit, Write, MultiEdit, NotebookRead, NotebookEdit, TodoWrite, ExitPlanMode). Other tools still route through permission-store rules.', mode === PermissionModeAsk && 'Ask-mode routes every tool call through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.'] }), _jsx("p", { className: "bset-subtitle", children: "This is the global default. Each new session snapshots it at creation and can be overridden per-session via the mode selector in the chat controls bar." }), error && _jsx("p", { className: "bset-error", children: error })] }));
 }
 //# sourceMappingURL=BridgeSettings.js.map

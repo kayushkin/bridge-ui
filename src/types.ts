@@ -36,6 +36,9 @@ export {
   HookSourceHook,
   HookSourcePermission,
   HookSourceUserInput,
+  PermissionModeAsk,
+  PermissionModeAuto,
+  PermissionModeBypass,
 } from '@kayushkin/llm-bridge-types'
 
 // Re-export canonical types for consumers.

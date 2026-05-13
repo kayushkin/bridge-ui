@@ -1,7 +1,14 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
-import type { FetchFn, HarnessDefaults, HarnessInfo } from '../types'
+import {
+  PermissionModeAsk,
+  PermissionModeAuto,
+  PermissionModeBypass,
+  type FetchFn,
+  type HarnessDefaults,
+  type HarnessInfo,
+} from '../types'
 import { SourceFoldersEditor } from './SourceFoldersEditor'
 import { InberAgentsConfig } from './InberAgentsConfig'
 
@@ -75,7 +82,7 @@ export function BridgeSettings() {
     <div className="bset-container">
       <SourceFoldersEditor />
 
-      <PermissionsBypassToggle apiFetch={apiFetch} basePath={basePath} />
+      <PermissionsModeSelector apiFetch={apiFetch} basePath={basePath} />
 
       <h2 className="bset-title">Harness Defaults</h2>
       <p className="bset-subtitle">Configure default settings for each harness type. These are applied when creating new sessions.</p>
@@ -165,66 +172,83 @@ export function BridgeSettings() {
   )
 }
 
-// PermissionsBypassToggle is the global permission-bypass switch. When off
-// (default), every tool call routes through the PreToolUse hook to
-// permission-store's rule engine. When on, the prehook short-circuits to
-// allow without consulting permission-store. Saved as bridge-prefs
-// .bypass_permissions; bridge-server reads it on every prehook call so the
-// toggle takes effect immediately for every active and future session.
-function PermissionsBypassToggle({ apiFetch, basePath }: { apiFetch: FetchFn; basePath: string }) {
-  const [enabled, setEnabled] = useState<boolean | null>(null)
+// PermissionsModeSelector is the global permission-mode selector. The
+// selected mode is the default for new sessions (snapshotted into
+// HarnessConfig at create time) and the fallback for legacy sessions
+// without a per-session mode. Saved as bridge-prefs.permission_mode;
+// bridge-server reads it on every prehook call so changes take effect
+// immediately for every active and future session.
+function PermissionsModeSelector({ apiFetch, basePath }: { apiFetch: FetchFn; basePath: string }) {
+  const [mode, setMode] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load current state on mount.
   useEffect(() => {
     let cancelled = false
     apiFetch(`${basePath}/bridge-prefs`)
       .then(r => r.ok ? r.json() : null)
-      .then((prefs: { bypass_permissions?: boolean } | null) => {
-        if (!cancelled && prefs) setEnabled(!!prefs.bypass_permissions)
+      .then((prefs: { permission_mode?: string; bypass_permissions?: boolean } | null) => {
+        if (cancelled || !prefs) return
+        // Prefer the new field; fall back to legacy bool so older prefs
+        // files migrate visibly on first render.
+        if (prefs.permission_mode) setMode(prefs.permission_mode)
+        else if (prefs.bypass_permissions) setMode(PermissionModeBypass)
+        else setMode(PermissionModeAsk)
       })
-      .catch(() => { if (!cancelled) setEnabled(false) })
+      .catch(() => { if (!cancelled) setMode(PermissionModeAsk) })
     return () => { cancelled = true }
   }, [apiFetch, basePath])
 
-  const toggle = useCallback(async () => {
-    if (enabled === null) return
+  const handleChange = useCallback(async (next: string) => {
+    if (mode === null || next === mode) return
     setBusy(true)
     setError(null)
-    const next = !enabled
+    const prev = mode
+    setMode(next)
     try {
-      const res = await apiFetch(`${basePath}/bridge/bypass-permissions`, {
+      const res = await apiFetch(`${basePath}/bridge/permission-mode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: next }),
+        body: JSON.stringify({ mode: next }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setEnabled(next)
     } catch (err) {
+      setMode(prev)
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
     }
-  }, [enabled, apiFetch, basePath])
+  }, [mode, apiFetch, basePath])
 
-  if (enabled === null) {
-    return null // initial fetch in flight
+  if (mode === null) {
+    return null
   }
 
   return (
     <div className="bset-bypass-card">
       <h2 className="bset-title">Permissions</h2>
       <div className="bset-bypass-row">
-        <label className="bset-bypass-toggle">
-          <input type="checkbox" checked={enabled} disabled={busy} onChange={toggle} />
-          <span><strong>Bypass permissions</strong> — skip all rules; every tool call auto-approves</span>
+        <label className="bset-mode-row">
+          <strong>Mode:</strong>
+          <select
+            className="bset-mode-select"
+            value={mode}
+            disabled={busy}
+            onChange={e => handleChange(e.target.value)}
+          >
+            <option value={PermissionModeAsk}>Ask — gate every novel tool call</option>
+            <option value={PermissionModeAuto}>Auto — allow reads, edits, planning; ask for shell/fetch/agent</option>
+            <option value={PermissionModeBypass}>Bypass — allow every tool call</option>
+          </select>
         </label>
       </div>
       <p className="bset-subtitle">
-        {enabled
-          ? 'Bypass is ON. Every Claude Code tool call auto-approves immediately, and every Codex session launches with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored until you turn this off.'
-          : 'Bypass is OFF. Claude Code tool calls route through permission-store rules; Codex runs in its default sandbox. Manage rules at /permissions; pending prompts surface inline in chat.'}
+        {mode === PermissionModeBypass && 'Bypass is ON. Every tool call auto-approves immediately; Codex sessions launch with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored. AskUserQuestion still pauses for your answer.'}
+        {mode === PermissionModeAuto && 'Auto-mode allows the bridge-defined safe-tool set (Read, Glob, Grep, LS, Edit, Write, MultiEdit, NotebookRead, NotebookEdit, TodoWrite, ExitPlanMode). Other tools still route through permission-store rules.'}
+        {mode === PermissionModeAsk && 'Ask-mode routes every tool call through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.'}
+      </p>
+      <p className="bset-subtitle">
+        This is the global default. Each new session snapshots it at creation and can be overridden per-session via the mode selector in the chat controls bar.
       </p>
       {error && <p className="bset-error">{error}</p>}
     </div>

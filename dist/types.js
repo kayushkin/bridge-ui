@@ -6,5 +6,5 @@
 // DO NOT duplicate these types locally. If you need a new API type,
 // add the Go struct to llm-bridge/msg/server.go, run generate-ts.sh,
 // and import it here.
-export { HookSourceHook, HookSourcePermission, HookSourceUserInput, } from '@kayushkin/llm-bridge-types';
+export { HookSourceHook, HookSourcePermission, HookSourceUserInput, PermissionModeAsk, PermissionModeAuto, PermissionModeBypass, } from '@kayushkin/llm-bridge-types';
 //# sourceMappingURL=types.js.map
