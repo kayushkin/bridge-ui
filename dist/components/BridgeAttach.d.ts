@@ -1,3 +1,4 @@
+import '@xterm/xterm/css/xterm.css';
 export interface BridgeAttachProps {
     sessionId: string;
     attachToken: string;
