@@ -29,15 +29,20 @@ const DEFAULT_INNER_TREE: InnerNode = {
     { kind: 'leaf', viewType: 'timeline' },
     { kind: 'leaf', viewType: 'git' },
     { kind: 'leaf', viewType: 'kanban' },
+    { kind: 'leaf', viewType: 'attach' },
   ],
 }
 
-const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: true, timeline: true, git: true, kanban: true }
-const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1 }
+// 'attach' is hidden by default and auto-shown by Workspace when the
+// active session enters pty mode. Keeping it hidden by default avoids
+// cluttering events-mode workspaces with an inert terminal pane.
+const DEFAULT_PANES_HIDDEN: PanesHidden = { turns: false, thread: true, timeline: true, git: true, kanban: true, attach: true }
+const DEFAULT_PANE_SIZES: PaneSizes = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1, attach: 1 }
 
 // Backfill missing PaneKey leaves into a persisted workspace's inner layout
-// tree. New PaneKeys (e.g. 'kanban' added 2026-05-07) need to be present in
-// the tree of pre-existing workspaces so their toggle has something to show.
+// tree. New PaneKeys (e.g. 'kanban' added 2026-05-07, 'attach' added
+// 2026-05-14) need to be present in the tree of pre-existing workspaces
+// so their toggle has something to show.
 function ensurePaneLeaves(node: InnerNode): InnerNode {
   const present = new Set<string>()
   const walk = (n: InnerNode) => {
@@ -45,7 +50,7 @@ function ensurePaneLeaves(node: InnerNode): InnerNode {
     n.children.forEach(walk)
   }
   walk(node)
-  const missing: InnerNode[] = (['turns', 'thread', 'timeline', 'git', 'kanban'] as const)
+  const missing: InnerNode[] = (['turns', 'thread', 'timeline', 'git', 'kanban', 'attach'] as const)
     .filter(k => !present.has(k))
     .map(k => ({ kind: 'leaf', viewType: k }))
   if (missing.length === 0) return node

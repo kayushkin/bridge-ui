@@ -1,12 +1,14 @@
 import type { PaneKey, PanesHidden } from './types'
 
-export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban }: {
+export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable }: {
   panesHidden: PanesHidden
   onToggleTurns: () => void
   onToggleThread: () => void
   onToggleTimeline: () => void
   onToggleGit: () => void
   onToggleKanban: () => void
+  onToggleAttach: () => void
+  attachAvailable: boolean
 }) {
   const pill = (key: PaneKey, label: string, icon: string, onClick: () => void) => {
     const visible = !panesHidden[key]
@@ -27,6 +29,7 @@ export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onTogg
       {pill('timeline', 'Timeline', '⏱', onToggleTimeline)}
       {pill('git', 'Git', '🌿', onToggleGit)}
       {pill('kanban', 'Kanban', '🗂', onToggleKanban)}
+      {attachAvailable && pill('attach', 'Terminal', '⌨', onToggleAttach)}
     </div>
   )
 }

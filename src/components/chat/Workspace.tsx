@@ -4,7 +4,6 @@ import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../..
 import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
-import { BridgeAttach } from '../BridgeAttach'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
 import { PendingPermissionsBanner } from './PendingPermissionsBanner'
@@ -383,6 +382,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         onToggleTimeline={() => togglePane('timeline')}
         onToggleGit={() => togglePane('git')}
         onToggleKanban={() => togglePane('kanban')}
+        onToggleAttach={() => togglePane('attach')}
+        attachAvailable={bridge.activeSession?.mode === 'pty'}
         onCloseWorkspace={onClose}
         gitRepos={gitRepos}
         selectedRepo={selectedRepo}
@@ -400,7 +401,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         // workspace's persisted panesHidden/layout are left untouched —
         // the user keeps their split layout when they return to full mode.
         panesHidden: minimal
-          ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban' }
+          ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban', attach: mobilePane !== 'attach' }
           : workspace.panesHidden,
         paneSizes: workspace.paneSizes,
         togglePane,
@@ -415,37 +416,22 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         resolveHook: bridge.resolveHook,
       }}>
         <PendingPermissionsBanner />
-        {bridge.activeSession?.mode === 'pty' && bridge.attachTokens[bridge.activeSession.session_id] ? (
-          // Pty sessions render as a full-bleed terminal: the harness's
-          // structured event stream is silent in pty mode (see
-          // PTY-MODE.md), so the regular pane tree would be empty.
-          // JSONL backfill into log-store is a follow-up that lets the
-          // other panes populate; until then the terminal is the only
-          // meaningful view.
-          <BridgeAttach
-            sessionId={bridge.activeSession.session_id}
-            attachToken={bridge.attachTokens[bridge.activeSession.session_id]}
-          />
-        ) : (
-          <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
-        )}
+        <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
       </WorkspaceProvider>
       {renderControls}
       {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
-      {/* Composer is meaningless when the session is in pty mode — all
-          input goes through the terminal. Hide it rather than letting the
-          user type into a dead box. */}
-      {bridge.activeSession?.mode !== 'pty' && (
-        <Composer
-          sessionId={bridge.activeSession?.session_id ?? null}
-          connected={bridge.connected && !!bridge.activeSession}
-          streaming={bridge.uiState === 'running'}
-          paused={bridge.uiState === 'paused'}
-          onSend={handleSend}
-          onStop={bridge.interrupt}
-          onResume={bridge.resume}
-        />
-      )}
+      {/* Composer stays visible in pty mode too — the server's /send
+          handler routes the typed message into the pty fd, so users can
+          enter text from either the Composer or the BridgeAttach pane. */}
+      <Composer
+        sessionId={bridge.activeSession?.session_id ?? null}
+        connected={bridge.connected && !!bridge.activeSession}
+        streaming={bridge.uiState === 'running'}
+        paused={bridge.uiState === 'paused'}
+        onSend={handleSend}
+        onStop={bridge.interrupt}
+        onResume={bridge.resume}
+      />
       {showSystemPrompt && bridge.activeSession?.info && (
         <SystemPromptModal
           info={bridge.activeSession.info}

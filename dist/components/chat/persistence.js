@@ -6,7 +6,7 @@ const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed';
 const WORKSPACES_KEY = 'bridge-ui-workspaces';
 const HARNESS_FILTER_KEY = 'bridge-ui-harness-filter';
 const DRAFTS_KEY = 'bridge-ui-drafts';
-export const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1 };
+export const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1, attach: 1 };
 export function loadCollapseState() {
     try {
         const s = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}');
@@ -32,7 +32,7 @@ export function loadPaneSizes() {
     try {
         const raw = JSON.parse(localStorage.getItem(SIZES_KEY) || '{}');
         const pick = (k) => (typeof raw[k] === 'number' && raw[k] > 0 ? raw[k] : 1);
-        return { turns: pick('turns'), thread: pick('thread'), timeline: pick('timeline'), git: pick('git'), kanban: pick('kanban') };
+        return { turns: pick('turns'), thread: pick('thread'), timeline: pick('timeline'), git: pick('git'), kanban: pick('kanban'), attach: pick('attach') };
     }
     catch {
         return { ...DEFAULT_PANE_SIZES };

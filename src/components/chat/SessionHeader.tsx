@@ -7,7 +7,7 @@ import { StatusDot } from './StatusDot'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
   /** Full session row from the bridge — drives the details dropdown
    * (source, folder, instance, mode, IDs, timestamps). Undefined when
@@ -38,6 +38,12 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
   onToggleTimeline: () => void
   onToggleGit: () => void
   onToggleKanban: () => void
+  onToggleAttach: () => void
+  // attachAvailable hides the Attach toggle entirely when the active
+  // session isn't pty-mode. Avoids exposing a control that would do
+  // nothing visible (LayoutRenderer also force-hides the pane in
+  // events mode regardless of the user's panesHidden choice).
+  attachAvailable: boolean
   onCloseWorkspace?: () => void
   gitRepos: GitRepo[]
   selectedRepo: string
@@ -188,6 +194,8 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
             onToggleTimeline={onToggleTimeline}
             onToggleGit={onToggleGit}
             onToggleKanban={onToggleKanban}
+            onToggleAttach={onToggleAttach}
+            attachAvailable={attachAvailable}
           />
           {onCloseWorkspace && (
             <button

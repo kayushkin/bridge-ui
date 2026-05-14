@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { useBridgeConfig } from '../../context';
 import { useBridgeSession } from '../../useBridgeSession';
 import { formatTokens } from '../../utils';
-import { BridgeAttach } from '../BridgeAttach';
 import { Composer } from './Composer';
 import { LayoutRenderer } from './LayoutRenderer';
 import { PendingPermissionsBanner } from './PendingPermissionsBanner';
@@ -276,7 +275,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
             return createPortal(controlsBar, controlsSlot);
         return null;
     })();
-    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: activeChat, session: bridge.activeSession, harnessInfo: activeHarnessInfo, machine: activeMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsxs(WorkspaceProvider, { value: {
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: activeChat, session: bridge.activeSession, harnessInfo: activeHarnessInfo, machine: activeMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsxs(WorkspaceProvider, { value: {
                     chat: activeChat,
                     rows: bridge.logRows,
                     loading: bridge.loadingHistory,
@@ -288,7 +287,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     // workspace's persisted panesHidden/layout are left untouched —
                     // the user keeps their split layout when they return to full mode.
                     panesHidden: minimal
-                        ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban' }
+                        ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban', attach: mobilePane !== 'attach' }
                         : workspace.panesHidden,
                     paneSizes: workspace.paneSizes,
                     togglePane,
@@ -301,14 +300,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     refreshGitRepos,
                     pendingHooks: bridge.pendingHooks,
                     resolveHook: bridge.resolveHook,
-                }, children: [_jsx(PendingPermissionsBanner, {}), bridge.activeSession?.mode === 'pty' && bridge.attachTokens[bridge.activeSession.session_id] ? (
-                    // Pty sessions render as a full-bleed terminal: the harness's
-                    // structured event stream is silent in pty mode (see
-                    // PTY-MODE.md), so the regular pane tree would be empty.
-                    // JSONL backfill into log-store is a follow-up that lets the
-                    // other panes populate; until then the terminal is the only
-                    // meaningful view.
-                    _jsx(BridgeAttach, { sessionId: bridge.activeSession.session_id, attachToken: bridge.attachTokens[bridge.activeSession.session_id] })) : (_jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout }))] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), bridge.activeSession?.mode !== 'pty' && (_jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? null, connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume })), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? null, connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 // ModeToggle surfaces the events/pty mode switcher for harnesses that
 // support pty. Disabled while a turn is in flight — switching mid-

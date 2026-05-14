@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { BridgeAttach } from '../BridgeAttach'
 import { GitPanel } from '../GitPanel'
 import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { SplitResizer } from './SplitResizer'
@@ -6,6 +7,7 @@ import { Thread } from './Thread'
 import { Timeline } from './Timeline'
 import { TurnsView } from './TurnsView'
 import { useWorkspace } from './WorkspaceContext'
+import { useBridgeSession } from '../../useBridgeSession'
 import type { InnerNode, PaneKey, ViewType } from './types'
 
 function hasVisibleLeaf(node: InnerNode, hidden: Set<ViewType>): boolean {
@@ -81,7 +83,45 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           paneKey="kanban"
         />
       )
+    case 'attach':
+      return <AttachLeaf style={style} />
   }
+}
+
+// AttachLeaf wraps BridgeAttach with the boilerplate pane chrome and pulls
+// the active session + cached attach token off useBridgeSession. Sessions
+// without a cached token (those not created or mode-switched in this
+// browser tab) render a hint instead — the server doesn't have a
+// token-refresh endpoint yet, so cross-tab attach isn't supported in v1.
+function AttachLeaf({ style }: { style?: React.CSSProperties }) {
+  const ws = useWorkspace()
+  const bridge = useBridgeSession()
+  const sess = bridge.activeSession
+  const token = sess ? bridge.attachTokens[sess.session_id] : ''
+  return (
+    <div className="bc-split-pane bc-split-pane-attach" style={style} data-pane="attach">
+      <div
+        className="bc-split-pane-header bc-header-clickable"
+        onClick={() => ws.togglePane('attach')}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ws.togglePane('attach') } }}
+        role="button"
+        tabIndex={0}
+        title="Hide terminal"
+        aria-label="Hide terminal"
+      >
+        <span className="bc-split-pane-title">Terminal</span>
+        <span className="bc-spacer" />
+        <span className="bc-split-collapse-btn" aria-hidden="true">×</span>
+      </div>
+      {sess && token ? (
+        <BridgeAttach sessionId={sess.session_id} attachToken={token} />
+      ) : (
+        <div className="bc-attach-empty">
+          {!sess ? 'No active session.' : 'No attach token cached for this session — flip mode via the toggle to mint one.'}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function SplitView({ node, hidden }: { node: Extract<InnerNode, { kind: 'split' }>; hidden: Set<ViewType> }) {
@@ -131,12 +171,18 @@ function SplitView({ node, hidden }: { node: Extract<InnerNode, { kind: 'split' 
 
 export function LayoutRenderer({ tree }: { tree: InnerNode }) {
   const ws = useWorkspace()
+  const bridge = useBridgeSession()
   const hidden = new Set<ViewType>()
   if (ws.panesHidden.turns) hidden.add('turns')
   if (ws.panesHidden.thread) hidden.add('thread')
   if (ws.panesHidden.timeline) hidden.add('timeline')
   if (ws.panesHidden.git) hidden.add('git')
   if (ws.panesHidden.kanban) hidden.add('kanban')
+  // The Terminal pane only makes sense for pty sessions. Force-hide it
+  // for events sessions regardless of the persisted panesHidden state,
+  // so a user who flips between modes doesn't accidentally see an
+  // empty/dead terminal box on their events-mode workspaces.
+  if (ws.panesHidden.attach || bridge.activeSession?.mode !== 'pty') hidden.add('attach')
 
   if (!hasVisibleLeaf(tree, hidden)) {
     return (

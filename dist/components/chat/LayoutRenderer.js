@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useRef } from 'react';
+import { BridgeAttach } from '../BridgeAttach';
 import { GitPanel } from '../GitPanel';
 import { LinkedKanbanPanel } from './LinkedKanbanPanel';
 import { SplitResizer } from './SplitResizer';
@@ -7,6 +8,7 @@ import { Thread } from './Thread';
 import { Timeline } from './Timeline';
 import { TurnsView } from './TurnsView';
 import { useWorkspace } from './WorkspaceContext';
+import { useBridgeSession } from '../../useBridgeSession';
 function hasVisibleLeaf(node, hidden) {
     if (node.kind === 'leaf')
         return !hidden.has(node.viewType);
@@ -30,7 +32,24 @@ function ViewLeaf({ viewType, style }) {
             return (_jsx(GitPanel, { sessionId: sessionId, uiState: ws.uiState, onToggleCollapse: () => ws.togglePane('git'), style: style, paneKey: "git" }));
         case 'kanban':
             return (_jsx(LinkedKanbanPanel, { sessionId: sessionId, onToggleCollapse: () => ws.togglePane('kanban'), style: style, paneKey: "kanban" }));
+        case 'attach':
+            return _jsx(AttachLeaf, { style: style });
     }
+}
+// AttachLeaf wraps BridgeAttach with the boilerplate pane chrome and pulls
+// the active session + cached attach token off useBridgeSession. Sessions
+// without a cached token (those not created or mode-switched in this
+// browser tab) render a hint instead — the server doesn't have a
+// token-refresh endpoint yet, so cross-tab attach isn't supported in v1.
+function AttachLeaf({ style }) {
+    const ws = useWorkspace();
+    const bridge = useBridgeSession();
+    const sess = bridge.activeSession;
+    const token = sess ? bridge.attachTokens[sess.session_id] : '';
+    return (_jsxs("div", { className: "bc-split-pane bc-split-pane-attach", style: style, "data-pane": "attach", children: [_jsxs("div", { className: "bc-split-pane-header bc-header-clickable", onClick: () => ws.togglePane('attach'), onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    ws.togglePane('attach');
+                } }, role: "button", tabIndex: 0, title: "Hide terminal", "aria-label": "Hide terminal", children: [_jsx("span", { className: "bc-split-pane-title", children: "Terminal" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), sess && token ? (_jsx(BridgeAttach, { sessionId: sess.session_id, attachToken: token })) : (_jsx("div", { className: "bc-attach-empty", children: !sess ? 'No active session.' : 'No attach token cached for this session — flip mode via the toggle to mint one.' }))] }));
 }
 function SplitView({ node, hidden }) {
     const ws = useWorkspace();
@@ -69,6 +88,7 @@ function SplitView({ node, hidden }) {
 }
 export function LayoutRenderer({ tree }) {
     const ws = useWorkspace();
+    const bridge = useBridgeSession();
     const hidden = new Set();
     if (ws.panesHidden.turns)
         hidden.add('turns');
@@ -80,6 +100,12 @@ export function LayoutRenderer({ tree }) {
         hidden.add('git');
     if (ws.panesHidden.kanban)
         hidden.add('kanban');
+    // The Terminal pane only makes sense for pty sessions. Force-hide it
+    // for events sessions regardless of the persisted panesHidden state,
+    // so a user who flips between modes doesn't accidentally see an
+    // empty/dead terminal box on their events-mode workspaces.
+    if (ws.panesHidden.attach || bridge.activeSession?.mode !== 'pty')
+        hidden.add('attach');
     if (!hasVisibleLeaf(tree, hidden)) {
         return (_jsx("div", { className: "bc-chat-split", children: _jsx("div", { className: "bc-split-empty", children: _jsx("div", { className: "bc-split-empty-hint", children: "All panes hidden. Use the toggles above to show Turns, Thread, Timeline, Git, or Kanban." }) }) }));
     }

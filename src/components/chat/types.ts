@@ -29,7 +29,10 @@ export interface AppCollapseState {
   sessionList: boolean
 }
 
-export type PaneKey = 'turns' | 'thread' | 'timeline' | 'git' | 'kanban'
+// 'attach' is the pty terminal view. It's only meaningful for sessions
+// running in pty mode; LayoutRenderer hides it whenever
+// session.mode !== 'pty' regardless of the user's panesHidden choice.
+export type PaneKey = 'turns' | 'thread' | 'timeline' | 'git' | 'kanban' | 'attach'
 export type PanesHidden = Record<PaneKey, boolean>
 export type PaneSizes = Record<PaneKey, number>
 

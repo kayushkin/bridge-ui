@@ -1,7 +1,7 @@
 import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types';
 import type { ChatSession, PanesHidden } from './types';
 import type { GitRepo } from './WorkspaceContext';
-export declare function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export declare function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
     chat: ChatSession | null;
     /** Full session row from the bridge — drives the details dropdown
      * (source, folder, instance, mode, IDs, timestamps). Undefined when
@@ -32,6 +32,8 @@ export declare function SessionHeader({ chat, session, harnessInfo, machine, mac
     onToggleTimeline: () => void;
     onToggleGit: () => void;
     onToggleKanban: () => void;
+    onToggleAttach: () => void;
+    attachAvailable: boolean;
     onCloseWorkspace?: () => void;
     gitRepos: GitRepo[];
     selectedRepo: string;

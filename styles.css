@@ -4464,3 +4464,13 @@
   color: #ef4444;
   font-size: 0.85em;
 }
+
+/* ===== BridgeAttach pane chrome ===== */
+.bc-split-pane-attach { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bc-split-pane-attach .bridge-attach { border: none; border-radius: 0; height: 100%; }
+.bc-attach-empty {
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  font-style: italic;
+}
