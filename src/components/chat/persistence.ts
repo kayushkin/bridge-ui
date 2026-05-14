@@ -40,13 +40,25 @@ export function savePaneSizes(s: PaneSizes) {
   try { localStorage.setItem(SIZES_KEY, JSON.stringify(s)) } catch { /* ignore */ }
 }
 
+// Row kinds hidden in chat history by default. These are observability /
+// server-derived signals — useful in the Usage page or for debugging but
+// noise in the conversation view. Users can toggle them back on via the
+// FilterBar; once they save any choice (even empty), their preference
+// sticks and these defaults stop applying.
+const DEFAULT_HIDDEN_TYPES: ReadonlyArray<string> = [
+  'api_call',
+  'api_spend_total',
+  'usage_total',
+  'turn_complete',
+]
+
 export function loadHiddenTypes(): Set<string> {
   try {
     const raw = localStorage.getItem(FILTER_KEY)
-    if (!raw) return new Set()
+    if (raw === null) return new Set(DEFAULT_HIDDEN_TYPES)
     const arr = JSON.parse(raw)
     return new Set(Array.isArray(arr) ? arr.map(String) : [])
-  } catch { return new Set() }
+  } catch { return new Set(DEFAULT_HIDDEN_TYPES) }
 }
 
 export function saveHiddenTypes(s: Set<string>) {

@@ -3276,6 +3276,97 @@
   letter-spacing: 0.01em;
 }
 
+/* Cost chip + drill-down panel — surfaces APISpendTotal when present
+ * (per-call OTel-derived) with by-model + by-source breakdowns. Falls
+ * back to the per-turn EventResult.Cost sum when no api_call telemetry
+ * has landed for the session yet. */
+.bc-cost-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.bc-cost-clickable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.bc-cost-clickable:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.bc-cost-open {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.bc-cost-caret { font-size: 0.85em; opacity: .55; line-height: 1; }
+.bc-cost-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bc-edge, var(--border));
+  background: var(--bg-surface, #1a1a1a);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.55);
+  font-size: 0.78em;
+}
+.bc-cost-panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  gap: 12px;
+}
+.bc-cost-panel-total .bc-cost-panel-label,
+.bc-cost-panel-total .bc-cost-panel-value {
+  font-weight: 600;
+  font-size: 1.05em;
+  color: var(--text);
+}
+.bc-cost-panel-sub .bc-cost-panel-label,
+.bc-cost-panel-sub .bc-cost-panel-value {
+  color: var(--text-muted);
+  font-size: 0.92em;
+}
+.bc-cost-panel-overhead {
+  border-top: 1px dashed color-mix(in srgb, var(--text) 10%, transparent);
+  margin-top: 4px;
+  padding-top: 6px;
+  color: var(--text-muted);
+  font-size: 0.92em;
+}
+.bc-cost-panel-overhead .bc-cost-panel-value {
+  color: var(--accent);
+}
+.bc-cost-panel-group {
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.bc-cost-panel-group-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.bc-cost-panel .bc-cost-panel-label {
+  color: var(--text-muted);
+}
+.bc-cost-panel .bc-cost-panel-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 
 /* Pane toggles — soft pills */
 .bc-pane-toggle {

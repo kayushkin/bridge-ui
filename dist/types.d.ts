@@ -1,6 +1,6 @@
-import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
+import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, APICallEvent, APISpendTotalEvent, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
 export { HookSourceHook, HookSourcePermission, HookSourceUserInput, PermissionModeAsk, PermissionModeAskAll, PermissionModeAuto, PermissionModeBlockAll, PermissionModeBypass, PermissionModeCustom, PermissionModePlan, PermissionModeRead, } from '@kayushkin/llm-bridge-types';
-export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, APICallEvent, APISpendTotalEvent, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
 export type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
@@ -34,7 +34,7 @@ export interface Message {
     sessionId?: string;
 }
 export type LogRowActor = 'user' | 'assistant' | 'system';
-export type LogRowKind = 'user_message' | 'text' | 'thinking' | 'tool' | 'result' | 'error' | 'system' | 'session_state' | 'session_info' | 'plan' | 'approval' | 'hook' | 'stream' | 'block' | 'other';
+export type LogRowKind = 'user_message' | 'text' | 'thinking' | 'tool' | 'result' | 'error' | 'system' | 'session_state' | 'session_info' | 'plan' | 'approval' | 'hook' | 'stream' | 'block' | 'api_call' | 'api_spend_total' | 'usage_total' | 'turn_complete' | 'other';
 export interface LogRow {
     key: string;
     clientId?: string;
@@ -64,6 +64,8 @@ export interface LogRow {
     sessionInfo?: SessionInfo;
     errorMessage?: string;
     hook?: HookEvent;
+    apiCall?: APICallEvent;
+    apiSpendTotal?: APISpendTotalEvent;
     events: Array<Record<string, unknown>>;
     done?: boolean;
 }

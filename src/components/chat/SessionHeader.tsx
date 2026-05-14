@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types'
-import { formatCost, formatTokens } from '../../utils'
+import { formatTokens } from '../../utils'
+import { CostBreakdown } from './CostBreakdown'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
 import { StatusDot } from './StatusDot'
@@ -160,11 +161,11 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
         {chat
           ? <EditableName value={chat.displayName} onSave={onRename} className="bc-session-name" />
           : <span className="bc-session-name bc-session-name-empty">—</span>}
-        {totalCost > 0 && (
-          <span className="bc-cost" title={contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined}>
-            {formatCost(totalCost)}
-          </span>
-        )}
+        <CostBreakdown
+          rows={rows}
+          fallbackTotalUSD={totalCost}
+          fallbackTitle={contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined}
+        />
         {repoCount > 0 && currentRepo && (
           <label
             className="bc-repo-chip"

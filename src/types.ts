@@ -27,6 +27,8 @@ import type {
   MCPServerInfo,
   HookEvent,
   HookResolution,
+  APICallEvent,
+  APISpendTotalEvent,
   CreateSessionRequest,
   CreateMachineRequest,
   UpdateMachineRequest,
@@ -66,6 +68,8 @@ export type {
   MCPServerInfo,
   HookEvent,
   HookResolution,
+  APICallEvent,
+  APISpendTotalEvent,
   CreateSessionRequest,
   CreateMachineRequest,
   UpdateMachineRequest,
@@ -153,6 +157,13 @@ export type LogRowKind =
   | 'hook'        // canonical permission/observation surface (HookEvent)
   | 'stream'      // stream events with no delta (block-boundary markers)
   | 'block'       // finished content blocks not specialized to text/thinking (e.g. images, refusals)
+  // Observability / derived signals. Hidden from chat by default (see
+  // DEFAULT_HIDDEN_TYPES in components/chat/persistence.ts) but surfaced
+  // as their own FilterBar toggles so users can opt in.
+  | 'api_call'         // raw per-call telemetry from the harness (OTel-derived for claudecode)
+  | 'api_spend_total'  // running per-call spend total, server-derived
+  | 'usage_total'      // running per-turn usage total, server-derived
+  | 'turn_complete'    // coalesced turn summary, server-derived
   | 'other'
 
 export interface LogRow {
@@ -190,6 +201,8 @@ export interface LogRow {
   sessionInfo?: SessionInfo
   errorMessage?: string
   hook?: HookEvent           // populated for kind='hook' rows; carries phase, decision, resolution
+  apiCall?: APICallEvent     // populated for kind='api_call' rows; one upstream model API call
+  apiSpendTotal?: APISpendTotalEvent  // populated for kind='api_spend_total' rows; running per-call spend
 
   // Raw events that composed this row (for "show raw" expand).
   events: Array<Record<string, unknown>>

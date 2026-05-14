@@ -46,6 +46,10 @@ function actorFor(eventType: string): LogRowActor {
     case 'system':
     case 'session_state':
     case 'session_info':
+    case 'api_call':
+    case 'api_spend_total':
+    case 'usage_total':
+    case 'turn_complete':
       return 'system'
     default:
       return 'assistant'
@@ -78,6 +82,10 @@ function rowKindOf(ev: BridgeEvent): LogRowKind {
     case 'plan': return 'plan'
     case 'approval': return 'approval'
     case 'hook': return 'hook'
+    case 'api_call': return 'api_call'
+    case 'api_spend_total': return 'api_spend_total'
+    case 'usage_total': return 'usage_total'
+    case 'turn_complete': return 'turn_complete'
     default: return 'other'
   }
 }
@@ -232,6 +240,16 @@ function applyDelta(row: LogRow, ev: BridgeEvent): LogRow {
         toolUseId: row.toolUseId,
         done: hook.phase === 'completed',
       }
+    }
+    case 'api_call': {
+      const apiCall = ev.data.api_call
+      if (!apiCall) return base
+      return { ...base, apiCall, done: true }
+    }
+    case 'api_spend_total': {
+      const apiSpendTotal = ev.data.api_spend_total
+      if (!apiSpendTotal) return base
+      return { ...base, apiSpendTotal, done: true }
     }
     default:
       return base
