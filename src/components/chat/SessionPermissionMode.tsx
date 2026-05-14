@@ -2,8 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../../context'
 import {
   PermissionModeAsk,
+  PermissionModeAskAll,
   PermissionModeAuto,
+  PermissionModeBlockAll,
   PermissionModeBypass,
+  PermissionModeCustom,
+  PermissionModePlan,
+  PermissionModeRead,
   type HarnessInfo,
   type ManagedSession,
 } from '../../types'
@@ -19,19 +24,47 @@ import {
 // prehook (takes effect on the next tool call) and forwarded to the
 // harness as a start param on next spawn/resume.
 //
-// Options are filtered by the harness's SupportedPermissionModes — "auto"
-// is hidden for harnesses that don't know how to translate it.
+// Options are filtered by the harness's SupportedPermissionModes.
 const MODE_LABELS: Record<string, string> = {
-  [PermissionModeAsk]: 'Ask',
-  [PermissionModeAuto]: 'Auto',
-  [PermissionModeBypass]: 'Bypass',
+  [PermissionModeBlockAll]: 'Block All',
+  [PermissionModePlan]: 'Plan',
+  [PermissionModeRead]: 'Read',
+  [PermissionModeAskAll]: 'Ask All',
+  [PermissionModeAsk]: 'Rules',
+  [PermissionModeAuto]: 'Auto Rules',
+  [PermissionModeBypass]: 'Allow All',
+  [PermissionModeCustom]: 'Custom…',
 }
 
 const MODE_TITLES: Record<string, string> = {
-  [PermissionModeAsk]: 'Ask before novel tool calls.',
-  [PermissionModeAuto]: 'Auto-allow safe tools (reads + edits + planning); ask for shell, fetch, agent spawns.',
-  [PermissionModeBypass]: 'Auto-allow every tool call. AskUserQuestion still pauses for your answer.',
+  [PermissionModeBlockAll]: 'Deny every tool call. Agent sees the deny and can keep reasoning or ask you.',
+  [PermissionModePlan]: 'Only planning tools (Read / Glob / Grep / TodoWrite). No writes, no shell.',
+  [PermissionModeRead]: 'Read-only inspection (Read / Glob / Grep / LS / NotebookRead). No writes, no shell.',
+  [PermissionModeAskAll]: 'Skip rules and prompt on every single tool call.',
+  [PermissionModeAsk]: 'Default. Use permission rules; prompt only when a rule says ask or no rule matches.',
+  [PermissionModeAuto]: 'Auto-allow safe tools (reads + edits + planning); rules for shell / fetch / agent spawns.',
+  [PermissionModeBypass]: 'Allow every tool call. AskUserQuestion still pauses for your answer.',
+  [PermissionModeCustom]: 'Raw harness-specific approval / sandbox knobs (advanced).',
 }
+
+// MODE_ORDER controls dropdown ordering (restrictive → permissive, then
+// special at the bottom). Modes not present in the harness's supported
+// list are filtered out; modes the harness adds but we haven't listed
+// here append at the end so unknown additions still render.
+const MODE_ORDER: string[] = [
+  PermissionModeBlockAll,
+  PermissionModePlan,
+  PermissionModeRead,
+  PermissionModeAskAll,
+  PermissionModeAsk,
+  PermissionModeAuto,
+  PermissionModeBypass,
+  PermissionModeCustom,
+]
+
+// MODE_DIVIDER_BEFORE inserts a visual separator before Custom so the
+// power-user escape hatch is visually distinct from the everyday modes.
+const MODE_DIVIDER_BEFORE = new Set<string>([PermissionModeCustom])
 
 export function SessionPermissionMode({
   session,
@@ -51,8 +84,15 @@ export function SessionPermissionMode({
   const supported = useMemo<string[]>(() => {
     const info = harnesses?.find(h => h.name === session.harness)
     const advertised = info?.supported_permission_modes
-    if (advertised && advertised.length > 0) return advertised
-    return [PermissionModeAsk, PermissionModeBypass]
+    const raw = advertised && advertised.length > 0
+      ? advertised
+      : [PermissionModeAsk, PermissionModeBypass]
+
+    // Sort by canonical MODE_ORDER, append any unknown modes at the end
+    // so server-side additions still render without a UI bump.
+    const known = MODE_ORDER.filter(m => raw.includes(m))
+    const extras = raw.filter(m => !MODE_ORDER.includes(m))
+    return [...known, ...extras]
   }, [harnesses, session.harness])
 
   const handleChange = useCallback(async (next: string) => {
@@ -83,9 +123,24 @@ export function SessionPermissionMode({
         onChange={e => handleChange(e.target.value)}
         aria-label="Permission mode"
       >
-        {supported.map(m => (
-          <option key={m} value={m}>{MODE_LABELS[m] ?? m}</option>
-        ))}
+        {supported.map((m, i) => {
+          // Render an HR-style disabled separator row before "special"
+          // modes (Custom for now). HTML <select> doesn't support real
+          // separators, so use a disabled option with em-dashes — every
+          // browser respects the disabled state.
+          const showDivider = MODE_DIVIDER_BEFORE.has(m) && i > 0
+          const opt = (
+            <option key={m} value={m} title={MODE_TITLES[m] ?? ''}>
+              {MODE_LABELS[m] ?? m}
+            </option>
+          )
+          return showDivider
+            ? [
+                <option key={`__sep_${m}`} disabled value="">────────</option>,
+                opt,
+              ]
+            : opt
+        })}
       </select>
     </div>
   )
