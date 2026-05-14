@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BridgeAttach } from '../BridgeAttach';
 import { GitPanel } from '../GitPanel';
 import { LinkedKanbanPanel } from './LinkedKanbanPanel';
@@ -44,10 +44,31 @@ function AttachLeaf({ style }) {
     const ws = useWorkspace();
     const sessionId = ws.chat?.sessionId ?? '';
     const token = ws.attachToken ?? '';
+    // After a page refresh the in-memory attachTokens map is empty, but
+    // the server's hub usually still has a live token. Try to recover it
+    // once on mount (and whenever the active session changes) before
+    // falling back to the "flip mode to mint" hint. The 'pending' state
+    // suppresses the hint during the in-flight fetch so the user doesn't
+    // see it flash.
+    const [pending, setPending] = useState(false);
+    const refresh = ws.refreshAttachToken;
+    useEffect(() => {
+        if (!sessionId || token || !refresh || ws.sessionMode !== 'pty')
+            return;
+        let cancelled = false;
+        setPending(true);
+        refresh(sessionId).finally(() => { if (!cancelled)
+            setPending(false); });
+        return () => { cancelled = true; };
+    }, [sessionId, token, refresh, ws.sessionMode]);
     return (_jsxs("div", { className: "bc-split-pane bc-split-pane-attach", style: style, "data-pane": "attach", children: [_jsxs("div", { className: "bc-split-pane-header bc-header-clickable", onClick: () => ws.togglePane('attach'), onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     ws.togglePane('attach');
-                } }, role: "button", tabIndex: 0, title: "Hide terminal", "aria-label": "Hide terminal", children: [_jsx("span", { className: "bc-split-pane-title", children: "Terminal" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), sessionId && token ? (_jsx(BridgeAttach, { sessionId: sessionId, attachToken: token })) : (_jsx("div", { className: "bc-attach-empty", children: !sessionId ? 'No active session.' : 'No attach token cached for this session — flip mode via the toggle to mint one.' }))] }));
+                } }, role: "button", tabIndex: 0, title: "Hide terminal", "aria-label": "Hide terminal", children: [_jsx("span", { className: "bc-split-pane-title", children: "Terminal" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), sessionId && token ? (_jsx(BridgeAttach, { sessionId: sessionId, attachToken: token })) : (_jsx("div", { className: "bc-attach-empty", children: !sessionId
+                    ? 'No active session.'
+                    : pending
+                        ? 'Recovering attach token…'
+                        : 'No live pty hub for this session — flip mode via the toggle to mint one.' }))] }));
 }
 function SplitView({ node, hidden }) {
     const ws = useWorkspace();

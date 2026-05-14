@@ -20,6 +20,7 @@ export interface WorkspaceValue {
     error: string | null;
     sessionMode?: string;
     attachToken?: string;
+    refreshAttachToken?: (sessionId: string) => Promise<string | null>;
     panesHidden: PanesHidden;
     paneSizes: PaneSizes;
     togglePane: (key: PaneKey) => void;

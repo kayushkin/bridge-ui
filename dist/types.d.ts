@@ -103,6 +103,7 @@ export interface UseBridgeSessionReturn {
     selectSession: (id: string) => void;
     attachTokens: Record<string, string>;
     switchMode: (sessionId: string, mode: 'events' | 'pty') => Promise<string | null>;
+    refreshAttachToken: (sessionId: string) => Promise<string | null>;
     send: (text: string) => void;
     interrupt: () => void;
     resume: () => void;

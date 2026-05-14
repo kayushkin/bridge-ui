@@ -398,6 +398,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         error: bridge.error,
         sessionMode: bridge.activeSession?.mode,
         attachToken: bridge.activeSession ? bridge.attachTokens[bridge.activeSession.session_id] : undefined,
+        refreshAttachToken: bridge.refreshAttachToken,
         // In minimal (mobile) mode, force the per-workspace pane state to
         // show only the user's currently-selected mobilePane. The
         // workspace's persisted panesHidden/layout are left untouched —

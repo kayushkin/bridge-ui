@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BridgeAttach } from '../BridgeAttach'
 import { GitPanel } from '../GitPanel'
 import { LinkedKanbanPanel } from './LinkedKanbanPanel'
@@ -96,6 +96,21 @@ function AttachLeaf({ style }: { style?: React.CSSProperties }) {
   const ws = useWorkspace()
   const sessionId = ws.chat?.sessionId ?? ''
   const token = ws.attachToken ?? ''
+  // After a page refresh the in-memory attachTokens map is empty, but
+  // the server's hub usually still has a live token. Try to recover it
+  // once on mount (and whenever the active session changes) before
+  // falling back to the "flip mode to mint" hint. The 'pending' state
+  // suppresses the hint during the in-flight fetch so the user doesn't
+  // see it flash.
+  const [pending, setPending] = useState(false)
+  const refresh = ws.refreshAttachToken
+  useEffect(() => {
+    if (!sessionId || token || !refresh || ws.sessionMode !== 'pty') return
+    let cancelled = false
+    setPending(true)
+    refresh(sessionId).finally(() => { if (!cancelled) setPending(false) })
+    return () => { cancelled = true }
+  }, [sessionId, token, refresh, ws.sessionMode])
   return (
     <div className="bc-split-pane bc-split-pane-attach" style={style} data-pane="attach">
       <div
@@ -115,7 +130,11 @@ function AttachLeaf({ style }: { style?: React.CSSProperties }) {
         <BridgeAttach sessionId={sessionId} attachToken={token} />
       ) : (
         <div className="bc-attach-empty">
-          {!sessionId ? 'No active session.' : 'No attach token cached for this session — flip mode via the toggle to mint one.'}
+          {!sessionId
+            ? 'No active session.'
+            : pending
+            ? 'Recovering attach token…'
+            : 'No live pty hub for this session — flip mode via the toggle to mint one.'}
         </div>
       )}
     </div>

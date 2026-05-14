@@ -31,6 +31,12 @@ export interface WorkspaceValue {
   // an empty activeSession, which would force-hide the attach pane.
   sessionMode?: string
   attachToken?: string
+  // refreshAttachToken bridges to useBridgeSession's same-named action
+  // so pane components inside the workspace can recover the token after
+  // a page refresh without having to thread the bridge hook themselves
+  // (the hook is per-call-state and creating a fresh instance has bitten
+  // us — see WorkspaceContext.tsx commit 2b49c48 for why).
+  refreshAttachToken?: (sessionId: string) => Promise<string | null>
   panesHidden: PanesHidden
   paneSizes: PaneSizes
   togglePane: (key: PaneKey) => void

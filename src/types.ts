@@ -286,6 +286,11 @@ export interface UseBridgeSessionReturn {
   // new mode using --resume so history is preserved. Returns the new
   // attach token on a successful pty switch (also cached in attachTokens).
   switchMode: (sessionId: string, mode: 'events' | 'pty') => Promise<string | null>
+  // refreshAttachToken fetches the per-hub attach token from the
+  // server (GET /sessions/{id}/attach-token) and caches it. Used by
+  // BridgeAttach to recover the token after a page refresh wipes
+  // the in-memory map. Returns null when no live hub exists.
+  refreshAttachToken: (sessionId: string) => Promise<string | null>
   send: (text: string) => void
   interrupt: () => void
   resume: () => void

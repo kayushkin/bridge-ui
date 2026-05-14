@@ -837,6 +837,28 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     }
   }, [fetchFn, basePath, refreshSessionsImpl, selectSession])
 
+  // refreshAttachToken fetches the per-hub attach token from
+  // GET /sessions/{id}/attach-token. Called by AttachLeaf on mount when
+  // there's no cached token (typically after a page refresh wiped the
+  // in-memory map). Returns the token, or null when the server has no
+  // live hub for this session — the UI then prompts the user to flip
+  // mode to mint one.
+  const refreshAttachToken = useCallback(async (sessionId: string): Promise<string | null> => {
+    try {
+      const res = await fetchFn(`${basePath}/sessions/${sessionId}/attach-token`)
+      if (!res.ok) return null
+      const body = await res.json() as { attach_token?: string }
+      const token = body.attach_token ?? ''
+      if (token) {
+        setAttachTokens(prev => ({ ...prev, [sessionId]: token }))
+        return token
+      }
+      return null
+    } catch {
+      return null
+    }
+  }, [fetchFn, basePath])
+
   // switchMode flips a live session between events and pty modes. The
   // server kills the current harness process and respawns in the new
   // mode using --resume, so the user's CC history is preserved across
@@ -1137,6 +1159,7 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     resolveHook,
     attachTokens,
     switchMode,
+    refreshAttachToken,
   }), [
     sessions,
     activeSession,
@@ -1163,5 +1186,6 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     resolveHook,
     attachTokens,
     switchMode,
+    refreshAttachToken,
   ])
 }
