@@ -4404,3 +4404,63 @@
 
 .bk-orphans { margin-top: 16px; padding: 8px; border: 1px dashed #d97757; border-radius: 4px; }
 .bk-orphan-note { font-size: 0.85em; opacity: 0.75; }
+
+/* ===== BridgeAttach (pty terminal) =====
+ * Consumer must also import '@xterm/xterm/css/xterm.css' for the
+ * terminal canvas itself; these styles are the surrounding chrome.
+ */
+.bridge-attach {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bridge-attach-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85em;
+  background: var(--bg);
+}
+.bridge-attach-status { color: var(--text-muted); font-family: var(--mono, ui-monospace, monospace); }
+.bridge-attach-readonly {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #2a2a2a;
+  color: #aaa;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bridge-attach-detach {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+.bridge-attach-detach:hover { border-color: var(--accent); color: var(--accent); }
+.bridge-attach-term {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 6px;
+  /* xterm sizes itself to this container; FitAddon measures it. */
+  background: #000;
+}
+.bridge-attach-term .xterm { height: 100%; }
+.bridge-attach-error {
+  padding: 8px 12px;
+  background: #1a0a0a;
+  border-top: 1px solid #4a2a2a;
+  color: #ef4444;
+  font-size: 0.85em;
+}

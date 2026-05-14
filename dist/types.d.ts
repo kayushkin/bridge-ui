@@ -99,6 +99,8 @@ export interface UseBridgeSessionReturn {
     loadingHistory: boolean;
     createSession: (opts: Partial<CreateSessionRequest> & Pick<CreateSessionRequest, 'harness'>) => Promise<ManagedSession | null>;
     selectSession: (id: string) => void;
+    attachTokens: Record<string, string>;
+    switchMode: (sessionId: string, mode: 'events' | 'pty') => Promise<string | null>;
     send: (text: string) => void;
     interrupt: () => void;
     resume: () => void;

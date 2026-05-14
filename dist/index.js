@@ -32,6 +32,7 @@ export { BridgePermissions } from './components/BridgePermissions';
 export { BridgeAgents } from './components/BridgeAgents';
 export { BridgeFiles } from './components/BridgeFiles';
 export { BridgeKanban } from './components/BridgeKanban';
+export { BridgeAttach } from './components/BridgeAttach';
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
 // Shared status dot — used by header, sidebar, and composer status chip

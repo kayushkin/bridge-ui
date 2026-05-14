@@ -4,6 +4,7 @@ import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../..
 import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
+import { BridgeAttach } from '../BridgeAttach'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
 import { PendingPermissionsBanner } from './PendingPermissionsBanner'
@@ -285,6 +286,13 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
       {bridge.activeSession && (
         <>
           <StatusChip uiState={bridge.uiState} activity={bridge.activity} compacting={bridge.compacting} />
+          {activeHarnessInfo?.pty && (
+            <ModeToggle
+              currentMode={bridge.activeSession.mode}
+              busy={bridge.uiState === 'running'}
+              onSwitch={mode => bridge.switchMode(bridge.activeSession!.session_id, mode)}
+            />
+          )}
           {capabilities.has('model') && harnessModels.length > 0 && (
             <select className="bc-ctrl-select" value={configModel} onChange={e => setConfigModel(e.target.value)} title="Model">
               <option value="">Model</option>
@@ -407,19 +415,37 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         resolveHook: bridge.resolveHook,
       }}>
         <PendingPermissionsBanner />
-        <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
+        {bridge.activeSession?.mode === 'pty' && bridge.attachTokens[bridge.activeSession.session_id] ? (
+          // Pty sessions render as a full-bleed terminal: the harness's
+          // structured event stream is silent in pty mode (see
+          // PTY-MODE.md), so the regular pane tree would be empty.
+          // JSONL backfill into log-store is a follow-up that lets the
+          // other panes populate; until then the terminal is the only
+          // meaningful view.
+          <BridgeAttach
+            sessionId={bridge.activeSession.session_id}
+            attachToken={bridge.attachTokens[bridge.activeSession.session_id]}
+          />
+        ) : (
+          <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
+        )}
       </WorkspaceProvider>
       {renderControls}
       {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
-      <Composer
-        sessionId={bridge.activeSession?.session_id ?? null}
-        connected={bridge.connected && !!bridge.activeSession}
-        streaming={bridge.uiState === 'running'}
-        paused={bridge.uiState === 'paused'}
-        onSend={handleSend}
-        onStop={bridge.interrupt}
-        onResume={bridge.resume}
-      />
+      {/* Composer is meaningless when the session is in pty mode — all
+          input goes through the terminal. Hide it rather than letting the
+          user type into a dead box. */}
+      {bridge.activeSession?.mode !== 'pty' && (
+        <Composer
+          sessionId={bridge.activeSession?.session_id ?? null}
+          connected={bridge.connected && !!bridge.activeSession}
+          streaming={bridge.uiState === 'running'}
+          paused={bridge.uiState === 'paused'}
+          onSend={handleSend}
+          onStop={bridge.interrupt}
+          onResume={bridge.resume}
+        />
+      )}
       {showSystemPrompt && bridge.activeSession?.info && (
         <SystemPromptModal
           info={bridge.activeSession.info}
@@ -427,6 +453,29 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         />
       )}
     </div>
+  )
+}
+
+// ModeToggle surfaces the events/pty mode switcher for harnesses that
+// support pty. Disabled while a turn is in flight — switching mid-
+// generation would lose the partial response (the server enforces this
+// too, but we disable the button so the user gets immediate feedback).
+function ModeToggle({ currentMode, busy, onSwitch }: {
+  currentMode?: 'events' | 'pty' | string
+  busy: boolean
+  onSwitch: (mode: 'events' | 'pty') => void
+}) {
+  const isPty = currentMode === 'pty'
+  const target: 'events' | 'pty' = isPty ? 'events' : 'pty'
+  return (
+    <button
+      className={`bc-ctrl-btn bc-ctrl-btn-mode${isPty ? ' bc-ctrl-btn-mode-pty' : ''}`}
+      onClick={() => onSwitch(target)}
+      disabled={busy}
+      title={busy ? 'Cannot switch mode mid-turn' : `Switch to ${target} mode`}
+    >
+      Mode: {isPty ? 'pty' : 'events'}
+    </button>
   )
 }
 

@@ -787,6 +787,14 @@ export function useBridgeSession() {
     // Type / purpose / origin are required on the wire but the frontend
     // defaults them so call sites don't have to know about classification.
     // Callers can override by providing any of the three explicitly.
+    // attachTokens caches the per-session pty attach token returned by
+    // POST /sessions and POST /sessions/{id}/mode responses. Keyed by
+    // bridge id. The server doesn't expose a refresh endpoint — a hub's
+    // token only exists in memory alongside its pty — so this map is the
+    // only place bridge-ui can retrieve a usable token. Sessions not
+    // created/switched in this browser tab won't have an entry; the UI
+    // exposes a mode-switch action that mints a fresh one.
+    const [attachTokens, setAttachTokens] = useState({});
     const createSession = useCallback(async (opts) => {
         try {
             const body = {
@@ -804,7 +812,15 @@ export function useBridgeSession() {
                 setError(`Failed to create session: ${res.statusText}`);
                 return null;
             }
-            const sess = await res.json();
+            // POST /sessions returns ManagedSession with an optional
+            // attach_token sibling for pty sessions — keep the token in state
+            // so the BridgeAttach component can dial /attach without a second
+            // round-trip. Empty for events-mode sessions.
+            const sessWithToken = await res.json();
+            const sess = sessWithToken;
+            if (sessWithToken.attach_token) {
+                setAttachTokens(prev => ({ ...prev, [sess.session_id]: sessWithToken.attach_token }));
+            }
             await refreshSessionsImpl();
             selectSession(sess.session_id);
             return sess;
@@ -814,6 +830,46 @@ export function useBridgeSession() {
             return null;
         }
     }, [fetchFn, basePath, refreshSessionsImpl, selectSession]);
+    // switchMode flips a live session between events and pty modes. The
+    // server kills the current harness process and respawns in the new
+    // mode using --resume, so the user's CC history is preserved across
+    // the swap. Returns the new attach token on a successful pty switch
+    // (cached in attachTokens automatically); returns null on any
+    // failure or for events-mode switches.
+    const switchMode = useCallback(async (sessionId, mode) => {
+        try {
+            const res = await fetchFn(`${basePath}/sessions/${sessionId}/mode`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode }),
+            });
+            if (!res.ok) {
+                setError(`Failed to switch mode: ${res.statusText}`);
+                return null;
+            }
+            const sessWithToken = await res.json();
+            if (sessWithToken.attach_token) {
+                setAttachTokens(prev => ({ ...prev, [sessionId]: sessWithToken.attach_token }));
+            }
+            else if (mode === 'events') {
+                // Events-mode session has no live pty, so the cached token is
+                // unusable. Drop it to keep the map honest.
+                setAttachTokens(prev => {
+                    if (!(sessionId in prev))
+                        return prev;
+                    const next = { ...prev };
+                    delete next[sessionId];
+                    return next;
+                });
+            }
+            await refreshSessionsImpl();
+            return sessWithToken.attach_token ?? null;
+        }
+        catch (err) {
+            setError(`Failed to switch mode: ${err}`);
+            return null;
+        }
+    }, [fetchFn, basePath, refreshSessionsImpl]);
     const send = useCallback(async (text) => {
         if (!activeSessionId || !text.trim())
             return;
@@ -1066,6 +1122,8 @@ export function useBridgeSession() {
         refreshSessions,
         pendingHooks: pendingHooksList,
         resolveHook,
+        attachTokens,
+        switchMode,
     }), [
         sessions,
         activeSession,
@@ -1090,6 +1148,8 @@ export function useBridgeSession() {
         refreshSessions,
         pendingHooksList,
         resolveHook,
+        attachTokens,
+        switchMode,
     ]);
 }
 //# sourceMappingURL=useBridgeSession.js.map

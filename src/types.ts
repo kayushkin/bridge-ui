@@ -257,6 +257,17 @@ export interface UseBridgeSessionReturn {
   loadingHistory: boolean
   createSession: (opts: Partial<CreateSessionRequest> & Pick<CreateSessionRequest, 'harness'>) => Promise<ManagedSession | null>
   selectSession: (id: string) => void
+  // attachTokens caches the per-session pty attach token returned by
+  // POST /sessions and POST /sessions/{id}/mode. Keyed by bridge id.
+  // Empty for sessions not created or mode-switched in this browser tab —
+  // the server does not expose a refresh endpoint, so cross-tab attach
+  // is unsupported in v1.
+  attachTokens: Record<string, string>
+  // switchMode flips a live session between events and pty mode. The
+  // bridge-server kills the current harness process and respawns in the
+  // new mode using --resume so history is preserved. Returns the new
+  // attach token on a successful pty switch (also cached in attachTokens).
+  switchMode: (sessionId: string, mode: 'events' | 'pty') => Promise<string | null>
   send: (text: string) => void
   interrupt: () => void
   resume: () => void
