@@ -24,6 +24,13 @@ export interface WorkspaceValue {
   uiState: SessionUIState
   activity: ActivityKind
   error: string | null
+  // Pty-related session state plumbed through the context so LayoutRenderer
+  // (which lives inside WorkspaceProvider) doesn't have to call
+  // useBridgeSession() — that hook isn't context-backed, so calling it
+  // from a non-root component creates an independent state instance with
+  // an empty activeSession, which would force-hide the attach pane.
+  sessionMode?: string
+  attachToken?: string
   panesHidden: PanesHidden
   paneSizes: PaneSizes
   togglePane: (key: PaneKey) => void

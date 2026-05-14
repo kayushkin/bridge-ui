@@ -7,7 +7,6 @@ import { Thread } from './Thread'
 import { Timeline } from './Timeline'
 import { TurnsView } from './TurnsView'
 import { useWorkspace } from './WorkspaceContext'
-import { useBridgeSession } from '../../useBridgeSession'
 import type { InnerNode, PaneKey, ViewType } from './types'
 
 function hasVisibleLeaf(node: InnerNode, hidden: Set<ViewType>): boolean {
@@ -89,15 +88,14 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
 }
 
 // AttachLeaf wraps BridgeAttach with the boilerplate pane chrome and pulls
-// the active session + cached attach token off useBridgeSession. Sessions
-// without a cached token (those not created or mode-switched in this
-// browser tab) render a hint instead — the server doesn't have a
-// token-refresh endpoint yet, so cross-tab attach isn't supported in v1.
+// the session id + attach token off the workspace context (populated by
+// Workspace from its own useBridgeSession). Reading useBridgeSession()
+// directly here doesn't work — the hook isn't context-backed and a fresh
+// call creates an independent state instance with an empty activeSession.
 function AttachLeaf({ style }: { style?: React.CSSProperties }) {
   const ws = useWorkspace()
-  const bridge = useBridgeSession()
-  const sess = bridge.activeSession
-  const token = sess ? bridge.attachTokens[sess.session_id] : ''
+  const sessionId = ws.chat?.sessionId ?? ''
+  const token = ws.attachToken ?? ''
   return (
     <div className="bc-split-pane bc-split-pane-attach" style={style} data-pane="attach">
       <div
@@ -113,11 +111,11 @@ function AttachLeaf({ style }: { style?: React.CSSProperties }) {
         <span className="bc-spacer" />
         <span className="bc-split-collapse-btn" aria-hidden="true">×</span>
       </div>
-      {sess && token ? (
-        <BridgeAttach sessionId={sess.session_id} attachToken={token} />
+      {sessionId && token ? (
+        <BridgeAttach sessionId={sessionId} attachToken={token} />
       ) : (
         <div className="bc-attach-empty">
-          {!sess ? 'No active session.' : 'No attach token cached for this session — flip mode via the toggle to mint one.'}
+          {!sessionId ? 'No active session.' : 'No attach token cached for this session — flip mode via the toggle to mint one.'}
         </div>
       )}
     </div>
@@ -171,7 +169,6 @@ function SplitView({ node, hidden }: { node: Extract<InnerNode, { kind: 'split' 
 
 export function LayoutRenderer({ tree }: { tree: InnerNode }) {
   const ws = useWorkspace()
-  const bridge = useBridgeSession()
   const hidden = new Set<ViewType>()
   if (ws.panesHidden.turns) hidden.add('turns')
   if (ws.panesHidden.thread) hidden.add('thread')
@@ -182,7 +179,7 @@ export function LayoutRenderer({ tree }: { tree: InnerNode }) {
   // for events sessions regardless of the persisted panesHidden state,
   // so a user who flips between modes doesn't accidentally see an
   // empty/dead terminal box on their events-mode workspaces.
-  if (ws.panesHidden.attach || bridge.activeSession?.mode !== 'pty') hidden.add('attach')
+  if (ws.panesHidden.attach || ws.sessionMode !== 'pty') hidden.add('attach')
 
   if (!hasVisibleLeaf(tree, hidden)) {
     return (

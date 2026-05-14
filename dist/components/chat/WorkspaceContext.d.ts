@@ -18,6 +18,8 @@ export interface WorkspaceValue {
     uiState: SessionUIState;
     activity: ActivityKind;
     error: string | null;
+    sessionMode?: string;
+    attachToken?: string;
     panesHidden: PanesHidden;
     paneSizes: PaneSizes;
     togglePane: (key: PaneKey) => void;
