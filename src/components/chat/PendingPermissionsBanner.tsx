@@ -20,7 +20,7 @@ export function PendingPermissionsBanner() {
 
   if (ws.pendingHooks.length === 0) return null
 
-  // permission-store sits as a dash sibling of bridge: /api/bridge → /api/permission-store
+  // permission-store sibling path: /api/bridge → /api/permission-store
   const permStoreBase = basePath.replace(/\/[^/]+$/, '/permission-store')
 
   return (

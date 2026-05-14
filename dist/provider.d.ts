@@ -17,10 +17,16 @@ interface BridgeProviderProps {
     /** Base path for llm-bridge-adapter API. If omitted, bus_session links can't
      * resolve to a bridge_id and the chat button on those cards stays disabled. */
     bridgeAdapterBasePath?: string;
+    /** Base path for usage-store API. If omitted, spend/limits sections of the
+     * Usage tab are hidden and only per-session aggregates are shown. */
+    usageStoreBasePath?: string;
+    /** Optional render hook for per-harness Settings-tab extensions. Return null
+     * for harnesses that don't need a custom panel. */
+    renderHarnessExtension?: (harnessName: string) => ReactNode;
     /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES. */
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, bridgeAdapterBasePath, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, bridgeAdapterBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map

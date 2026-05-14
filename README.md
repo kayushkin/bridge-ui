@@ -1,21 +1,14 @@
 # @kayushkin/bridge-ui
 
-Reusable React component library for apps that consume an [llm-bridge-server](../llm-bridge-server) backend. Ships the chat surface, session/instance/auth/usage/skills/conformance pages, plus the underlying SSE client and React hooks — so a host app only has to wire auth and routes.
+Reusable React component library for apps that consume an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend. Ships the chat surface, session/instance/auth/usage/skills/conformance pages, plus the underlying SSE client and React hooks — so a host app only has to wire auth and routes.
 
-Used in production by [llmux](../llmux) and [dash](../dash); both render their bridge area by mounting `<BridgeLayout>` under their own router.
+The simplest way to get a working UI on top of llm-bridge-server is to run the server directly — it embeds bridge-ui's built `dist/` and serves it at the root. Embed this package in your own React app if you want to customize the host (chrome, auth, routing).
 
 ## Install
 
 ```bash
 npm install @kayushkin/bridge-ui
 ```
-
-> **Note (pre-publish blocker):** `package.json` currently declares
-> `"@kayushkin/llm-bridge-types": "file:../llm-bridge/ts"`. That works on a
-> dev machine where the sibling `llm-bridge` repo is checked out, but breaks
-> `npm install @kayushkin/bridge-ui` for any external consumer. Resolved by
-> publishing `@kayushkin/llm-bridge-types` to npm and switching to a version
-> dep — tracked as a separate todo.
 
 Peer dependencies (host app must provide):
 

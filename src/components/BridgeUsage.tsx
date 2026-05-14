@@ -88,14 +88,8 @@ interface SpendKeysResponse {
 
 type Period = 'day' | 'week' | 'month'
 
-const SOURCE_LABELS: Record<string, string> = {
-  '': 'Interactive',
-  scheduler: 'Scheduler',
-  autoworker: 'Autoworker',
-  renamer: 'Renamer',
-  'harness-watch': 'Harness watch',
-  healthcheck: 'Healthcheck',
-  conformance: 'Conformance',
+function sourceLabel(source: string): string {
+  return source || 'Interactive'
 }
 
 // Distinct, color-blind-friendly palette used by both pie charts and the
@@ -227,7 +221,7 @@ function periodCutoff(period: Period): string {
 }
 
 export function BridgeUsage() {
-  const { fetch: apiFetch, basePath } = useBridgeConfig()
+  const { fetch: apiFetch, basePath, usageStoreBasePath } = useBridgeConfig()
   const [sessions, setSessions] = useState<BridgeSession[]>([])
   const [aggregates, setAggregates] = useState<Map<string, SessionAggregate>>(new Map())
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
@@ -265,31 +259,34 @@ export function BridgeUsage() {
     finally { setLoadingUsage(false) }
   }, [apiFetch, basePath])
 
-  // Subscription limits live on usage-store (via dash proxy at /api/usage/limits).
-  // No basePath — this endpoint is site-global, not bridge-specific.
+  // Subscription limits live on usage-store. Skipped entirely when no
+  // usageStoreBasePath is configured.
   const fetchLimits = useCallback(async () => {
+    if (!usageStoreBasePath) return
     try {
-      const res = await apiFetch('/api/usage/limits')
+      const res = await apiFetch(`${usageStoreBasePath}/limits`)
       if (res.ok) setLimits(await res.json())
     } catch { /* ignore */ }
-  }, [apiFetch])
+  }, [apiFetch, usageStoreBasePath])
 
   // Per-API-key spend (computed from usage_report token counts × per-model
   // pricing). Refreshed hourly on the server; the UI just reads the latest.
   const fetchSpend = useCallback(async () => {
+    if (!usageStoreBasePath) return
     try {
-      const res = await apiFetch('/api/usage/spend/keys')
+      const res = await apiFetch(`${usageStoreBasePath}/spend/keys`)
       if (res.ok) setSpend(await res.json())
     } catch { /* ignore */ }
-  }, [apiFetch])
+  }, [apiFetch, usageStoreBasePath])
 
   const submitTopup = useCallback(async (provider: string) => {
+    if (!usageStoreBasePath) return
     const amount = parseFloat(addCreditDraft.amount)
     if (!isFinite(amount) || amount <= 0) return
     const body: Record<string, unknown> = { provider, amount_usd: amount, note: addCreditDraft.note }
     if (addCreditDraft.date) body.occurred_at_str = addCreditDraft.date
     try {
-      const res = await apiFetch('/api/usage/spend/topups', {
+      const res = await apiFetch(`${usageStoreBasePath}/spend/topups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -300,17 +297,19 @@ export function BridgeUsage() {
         fetchSpend()
       }
     } catch { /* ignore */ }
-  }, [apiFetch, addCreditDraft, fetchSpend])
+  }, [apiFetch, addCreditDraft, fetchSpend, usageStoreBasePath])
 
   const deleteTopup = useCallback(async (id: number) => {
+    if (!usageStoreBasePath) return
     if (!confirm('Delete this top-up?')) return
     try {
-      const res = await apiFetch(`/api/usage/spend/topups/${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`${usageStoreBasePath}/spend/topups/${id}`, { method: 'DELETE' })
       if (res.ok) fetchSpend()
     } catch { /* ignore */ }
-  }, [apiFetch, fetchSpend])
+  }, [apiFetch, fetchSpend, usageStoreBasePath])
 
   const toggleRaw = useCallback(async (provider: string, apiKeyID: string) => {
+    if (!usageStoreBasePath) return
     const k = `${provider}:${apiKeyID}`
     setExpandedRaw(prev => {
       if (prev[k] !== undefined) {
@@ -322,26 +321,28 @@ export function BridgeUsage() {
     })
     if (expandedRaw[k] !== undefined) return
     try {
-      const res = await apiFetch(`/api/usage/spend/keys/${provider}/${apiKeyID}/raw`)
+      const res = await apiFetch(`${usageStoreBasePath}/spend/keys/${provider}/${apiKeyID}/raw`)
       const text = res.ok ? await res.text() : `error ${res.status}: ${await res.text()}`
       setExpandedRaw(prev => ({ ...prev, [k]: text }))
     } catch (e) {
       setExpandedRaw(prev => ({ ...prev, [k]: `error: ${e}` }))
     }
-  }, [apiFetch, expandedRaw])
+  }, [apiFetch, expandedRaw, usageStoreBasePath])
 
   useEffect(() => { fetchSessions() }, [fetchSessions])
   useEffect(() => { fetchAggregates() }, [fetchAggregates])
   useEffect(() => {
+    if (!usageStoreBasePath) return
     fetchLimits()
     const t = setInterval(fetchLimits, 60000)
     return () => clearInterval(t)
-  }, [fetchLimits])
+  }, [fetchLimits, usageStoreBasePath])
   useEffect(() => {
+    if (!usageStoreBasePath) return
     fetchSpend()
     const t = setInterval(fetchSpend, 5 * 60_000)
     return () => clearInterval(t)
-  }, [fetchSpend])
+  }, [fetchSpend, usageStoreBasePath])
 
   const periodSessions = useMemo(() => {
     const cutoff = periodCutoff(period)
@@ -420,7 +421,7 @@ export function BridgeUsage() {
     return Array.from(sums.entries())
       .map(([key, value], i) => ({
         key: key || '__interactive',
-        label: SOURCE_LABELS[key] ?? (key || 'Interactive'),
+        label: sourceLabel(key),
         value,
         color: colorFor(i),
       }))
@@ -665,7 +666,7 @@ export function BridgeUsage() {
                   {sources.map(src => {
                     const k = `${harness}::${src.source}`
                     const open = !!expandedSources[k]
-                    const label = SOURCE_LABELS[src.source] ?? (src.source || 'Interactive')
+                    const label = sourceLabel(src.source)
                     return (
                       <div key={k} className="bu-source-group">
                         <button

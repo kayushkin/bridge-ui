@@ -1,5 +1,4 @@
 node_modules/
-dist/
 *.tsbuildinfo
 
 # Host-local config (machine-specific systemd drop-ins, dev secrets, etc.).

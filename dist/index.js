@@ -7,6 +7,7 @@ export { BridgeProvider } from './provider';
 export { connectSSE } from './bridgeSSE';
 // Hooks
 export { useBridgeSession } from './useBridgeSession';
+export { useBridgeAttach } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
 export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgePrefs } from './useBridgePrefs';
@@ -39,6 +40,6 @@ export { StatusDot } from './components/chat/StatusDot';
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually. The body gets a
 // `bridge-minimal-chrome` class while minimal mode is active — host apps
-// (dash, llmux) can use it to hide their own site chrome via plain CSS.
+// can use it to hide their own site chrome via plain CSS.
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 //# sourceMappingURL=index.js.map

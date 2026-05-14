@@ -19,7 +19,7 @@ export function PendingPermissionsBanner() {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
     if (ws.pendingHooks.length === 0)
         return null;
-    // permission-store sits as a dash sibling of bridge: /api/bridge → /api/permission-store
+    // permission-store sibling path: /api/bridge → /api/permission-store
     const permStoreBase = basePath.replace(/\/[^/]+$/, '/permission-store');
     return (_jsx("div", { className: "bc-pending-banner", role: "region", "aria-label": "Pending permission prompts", children: ws.pendingHooks.map(hook => {
             const key = hook.request_id || `nokey-${hook.event}`;

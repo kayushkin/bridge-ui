@@ -10,7 +10,6 @@ import {
   type HarnessInfo,
 } from '../types'
 import { SourceFoldersEditor } from './SourceFoldersEditor'
-import { InberAgentsConfig } from './InberAgentsConfig'
 
 interface ModelInfo {
   id: string
@@ -29,7 +28,7 @@ const COMMON_TOOLS = [
 ]
 
 export function BridgeSettings() {
-  const { fetch: apiFetch, basePath } = useBridgeConfig()
+  const { fetch: apiFetch, basePath, renderHarnessExtension } = useBridgeConfig()
   const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` })
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -161,7 +160,7 @@ export function BridgeSettings() {
                     {saving === h.name ? 'Saved!' : 'Save Defaults'}
                   </button>
 
-                  {h.name === 'inber' && <InberAgentsConfig />}
+                  {renderHarnessExtension?.(h.name)}
                 </div>
               )}
             </div>

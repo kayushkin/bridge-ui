@@ -62,10 +62,9 @@ const SCOPE_META: Record<string, { label: string; emoji: string; description: st
   subagent: { label: 'Subagents', emoji: '\u{1F916}', description: '~/.claude/agents — Claude Code subagent definitions' },
   memory:   { label: 'Memory',    emoji: '\u{1F9E0}', description: '~/.claude/projects/*/memory — auto-loaded by Claude Code per project' },
   command:  { label: 'Commands',  emoji: '⚡',    description: '~/.claude/commands — slash-command definitions' },
-  inber:    { label: 'Inber',     emoji: '\u{1F33F}', description: '~/inber-workspace/agents — inber orchestrator agent configs' },
 }
 
-const SCOPE_ORDER = ['global', 'project', 'subagent', 'memory', 'command', 'inber']
+const SCOPE_ORDER = ['global', 'project', 'subagent', 'memory', 'command']
 
 const INJECTION_HARNESSES: { slug: string; label: string }[] = [
   { slug: 'codex',  label: 'Codex' },
@@ -89,7 +88,6 @@ function usedBy(f: TrackedFile): { label: string; mode: string } {
   if (f.scope === 'subagent') return { label: 'Claude Code subagent', mode: 'subagent' }
   if (f.scope === 'memory') return { label: 'Claude Code memory', mode: 'memory' }
   if (f.scope === 'command') return { label: 'Claude Code commands', mode: 'native' }
-  if (f.scope === 'inber') return { label: 'Inber orchestrator', mode: 'inber' }
   return { label: f.scope, mode: 'unknown' }
 }
 

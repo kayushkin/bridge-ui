@@ -4,11 +4,11 @@ import { useBridgeConfig } from '../context'
 import { useBridgeFolders } from '../useBridgeFolders'
 
 // Editor for the runtime purpose→folder map. Each row maps a session.purpose
-// tag (e.g. "scheduler", "conformance") to a folder. Rows with default=true
-// come from LLMBRIDGE_SOURCE_FOLDERS; default=false rows are runtime overrides
-// stored in source_folders. PUT replaces; DELETE reverts to the env default.
-// The env var and table keep the legacy "source" naming for storage
-// internals (llm-bridge-server f03b058); the user-facing axis is "purpose".
+// tag to a folder. Rows with default=true come from LLMBRIDGE_SOURCE_FOLDERS;
+// default=false rows are runtime overrides stored in source_folders. PUT
+// replaces; DELETE reverts to the env default. The env var and table keep
+// the legacy "source" naming for storage internals; the user-facing axis is
+// "purpose".
 //
 // On Save, the editor offers to rebucket existing sessions whose folder was
 // empty or matched the prior effective folder for that purpose. Manual moves
@@ -95,7 +95,7 @@ export function SourceFoldersEditor() {
       <h2 className="bset-title">Session Purpose Folders</h2>
       <p className="bset-subtitle">
         Auto-file new sessions into a sidebar folder based on their <code>purpose</code> tag
-        (set by the caller — autoworker, scheduler, conformance, etc.). Rows marked <em>default</em>
+        (set by the caller when creating the session). Rows marked <em>default</em>
         come from LLMBRIDGE_SOURCE_FOLDERS; saving over them creates a runtime override.
       </p>
 

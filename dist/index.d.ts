@@ -6,6 +6,8 @@ export type { BridgeConfig, BridgeRoutes } from './context';
 export { BridgeProvider } from './provider';
 export { connectSSE } from './bridgeSSE';
 export { useBridgeSession } from './useBridgeSession';
+export { useBridgeAttach } from './useBridgeAttach';
+export type { AttachStatus, AttachRole, AttachExit, UseBridgeAttachReturn, UseBridgeAttachOptions, } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
 export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgePrefs } from './useBridgePrefs';

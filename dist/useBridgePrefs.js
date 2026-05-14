@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-const LS_MIGRATED_SUFFIX = '-migrated';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 export function useBridgePrefs(options = {}) {
     const { fetch: fetchFn, endpoint, storagePrefix = 'bridge-prefs' } = options;
     const [prefs, setPrefs] = useState({});
-    const migratedRef = useRef(false);
     const serverMode = !!(fetchFn && endpoint);
     // Load prefs on mount
     useEffect(() => {
@@ -16,34 +14,6 @@ export function useBridgePrefs(options = {}) {
                         return;
                     const data = await res.json();
                     setPrefs(data);
-                    // One-time migration from old localStorage keys
-                    if (!migratedRef.current && !localStorage.getItem(storagePrefix + LS_MIGRATED_SUFFIX)) {
-                        migratedRef.current = true;
-                        const lsHarness = localStorage.getItem('dash-bridge-harness');
-                        const lsSession = localStorage.getItem('dash-bridge-session');
-                        if (lsHarness || lsSession) {
-                            const migrationPrefs = {};
-                            if (lsHarness)
-                                migrationPrefs.last_harness = lsHarness;
-                            if (lsHarness && lsSession) {
-                                migrationPrefs.last_session = { [lsHarness]: lsSession };
-                            }
-                            const importRes = await fetchFn(endpoint, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(migrationPrefs),
-                            });
-                            if (importRes.ok) {
-                                localStorage.removeItem('dash-bridge-harness');
-                                localStorage.removeItem('dash-bridge-session');
-                                localStorage.setItem(storagePrefix + LS_MIGRATED_SUFFIX, '1');
-                                setPrefs(prev => ({ ...prev, ...migrationPrefs }));
-                            }
-                        }
-                        else {
-                            localStorage.setItem(storagePrefix + LS_MIGRATED_SUFFIX, '1');
-                        }
-                    }
                 }
                 catch { /* ignore */ }
             }

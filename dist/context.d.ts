@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { FetchFn } from './types';
 export interface BridgeRoutes {
     chat: string;
@@ -37,6 +38,14 @@ export interface BridgeConfig {
      * card is linked by entity_type=bus_session. If empty, those cards' chat
      * deeplinks are disabled. */
     bridgeAdapterBasePath: string;
+    /** Base path for usage-store API (e.g. "/api/usage"). No trailing slash.
+     * If empty, the spend/limits sections of the Usage tab are hidden and only
+     * per-session aggregates from llm-bridge-server are shown. */
+    usageStoreBasePath: string;
+    /** Optional render hook called per harness in the Settings tab. Hosts can
+     * use this to inject harness-specific configuration UI keyed on harness
+     * name. Return null for harnesses without an extension. */
+    renderHarnessExtension: ((harnessName: string) => ReactNode) | null;
     /** Route paths for navigation between bridge pages. */
     routes: BridgeRoutes;
 }
