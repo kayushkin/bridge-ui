@@ -48,6 +48,18 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   for (const row of rows) {
     if (row.kind === 'user_message' && row.text) {
       if (!row.messageId && canonicalUserTexts.has(row.text)) continue
+      // Collapse duplicate user_message rows for the same prompt. The
+      // bridge records a user message from two independent ingestion
+      // paths — stream-json / rollout tailer, and Claude Code's OTel
+      // `user_prompt` log — so one prompt can land as two events with
+      // different message_ids. Either source may be absent, so we don't
+      // pick a winner: we drop a user_message whose text repeats the
+      // immediately-preceding user item. The two duplicates always arrive
+      // back-to-back (before the assistant responds), so an assistant or
+      // system turn between two identical prompts breaks the run and a
+      // genuine re-send of the same text still renders twice.
+      const prevItem = out[out.length - 1]
+      if (prevItem && prevItem.actor === 'user' && prevItem.text === row.text) continue
       out.push({
         key: `tv_user_${row.key}`,
         actor: 'user',
