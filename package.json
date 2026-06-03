@@ -9,15 +9,19 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./styles.css": "./styles.css"
+    "./styles.css": "./styles.css",
+    "./theme.css": "./theme.css"
   },
   "files": [
     "dist",
-    "styles.css"
+    "styles.css",
+    "theme.css"
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "start": "vite --config standalone/vite.config.ts",
+    "build:standalone": "vite build --config standalone/vite.config.ts"
   },
   "dependencies": {
     "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts",
@@ -34,9 +38,11 @@
     "@types/diff": "^7.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vite": "^6.0.7"
   }
 }

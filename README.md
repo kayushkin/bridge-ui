@@ -16,7 +16,16 @@ Peer dependencies (host app must provide):
 - `react-dom` ≥ 18
 - `react-router-dom` ≥ 6
 
-The library is ESM-only (`"type": "module"`) and ships its own stylesheet at `@kayushkin/bridge-ui/styles.css`.
+The library is ESM-only (`"type": "module"`) and ships two stylesheets:
+
+- `@kayushkin/bridge-ui/styles.css` — component styles (always import this). It only
+  *consumes* theme variables (`--bg`, `--bg-surface`, `--border`, `--text`, `--accent`,
+  `--success`, …); it defines none.
+- `@kayushkin/bridge-ui/theme.css` — **optional** default theme: defines those variables
+  (dark + a `[data-theme="light"]` variant) plus a base reset, scrollbars, and body
+  defaults. Import it to get a working look with zero config. Hosts that already define
+  their own palette (dash, llmux do) should **skip** it and set the same variables at
+  `:root` to override.
 
 ## Usage
 
@@ -186,7 +195,25 @@ npm run build    # tsc → dist/
 npm run dev      # tsc --watch
 ```
 
-`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. The published package contains `dist/` and `styles.css` only (`files` field in `package.json`).
+`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. The published package contains `dist/`, `styles.css`, and `theme.css` only (`files` field in `package.json`).
+
+## Standalone launcher
+
+A minimal Vite app under `standalone/` runs the full UI on its own — useful for
+developing the library or driving a bare llm-bridge-server without a host app. It mounts
+`BridgeProvider` + `BridgeLayout` against `src/` directly (no prior build needed) and
+imports both `theme.css` and `styles.css`, so it's fully styled out of the box.
+
+```bash
+npm install
+npm start                 # dev server; proxies /api/bridge → localhost:8160,
+                          # plus skill-store/tool-store/kanban (see standalone/vite.config.ts)
+npm run build:standalone  # static bundle → standalone/dist (gitignored, not published)
+```
+
+Point it at a different bridge without the dev proxy via `VITE_BRIDGE_BASE`
+(e.g. an absolute URL). The launcher lives outside `src/`, so it never enters the
+published library build.
 
 ## License
 

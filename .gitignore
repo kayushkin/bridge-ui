@@ -1,6 +1,10 @@
 node_modules/
 *.tsbuildinfo
 
+# Standalone launcher build output (the published package ships dist/ +
+# the two stylesheets only — see "files" in package.json).
+/standalone/dist/
+
 # Host-local config (machine-specific systemd drop-ins, dev secrets, etc.).
 # Put anything that should never leave this machine under ./.local/
 /.local/
