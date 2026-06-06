@@ -1376,6 +1376,14 @@
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
   position: sticky; top: 0; z-index: 5;
+  /* Cap height so multiple simultaneous questions stay reachable: the banner
+     scrolls internally instead of pushing its Submit/Decline buttons off the
+     bottom of the viewport. overscroll-behavior keeps the scroll from chaining
+     to the transcript underneath. */
+  max-height: 70vh;
+  max-height: 70dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .bc-pending-card {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
