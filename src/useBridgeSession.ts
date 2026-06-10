@@ -552,6 +552,10 @@ export function useBridgeSession(): UseBridgeSessionReturn {
         }
       } catch {
         if (abort.signal.aborted) return
+        // Stream dropped unexpectedly (transient network/background suspend),
+        // not a deliberate closeSSE(). Clear the ref so the running-state
+        // reconnect effect can re-attach instead of seeing a dead controller.
+        if (sseAbort.current === abort) sseAbort.current = null
         setActivity({ kind: 'idle' })
       }
     })()
@@ -781,12 +785,20 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && activeSessionId) {
-        refreshSessionsImpl()
+        // A backgrounded tab has its SSE fetch suspended by the browser, so a
+        // stream that finished (or was interrupted) while hidden leaves a stale
+        // in-progress row and a dead-but-non-null sseAbort. refreshSessionsImpl
+        // alone only updates the sessions list, never the log rows — that's why
+        // refocus looked broken while session-switching worked. Re-run the full
+        // reconcile that a switch does: force-close the dead SSE, reload history
+        // (renders the now-complete message), and re-attach only if the server
+        // still reports running.
+        selectSession(activeSessionId)
       }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [activeSessionId, refreshSessionsImpl])
+  }, [activeSessionId, selectSession])
 
   // --- Actions ---
 
