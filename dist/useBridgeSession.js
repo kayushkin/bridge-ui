@@ -606,7 +606,10 @@ export function useBridgeSession() {
                         refreshSessionsImpl();
                     else if (sys?.subtype === 'retry')
                         setError(`Retrying (attempt ${sys.attempt}/${sys.max_retries})...`);
-                    else if (sys?.subtype === 'compact_boundary' || sys?.subtype === 'compact_ack')
+                    // compact_ack only confirms the request was received — compaction is
+                    // still in progress, so keep the indicator up. compact_boundary is the
+                    // real completion signal that clears it.
+                    else if (sys?.subtype === 'compact_boundary')
                         clearCompacting();
                     break;
                 }
@@ -1037,10 +1040,13 @@ export function useBridgeSession() {
         setCompacting(true);
         if (compactingTimer.current)
             clearTimeout(compactingTimer.current);
+        // Safety net: clear the indicator if no compact_boundary arrives. Compacting
+        // a large context can take a while, so give it a generous window — the
+        // boundary event normally clears it well before this fires.
         compactingTimer.current = setTimeout(() => {
             compactingTimer.current = null;
             setCompacting(false);
-        }, 30000);
+        }, 180000);
         try {
             const body = {};
             if (summary)

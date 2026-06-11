@@ -18,6 +18,7 @@ export interface WorkspaceValue {
     uiState: SessionUIState;
     activity: ActivityKind;
     error: string | null;
+    compacting: boolean;
     sessionMode?: string;
     attachToken?: string;
     refreshAttachToken?: (sessionId: string) => Promise<string | null>;

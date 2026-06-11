@@ -24,6 +24,7 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
         <TurnsView
           rows={ws.rows}
           agent={agent}
+          compacting={ws.compacting}
           onToggleCollapse={() => ws.togglePane('turns')}
           style={style}
           paneKey="turns"

@@ -1,7 +1,8 @@
 import type { LogRow } from '../../types';
-export declare function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
+export declare function TurnsView({ rows, agent, compacting, onToggleCollapse, style, paneKey }: {
     rows: LogRow[];
     agent: string;
+    compacting?: boolean;
     onToggleCollapse: () => void;
     style?: React.CSSProperties;
     paneKey?: string;

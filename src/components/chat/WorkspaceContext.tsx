@@ -24,6 +24,10 @@ export interface WorkspaceValue {
   uiState: SessionUIState
   activity: ActivityKind
   error: string | null
+  // True while a context compaction is in flight (set on request, cleared by
+  // the harness's compact_boundary event). Drives the live "Compacting…"
+  // indicator in TurnsView.
+  compacting: boolean
   // Pty-related session state plumbed through the context so LayoutRenderer
   // (which lives inside WorkspaceProvider) doesn't have to call
   // useBridgeSession() — that hook isn't context-backed, so calling it

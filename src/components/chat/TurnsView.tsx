@@ -210,9 +210,10 @@ function TurnsAside({ variant, icon, label, text, live }: {
   )
 }
 
-export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
+export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, paneKey }: {
   rows: LogRow[]
   agent: string
+  compacting?: boolean
   onToggleCollapse: () => void
   style?: React.CSSProperties
   paneKey?: string
@@ -290,6 +291,12 @@ export function TurnsView({ rows, agent, onToggleCollapse, style, paneKey }: {
             </div>
           )
         })}
+        {compacting && (
+          <div className="bc-turns-compacting" role="status" aria-live="polite">
+            <span className="bc-turns-compacting-bar" aria-hidden />
+            <span className="bc-turns-compacting-text">Compacting context…</span>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
       {!isAtBottom && (

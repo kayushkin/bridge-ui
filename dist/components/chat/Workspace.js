@@ -282,6 +282,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
                     uiState: bridge.uiState,
                     activity: bridge.activity,
                     error: bridge.error,
+                    compacting: bridge.compacting,
                     sessionMode: bridge.activeSession?.mode,
                     attachToken: bridge.activeSession ? bridge.attachTokens[bridge.activeSession.session_id] : undefined,
                     refreshAttachToken: bridge.refreshAttachToken,

@@ -680,6 +680,21 @@
 .bc-turns-marker-ts { white-space: nowrap; opacity: 0.7; }
 .bc-turns-marker-compact .bc-turns-marker-text { color: #a78bfa; }
 .bc-turns-marker-compact .bc-turns-marker-line { background: color-mix(in srgb, #a78bfa 30%, var(--border)); }
+/* Live indicator pinned at the bottom of the turns list while a compaction is
+   in flight. Reuses the violet squishing-bar motif from the status dot. */
+.bc-turns-compacting {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; margin: 4px 0;
+  font-size: 0.74em; color: #a78bfa;
+  text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  border-top: 1px dashed color-mix(in srgb, #a78bfa 30%, var(--border));
+}
+.bc-turns-compacting-bar {
+  width: 6px; height: 12px; border-radius: 2px; flex: none;
+  background: #a78bfa;
+  animation: bc-compact-anim 1.4s ease-in-out infinite;
+}
+.bc-turns-compacting-text { white-space: nowrap; }
 .bc-turns-item {
   display: flex;
   flex-direction: column;
