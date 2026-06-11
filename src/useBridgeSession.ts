@@ -350,6 +350,31 @@ function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>)
   return session.state as SessionUIState
 }
 
+// shouldHoldSSE reports whether a session state warrants a live SSE
+// connection. True for every non-terminal state where the server may push
+// events on its own (the agent is working) OR a hook is open and will emit
+// a resolution — most importantly awaiting_permission, where the session
+// can sit for minutes waiting on a human and the stream is prone to being
+// dropped by an idle proxy/backgrounded tab. The legacy `running` /
+// `waiting_on_approval` values are kept so sessions on the old vocabulary
+// still reconnect. Quiescent states (idle / awaiting_user / paused) and
+// terminal states (completed / error / aborted / disconnected) are excluded
+// — those emit nothing until a user action (send / resume), which attaches
+// the stream itself.
+const sseHoldingStates = new Set<string>([
+  'starting',
+  'model_generating',
+  'tool_running',
+  'compacting',
+  'awaiting_permission',
+  'rate_limited',
+  'running', // deprecated alias for tool_running
+  'waiting_on_approval', // deprecated alias for awaiting_permission
+])
+function shouldHoldSSE(state: string | undefined): boolean {
+  return state != null && sseHoldingStates.has(state)
+}
+
 // --- Hook ---
 
 export function useBridgeSession(): UseBridgeSessionReturn {
@@ -727,7 +752,8 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       // Hydrate the sticky-banner state. /hooks/pending returns the
       // awaiting_resolution events that haven't been closed by a matching
       // completed yet — required because Last-Event-ID replay only fires
-      // on SSE attach, and the SSE attach below is conditional on running.
+      // on SSE attach, and the SSE attach below is conditional on the
+      // session being in a live (SSE-holding) state.
       try {
         const res = await fetchFn(`${basePath}/sessions/${id}/hooks/pending`)
         if (res.ok && activeSessionIdRef.current === id) {
@@ -748,15 +774,15 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       // captured when this callback was created — the session may have been
       // freshly created and not yet present in the closure snapshot.
       const session = sessionsRef.current.find(s => s.session_id === id)
-      if (session?.state === 'running') {
+      if (shouldHoldSSE(session?.state)) {
         startSSE(id)
       }
     })()
   }, [closeSSE, loadHistory, startSSE, refreshSessionsImpl, clearCompacting])
 
   useEffect(() => {
-    if (activeSession?.state === 'running' && !sseAbort.current) {
-      startSSE(activeSession.session_id)
+    if (shouldHoldSSE(activeSession?.state) && !sseAbort.current) {
+      startSSE(activeSession!.session_id)
     }
   }, [activeSession?.state, activeSession?.session_id, startSSE])
 
