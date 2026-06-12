@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import { ARCHIVE_FOLDER, type UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
-import { HarnessFilterBar } from './HarnessFilterBar'
+import { HarnessFilterBar, sessionMode } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
 import { SplitButtons } from './SplitButtons'
 import { StatusDot } from './StatusDot'
 import {
   loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
+  loadExcludedTypes, loadExcludedPurposes, loadExcludedModes,
   saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
+  saveExcludedTypes, saveExcludedPurposes, saveExcludedModes,
 } from './persistence'
 import type { CtxMenuState, SplitMode } from './types'
 
@@ -40,6 +42,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   const newFolderRef = useRef<HTMLInputElement>(null)
   const [excludedHarnesses, setExcludedHarnesses] = useState<Set<string>>(loadExcludedHarnesses)
   const [excludedMachines, setExcludedMachines] = useState<Set<string>>(loadExcludedMachines)
+  const [excludedTypes, setExcludedTypes] = useState<Set<string>>(loadExcludedTypes)
+  const [excludedPurposes, setExcludedPurposes] = useState<Set<string>>(loadExcludedPurposes)
+  const [excludedModes, setExcludedModes] = useState<Set<string>>(loadExcludedModes)
   const [showNewMenu, setShowNewMenu] = useState(false)
 
   useEffect(() => {
@@ -76,9 +81,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
       if (excludedHarnesses.has(s.harness)) return false
       const machineID = s.instance_id ? instanceMachineByID.get(s.instance_id) : undefined
       if (machineID && excludedMachines.has(machineID)) return false
+      if (s.type && excludedTypes.has(s.type)) return false
+      if (s.purpose && excludedPurposes.has(s.purpose)) return false
+      if (excludedModes.has(sessionMode(s))) return false
       return true
     }),
-    [sessions, excludedHarnesses, excludedMachines, instanceMachineByID]
+    [sessions, excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes, instanceMachineByID]
   )
 
   const sorted = useMemo(() =>
@@ -128,15 +136,34 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     })
   }
 
+  const toggleClass = (dim: 'type' | 'purpose' | 'mode', value: string) => {
+    const [setter, saver] = dim === 'type'
+      ? [setExcludedTypes, saveExcludedTypes] as const
+      : dim === 'purpose'
+        ? [setExcludedPurposes, saveExcludedPurposes] as const
+        : [setExcludedModes, saveExcludedModes] as const
+    setter(prev => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      saver(next)
+      return next
+    })
+  }
+
   const clearSessionFilter = () => {
-    setExcludedHarnesses(prev => {
-      if (prev.size > 0) saveExcludedHarnesses(new Set())
+    const reset = (
+      setter: React.Dispatch<React.SetStateAction<Set<string>>>,
+      saver: (s: Set<string>) => void,
+    ) => setter(prev => {
+      if (prev.size > 0) saver(new Set())
       return prev.size === 0 ? prev : new Set()
     })
-    setExcludedMachines(prev => {
-      if (prev.size > 0) saveExcludedMachines(new Set())
-      return prev.size === 0 ? prev : new Set()
-    })
+    reset(setExcludedHarnesses, saveExcludedHarnesses)
+    reset(setExcludedMachines, saveExcludedMachines)
+    reset(setExcludedTypes, saveExcludedTypes)
+    reset(setExcludedPurposes, saveExcludedPurposes)
+    reset(setExcludedModes, saveExcludedModes)
   }
 
   const openSessionMenu = (e: React.MouseEvent, sessionId: string) => {
@@ -271,8 +298,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         instanceMachineByID={instanceMachineByID}
         excludedHarnesses={excludedHarnesses}
         excludedMachines={excludedMachines}
+        excludedTypes={excludedTypes}
+        excludedPurposes={excludedPurposes}
+        excludedModes={excludedModes}
         onToggleHarness={toggleHarness}
         onToggleMachine={toggleMachine}
+        onToggleClass={toggleClass}
         onClear={clearSessionFilter}
         basePath={basePath}
       />

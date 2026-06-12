@@ -187,6 +187,36 @@ export function saveExcludedMachines(s) {
     }
     catch { /* ignore */ }
 }
+// Excluded session classification values for the sidebar filter — one set
+// per orthogonal dimension (type / purpose / mode). Each stored under its
+// own localStorage key so they reset independently. Default = empty (show all).
+const TYPE_FILTER_KEY = 'bridge-ui-session-type-filter';
+const PURPOSE_FILTER_KEY = 'bridge-ui-session-purpose-filter';
+const MODE_FILTER_KEY = 'bridge-ui-session-mode-filter';
+function loadExcludedSet(key) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw)
+            return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    }
+    catch {
+        return new Set();
+    }
+}
+function saveExcludedSet(key, s) {
+    try {
+        localStorage.setItem(key, JSON.stringify([...s]));
+    }
+    catch { /* ignore */ }
+}
+export const loadExcludedTypes = () => loadExcludedSet(TYPE_FILTER_KEY);
+export const saveExcludedTypes = (s) => saveExcludedSet(TYPE_FILTER_KEY, s);
+export const loadExcludedPurposes = () => loadExcludedSet(PURPOSE_FILTER_KEY);
+export const saveExcludedPurposes = (s) => saveExcludedSet(PURPOSE_FILTER_KEY, s);
+export const loadExcludedModes = () => loadExcludedSet(MODE_FILTER_KEY);
+export const saveExcludedModes = (s) => saveExcludedSet(MODE_FILTER_KEY, s);
 // Composer drafts keyed by session id. Persisted as a single object so a
 // session's in-progress text survives layout changes, pane swaps, and reloads.
 function readDrafts() {

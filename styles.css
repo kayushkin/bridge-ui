@@ -2628,6 +2628,20 @@
   padding: 2px 8px 2px 6px;
   font-size: 0.72em;
 }
+/* Classification filter rows (type / purpose / mode) — a small leading
+ * label followed by text chips. Sits below the machine/harness icon rows. */
+.bc-class-filter-row { align-items: center; }
+.bc-class-filter-label {
+  font-size: 0.68em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  opacity: 0.7;
+  margin-right: 2px;
+  flex: 0 0 auto;
+}
+.bc-class-chip { padding: 1px 8px; }
+.bc-class-chip-name { line-height: 1.3; }
 .bc-inst-filter-clear {
   align-self: flex-end;
   border: none;
