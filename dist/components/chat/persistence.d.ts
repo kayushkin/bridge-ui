@@ -17,6 +17,8 @@ export declare function loadWorkspacesState(): PersistedWorkspaces;
 export declare function saveWorkspacesState(s: PersistedWorkspaces): void;
 export declare function loadExcludedHarnesses(): Set<string>;
 export declare function saveExcludedHarnesses(s: Set<string>): void;
+export declare function loadFilterCollapsed(): boolean;
+export declare function saveFilterCollapsed(collapsed: boolean): void;
 export declare function loadExcludedMachines(): Set<string>;
 export declare function saveExcludedMachines(s: Set<string>): void;
 export declare const loadExcludedTypes: () => Set<string>;

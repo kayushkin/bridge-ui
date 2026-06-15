@@ -38,7 +38,7 @@ function ClassFilterRow({ label, values, counts, excluded, onToggle }) {
                 return (_jsx("button", { type: "button", className: `bc-inst-chip bc-class-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggle(v), title: tooltip, children: _jsx("span", { className: "bc-class-chip-name", children: v }) }, v));
             })] }));
 }
-export function HarnessFilterBar({ machines, harnesses, sessions, instanceMachineByID, excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes, onToggleHarness, onToggleMachine, onToggleClass, onClear, basePath, }) {
+export function HarnessFilterBar({ machines, harnesses, sessions, instanceMachineByID, excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes, onToggleHarness, onToggleMachine, onToggleClass, onClear, basePath, collapsed, onToggleCollapsed, }) {
     const harnessMap = useMemo(() => {
         const m = new Map();
         for (const h of harnesses)
@@ -93,33 +93,34 @@ export function HarnessFilterBar({ machines, harnesses, sessions, instanceMachin
         classDims.mode.values.length > 1;
     if (visibleHarnesses.length <= 1 && machines.length <= 1 && !hasClassRows)
         return null;
-    const anyExcluded = visibleHarnesses.some(h => excludedHarnesses.has(h))
-        || machines.some(m => excludedMachines.has(m.id))
-        || excludedTypes.size > 0 || excludedPurposes.size > 0 || excludedModes.size > 0;
-    return (_jsxs("div", { className: "bc-inst-filter", children: [machines.length > 1 && (_jsx("div", { className: "bc-inst-filter-chips bc-inst-filter-machines", children: machines.map(m => {
-                    const active = !excludedMachines.has(m.id);
-                    const count = machineCounts.get(m.id) ?? 0;
-                    const tooltip = [
-                        m.name,
-                        m.hostname || `transport: ${m.transport}`,
-                        `${count} session${count === 1 ? '' : 's'}`,
-                        `click to ${active ? 'hide' : 'show'}`,
-                    ].filter(Boolean).join('\n');
-                    return (_jsxs("button", { type: "button", className: `bc-inst-chip bc-machine-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggleMachine(m.id), title: tooltip, children: [m.emoji
-                                ? _jsx("span", { className: "bc-inst-chip-emoji", children: m.emoji })
-                                : _jsx("span", { className: "bc-inst-chip-emoji", "aria-hidden": true, children: "\uD83D\uDDA5" }), _jsx("span", { className: "bc-machine-chip-name", children: m.name })] }, m.id));
-                }) })), visibleHarnesses.length > 1 && (_jsx("div", { className: "bc-inst-filter-chips", children: visibleHarnesses.map(h => {
-                    const info = harnessMap.get(h);
-                    const active = !excludedHarnesses.has(h);
-                    const count = harnessCounts.get(h) ?? 0;
-                    const lines = [
-                        info?.label || h,
-                        `${count} session${count === 1 ? '' : 's'}`,
-                        `click to ${active ? 'hide' : 'show'}`,
-                    ].filter(Boolean).join('\n');
-                    return (_jsx("button", { type: "button", className: `bc-inst-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggleHarness(h), title: lines, children: info?.image
-                            ? _jsx("img", { className: "bc-inst-chip-img", src: `${basePath}${info.image}`, alt: "" })
-                            : _jsx("span", { className: "bc-inst-chip-emoji", children: info?.emoji || '·' }) }, h));
-                }) })), _jsx(ClassFilterRow, { label: "Type", values: classDims.type.values, counts: classDims.type.counts, excluded: excludedTypes, onToggle: v => onToggleClass('type', v) }), _jsx(ClassFilterRow, { label: "Purpose", values: classDims.purpose.values, counts: classDims.purpose.counts, excluded: excludedPurposes, onToggle: v => onToggleClass('purpose', v) }), _jsx(ClassFilterRow, { label: "Mode", values: classDims.mode.values, counts: classDims.mode.counts, excluded: excludedModes, onToggle: v => onToggleClass('mode', v) }), anyExcluded && (_jsx("button", { type: "button", className: "bc-inst-filter-clear", onClick: onClear, title: "Show all sessions \u2014 clear every machine, harness, type, purpose and mode filter", children: "show all" }))] }));
+    const activeCount = visibleHarnesses.filter(h => excludedHarnesses.has(h)).length
+        + machines.filter(m => excludedMachines.has(m.id)).length
+        + excludedTypes.size + excludedPurposes.size + excludedModes.size;
+    const anyExcluded = activeCount > 0;
+    return (_jsxs("div", { className: "bc-inst-filter", children: [_jsxs("button", { type: "button", className: `bc-filter-toggle ${anyExcluded ? 'bc-filter-toggle-active' : ''}`, onClick: onToggleCollapsed, "aria-expanded": !collapsed, title: collapsed ? 'Show session filters' : 'Hide session filters', children: [_jsx("span", { className: "bc-filter-chevron", children: collapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-filter-label", children: "Filters" }), anyExcluded && _jsx("span", { className: "bc-filter-badge", children: activeCount })] }), !collapsed && (_jsxs("div", { className: "bc-inst-filter-body", children: [machines.length > 1 && (_jsx("div", { className: "bc-inst-filter-chips bc-inst-filter-machines", children: machines.map(m => {
+                            const active = !excludedMachines.has(m.id);
+                            const count = machineCounts.get(m.id) ?? 0;
+                            const tooltip = [
+                                m.name,
+                                m.hostname || `transport: ${m.transport}`,
+                                `${count} session${count === 1 ? '' : 's'}`,
+                                `click to ${active ? 'hide' : 'show'}`,
+                            ].filter(Boolean).join('\n');
+                            return (_jsxs("button", { type: "button", className: `bc-inst-chip bc-machine-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggleMachine(m.id), title: tooltip, children: [m.emoji
+                                        ? _jsx("span", { className: "bc-inst-chip-emoji", children: m.emoji })
+                                        : _jsx("span", { className: "bc-inst-chip-emoji", "aria-hidden": true, children: "\uD83D\uDDA5" }), _jsx("span", { className: "bc-machine-chip-name", children: m.name })] }, m.id));
+                        }) })), visibleHarnesses.length > 1 && (_jsx("div", { className: "bc-inst-filter-chips", children: visibleHarnesses.map(h => {
+                            const info = harnessMap.get(h);
+                            const active = !excludedHarnesses.has(h);
+                            const count = harnessCounts.get(h) ?? 0;
+                            const lines = [
+                                info?.label || h,
+                                `${count} session${count === 1 ? '' : 's'}`,
+                                `click to ${active ? 'hide' : 'show'}`,
+                            ].filter(Boolean).join('\n');
+                            return (_jsx("button", { type: "button", className: `bc-inst-chip ${active ? 'bc-inst-chip-active' : ''}`, onClick: () => onToggleHarness(h), title: lines, children: info?.image
+                                    ? _jsx("img", { className: "bc-inst-chip-img", src: `${basePath}${info.image}`, alt: "" })
+                                    : _jsx("span", { className: "bc-inst-chip-emoji", children: info?.emoji || '·' }) }, h));
+                        }) })), _jsx(ClassFilterRow, { label: "Type", values: classDims.type.values, counts: classDims.type.counts, excluded: excludedTypes, onToggle: v => onToggleClass('type', v) }), _jsx(ClassFilterRow, { label: "Purpose", values: classDims.purpose.values, counts: classDims.purpose.counts, excluded: excludedPurposes, onToggle: v => onToggleClass('purpose', v) }), _jsx(ClassFilterRow, { label: "Mode", values: classDims.mode.values, counts: classDims.mode.counts, excluded: excludedModes, onToggle: v => onToggleClass('mode', v) }), anyExcluded && (_jsx("button", { type: "button", className: "bc-inst-filter-clear", onClick: onClear, title: "Show all sessions \u2014 clear every machine, harness, type, purpose and mode filter", children: "show all" }))] }))] }));
 }
 //# sourceMappingURL=HarnessFilterBar.js.map

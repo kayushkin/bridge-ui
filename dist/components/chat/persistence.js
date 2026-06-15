@@ -5,6 +5,7 @@ const FILTER_KEY = 'bridge-ui-type-filter';
 const FOLDER_COLLAPSED_KEY = 'bridge-folder-collapsed';
 const WORKSPACES_KEY = 'bridge-ui-workspaces';
 const HARNESS_FILTER_KEY = 'bridge-ui-harness-filter';
+const FILTER_COLLAPSED_KEY = 'bridge-ui-filter-collapsed';
 const DRAFTS_KEY = 'bridge-ui-drafts';
 export const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1, attach: 1 };
 export function loadCollapseState() {
@@ -162,6 +163,23 @@ export function loadExcludedHarnesses() {
 export function saveExcludedHarnesses(s) {
     try {
         localStorage.setItem(HARNESS_FILTER_KEY, JSON.stringify([...s]));
+    }
+    catch { /* ignore */ }
+}
+// Collapsed state of the sidebar "Filters" section. Default = collapsed, so the
+// machine/harness/type/purpose/mode chip rows stay tucked away until opened.
+export function loadFilterCollapsed() {
+    try {
+        const raw = localStorage.getItem(FILTER_COLLAPSED_KEY);
+        return raw === null ? true : raw === 'true';
+    }
+    catch {
+        return true;
+    }
+}
+export function saveFilterCollapsed(collapsed) {
+    try {
+        localStorage.setItem(FILTER_COLLAPSED_KEY, String(collapsed));
     }
     catch { /* ignore */ }
 }

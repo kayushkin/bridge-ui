@@ -9,8 +9,10 @@ import { StatusDot } from './StatusDot'
 import {
   loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
   loadExcludedTypes, loadExcludedPurposes, loadExcludedModes,
+  loadFilterCollapsed,
   saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
   saveExcludedTypes, saveExcludedPurposes, saveExcludedModes,
+  saveFilterCollapsed,
 } from './persistence'
 import type { CtxMenuState, SplitMode } from './types'
 
@@ -45,6 +47,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   const [excludedTypes, setExcludedTypes] = useState<Set<string>>(loadExcludedTypes)
   const [excludedPurposes, setExcludedPurposes] = useState<Set<string>>(loadExcludedPurposes)
   const [excludedModes, setExcludedModes] = useState<Set<string>>(loadExcludedModes)
+  const [filterCollapsed, setFilterCollapsed] = useState<boolean>(loadFilterCollapsed)
   const [showNewMenu, setShowNewMenu] = useState(false)
 
   useEffect(() => {
@@ -147,6 +150,14 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
       if (next.has(value)) next.delete(value)
       else next.add(value)
       saver(next)
+      return next
+    })
+  }
+
+  const toggleFilterCollapsed = () => {
+    setFilterCollapsed(prev => {
+      const next = !prev
+      saveFilterCollapsed(next)
       return next
     })
   }
@@ -306,6 +317,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         onToggleClass={toggleClass}
         onClear={clearSessionFilter}
         basePath={basePath}
+        collapsed={filterCollapsed}
+        onToggleCollapsed={toggleFilterCollapsed}
       />
 
       {sorted.length === 0 && (

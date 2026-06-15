@@ -2589,11 +2589,45 @@
 
 /* Instance filter chips */
 .bc-inst-filter {
-  padding: 4px 10px 8px;
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+}
+.bc-inst-filter-body {
+  padding: 4px 10px 8px;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+}
+/* Collapsible "Filters" header — mirrors .bc-folder-header so the sidebar
+ * reads consistently. A small badge shows the active-filter count while the
+ * section is collapsed, so applied filters stay discoverable. */
+.bc-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82em;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.15s;
+}
+.bc-filter-toggle:hover { background: rgba(99, 102, 241, 0.06); }
+.bc-filter-toggle-active { color: var(--text); }
+.bc-filter-chevron { width: 10px; color: var(--text-dim); font-size: 0.8em; }
+.bc-filter-label { flex: 1; }
+.bc-filter-badge {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--accent);
+  font-size: 0.75em;
+  font-weight: 600;
 }
 .bc-inst-filter-chips {
   display: flex;

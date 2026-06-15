@@ -41,6 +41,8 @@ interface HarnessFilterBarProps {
   onToggleClass: (dim: ClassDim, value: string) => void
   onClear: () => void
   basePath: string
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }
 
 // One labelled row of text chips for a classification dimension. Values are
@@ -85,6 +87,7 @@ export function HarnessFilterBar({
   machines, harnesses, sessions, instanceMachineByID,
   excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes,
   onToggleHarness, onToggleMachine, onToggleClass, onClear, basePath,
+  collapsed, onToggleCollapsed,
 }: HarnessFilterBarProps) {
   const harnessMap = useMemo(() => {
     const m = new Map<string, HarnessInfo>()
@@ -142,12 +145,26 @@ export function HarnessFilterBar({
 
   if (visibleHarnesses.length <= 1 && machines.length <= 1 && !hasClassRows) return null
 
-  const anyExcluded = visibleHarnesses.some(h => excludedHarnesses.has(h))
-    || machines.some(m => excludedMachines.has(m.id))
-    || excludedTypes.size > 0 || excludedPurposes.size > 0 || excludedModes.size > 0
+  const activeCount = visibleHarnesses.filter(h => excludedHarnesses.has(h)).length
+    + machines.filter(m => excludedMachines.has(m.id)).length
+    + excludedTypes.size + excludedPurposes.size + excludedModes.size
+  const anyExcluded = activeCount > 0
 
   return (
     <div className="bc-inst-filter">
+      <button
+        type="button"
+        className={`bc-filter-toggle ${anyExcluded ? 'bc-filter-toggle-active' : ''}`}
+        onClick={onToggleCollapsed}
+        aria-expanded={!collapsed}
+        title={collapsed ? 'Show session filters' : 'Hide session filters'}
+      >
+        <span className="bc-filter-chevron">{collapsed ? '▸' : '▾'}</span>
+        <span className="bc-filter-label">Filters</span>
+        {anyExcluded && <span className="bc-filter-badge">{activeCount}</span>}
+      </button>
+      {!collapsed && (
+      <div className="bc-inst-filter-body">
       {machines.length > 1 && (
         <div className="bc-inst-filter-chips bc-inst-filter-machines">
           {machines.map(m => {
@@ -228,6 +245,8 @@ export function HarnessFilterBar({
         <button type="button" className="bc-inst-filter-clear" onClick={onClear} title="Show all sessions — clear every machine, harness, type, purpose and mode filter">
           show all
         </button>
+      )}
+      </div>
       )}
     </div>
   )
