@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import { ARCHIVE_FOLDER, type UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
-import { HarnessFilterBar, sessionMode } from './HarnessFilterBar'
+import { HarnessFilterBar, sessionMode, sessionStatusGroup } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
 import { SplitButtons } from './SplitButtons'
 import { StatusDot } from './StatusDot'
 import {
   loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed,
-  loadExcludedTypes, loadExcludedPurposes, loadExcludedModes,
+  loadExcludedTypes, loadExcludedPurposes, loadExcludedModes, loadExcludedStatuses,
   loadFilterCollapsed,
   saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed,
-  saveExcludedTypes, saveExcludedPurposes, saveExcludedModes,
+  saveExcludedTypes, saveExcludedPurposes, saveExcludedModes, saveExcludedStatuses,
   saveFilterCollapsed,
 } from './persistence'
 import type { CtxMenuState, SplitMode } from './types'
@@ -47,6 +47,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   const [excludedTypes, setExcludedTypes] = useState<Set<string>>(loadExcludedTypes)
   const [excludedPurposes, setExcludedPurposes] = useState<Set<string>>(loadExcludedPurposes)
   const [excludedModes, setExcludedModes] = useState<Set<string>>(loadExcludedModes)
+  const [excludedStatuses, setExcludedStatuses] = useState<Set<string>>(loadExcludedStatuses)
   const [filterCollapsed, setFilterCollapsed] = useState<boolean>(loadFilterCollapsed)
   const [showNewMenu, setShowNewMenu] = useState(false)
 
@@ -79,6 +80,13 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     return m
   }, [instances])
 
+  // Status is a derived dimension: bucket each session's canonical UI state
+  // (the same getSessionUIState that drives the status dot) into a coarse group.
+  const statusOf = useCallback(
+    (s: ManagedSession) => sessionStatusGroup(getSessionUIState(s)),
+    [getSessionUIState]
+  )
+
   const filtered = useMemo(() =>
     sessions.filter(s => {
       if (excludedHarnesses.has(s.harness)) return false
@@ -87,9 +95,11 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
       if (s.type && excludedTypes.has(s.type)) return false
       if (s.purpose && excludedPurposes.has(s.purpose)) return false
       if (excludedModes.has(sessionMode(s))) return false
+      const status = statusOf(s)
+      if (status && excludedStatuses.has(status)) return false
       return true
     }),
-    [sessions, excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes, instanceMachineByID]
+    [sessions, excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes, excludedStatuses, statusOf, instanceMachineByID]
   )
 
   const sorted = useMemo(() =>
@@ -139,12 +149,14 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     })
   }
 
-  const toggleClass = (dim: 'type' | 'purpose' | 'mode', value: string) => {
+  const toggleClass = (dim: 'type' | 'purpose' | 'mode' | 'status', value: string) => {
     const [setter, saver] = dim === 'type'
       ? [setExcludedTypes, saveExcludedTypes] as const
       : dim === 'purpose'
         ? [setExcludedPurposes, saveExcludedPurposes] as const
-        : [setExcludedModes, saveExcludedModes] as const
+        : dim === 'mode'
+          ? [setExcludedModes, saveExcludedModes] as const
+          : [setExcludedStatuses, saveExcludedStatuses] as const
     setter(prev => {
       const next = new Set(prev)
       if (next.has(value)) next.delete(value)
@@ -175,6 +187,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     reset(setExcludedTypes, saveExcludedTypes)
     reset(setExcludedPurposes, saveExcludedPurposes)
     reset(setExcludedModes, saveExcludedModes)
+    reset(setExcludedStatuses, saveExcludedStatuses)
   }
 
   const openSessionMenu = (e: React.MouseEvent, sessionId: string) => {
@@ -312,6 +325,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         excludedTypes={excludedTypes}
         excludedPurposes={excludedPurposes}
         excludedModes={excludedModes}
+        excludedStatuses={excludedStatuses}
+        statusOf={statusOf}
         onToggleHarness={toggleHarness}
         onToggleMachine={toggleMachine}
         onToggleClass={toggleClass}

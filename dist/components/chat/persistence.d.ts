@@ -27,6 +27,8 @@ export declare const loadExcludedPurposes: () => Set<string>;
 export declare const saveExcludedPurposes: (s: Set<string>) => void;
 export declare const loadExcludedModes: () => Set<string>;
 export declare const saveExcludedModes: (s: Set<string>) => void;
+export declare const loadExcludedStatuses: () => Set<string>;
+export declare const saveExcludedStatuses: (s: Set<string>) => void;
 export declare function loadDraft(sessionId: string): string;
 export declare function saveDraft(sessionId: string, text: string): void;
 export declare function clearDraft(sessionId: string): void;

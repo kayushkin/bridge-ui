@@ -144,7 +144,7 @@ export function saveExcludedHarnesses(s: Set<string>) {
 }
 
 // Collapsed state of the sidebar "Filters" section. Default = collapsed, so the
-// machine/harness/type/purpose/mode chip rows stay tucked away until opened.
+// machine/harness/type/purpose/mode/status chip rows stay tucked away until opened.
 export function loadFilterCollapsed(): boolean {
   try {
     const raw = localStorage.getItem(FILTER_COLLAPSED_KEY)
@@ -175,11 +175,14 @@ export function saveExcludedMachines(s: Set<string>) {
 }
 
 // Excluded session classification values for the sidebar filter — one set
-// per orthogonal dimension (type / purpose / mode). Each stored under its
-// own localStorage key so they reset independently. Default = empty (show all).
+// per orthogonal dimension (type / purpose / mode / status). Each stored under
+// its own localStorage key so they reset independently. Default = empty (show
+// all). Status is a derived dimension (bucketed from each session's live UI
+// state — see sessionStatusGroup), not a stored session field like the others.
 const TYPE_FILTER_KEY = 'bridge-ui-session-type-filter'
 const PURPOSE_FILTER_KEY = 'bridge-ui-session-purpose-filter'
 const MODE_FILTER_KEY = 'bridge-ui-session-mode-filter'
+const STATUS_FILTER_KEY = 'bridge-ui-session-status-filter'
 
 function loadExcludedSet(key: string): Set<string> {
   try {
@@ -200,6 +203,8 @@ export const loadExcludedPurposes = () => loadExcludedSet(PURPOSE_FILTER_KEY)
 export const saveExcludedPurposes = (s: Set<string>) => saveExcludedSet(PURPOSE_FILTER_KEY, s)
 export const loadExcludedModes = () => loadExcludedSet(MODE_FILTER_KEY)
 export const saveExcludedModes = (s: Set<string>) => saveExcludedSet(MODE_FILTER_KEY, s)
+export const loadExcludedStatuses = () => loadExcludedSet(STATUS_FILTER_KEY)
+export const saveExcludedStatuses = (s: Set<string>) => saveExcludedSet(STATUS_FILTER_KEY, s)
 
 // Composer drafts keyed by session id. Persisted as a single object so a
 // session's in-progress text survives layout changes, pane swaps, and reloads.
