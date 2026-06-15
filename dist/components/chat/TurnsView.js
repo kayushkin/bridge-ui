@@ -1,8 +1,28 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { UsageLine } from './UsageLine';
 import { formatHMS } from './utils';
+// Persisted on/off state for rendering assistant response bodies as markdown.
+// Defaults to on; any value other than "off" is treated as enabled so the
+// first-run default and unparseable values both render markdown.
+const MD_PREF_KEY = 'bridge-turns-markdown';
+function readMarkdownPref() {
+    try {
+        return localStorage.getItem(MD_PREF_KEY) !== 'off';
+    }
+    catch {
+        return true;
+    }
+}
+function ResponseBody({ text, markdown }) {
+    if (markdown) {
+        return (_jsx("div", { className: "bc-turns-text bc-turns-md", children: _jsx(ReactMarkdown, { remarkPlugins: [remarkGfm], children: text }) }));
+    }
+    return _jsx("div", { className: "bc-turns-text", children: text });
+}
 function rowsToTurns(rows) {
     // Within one assistant turn, the harness can emit several text blocks
     // separated by tool calls (e.g. "Let me check…" → tool → "Found it…" →
@@ -195,19 +215,30 @@ function TurnsAside({ variant, icon, label, text, live }) {
 export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, paneKey }) {
     const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTurns(rows), [rows]);
+    const [markdown, setMarkdown] = useState(readMarkdownPref);
     const onHeaderKey = useCallback((e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onToggleCollapse();
         }
     }, [onToggleCollapse]);
-    return (_jsxs("div", { className: "bc-turns-pane", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-turns-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide turns", "aria-label": "Hide turns", children: [_jsx("span", { className: "bc-turns-title", children: "Turns" }), _jsx("span", { className: "bc-turns-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-turns-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-turns-body", children: [items.length === 0 && _jsx("div", { className: "bc-turns-empty", children: "No messages yet" }), items.map(it => {
+    const toggleMarkdown = useCallback(() => {
+        setMarkdown(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem(MD_PREF_KEY, next ? 'on' : 'off');
+            }
+            catch { /* ignore */ }
+            return next;
+        });
+    }, []);
+    return (_jsxs("div", { className: "bc-turns-pane", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-turns-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide turns", "aria-label": "Hide turns", children: [_jsx("span", { className: "bc-turns-title", children: "Turns" }), _jsx("span", { className: "bc-turns-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("button", { type: "button", className: "bc-turns-md-toggle", onClick: e => { e.stopPropagation(); toggleMarkdown(); }, title: markdown ? 'Rendering markdown — click to show raw text' : 'Showing raw text — click to render markdown', "aria-label": "Toggle markdown rendering", "aria-pressed": markdown, children: markdown ? 'MD' : 'TXT' }), _jsx("span", { className: "bc-turns-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-turns-body", children: [items.length === 0 && _jsx("div", { className: "bc-turns-empty", children: "No messages yet" }), items.map(it => {
                         if (it.isMarker) {
                             return (_jsxs("div", { className: `bc-turns-marker bc-turns-marker-${it.markerKind}`, role: "separator", children: [_jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true }), _jsx("span", { className: "bc-turns-marker-text", children: it.text }), _jsx("span", { className: "bc-turns-marker-ts", children: formatHMS(it.ts) }), _jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true })] }, it.key));
                         }
                         const hasAside = !!(it.thinking || it.narration);
                         const asideLive = hasAside && !it.turnDone;
-                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), asideLive && it.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && it.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), it.isStreaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: it.thinking, live: asideLive })), it.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: it.narration, live: asideLive })), it.text && _jsx("div", { className: "bc-turns-text", children: it.text })] }, it.key));
+                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), asideLive && it.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && it.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), it.isStreaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: it.thinking, live: asideLive })), it.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: it.narration, live: asideLive })), it.text && _jsx(ResponseBody, { text: it.text, markdown: markdown && it.actor === 'assistant' })] }, it.key));
                     }), compacting && (_jsxs("div", { className: "bc-turns-compacting", role: "status", "aria-live": "polite", children: [_jsx("span", { className: "bc-turns-compacting-bar", "aria-hidden": true }), _jsx("span", { className: "bc-turns-compacting-text", children: "Compacting context\u2026" })] })), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }));
 }
 //# sourceMappingURL=TurnsView.js.map

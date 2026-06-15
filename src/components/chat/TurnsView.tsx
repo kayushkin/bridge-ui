@@ -1,9 +1,31 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { UsageLine } from './UsageLine'
 import { formatHMS } from './utils'
 import type { TurnsItem } from './types'
+
+// Persisted on/off state for rendering assistant response bodies as markdown.
+// Defaults to on; any value other than "off" is treated as enabled so the
+// first-run default and unparseable values both render markdown.
+const MD_PREF_KEY = 'bridge-turns-markdown'
+
+function readMarkdownPref(): boolean {
+  try { return localStorage.getItem(MD_PREF_KEY) !== 'off' } catch { return true }
+}
+
+function ResponseBody({ text, markdown }: { text: string; markdown: boolean }) {
+  if (markdown) {
+    return (
+      <div className="bc-turns-text bc-turns-md">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div>
+    )
+  }
+  return <div className="bc-turns-text">{text}</div>
+}
 
 function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   // Within one assistant turn, the harness can emit several text blocks
@@ -220,10 +242,19 @@ export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, pa
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTurns(rows), [rows])
+  const [markdown, setMarkdown] = useState<boolean>(readMarkdownPref)
 
   const onHeaderKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() }
   }, [onToggleCollapse])
+
+  const toggleMarkdown = useCallback(() => {
+    setMarkdown(prev => {
+      const next = !prev
+      try { localStorage.setItem(MD_PREF_KEY, next ? 'on' : 'off') } catch { /* ignore */ }
+      return next
+    })
+  }, [])
 
   return (
     <div className="bc-turns-pane" style={style} data-pane={paneKey}>
@@ -239,6 +270,14 @@ export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, pa
         <span className="bc-turns-title">Turns</span>
         <span className="bc-turns-count">{items.length}</span>
         <span className="bc-spacer" />
+        <button
+          type="button"
+          className="bc-turns-md-toggle"
+          onClick={e => { e.stopPropagation(); toggleMarkdown() }}
+          title={markdown ? 'Rendering markdown — click to show raw text' : 'Showing raw text — click to render markdown'}
+          aria-label="Toggle markdown rendering"
+          aria-pressed={markdown}
+        >{markdown ? 'MD' : 'TXT'}</button>
         <span className="bc-turns-collapse-btn" aria-hidden="true">×</span>
       </div>
       <div ref={containerRef} className="bc-turns-body">
@@ -287,7 +326,7 @@ export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, pa
                   live={asideLive}
                 />
               )}
-              {it.text && <div className="bc-turns-text">{it.text}</div>}
+              {it.text && <ResponseBody text={it.text} markdown={markdown && it.actor === 'assistant'} />}
             </div>
           )
         })}
