@@ -19,7 +19,7 @@ export function EditableName({ value, onSave, className }: {
   }
 
   if (!editing) {
-    return <span className={className} onDoubleClick={() => setEditing(true)} title="Double-click to rename">{value}</span>
+    return <span className={className} onDoubleClick={() => setEditing(true)} title={value}>{value}</span>
   }
 
   return (

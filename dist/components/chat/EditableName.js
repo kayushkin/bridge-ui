@@ -14,7 +14,7 @@ export function EditableName({ value, onSave, className }) {
         setEditing(false);
     };
     if (!editing) {
-        return _jsx("span", { className: className, onDoubleClick: () => setEditing(true), title: "Double-click to rename", children: value });
+        return _jsx("span", { className: className, onDoubleClick: () => setEditing(true), title: value, children: value });
     }
     return (_jsx("input", { ref: inputRef, className: "bc-inline-edit", value: draft, onChange: e => setDraft(e.target.value), onBlur: commit, onKeyDown: e => { if (e.key === 'Enter')
             commit(); if (e.key === 'Escape')
