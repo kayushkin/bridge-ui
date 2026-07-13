@@ -27,6 +27,19 @@ function ResponseBody({ text, markdown }: { text: string; markdown: boolean }) {
   return <div className="bc-turns-text">{text}</div>
 }
 
+// Claude Code reports every prompt twice: once through the stream-json /
+// rollout parser, and once through its OTel `user_prompt` log. The two land as
+// separate events with distinct message_ids AND distinct turn_ids, so there is
+// no shared id to correlate them by — but llm-bridge-claudecode tags the OTel
+// copy `extensions.source = "otel"` (otel.go tagOTelSource) precisely so
+// consumers can tell the copies apart. Read that tag rather than guessing.
+function isOTelSourced(row: LogRow): boolean {
+  return row.events.some((e) => {
+    const source = (e as { extensions?: { source?: unknown } }).extensions?.source
+    return source === 'otel'
+  })
+}
+
 function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   // Within one assistant turn, the harness can emit several text blocks
   // separated by tool calls (e.g. "Let me check…" → tool → "Found it…" →
@@ -48,6 +61,14 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   // orphan optimistic rows when the SSE user_message arrived before /send's
   // response could patch the optimistic row's key into the same group.
   const canonicalUserTexts = new Set<string>()
+  // How many harness-sourced (non-OTel) user_message rows exist per prompt text.
+  // Used to absorb the redundant OTel copy of the same prompt. This counts
+  // rather than using a Set so the two sources stay genuinely redundant: N
+  // harness copies absorb N OTel copies, and any surplus OTel copy still
+  // renders. So if either source drops an event in transit, the prompt still
+  // appears exactly once — and a real re-send of identical text still appears
+  // twice, because it contributes its own harness copy to the count.
+  const harnessUserTextCounts = new Map<string, number>()
   for (const r of rows) {
     if (r.kind === 'result' && r.done && r.messageId && r.turnId) {
       let s = turnResultMsgIds.get(r.turnId)
@@ -61,6 +82,9 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
     }
     if (r.kind === 'user_message' && r.messageId && r.text) {
       canonicalUserTexts.add(r.text)
+      if (!isOTelSourced(r)) {
+        harnessUserTextCounts.set(r.text, (harnessUserTextCounts.get(r.text) ?? 0) + 1)
+      }
     }
   }
 
@@ -70,18 +94,21 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   for (const row of rows) {
     if (row.kind === 'user_message' && row.text) {
       if (!row.messageId && canonicalUserTexts.has(row.text)) continue
-      // Collapse duplicate user_message rows for the same prompt. The
-      // bridge records a user message from two independent ingestion
-      // paths — stream-json / rollout tailer, and Claude Code's OTel
-      // `user_prompt` log — so one prompt can land as two events with
-      // different message_ids. Either source may be absent, so we don't
-      // pick a winner: we drop a user_message whose text repeats the
-      // immediately-preceding user item. The two duplicates always arrive
-      // back-to-back (before the assistant responds), so an assistant or
-      // system turn between two identical prompts breaks the run and a
-      // genuine re-send of the same text still renders twice.
-      const prevItem = out[out.length - 1]
-      if (prevItem && prevItem.actor === 'user' && prevItem.text === row.text) continue
+      // Drop the OTel copy of a prompt only when a harness-sourced copy exists
+      // to stand in for it. This cannot be a positional check: Claude Code's
+      // OTel exporter batches on a ~1s interval, so when the assistant starts
+      // replying before that batch flushes, the OTel copy lands *after* the
+      // reply and is no longer adjacent to the prompt it duplicates.
+      // Unmatched OTel rows must still render — in PTY mode the OTel log is
+      // the only source for what the user typed (keystrokes go through the pty
+      // fd, never through /send), so there is no harness copy to pair with.
+      if (isOTelSourced(row)) {
+        const unabsorbed = harnessUserTextCounts.get(row.text) ?? 0
+        if (unabsorbed > 0) {
+          harnessUserTextCounts.set(row.text, unabsorbed - 1)
+          continue
+        }
+      }
       out.push({
         key: `tv_user_${row.key}`,
         actor: 'user',
