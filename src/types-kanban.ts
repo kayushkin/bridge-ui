@@ -85,6 +85,11 @@ export interface NoteboardItem {
   links: string[]
   created_at: string
   updated_at: string
+  /** The agent gate. Set => this work is parked and no autoworker will pick it
+   * up, in any column. Separate from `status` on purpose: a held card is still
+   * open work, it just isn't cleared to run unattended. */
+  held_at?: string | null
+  hold_reason?: string
   [extra: string]: unknown
 }
 

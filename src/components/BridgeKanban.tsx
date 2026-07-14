@@ -203,6 +203,18 @@ export function BridgeKanban() {
                   onMoveCard={(cardID, columnID) => k.moveCard(cardID, columnID)}
                   onOpenCard={(cardID) => setDrawerCardID(cardID)}
                   onOpenChat={openSessionLink}
+                  onStopCard={async (cardID) => {
+                    // Parking work nobody is doing yet is cheap and reversible, so
+                    // it just happens. Interrupting an agent mid-turn is not the
+                    // same act, and the card's own session link is what tells the
+                    // two apart — so only that case asks.
+                    const card = cv.cards?.find(c => c.placement.card_id === cardID)
+                    if (card && sessionLink(card)) {
+                      if (!confirm('This card has a running session. Stop will pause the agent mid-turn (resumable) and park the work. Continue?')) return false
+                    }
+                    return k.stopCard(cardID)
+                  }}
+                  onPlayCard={(cardID) => k.playCard(cardID)}
                   onDeleteColumn={async () => {
                     if ((cv.cards?.length ?? 0) > 0) {
                       if (!confirm(`Column "${cv.column.name}" has ${cv.cards!.length} cards. Delete column AND detach those cards?`)) return
@@ -323,6 +335,8 @@ function ColumnPane({
   onMoveCard,
   onOpenCard,
   onOpenChat,
+  onStopCard,
+  onPlayCard,
   onDeleteColumn,
 }: {
   cv: ColumnView
@@ -336,6 +350,8 @@ function ColumnPane({
   onMoveCard: (cardID: string, columnID: string) => Promise<boolean>
   onOpenCard: (cardID: string) => void
   onOpenChat: OpenChatFn
+  onStopCard: (cardID: string) => Promise<boolean>
+  onPlayCard: (cardID: string) => Promise<boolean>
   onDeleteColumn: () => void
 }) {
   const cards = cv.cards ?? []
@@ -389,6 +405,8 @@ function ColumnPane({
               onMove={onMoveCard}
               onOpen={() => onOpenCard(c.placement.card_id)}
               onOpenChat={onOpenChat}
+              onStop={onStopCard}
+              onPlay={onPlayCard}
             />
           ))}
           {cards.length === 0 && (
@@ -441,6 +459,8 @@ function CardTile({
   onMove,
   onOpen,
   onOpenChat,
+  onStop,
+  onPlay,
 }: {
   card: CardView
   currentColumn: string
@@ -448,6 +468,8 @@ function CardTile({
   onMove: (cardID: string, columnID: string) => Promise<boolean>
   onOpen: () => void
   onOpenChat: OpenChatFn
+  onStop: (cardID: string) => Promise<boolean>
+  onPlay: (cardID: string) => Promise<boolean>
 }) {
   const item = card.item
   if (!item) {
@@ -461,9 +483,18 @@ function CardTile({
   const tags: string[] = Array.isArray(item.tags) ? item.tags : []
   const status = item.status as string
   const session = sessionLink(card)
+  // The gate is a property of the work, not of the column it sits in — so the
+  // button renders on every card in every column, not just in a gate column.
+  const held = !!item.held_at
   return (
-    <div className="bk-card" onClick={onOpen}>
+    <div className={`bk-card${held ? ' bk-card-held' : ''}`} onClick={onOpen}>
       <div className="bk-card-title">{item.title}</div>
+      {held && (
+        <div className="bk-card-hold" title={item.hold_reason || 'No reason given'}>
+          ⏸ held — no agent will pick this up
+          {item.hold_reason ? `: ${item.hold_reason}` : ''}
+        </div>
+      )}
       {tags.length > 0 && (
         <div className="bk-card-tags">
           {tags.map(t => <span key={t} className="bk-tag">{t}</span>)}
@@ -471,6 +502,17 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
+        <button
+          type="button"
+          className={held ? 'bk-card-play' : 'bk-card-stop'}
+          title={held
+            ? 'Play — clear the hold so agents may work this, and resume its session if it was paused'
+            : 'Stop — park this work so no agent picks it up, and pause any session already running it'}
+          onClick={e => {
+            e.stopPropagation()
+            held ? onPlay(card.placement.card_id) : onStop(card.placement.card_id)
+          }}
+        >{held ? '▶' : '⏸'}</button>
         {session && (
           <button
             type="button"

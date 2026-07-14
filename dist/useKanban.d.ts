@@ -22,6 +22,10 @@ export interface CreateCardArgs {
     list_id?: string;
     column_id: string;
     position?: number;
+    /** Create the card already parked, so no autoworker tick can pick the work up
+     * in the gap between the card appearing and a human seeing it. */
+    hold?: boolean;
+    hold_reason?: string;
 }
 /**
  * useKanban — list/create boards and (when a board id is given) load its
@@ -43,6 +47,10 @@ export declare function useKanban(boardID: string | null, options?: UseKanbanOpt
     moveCard: (cardID: string, columnID: string, position?: number) => Promise<boolean>;
     patchCard: (cardID: string, patch: Record<string, unknown>) => Promise<boolean>;
     deleteCard: (cardID: string, hard?: boolean) => Promise<boolean>;
+    holdCard: (cardID: string, reason?: string) => Promise<boolean>;
+    unholdCard: (cardID: string) => Promise<boolean>;
+    stopCard: (cardID: string, reason?: string) => Promise<boolean>;
+    playCard: (cardID: string) => Promise<boolean>;
     listCardLinks: (cardID: string) => Promise<CardLink[]>;
     addCardLink: (cardID: string, entity_type: string, entity_ref: string, label?: string) => Promise<boolean>;
     deleteCardLink: (linkID: string) => Promise<boolean>;

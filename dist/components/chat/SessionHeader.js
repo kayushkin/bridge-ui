@@ -92,7 +92,7 @@ function SessionDetailsPanel({ session }) {
         ['session id', fmt(session.session_id), true],
         ['harness session', fmt(session.harness_session_id), true],
         ['parent', fmt(session.parent_id), true],
-        ['spawner', fmt(session.spawner_id), true],
+        ['spawned by', fmt(session.manager_session_id), true],
         ['pid', session.pid ? String(session.pid) : '—'],
         ['created', fmtDate(session.created_at)],
         ['updated', fmtDate(session.updated_at)],

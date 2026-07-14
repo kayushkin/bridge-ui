@@ -4545,6 +4545,28 @@
 }
 .bk-card-chat:hover { border-color: var(--accent); color: var(--accent); }
 
+/* The hold gate. A held card must be obvious at a glance across the whole board
+   — the whole failure mode this guards against is work quietly sitting parked
+   (or quietly NOT parked) without anyone noticing which. */
+.bk-card-stop, .bk-card-play {
+  font-size: 0.8em; padding: 1px 6px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 3px; color: inherit; cursor: pointer;
+}
+.bk-card-stop:hover { border-color: var(--warn, #d08770); color: var(--warn, #d08770); }
+.bk-card-play:hover { border-color: var(--accent); color: var(--accent); }
+
+.bk-card-held {
+  border-left: 3px solid var(--warn, #d08770);
+  opacity: 0.75;
+}
+.bk-card-hold {
+  font-size: 0.78em;
+  color: var(--warn, #d08770);
+  margin: 2px 0 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .bk-new-form {
   display: flex; flex-direction: column; gap: 6px;
   padding: 8px;

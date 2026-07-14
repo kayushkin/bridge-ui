@@ -29,6 +29,10 @@ export interface CreateCardArgs {
   list_id?: string
   column_id: string
   position?: number
+  /** Create the card already parked, so no autoworker tick can pick the work up
+   * in the gap between the card appearing and a human seeing it. */
+  hold?: boolean
+  hold_reason?: string
 }
 
 /**
@@ -37,7 +41,9 @@ export interface CreateCardArgs {
  * All mutate actions auto-refresh the affected scope.
  */
 export function useKanban(boardID: string | null, options: UseKanbanOptions = {}) {
-  const { fetch: fetchFn, kanbanStoreBasePath } = useBridgeConfig()
+  // basePath is llm-bridge-server: the stop button has to reach past kanban-store
+  // to interrupt the session that is actually running the card's work.
+  const { fetch: fetchFn, kanbanStoreBasePath, basePath } = useBridgeConfig()
   const enabled = !!kanbanStoreBasePath
   const { loadBoards = true, loadEntityTypes = true } = options
 
@@ -184,6 +190,36 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     return true
   }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
 
+  /**
+   * holdCard / unholdCard — the stop/play button.
+   *
+   * The hold lives on the noteboard item, not on this board, which is why it
+   * works from ANY column rather than only from a designated gate column, and
+   * why it also binds on the autoworker's noteboard-discovery path, which never
+   * looks at a board at all.
+   */
+  const holdCard = useCallback(async (cardID: string, reason = ''): Promise<boolean> => {
+    if (!enabled) return false
+    const res = await fetchFn(`${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}/hold`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    })
+    if (!res.ok) { setError(`holdCard HTTP ${res.status}`); return false }
+    await fetchView()
+    return true
+  }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
+
+  const unholdCard = useCallback(async (cardID: string): Promise<boolean> => {
+    if (!enabled) return false
+    const res = await fetchFn(`${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}/unhold`, {
+      method: 'POST',
+    })
+    if (!res.ok) { setError(`unholdCard HTTP ${res.status}`); return false }
+    await fetchView()
+    return true
+  }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
+
   const deleteCard = useCallback(async (cardID: string, hard = false): Promise<boolean> => {
     if (!enabled) return false
     const url = `${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}${hard ? '?hard=true' : ''}`
@@ -199,6 +235,73 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     if (!res.ok) return []
     return (await res.json()) ?? []
   }, [fetchFn, kanbanStoreBasePath, enabled])
+
+  /**
+   * stopCard — the stop button, in whichever column the card is sitting.
+   *
+   * Two halves, because a card can be gated before it runs OR already running:
+   *   1. Hold the item, so no future autoworker tick dispatches it.
+   *   2. Interrupt any session already working it, so the agent stops NOW.
+   *
+   * The card does not move. It stays In Progress and paused, which keeps its
+   * session link meaningful — a card bounced back to Queued would have a link to
+   * a session that is no longer working it.
+   *
+   * Interrupt (not kill) is deliberate: llm-bridge models it as SessionPaused,
+   * "user-interrupted, can be resumed", so pressing play genuinely resumes the
+   * turn rather than starting the task over.
+   */
+  const stopCard = useCallback(async (cardID: string, reason = ''): Promise<boolean> => {
+    if (!enabled) return false
+    if (!(await holdCard(cardID, reason))) return false
+
+    const sessions = (await listCardLinks(cardID))
+      .filter(l => l.entity_type === 'session')
+      .map(l => l.entity_ref)
+
+    // A failed interrupt must not read as a successful stop. The hold already
+    // landed, so nothing NEW will be dispatched — but the agent already running
+    // is still running, and saying otherwise is the one lie this button cannot
+    // afford to tell.
+    let allPaused = true
+    for (const sid of sessions) {
+      const res = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sid)}/interrupt`, { method: 'POST' })
+      if (!res.ok) {
+        allPaused = false
+        setError(`held the card, but session ${sid} did not interrupt (HTTP ${res.status}) — it may still be working`)
+      }
+    }
+    await fetchView()
+    return allPaused
+  }, [fetchFn, basePath, enabled, holdCard, listCardLinks, fetchView])
+
+  /**
+   * playCard — the play button: clear the gate, and resume whatever we paused.
+   *
+   * A session is only resumed if it is actually `paused`. Blindly POSTing resume
+   * to every linked session would also poke sessions that ended on their own —
+   * play means "undo the stop", not "run this again", and a card can carry links
+   * to sessions from earlier, completed dispatches.
+   */
+  const playCard = useCallback(async (cardID: string): Promise<boolean> => {
+    if (!enabled) return false
+    if (!(await unholdCard(cardID))) return false
+
+    const sessions = (await listCardLinks(cardID))
+      .filter(l => l.entity_type === 'session')
+      .map(l => l.entity_ref)
+
+    for (const sid of sessions) {
+      const get = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sid)}`)
+      if (!get.ok) continue
+      const session = await get.json().catch(() => null)
+      if (session?.state !== 'paused') continue
+      const res = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sid)}/resume`, { method: 'POST' })
+      if (!res.ok) setError(`cleared the hold, but session ${sid} did not resume (HTTP ${res.status})`)
+    }
+    await fetchView()
+    return true
+  }, [fetchFn, basePath, enabled, unholdCard, listCardLinks, fetchView])
 
   const addCardLink = useCallback(async (cardID: string, entity_type: string, entity_ref: string, label?: string): Promise<boolean> => {
     if (!enabled) return false
@@ -275,6 +378,10 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     moveCard,
     patchCard,
     deleteCard,
+    holdCard,
+    unholdCard,
+    stopCard,
+    playCard,
     listCardLinks,
     addCardLink,
     deleteCardLink,
@@ -287,6 +394,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     fetchBoards, fetchView,
     createBoard, deleteBoard, createColumn, deleteColumn,
     createCard, moveCard, patchCard, deleteCard,
+    holdCard, unholdCard, stopCard, playCard,
     listCardLinks, addCardLink, deleteCardLink,
     listCardsForEntity, listEntityTags, addEntityTag, deleteEntityTag,
   ])
