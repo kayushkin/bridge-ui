@@ -4567,6 +4567,19 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* Spend ceiling. Distinct from the held banner: this is the ceiling that has
+   NOT yet been hit — informational, not a stop. */
+.bk-card-ceiling {
+  font-size: 0.75em;
+  color: var(--muted, #8a8a8a);
+  margin: 2px 0;
+}
+.bk-form-check {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.85em;
+}
+.bk-form-check input[type="checkbox"] { width: auto; }
+
 .bk-new-form {
   display: flex; flex-direction: column; gap: 6px;
   padding: 8px;

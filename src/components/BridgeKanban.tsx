@@ -346,7 +346,7 @@ function ColumnPane({
   onCompose: () => void
   composeOpen: boolean
   onCancelCompose: () => void
-  onCreateCard: (args: { title: string; body?: string; tags?: string[] }) => void | Promise<void>
+  onCreateCard: (args: NewCardArgs) => void | Promise<void>
   onMoveCard: (cardID: string, columnID: string) => Promise<boolean>
   onOpenCard: (cardID: string) => void
   onOpenChat: OpenChatFn
@@ -418,32 +418,65 @@ function ColumnPane({
   )
 }
 
+/** What the new-card form collects. Mirrors the subset of CreateCardArgs the
+ *  form exposes; column_id is supplied by the column that owns the form. */
+interface NewCardArgs {
+  title: string
+  body?: string
+  tags?: string[]
+  hold?: boolean
+  hold_reason?: string
+  auto_hold_at_usd?: number
+}
+
 function NewCardForm({
   onCreate,
   onCancel,
 }: {
-  onCreate: (args: { title: string; body?: string; tags?: string[] }) => void | Promise<void>
+  onCreate: (args: NewCardArgs) => void | Promise<void>
   onCancel: () => void
 }) {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [tags, setTags] = useState('')
+  const [hold, setHold] = useState(false)
+  const [ceiling, setCeiling] = useState('')
   return (
     <form
       className="bk-new-form bk-new-card"
       onSubmit={e => {
         e.preventDefault()
         if (!title.trim()) return
+        // An empty box is NO ceiling, not a ceiling of zero — and a ceiling of
+        // zero is a real thing ("stop before spending a cent"). parseFloat('')
+        // is NaN, so the empty case is filtered out explicitly rather than
+        // being allowed to fall through as 0.
+        const parsed = parseFloat(ceiling)
+        const auto_hold_at_usd = ceiling.trim() === '' || Number.isNaN(parsed) ? undefined : parsed
         onCreate({
           title: title.trim(),
           body: body.trim() || undefined,
           tags: tags.split(',').map(s => s.trim()).filter(Boolean),
+          hold: hold || undefined,
+          hold_reason: hold ? 'created held' : undefined,
+          auto_hold_at_usd,
         })
       }}
     >
       <input autoFocus placeholder="Card title" value={title} onChange={e => setTitle(e.target.value)} />
       <textarea placeholder="Body (markdown, optional)" rows={3} value={body} onChange={e => setBody(e.target.value)} />
       <input placeholder="tags (comma-separated)" value={tags} onChange={e => setTags(e.target.value)} />
+      <label className="bk-form-check" title="Create this card parked: no agent will pick it up until you press play.">
+        <input type="checkbox" checked={hold} onChange={e => setHold(e.target.checked)} />
+        Start held (agents can't pick this up)
+      </label>
+      <input
+        type="number" min="0" step="0.50"
+        placeholder="Auto-hold at $ (optional — blank = no limit)"
+        value={ceiling}
+        onChange={e => setCeiling(e.target.value)}
+        title="Once this card's agent sessions have cost this much in total, it is held automatically. Each session is also capped at whatever is left."
+      />
       <div className="bk-form-actions">
         <button type="submit" className="bi-save-btn">Add card</button>
         <button type="button" onClick={onCancel}>Cancel</button>
@@ -486,9 +519,18 @@ function CardTile({
   // The gate is a property of the work, not of the column it sits in — so the
   // button renders on every card in every column, not just in a gate column.
   const held = !!item.held_at
+  const ceiling = typeof item.auto_hold_at_usd === 'number' ? item.auto_hold_at_usd : null
   return (
     <div className={`bk-card${held ? ' bk-card-held' : ''}`} onClick={onOpen}>
       <div className="bk-card-title">{item.title}</div>
+      {ceiling !== null && (
+        <div
+          className="bk-card-ceiling"
+          title={`Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`}
+        >
+          ⛽ auto-hold at ${ceiling.toFixed(2)}
+        </div>
+      )}
       {held && (
         <div className="bk-card-hold" title={item.hold_reason || 'No reason given'}>
           ⏸ held — no agent will pick this up

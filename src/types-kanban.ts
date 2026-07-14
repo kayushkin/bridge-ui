@@ -90,6 +90,9 @@ export interface NoteboardItem {
    * open work, it just isn't cleared to run unattended. */
   held_at?: string | null
   hold_reason?: string
+  /** Spend ceiling: this card auto-holds once its agent sessions have cost this
+   * much in total. Absent/null = no ceiling. Zero is a REAL ceiling. */
+  auto_hold_at_usd?: number | null
   [extra: string]: unknown
 }
 

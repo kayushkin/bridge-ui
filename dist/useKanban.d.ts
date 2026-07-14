@@ -26,6 +26,10 @@ export interface CreateCardArgs {
      * in the gap between the card appearing and a human seeing it. */
     hold?: boolean;
     hold_reason?: string;
+    /** Spend ceiling: auto-hold this card once its agent sessions have cost this
+     * much in total. Undefined = no ceiling. Zero is a REAL ceiling ("stop before
+     * spending a cent"), so callers must not coerce an empty input to 0. */
+    auto_hold_at_usd?: number;
 }
 /**
  * useKanban — list/create boards and (when a board id is given) load its

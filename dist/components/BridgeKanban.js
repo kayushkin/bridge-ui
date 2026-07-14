@@ -184,16 +184,27 @@ function NewCardForm({ onCreate, onCancel, }) {
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [tags, setTags] = useState('');
+    const [hold, setHold] = useState(false);
+    const [ceiling, setCeiling] = useState('');
     return (_jsxs("form", { className: "bk-new-form bk-new-card", onSubmit: e => {
             e.preventDefault();
             if (!title.trim())
                 return;
+            // An empty box is NO ceiling, not a ceiling of zero — and a ceiling of
+            // zero is a real thing ("stop before spending a cent"). parseFloat('')
+            // is NaN, so the empty case is filtered out explicitly rather than
+            // being allowed to fall through as 0.
+            const parsed = parseFloat(ceiling);
+            const auto_hold_at_usd = ceiling.trim() === '' || Number.isNaN(parsed) ? undefined : parsed;
             onCreate({
                 title: title.trim(),
                 body: body.trim() || undefined,
                 tags: tags.split(',').map(s => s.trim()).filter(Boolean),
+                hold: hold || undefined,
+                hold_reason: hold ? 'created held' : undefined,
+                auto_hold_at_usd,
             });
-        }, children: [_jsx("input", { autoFocus: true, placeholder: "Card title", value: title, onChange: e => setTitle(e.target.value) }), _jsx("textarea", { placeholder: "Body (markdown, optional)", rows: 3, value: body, onChange: e => setBody(e.target.value) }), _jsx("input", { placeholder: "tags (comma-separated)", value: tags, onChange: e => setTags(e.target.value) }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add card" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
+        }, children: [_jsx("input", { autoFocus: true, placeholder: "Card title", value: title, onChange: e => setTitle(e.target.value) }), _jsx("textarea", { placeholder: "Body (markdown, optional)", rows: 3, value: body, onChange: e => setBody(e.target.value) }), _jsx("input", { placeholder: "tags (comma-separated)", value: tags, onChange: e => setTags(e.target.value) }), _jsxs("label", { className: "bk-form-check", title: "Create this card parked: no agent will pick it up until you press play.", children: [_jsx("input", { type: "checkbox", checked: hold, onChange: e => setHold(e.target.checked) }), "Start held (agents can't pick this up)"] }), _jsx("input", { type: "number", min: "0", step: "0.50", placeholder: "Auto-hold at $ (optional \u2014 blank = no limit)", value: ceiling, onChange: e => setCeiling(e.target.value), title: "Once this card's agent sessions have cost this much in total, it is held automatically. Each session is also capped at whatever is left." }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add card" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
 }
 function CardTile({ card, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, }) {
     const item = card.item;
@@ -206,7 +217,8 @@ function CardTile({ card, currentColumn, boardColumns, onMove, onOpen, onOpenCha
     // The gate is a property of the work, not of the column it sits in — so the
     // button renders on every card in every column, not just in a gate column.
     const held = !!item.held_at;
-    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
+    const ceiling = typeof item.auto_hold_at_usd === 'number' ? item.auto_hold_at_usd : null;
+    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
                             ? 'Play — clear the hold so agents may work this, and resume its session if it was paused'
                             : 'Stop — park this work so no agent picks it up, and pause any session already running it', onClick: e => {
                             e.stopPropagation();
