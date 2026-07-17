@@ -569,20 +569,52 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     sseAbort.current = abort
 
     ;(async () => {
-      try {
-        const events = connectSSE(fetchFn, basePath, sessionId, lastEventId.current, abort.signal)
-        for await (const event of events) {
-          if (event.id) lastEventId.current = event.id
-          handleSSEEvent(event)
+      // Self-healing reconnect loop. The per-session event stream has no retry
+      // of its own (connectSSE just returns when the reader ends), and a stream
+      // can die two ways: it *errors* (proxy/network reset — surfaces as a
+      // throw) or it *ends cleanly* (server closes it, or an idle proxy drops
+      // it after a long quiet stretch — the `for await` simply completes with
+      // no throw). Neither path used to re-attach: the clean-end path left
+      // sseAbort.current pointing at a dead controller, so the reconnect effect
+      // (keyed on session-state *changes* and guarded by !sseAbort.current)
+      // could never fire. A long-running agent that sits in a holding state
+      // waiting on background work (e.g. a slow download) would drop its stream
+      // mid-turn and go deaf — its eventual response only surfaced when the
+      // next /send re-attached the stream, making it look like the agent reply
+      // was gated on a user reply. So: whenever the stream is gone but the
+      // session is still in a state where the server may push on its own,
+      // reconnect with backoff, resuming from lastEventId so nothing is missed.
+      let retryDelay = 1000
+      while (!abort.signal.aborted) {
+        try {
+          const events = connectSSE(fetchFn, basePath, sessionId, lastEventId.current, abort.signal)
+          for await (const event of events) {
+            if (event.id) lastEventId.current = event.id
+            retryDelay = 1000 // healthy stream — reset backoff
+            handleSSEEvent(event)
+          }
+          // Fell out cleanly: server (or a proxy) closed the stream.
+        } catch {
+          if (abort.signal.aborted) break
+          // Errored mid-stream — fall through to the reconnect decision below.
         }
-      } catch {
-        if (abort.signal.aborted) return
-        // Stream dropped unexpectedly (transient network/background suspend),
-        // not a deliberate closeSSE(). Clear the ref so the running-state
-        // reconnect effect can re-attach instead of seeing a dead controller.
-        if (sseAbort.current === abort) sseAbort.current = null
-        setActivity({ kind: 'idle' })
+        if (abort.signal.aborted) break
+        // Reconnect only while the session still warrants a live stream. Once
+        // it's quiescent/terminal the server emits nothing until a user action,
+        // which attaches its own stream — so stop and release the controller so
+        // the reconnect effect can re-fire when the session next goes active.
+        const state = activeSessionRef.current?.session_id === sessionId
+          ? activeSessionRef.current?.state
+          : undefined
+        if (!shouldHoldSSE(state)) {
+          setActivity({ kind: 'idle' })
+          break
+        }
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        retryDelay = Math.min(retryDelay * 2, 30000)
       }
+      // Only release the ref if a newer startSSE hasn't already replaced it.
+      if (sseAbort.current === abort) sseAbort.current = null
     })()
 
     function handleSSEEvent(event: BridgeEvent) {
