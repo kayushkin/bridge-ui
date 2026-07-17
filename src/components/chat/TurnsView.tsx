@@ -40,6 +40,21 @@ function isOTelSourced(row: LogRow): boolean {
   })
 }
 
+// Claude Code injects internal notifications into the conversation as
+// user-role messages (e.g. the "no completion record was found for this
+// background shell command" note emitted on session resume). CC marks them
+// with `origin.kind: "task-notification"`, but the history-replay path
+// materializes them as plain user_message rows, so they surface in Turns as
+// if the user had typed them. Their content is exactly a single
+// `<task-notification>…</task-notification>` block — match that sentinel to
+// drop them from the conversation view without touching the raw event log.
+// Anchored start+end so a real prompt that merely *quotes* a notification
+// (as opposed to being one) still renders.
+function isHarnessNotification(text: string): boolean {
+  const t = text.trim()
+  return t.startsWith('<task-notification>') && t.endsWith('</task-notification>')
+}
+
 function rowsToTurns(rows: LogRow[]): TurnsItem[] {
   // Within one assistant turn, the harness can emit several text blocks
   // separated by tool calls (e.g. "Let me check…" → tool → "Found it…" →
@@ -93,6 +108,8 @@ function rowsToTurns(rows: LogRow[]): TurnsItem[] {
 
   for (const row of rows) {
     if (row.kind === 'user_message' && row.text) {
+      // Harness-injected notifications aren't user turns — drop them.
+      if (isHarnessNotification(row.text)) continue
       if (!row.messageId && canonicalUserTexts.has(row.text)) continue
       // Drop the OTel copy of a prompt only when a harness-sourced copy exists
       // to stand in for it. This cannot be a positional check: Claude Code's
