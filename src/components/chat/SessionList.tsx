@@ -140,13 +140,24 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   const searchResults = useMemo(() => {
     if (!searchActive) return []
     const q = query.toLowerCase()
+    // Rank so a name/id match always outranks a content-only match, and an
+    // exact session-id lands at the very top — otherwise pasting a br_… id
+    // buries the intended session under transcripts that merely mention it.
+    const rankOf = (s: ManagedSession): number => {
+      const id = s.session_id.toLowerCase()
+      if (id === q) return 0
+      if (getDisplayName(s).toLowerCase().includes(q) || id.includes(q)) return 1
+      return 2
+    }
     return sessions
       .filter(s =>
         getDisplayName(s).toLowerCase().includes(q) ||
         s.session_id.toLowerCase().includes(q) ||
         (contentHits ? contentHits.has(s.session_id) : false)
       )
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map(s => ({ s, rank: rankOf(s) }))
+      .sort((a, b) => a.rank - b.rank || b.s.updated_at.localeCompare(a.s.updated_at))
+      .map(x => x.s)
   }, [searchActive, query, sessions, getDisplayName, contentHits])
 
   const { unfiled, grouped } = useMemo(() => {
