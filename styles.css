@@ -2592,6 +2592,7 @@
   color: var(--text-dim);
 }
 .bc-new-session-target-emoji { font-size: 0.95em; line-height: 1; }
+.bc-new-session-target-img { width: 15px; height: 15px; border-radius: 3px; object-fit: contain; vertical-align: middle; }
 .bc-new-session-target-at { opacity: 0.7; }
 .bc-new-session-caret-btn {
   display: inline-flex;
