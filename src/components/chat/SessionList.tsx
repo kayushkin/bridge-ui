@@ -412,13 +412,20 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                   className="bc-new-session-target"
                   aria-label={`${primaryHarness?.label || primaryInstance.harness_type} on ${primaryMachine?.name || 'machine'}`}
                 >
-                  {/* Harness icon: the same image the sidebar session rows use,
-                      falling back to the emoji only when there's no image. */}
+                  {/* Harness icon: the same image the sidebar session rows use;
+                      the harness's own emoji only when it has no image. No
+                      hardcoded fallback glyph. */}
                   {primaryHarness?.image
                     ? <img className="bc-new-session-target-img" src={`${basePath}${primaryHarness.image}`} alt="" />
-                    : <span className="bc-new-session-target-emoji" aria-hidden>{primaryHarness?.emoji || '·'}</span>}
-                  <span className="bc-new-session-target-at" aria-hidden>@</span>
-                  <span className="bc-new-session-target-emoji" aria-hidden>{primaryMachine?.emoji || '🖥'}</span>
+                    : primaryHarness?.emoji
+                      ? <span className="bc-new-session-target-emoji" aria-hidden>{primaryHarness.emoji}</span>
+                      : null}
+                  {primaryMachine?.emoji && (
+                    <>
+                      <span className="bc-new-session-target-at" aria-hidden>@</span>
+                      <span className="bc-new-session-target-emoji" aria-hidden>{primaryMachine.emoji}</span>
+                    </>
+                  )}
                 </span>
               )}
             </button>
