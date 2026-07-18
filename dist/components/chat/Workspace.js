@@ -31,7 +31,7 @@ function findPaneSplitGroup(node, key) {
     }
     return null;
 }
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, instances, machines, storeModels, bridgePrefs }) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, harnesses, instances, machines, storeModels, bridgePrefs }) {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
     const { minimal, controlsSlot, mobilePane } = useMinimalChrome();
     const bridge = useBridgeSession();
@@ -275,7 +275,9 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
             return createPortal(controlsBar, controlsSlot);
         return null;
     })();
-    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: activeChat, session: bridge.activeSession, harnessInfo: activeHarnessInfo, machine: activeMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsxs(WorkspaceProvider, { value: {
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: activeChat, session: bridge.activeSession, harnessInfo: activeHarnessInfo, machine: activeMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onMarkDone: onMarkDone && bridge.activeSession
+                    ? (done) => onMarkDone(bridge.activeSession.session_id, done)
+                    : undefined, onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsxs(WorkspaceProvider, { value: {
                     chat: activeChat,
                     rows: bridge.logRows,
                     loading: bridge.loadingHistory,

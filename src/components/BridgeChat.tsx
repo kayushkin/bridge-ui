@@ -294,6 +294,14 @@ export function BridgeChat() {
     bridge.renameSession(id, name)
   }, [bridge])
 
+  // Shared by the sidebar menu and the header Done button. markSessionDone
+  // is atomic server-side; refreshSessions repaints the list so the chat
+  // moves into (or out of) the Archive folder.
+  const handleMarkSessionDone = useCallback(async (id: string, done: boolean) => {
+    await folders.markSessionDone(id, done)
+    bridge.refreshSessions()
+  }, [folders, bridge])
+
   const openSessionIds = useMemo(
     () => new Set(workspaces.map(w => w.sessionId).filter((id): id is string => !!id)),
     [workspaces]
@@ -337,6 +345,7 @@ export function BridgeChat() {
         onFocus={() => setFocusedWorkspaceId(w.id)}
         onUpdate={fn => updateWorkspace(w.id, fn)}
         onClose={() => closeWorkspace(w.id)}
+        onMarkDone={handleMarkSessionDone}
         harnesses={harnesses}
         instances={instances.instances}
         machines={machines.machines}
@@ -348,7 +357,7 @@ export function BridgeChat() {
         }}
       />
     )
-  }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace])
+  }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace, handleMarkSessionDone])
 
   const sessionListEl = (
     <SessionList

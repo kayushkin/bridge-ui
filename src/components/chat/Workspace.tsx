@@ -38,6 +38,10 @@ interface WorkspaceProps {
   onFocus: () => void
   onUpdate: (fn: (w: WorkspaceState) => WorkspaceState) => void
   onClose?: () => void
+  // Toggles the active session's done state. Hoisted from the sidebar so the
+  // header's Done button can mark a chat complete in place. Owns the
+  // markSessionDone + session-list refresh; Workspace only forwards it.
+  onMarkDone?: (sessionId: string, done: boolean) => void
   harnesses: HarnessInfo[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -49,7 +53,7 @@ interface WorkspaceProps {
   }
 }
 
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps) {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const { minimal, controlsSlot, mobilePane } = useMinimalChrome()
   const bridge = useBridgeSession()
@@ -384,6 +388,9 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, harn
         onToggleKanban={() => togglePane('kanban')}
         onToggleAttach={() => togglePane('attach')}
         attachAvailable={bridge.activeSession?.mode === 'pty'}
+        onMarkDone={onMarkDone && bridge.activeSession
+          ? (done: boolean) => onMarkDone(bridge.activeSession!.session_id, done)
+          : undefined}
         onCloseWorkspace={onClose}
         gitRepos={gitRepos}
         selectedRepo={selectedRepo}

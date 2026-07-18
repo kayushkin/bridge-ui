@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types'
+import { ARCHIVE_FOLDER } from '../../useBridgeFolders'
 import { formatTokens } from '../../utils'
 import { CostBreakdown } from './CostBreakdown'
 import { EditableName } from './EditableName'
@@ -8,7 +9,7 @@ import { StatusDot } from './StatusDot'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable, onMarkDone, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
   /** Full session row from the bridge — drives the details dropdown
    * (source, folder, instance, mode, IDs, timestamps). Undefined when
@@ -45,6 +46,11 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
   // nothing visible (LayoutRenderer also force-hides the pane in
   // events mode regardless of the user's panesHidden choice).
   attachAvailable: boolean
+  // Marks the active session done (state=completed, folder=Archive) or
+  // reopens it — the same toggle the sidebar context menu exposes, hoisted
+  // into the header so it's reachable without opening the sidebar. Omitted
+  // when no session is active.
+  onMarkDone?: (done: boolean) => void
   onCloseWorkspace?: () => void
   gitRepos: GitRepo[]
   selectedRepo: string
@@ -98,6 +104,10 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
   }, [detailsOpen])
 
   const sourceLabel = session?.purpose || 'chat'
+
+  // A session is "done" once it has been marked and moved into the Archive
+  // folder — the same signal the sidebar uses to flip its menu label.
+  const isDone = session?.folder_name === ARCHIVE_FOLDER
 
   return (
     <div className="bc-header" style={headerStyle} data-harness={harness || undefined}>
@@ -198,6 +208,17 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
             onToggleAttach={onToggleAttach}
             attachAvailable={attachAvailable}
           />
+          {session && onMarkDone && (
+            <button
+              className={`bc-mark-done${isDone ? ' bc-mark-done-active' : ''}`}
+              onClick={() => onMarkDone(!isDone)}
+              title={isDone ? 'Reopen this session' : 'Mark this session done'}
+              aria-label={isDone ? 'Reopen session' : 'Mark session done'}
+              aria-pressed={isDone}
+            >
+              {isDone ? '↺ Reopen' : '✓ Done'}
+            </button>
+          )}
           {onCloseWorkspace && (
             <button
               className="bc-workspace-close"

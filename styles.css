@@ -107,6 +107,25 @@
   margin-left: 4px;
 }
 .bc-workspace-close:hover { color: #ef4444; border-color: #ef4444; }
+.bc-mark-done {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 2px 9px;
+  border-radius: 8px;
+  font-size: 0.85em;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+.bc-mark-done:hover { color: #22c55e; border-color: #22c55e; }
+.bc-mark-done-active {
+  color: #22c55e;
+  border-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 12%, transparent);
+}
+.bc-mark-done-active:hover { color: var(--text-dim); border-color: var(--border); background: transparent; }
 
 /* Session List (sidebar) */
 .bc-session-list {
