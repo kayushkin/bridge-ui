@@ -99,6 +99,25 @@ function makePendingWorkspace(instanceId: string, harness: string): WorkspaceSta
   return makeWorkspace(null, { pending: { instanceId, harness } })
 }
 
+// Tab-scoped flag, memoized once per page load. sessionStorage survives a
+// reload but is empty in a freshly opened tab/window, so this distinguishes
+// "opened a new dash page" (start on a fresh new chat, don't restore the last
+// session) from "reloaded the current one" (restore the open session/splits).
+// Reload re-imports this module, resetting the memo, and finds the key already
+// set → not fresh. A brand-new tab finds no key → fresh, and sets it.
+const TAB_STARTED_KEY = 'bridge-ui-tab-started'
+let freshTabMemo: boolean | null = null
+function isFreshTab(): boolean {
+  if (freshTabMemo !== null) return freshTabMemo
+  try {
+    freshTabMemo = !sessionStorage.getItem(TAB_STARTED_KEY)
+    sessionStorage.setItem(TAB_STARTED_KEY, '1')
+  } catch {
+    freshTabMemo = false
+  }
+  return freshTabMemo
+}
+
 export function BridgeChat() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
   const bridge = useBridgeSession()
@@ -109,20 +128,27 @@ export function BridgeChat() {
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
+  // Fresh tab/window: start empty so the bootstrap below opens a new chat
+  // instead of restoring the last session. A same-tab reload restores as usual.
+  const freshTab = useRef(isFreshTab()).current
   const initialState = useRef(loadWorkspacesState())
   const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() =>
-    initialState.current.workspaces.map(w => ({
+    freshTab ? [] : initialState.current.workspaces.map(w => ({
       ...w,
       panesHidden: { ...DEFAULT_PANES_HIDDEN, ...w.panesHidden },
       paneSizes: { ...DEFAULT_PANE_SIZES, ...w.paneSizes },
       layout: ensurePaneLeaves(w.layout),
     }))
   )
-  const [layout, setLayout] = useState<WorkspaceLayoutNode | null>(() => initialState.current.layout)
-  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(() => initialState.current.focusedWorkspaceId)
+  const [layout, setLayout] = useState<WorkspaceLayoutNode | null>(() => freshTab ? null : initialState.current.layout)
+  const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(() => freshTab ? null : initialState.current.focusedWorkspaceId)
   const bootstrappedRef = useRef(false)
 
   useEffect(() => {
+    // Don't let a fresh tab's unstarted new chat clobber the persisted real
+    // layout — a same-tab reload should still restore the open session. Once
+    // the pending chat becomes real (or a real session is opened), it saves.
+    if (workspaces.length > 0 && workspaces.every(w => w.pending)) return
     saveWorkspacesState({ workspaces, focusedWorkspaceId, layout })
   }, [workspaces, focusedWorkspaceId, layout])
 

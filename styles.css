@@ -2586,15 +2586,13 @@
 .bc-new-session-target {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
+  gap: 2px;
   padding-left: 6px;
   border-left: 1px solid var(--border);
   color: var(--text-dim);
 }
 .bc-new-session-target-emoji { font-size: 0.95em; line-height: 1; }
-.bc-new-session-target-img { width: 14px; height: 14px; border-radius: 3px; object-fit: contain; }
-.bc-new-session-target-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-new-session-target-at { opacity: 0.7; }
 .bc-new-session-caret-btn {
   display: inline-flex;
   align-items: center;

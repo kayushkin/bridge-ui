@@ -313,6 +313,10 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     return instances.find(i => i.enabled)
   }, [defaultInstanceId, instanceMap, instances])
   const primaryHarness = primaryInstance ? harnessMap.get(primaryInstance.harness_type) : undefined
+  const primaryMachine = useMemo(
+    () => primaryInstance ? machines.find(m => m.id === primaryInstance.machine_id) : undefined,
+    [primaryInstance, machines]
+  )
 
   const renderSession = (s: ManagedSession) => {
     const isOpen = openSessionIds.has(s.session_id)
@@ -398,17 +402,19 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
               onClick={() => primaryInstance && onNewChat(primaryInstance.id, 'replace')}
               disabled={!connected || !primaryInstance}
               title={primaryInstance
-                ? `New chat in ${primaryInstance.name}${primaryHarness ? ` (${primaryHarness.label})` : ''}`
+                ? `New chat in ${primaryInstance.name}${primaryHarness ? ` (${primaryHarness.label}` : ''}${primaryMachine ? ` on ${primaryMachine.name})` : primaryHarness ? ')' : ''}`
                 : 'No instances configured'}
             >
               <span className="bc-new-session-plus" aria-hidden>+</span>
               <span className="bc-new-session-label">New</span>
               {primaryInstance && (
-                <span className="bc-new-session-target">
-                  {primaryHarness?.image
-                    ? <img className="bc-new-session-target-img" src={`${basePath}${primaryHarness.image}`} alt="" />
-                    : <span className="bc-new-session-target-emoji" aria-hidden>{primaryHarness?.emoji || '·'}</span>}
-                  <span className="bc-new-session-target-name">{primaryHarness?.label || primaryInstance.harness_type}</span>
+                <span
+                  className="bc-new-session-target"
+                  aria-label={`${primaryHarness?.label || primaryInstance.harness_type} on ${primaryMachine?.name || 'machine'}`}
+                >
+                  <span className="bc-new-session-target-emoji" aria-hidden>{primaryHarness?.emoji || '·'}</span>
+                  <span className="bc-new-session-target-at" aria-hidden>@</span>
+                  <span className="bc-new-session-target-emoji" aria-hidden>{primaryMachine?.emoji || '🖥'}</span>
                 </span>
               )}
             </button>
