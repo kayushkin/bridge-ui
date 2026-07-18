@@ -31,7 +31,7 @@ function findPaneSplitGroup(node, key) {
     }
     return null;
 }
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, harnesses, instances, machines, storeModels, bridgePrefs }) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, onStartPending, harnesses, instances, machines, storeModels, bridgePrefs }) {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
     const { minimal, controlsSlot, mobilePane } = useMinimalChrome();
     const bridge = useBridgeSession();
@@ -127,6 +127,26 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
             return undefined;
         return machines.find(m => m.id === inst.machine_id);
     }, [instances, machines, activeInstanceID]);
+    // Pending (unstarted) new chat: a live composer with no server session yet.
+    // The session is created on the first send (handleSend below). Only true
+    // while there is no active session bound.
+    const isPending = !!workspace.pending && !bridge.activeSession;
+    const pendingHarnessInfo = useMemo(() => workspace.pending ? harnesses.find(h => h.name === workspace.pending.harness) : undefined, [harnesses, workspace.pending]);
+    const pendingMachine = useMemo(() => {
+        if (!workspace.pending)
+            return undefined;
+        const inst = instances.find(i => i.id === workspace.pending.instanceId);
+        if (!inst)
+            return undefined;
+        return machines.find(m => m.id === inst.machine_id);
+    }, [instances, machines, workspace.pending]);
+    // Header chrome: a synthesized "New chat" descriptor for a pending pane so
+    // the harness/machine chips render before the session exists.
+    const headerChat = activeChat ?? (isPending
+        ? { sessionId: null, harness: workspace.pending.harness, agent: '', displayName: 'New chat' }
+        : null);
+    const headerHarnessInfo = activeHarnessInfo ?? (isPending ? pendingHarnessInfo : undefined);
+    const headerMachine = activeMachine ?? (isPending ? pendingMachine : undefined);
     // Per-instance reachability for the header dot. Polled in line with
     // the rest of the header — cheap, and the API already aggregates
     // local/SSH/runner liveness behind a single bool.
@@ -246,6 +266,30 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     }, [bridge.logRows]);
     const contextTone = contextInfo.pct >= 90 ? 'crit' : contextInfo.pct >= 70 ? 'warn' : '';
     const handleSend = useCallback(async (text) => {
+        // Pending new chat: create the real server session now, on the first send,
+        // then route the message to it. The session is created with the harness's
+        // saved defaults (model / effort / budget / disabled tools), matching what
+        // the eager New-Session path used to apply.
+        if (workspace.pending && !bridge.activeSession) {
+            const { instanceId, harness } = workspace.pending;
+            const sess = await bridge.createSession({ harness, instance_id: instanceId, display_name: '' });
+            if (!sess)
+                return;
+            onStartPending?.(instanceId, sess.session_id);
+            const defaults = bridgePrefs.getDefaults(harness);
+            if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
+                bridge.sendConfig({
+                    model: defaults.model,
+                    effort: defaults.effort,
+                    max_budget: defaults.max_budget,
+                    disabled_tools: defaults.disabled_tools,
+                }, sess.session_id);
+            }
+            // Bind the pane to the new session and drop its pending marker.
+            onUpdate(w => ({ ...w, sessionId: sess.session_id, pending: undefined }));
+            bridge.send(text, sess.session_id);
+            return;
+        }
         if (pendingConfigRef.current) {
             bridge.sendConfig(pendingConfigRef.current);
             if (activeHarness) {
@@ -256,7 +300,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         if (bridge.uiState === 'running')
             await bridge.interrupt();
         bridge.send(text);
-    }, [bridge, bridgePrefs, activeHarness]);
+    }, [bridge, bridgePrefs, activeHarness, workspace.pending, onStartPending, onUpdate]);
     const handleRename = useCallback((name) => {
         if (activeChat?.sessionId)
             bridge.renameSession(activeChat.sessionId, name);
@@ -275,7 +319,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
             return createPortal(controlsBar, controlsSlot);
         return null;
     })();
-    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: activeChat, session: bridge.activeSession, harnessInfo: activeHarnessInfo, machine: activeMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onMarkDone: onMarkDone && bridge.activeSession
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: headerChat, session: bridge.activeSession, harnessInfo: headerHarnessInfo, machine: headerMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onMarkDone: onMarkDone && bridge.activeSession
                     ? (done) => onMarkDone(bridge.activeSession.session_id, done)
                     : undefined, onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsxs(WorkspaceProvider, { value: {
                     chat: activeChat,
@@ -306,7 +350,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
                     refreshGitRepos,
                     pendingHooks: bridge.pendingHooks,
                     resolveHook: bridge.resolveHook,
-                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? null, connected: bridge.connected && !!bridge.activeSession, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? (isPending ? workspace.id : null), connected: (bridge.connected && !!bridge.activeSession) || isPending, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 // ModeToggle surfaces the events/pty mode switcher for harnesses that
 // support pty. Disabled while a turn is in flight — switching mid-

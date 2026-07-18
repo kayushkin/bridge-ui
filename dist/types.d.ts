@@ -104,7 +104,7 @@ export interface UseBridgeSessionReturn {
     attachTokens: Record<string, string>;
     switchMode: (sessionId: string, mode: 'events' | 'pty') => Promise<string | null>;
     refreshAttachToken: (sessionId: string) => Promise<string | null>;
-    send: (text: string) => void;
+    send: (text: string, explicitSessionId?: string) => void;
     interrupt: () => void;
     resume: () => void;
     stop: () => void;
@@ -116,7 +116,7 @@ export interface UseBridgeSessionReturn {
         effort?: string;
         disabled_tools?: string[];
         max_budget?: number;
-    }) => void;
+    }, explicitSessionId?: string) => void;
     refreshSessions: () => void;
     pendingHooks: HookEvent[];
     resolveHook: (input: {

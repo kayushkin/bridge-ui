@@ -123,6 +123,12 @@ export function loadWorkspacesState() {
             if (!w || typeof w !== 'object')
                 return false;
             const ws = w;
+            // Drop unstarted "new chat" panes on load: they hold no server session,
+            // so a reload or a new window starts fresh (the chat bootstrap opens a
+            // new one) instead of resurrecting a stale draft. A dropped id makes the
+            // persisted layout invalid, which the caller rebuilds below.
+            if (ws.pending)
+                return false;
             return typeof ws.id === 'string'
                 && (ws.sessionId === null || typeof ws.sessionId === 'string')
                 && !!ws.panesHidden && !!ws.paneSizes && !!ws.layout;

@@ -291,14 +291,17 @@ export interface UseBridgeSessionReturn {
   // BridgeAttach to recover the token after a page refresh wipes
   // the in-memory map. Returns null when no live hub exists.
   refreshAttachToken: (sessionId: string) => Promise<string | null>
-  send: (text: string) => void
+  // explicitSessionId targets a session the caller just created, before the
+  // hook's activeSessionId state has settled (used by the lazily-started
+  // "pending" new chat). Omit to send to the active session.
+  send: (text: string, explicitSessionId?: string) => void
   interrupt: () => void
   resume: () => void
   stop: () => void
   compact: (summary?: string) => void
   fork: (displayName?: string) => void
   renameSession: (bridgeID: string, displayName: string) => Promise<void>
-  sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }) => void
+  sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }, explicitSessionId?: string) => void
   refreshSessions: () => void
 
   // Awaiting-resolution HookEvents for the active session: events whose

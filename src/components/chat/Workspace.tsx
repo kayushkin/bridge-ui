@@ -42,6 +42,10 @@ interface WorkspaceProps {
   // header's Done button can mark a chat complete in place. Owns the
   // markSessionDone + session-list refresh; Workspace only forwards it.
   onMarkDone?: (sessionId: string, done: boolean) => void
+  // Called after a pending (unstarted) new chat sends its first message and
+  // the real session is created. Lets the parent persist last-instance /
+  // last-session prefs.
+  onStartPending?: (instanceId: string, sessionId: string) => void
   harnesses: HarnessInfo[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -53,7 +57,7 @@ interface WorkspaceProps {
   }
 }
 
-export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps) {
+export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, onStartPending, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps) {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const { minimal, controlsSlot, mobilePane } = useMinimalChrome()
   const bridge = useBridgeSession()
@@ -153,6 +157,28 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     if (!inst) return undefined
     return machines.find(m => m.id === inst.machine_id)
   }, [instances, machines, activeInstanceID])
+
+  // Pending (unstarted) new chat: a live composer with no server session yet.
+  // The session is created on the first send (handleSend below). Only true
+  // while there is no active session bound.
+  const isPending = !!workspace.pending && !bridge.activeSession
+  const pendingHarnessInfo = useMemo(
+    () => workspace.pending ? harnesses.find(h => h.name === workspace.pending!.harness) : undefined,
+    [harnesses, workspace.pending]
+  )
+  const pendingMachine = useMemo(() => {
+    if (!workspace.pending) return undefined
+    const inst = instances.find(i => i.id === workspace.pending!.instanceId)
+    if (!inst) return undefined
+    return machines.find(m => m.id === inst.machine_id)
+  }, [instances, machines, workspace.pending])
+  // Header chrome: a synthesized "New chat" descriptor for a pending pane so
+  // the harness/machine chips render before the session exists.
+  const headerChat = activeChat ?? (isPending
+    ? { sessionId: null, harness: workspace.pending!.harness, agent: '', displayName: 'New chat' }
+    : null)
+  const headerHarnessInfo = activeHarnessInfo ?? (isPending ? pendingHarnessInfo : undefined)
+  const headerMachine = activeMachine ?? (isPending ? pendingMachine : undefined)
 
   // Per-instance reachability for the header dot. Polled in line with
   // the rest of the header — cheap, and the API already aggregates
@@ -269,6 +295,29 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
   const contextTone = contextInfo.pct >= 90 ? 'crit' : contextInfo.pct >= 70 ? 'warn' : ''
 
   const handleSend = useCallback(async (text: string) => {
+    // Pending new chat: create the real server session now, on the first send,
+    // then route the message to it. The session is created with the harness's
+    // saved defaults (model / effort / budget / disabled tools), matching what
+    // the eager New-Session path used to apply.
+    if (workspace.pending && !bridge.activeSession) {
+      const { instanceId, harness } = workspace.pending
+      const sess = await bridge.createSession({ harness, instance_id: instanceId, display_name: '' })
+      if (!sess) return
+      onStartPending?.(instanceId, sess.session_id)
+      const defaults = bridgePrefs.getDefaults(harness)
+      if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
+        bridge.sendConfig({
+          model: defaults.model,
+          effort: defaults.effort,
+          max_budget: defaults.max_budget,
+          disabled_tools: defaults.disabled_tools,
+        }, sess.session_id)
+      }
+      // Bind the pane to the new session and drop its pending marker.
+      onUpdate(w => ({ ...w, sessionId: sess.session_id, pending: undefined }))
+      bridge.send(text, sess.session_id)
+      return
+    }
     if (pendingConfigRef.current) {
       bridge.sendConfig(pendingConfigRef.current)
       if (activeHarness) {
@@ -278,7 +327,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     }
     if (bridge.uiState === 'running') await bridge.interrupt()
     bridge.send(text)
-  }, [bridge, bridgePrefs, activeHarness])
+  }, [bridge, bridgePrefs, activeHarness, workspace.pending, onStartPending, onUpdate])
 
   const handleRename = useCallback((name: string) => {
     if (activeChat?.sessionId) bridge.renameSession(activeChat.sessionId, name)
@@ -367,10 +416,10 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
       onFocusCapture={onFocus}
     >
       {!minimal && <SessionHeader
-        chat={activeChat}
+        chat={headerChat}
         session={bridge.activeSession}
-        harnessInfo={activeHarnessInfo}
-        machine={activeMachine}
+        harnessInfo={headerHarnessInfo}
+        machine={headerMachine}
         machineReachable={activeReachable}
         basePath={basePath}
         uiState={bridge.uiState}
@@ -435,8 +484,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
           handler routes the typed message into the pty fd, so users can
           enter text from either the Composer or the BridgeAttach pane. */}
       <Composer
-        sessionId={bridge.activeSession?.session_id ?? null}
-        connected={bridge.connected && !!bridge.activeSession}
+        sessionId={bridge.activeSession?.session_id ?? (isPending ? workspace.id : null)}
+        connected={(bridge.connected && !!bridge.activeSession) || isPending}
         streaming={bridge.uiState === 'running'}
         paused={bridge.uiState === 'paused'}
         onSend={handleSend}

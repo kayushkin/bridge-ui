@@ -20,7 +20,7 @@ import type { CtxMenuState, SplitMode } from './types'
 // sidebar DOM small so a large Archive folder can't balloon it to 10k+ nodes.
 const SESSION_LIST_CAP = 50
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -33,7 +33,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   focusedSessionId: string | null
   onSelect: (id: string) => void
   onOpenInSplit: (id: string, mode: SplitMode) => void
-  onNewSession: (instanceId: string, mode: SplitMode) => void
+  // Opens a new chat (a pending composer) in the given instance. No server
+  // session is created until the first message is sent.
+  onNewChat: (instanceId: string, mode: SplitMode) => void
   connected: boolean
   getDisplayName: (session: ManagedSession) => string
   getSessionUIState: (session: ManagedSession) => SessionUIState
@@ -299,8 +301,18 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
 
   const handlePickInstance = (id: string, mode: SplitMode) => {
     setShowNewMenu(false)
-    onNewSession(id, mode)
+    onNewChat(id, mode)
   }
+
+  // The instance the bare "+ New" button launches into: the most-recently-used
+  // one (defaultInstanceId) when it's still enabled, else the first enabled
+  // instance. Its harness supplies the emoji/label shown on the button.
+  const primaryInstance = useMemo(() => {
+    const preferred = defaultInstanceId ? instanceMap.get(defaultInstanceId) : undefined
+    if (preferred?.enabled) return preferred
+    return instances.find(i => i.enabled)
+  }, [defaultInstanceId, instanceMap, instances])
+  const primaryHarness = primaryInstance ? harnessMap.get(primaryInstance.harness_type) : undefined
 
   const renderSession = (s: ManagedSession) => {
     const isOpen = openSessionIds.has(s.session_id)
@@ -377,15 +389,41 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     <div className="bc-session-list">
       <div className="bc-new-session">
         <div className="bc-new-session-wrap">
-          <button
-            className="bc-new-session-btn"
-            onClick={() => setShowNewMenu(s => !s)}
-            disabled={!connected || enabledInstanceCount === 0}
-            aria-haspopup="menu"
-            aria-expanded={showNewMenu}
-          >
-            + New Session <span className="bc-new-session-caret">▾</span>
-          </button>
+          <div className="bc-new-session-split">
+            {/* Main action: open a new chat in the most-recently-used instance
+                (or the first enabled one). No dropdown needed for the common
+                case; the caret beside it picks a specific harness/env. */}
+            <button
+              className="bc-new-session-btn"
+              onClick={() => primaryInstance && onNewChat(primaryInstance.id, 'replace')}
+              disabled={!connected || !primaryInstance}
+              title={primaryInstance
+                ? `New chat in ${primaryInstance.name}${primaryHarness ? ` (${primaryHarness.label})` : ''}`
+                : 'No instances configured'}
+            >
+              <span className="bc-new-session-plus" aria-hidden>+</span>
+              <span className="bc-new-session-label">New</span>
+              {primaryInstance && (
+                <span className="bc-new-session-target">
+                  {primaryHarness?.image
+                    ? <img className="bc-new-session-target-img" src={`${basePath}${primaryHarness.image}`} alt="" />
+                    : <span className="bc-new-session-target-emoji" aria-hidden>{primaryHarness?.emoji || '·'}</span>}
+                  <span className="bc-new-session-target-name">{primaryHarness?.label || primaryInstance.harness_type}</span>
+                </span>
+              )}
+            </button>
+            <button
+              className="bc-new-session-caret-btn"
+              onClick={() => setShowNewMenu(s => !s)}
+              disabled={!connected || enabledInstanceCount === 0}
+              aria-haspopup="menu"
+              aria-expanded={showNewMenu}
+              title="Choose harness / environment"
+              aria-label="Choose harness or environment"
+            >
+              <span className="bc-new-session-caret" aria-hidden>▾</span>
+            </button>
+          </div>
           {showNewMenu && (
             <NewSessionMenu
               instances={instances}

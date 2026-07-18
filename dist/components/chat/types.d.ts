@@ -30,6 +30,10 @@ export type PaneSizes = Record<PaneKey, number>;
 export interface WorkspaceState {
     id: string;
     sessionId: string | null;
+    pending?: {
+        instanceId: string;
+        harness: string;
+    };
     panesHidden: PanesHidden;
     paneSizes: PaneSizes;
     layout: InnerNode;

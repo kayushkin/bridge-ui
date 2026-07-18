@@ -752,7 +752,16 @@ export function useBridgeSession() {
                 if (id > maxEventId)
                     maxEventId = id;
             }
-            setLogRows(rows);
+            // Preserve any optimistic user rows (clientId set) added while this load
+            // was in flight and not yet represented in the loaded history — e.g. a
+            // message sent immediately after creating a session (the lazily-started
+            // new chat does exactly this). Switching sessions clears rows first, so
+            // `prev` here only holds rows for the session we just loaded.
+            setLogRows(prev => {
+                const loadedKeys = new Set(rows.map(r => r.key));
+                const optimistic = prev.filter(r => r.clientId && !loadedKeys.has(r.key));
+                return optimistic.length ? [...rows, ...optimistic] : rows;
+            });
             lastEventId.current = maxEventId > 0 ? String(maxEventId) : undefined;
         }
         catch (err) {
@@ -1008,8 +1017,13 @@ export function useBridgeSession() {
             return null;
         }
     }, [fetchFn, basePath, refreshSessionsImpl]);
-    const send = useCallback(async (text) => {
-        if (!activeSessionId || !text.trim())
+    // explicitSessionId lets a caller send to a session it just created,
+    // before the activeSessionId state has re-rendered into this closure —
+    // the lazily-started "pending" new chat relies on this. Defaults to the
+    // active session.
+    const send = useCallback(async (text, explicitSessionId) => {
+        const targetSessionId = explicitSessionId || activeSessionId;
+        if (!targetSessionId || !text.trim())
             return;
         // Optimistic user row keyed by clientId. When /send returns with the
         // canonical bridge MessageID we patch the row's key to the grouping key
@@ -1030,9 +1044,9 @@ export function useBridgeSession() {
         };
         setLogRows(prev => [...prev, optimistic]);
         setError(null);
-        unmarkInterrupted(activeSessionId);
+        unmarkInterrupted(targetSessionId);
         try {
-            const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/send`, {
+            const res = await fetchFn(`${basePath}/sessions/${targetSessionId}/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text }),
@@ -1048,7 +1062,7 @@ export function useBridgeSession() {
                 setLogRows(prev => prev.map(r => r.clientId === clientId ? { ...r, messageId: body.message_id, key: newKey } : r));
             }
             lastEventId.current = undefined;
-            startSSE(activeSessionId);
+            startSSE(targetSessionId);
             refreshSessions();
         }
         catch (err) {
@@ -1177,11 +1191,12 @@ export function useBridgeSession() {
         }
         await refreshSessionsImpl();
     }, [fetchFn, basePath, refreshSessionsImpl]);
-    const sendConfig = useCallback(async (config) => {
-        if (!activeSessionId)
+    const sendConfig = useCallback(async (config, explicitSessionId) => {
+        const targetSessionId = explicitSessionId || activeSessionId;
+        if (!targetSessionId)
             return;
         try {
-            await fetchFn(`${basePath}/sessions/${activeSessionId}/config`, {
+            await fetchFn(`${basePath}/sessions/${targetSessionId}/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config),

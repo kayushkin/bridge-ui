@@ -39,6 +39,13 @@ export type PaneSizes = Record<PaneKey, number>
 export interface WorkspaceState {
   id: string
   sessionId: string | null
+  // An unstarted "new chat": the composer is live but no server session
+  // exists yet. Set only while sessionId is null; cleared the moment the
+  // first message is sent (which creates the real session) or the pane is
+  // retargeted to an existing session. Pending workspaces are never
+  // persisted — a reload or a new window discards them, so an abandoned
+  // new chat never leaves a dangling server session behind.
+  pending?: { instanceId: string; harness: string }
   panesHidden: PanesHidden
   paneSizes: PaneSizes
   layout: InnerNode

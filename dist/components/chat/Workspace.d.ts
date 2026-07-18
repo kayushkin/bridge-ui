@@ -7,6 +7,7 @@ interface WorkspaceProps {
     onUpdate: (fn: (w: WorkspaceState) => WorkspaceState) => void;
     onClose?: () => void;
     onMarkDone?: (sessionId: string, done: boolean) => void;
+    onStartPending?: (instanceId: string, sessionId: string) => void;
     harnesses: HarnessInfo[];
     instances: BridgeInstance[];
     machines: Machine[];
@@ -27,6 +28,6 @@ interface WorkspaceProps {
         setLastSession: (instanceId: string, sessionId: string) => void;
     };
 }
-export declare function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps): import("react/jsx-runtime").JSX.Element;
+export declare function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMarkDone, onStartPending, harnesses, instances, machines, storeModels, bridgePrefs }: WorkspaceProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=Workspace.d.ts.map

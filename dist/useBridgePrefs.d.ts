@@ -9,6 +9,7 @@ interface BridgePrefsOptions {
 }
 export declare function useBridgePrefs(options?: BridgePrefsOptions): {
     prefs: BridgePrefs;
+    loaded: boolean;
     setLastHarness: (harness: string) => void;
     setLastInstanceId: (instanceId: string) => void;
     setLastSession: (harness: string, sessionId: string) => void;

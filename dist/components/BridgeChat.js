@@ -92,6 +92,11 @@ function makeWorkspace(sessionId, seed) {
         ...seed,
     };
 }
+// A "pending" new chat: a workspace with a live composer but no server
+// session. The session is created on first send (see Workspace.handleSend).
+function makePendingWorkspace(instanceId, harness) {
+    return makeWorkspace(null, { pending: { instanceId, harness } });
+}
 export function BridgeChat() {
     const { fetch: apiFetch, basePath, routes } = useBridgeConfig();
     const bridge = useBridgeSession();
@@ -145,8 +150,7 @@ export function BridgeChat() {
     // root). With a non-empty tree, 'replace' falls back to a directional split
     // so the new workspace is never orphaned. 'split-auto' picks h or v based
     // on which dimension of the focused pane is longer.
-    const addWorkspace = useCallback((sessionId, mode) => {
-        const ws = makeWorkspace(sessionId);
+    const placeWorkspace = useCallback((ws, mode) => {
         setWorkspaces(prev => [...prev, ws]);
         setLayout(prev => {
             if (!prev)
@@ -162,6 +166,9 @@ export function BridgeChat() {
         setFocusedWorkspaceId(ws.id);
         return ws.id;
     }, [focusedWorkspaceId]);
+    const addWorkspace = useCallback((sessionId, mode) => {
+        return placeWorkspace(makeWorkspace(sessionId), mode);
+    }, [placeWorkspace]);
     // Plain click on a session row: focus existing workspace if one exists for
     // that session, else retarget the focused workspace, else spawn one. Use
     // the per-row split buttons (or the New Session menu's split modes) to
@@ -174,7 +181,7 @@ export function BridgeChat() {
             setFocusedWorkspaceId(existing.id);
         }
         else if (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId)) {
-            setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id } : w));
+            setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id, pending: undefined } : w));
         }
         else {
             addWorkspace(id, 'replace');
@@ -201,27 +208,33 @@ export function BridgeChat() {
             setStoreModels(data.filter(m => m.enabled));
         }).catch(() => { });
     }, [apiFetch, basePath]);
-    // Bootstrap one workspace from the last-used instance's last session on
-    // first ready render — but only if nothing was restored from localStorage.
+    // Bootstrap on first ready render: open a fresh pending "new chat" so a new
+    // window / reload lands on a ready-to-type composer rather than the last
+    // conversation. Only fires when nothing real was restored from localStorage
+    // (restored splits are left as-is — we don't stack an empty pane on top of
+    // them). The pending chat targets the most-recently-used instance, falling
+    // back to the first enabled instance. Gated on bridgePrefs.loaded so the
+    // last-instance choice isn't lost to an empty prefs snapshot.
     useEffect(() => {
         if (bootstrappedRef.current)
             return;
-        if (instances.loading)
+        if (instances.loading || !bridgePrefs.loaded)
             return;
         bootstrappedRef.current = true;
         if (workspaces.length > 0)
             return;
         const lastInstanceId = bridgePrefs.prefs.last_instance_id;
-        if (!lastInstanceId || !instances.instanceMap.has(lastInstanceId))
+        const lastInst = lastInstanceId ? instances.instanceMap.get(lastInstanceId) : undefined;
+        const inst = (lastInst && lastInst.enabled)
+            ? lastInst
+            : instances.instances.find(i => i.enabled);
+        if (!inst)
             return;
-        const lastId = bridgePrefs.getLastSession(lastInstanceId);
-        if (lastId) {
-            const ws = makeWorkspace(lastId);
-            setWorkspaces([ws]);
-            setLayout(buildFlatLayout([ws.id]));
-            setFocusedWorkspaceId(ws.id);
-        }
-    }, [bridgePrefs, instances.loading, instances.instanceMap, workspaces.length]);
+        const ws = makePendingWorkspace(inst.id, inst.harness_type);
+        setWorkspaces([ws]);
+        setLayout(buildFlatLayout([ws.id]));
+        setFocusedWorkspaceId(ws.id);
+    }, [bridgePrefs.loaded, bridgePrefs.prefs.last_instance_id, instances.loading, instances.instanceMap, instances.instances, workspaces.length]);
     // Deeplink support: ?session=<bridge_id> opens that session and clears the
     // param. Used by kanban cards (and BridgeSessions) to send the user into
     // chat focused on a specific session. Runs once; takes precedence over the
@@ -247,10 +260,14 @@ export function BridgeChat() {
     const getDisplayName = useCallback((session) => {
         return session.display_name || session.agent_id || '';
     }, []);
-    // New chat creation. Default mode = replace focused workspace's session
-    // (matches sidebar select behavior); any 'split-*' mode spawns a new
-    // workspace via addWorkspace (which resolves 'split-auto' to a direction).
-    const handleCreateForInstance = useCallback(async (instanceId, mode = 'replace') => {
+    // Open a new chat. This creates NO server session — it drops a "pending"
+    // workspace with a live composer; the real session is created lazily on
+    // first send (Workspace.handleSend). That makes new-chat open instantly
+    // (no round-trip, so the chat pane no longer lags behind the sidebar) and
+    // means an abandoned new chat never leaves a dangling session behind.
+    // Default mode = replace focused workspace (matches sidebar select
+    // behavior); any 'split-*' mode spawns a new pane.
+    const handleNewChatForInstance = useCallback((instanceId, mode = 'replace') => {
         const inst = instances.instanceMap.get(instanceId);
         if (!inst)
             return;
@@ -258,39 +275,26 @@ export function BridgeChat() {
         const harnessInfo = harnesses.find(h => h.name === harness);
         if (!harnessInfo?.available)
             return;
-        const defaults = bridgePrefs.getDefaults(harness);
-        // Permission gating runs as a PreToolUse HTTP hook injected by
-        // bridge-server (--settings → /permission/cc-prehook). The bypass
-        // pref is read on every prehook call, so no per-session
-        // permission_mode flag is needed — the harness always launches in
-        // bypassPermissions to disable CC's own gate.
-        const sess = await bridge.createSession({
-            harness,
-            instance_id: instanceId,
-            display_name: '',
-        });
-        if (!sess)
-            return;
+        // Remember the chosen instance so the "+ New" button reflects it next time.
         bridgePrefs.setLastInstanceId(instanceId);
-        bridgePrefs.setLastSession(instanceId, sess.session_id);
-        if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
-            bridge.sendConfig({
-                model: defaults.model,
-                effort: defaults.effort,
-                max_budget: defaults.max_budget,
-                disabled_tools: defaults.disabled_tools,
-            });
-        }
-        // Replace focused workspace's session when possible — only spawn a new
-        // workspace if the user chose split-h/-v or no workspace is focused.
+        const ws = makePendingWorkspace(instanceId, harness);
         const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId);
         if (mode === 'replace' && focused) {
-            setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.session_id } : w));
+            // Reuse the focused pane's id so the layout is undisturbed.
+            setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...ws, id: w.id } : w));
+            setFocusedWorkspaceId(focused.id);
         }
         else {
-            addWorkspace(sess.session_id, mode === 'replace' ? 'replace' : mode);
+            placeWorkspace(ws, mode === 'replace' ? 'replace' : mode);
         }
-    }, [bridge, bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, addWorkspace]);
+    }, [bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, placeWorkspace]);
+    // Called by a pending workspace once its first send has created the real
+    // session — persist it as this instance's last session so nav / reopen
+    // land on it.
+    const handlePendingStarted = useCallback((instanceId, sessionId) => {
+        bridgePrefs.setLastInstanceId(instanceId);
+        bridgePrefs.setLastSession(instanceId, sessionId);
+    }, [bridgePrefs]);
     const handleRenameSession = useCallback((id, name) => {
         bridge.renameSession(id, name);
     }, [bridge]);
@@ -331,13 +335,13 @@ export function BridgeChat() {
         const w = workspaces.find(ws => ws.id === workspaceId);
         if (!w)
             return null;
-        return (_jsx(Workspace, { workspace: w, focused: w.id === focusedWorkspaceId, onFocus: () => setFocusedWorkspaceId(w.id), onUpdate: fn => updateWorkspace(w.id, fn), onClose: () => closeWorkspace(w.id), onMarkDone: handleMarkSessionDone, harnesses: harnesses, instances: instances.instances, machines: machines.machines, storeModels: storeModels, bridgePrefs: {
+        return (_jsx(Workspace, { workspace: w, focused: w.id === focusedWorkspaceId, onFocus: () => setFocusedWorkspaceId(w.id), onUpdate: fn => updateWorkspace(w.id, fn), onClose: () => closeWorkspace(w.id), onMarkDone: handleMarkSessionDone, onStartPending: handlePendingStarted, harnesses: harnesses, instances: instances.instances, machines: machines.machines, storeModels: storeModels, bridgePrefs: {
                 getDefaults: bridgePrefs.getDefaults,
                 setHarnessDefaults: bridgePrefs.setHarnessDefaults,
                 setLastSession: bridgePrefs.setLastSession,
             } }));
-    }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace, handleMarkSessionDone]);
-    const sessionListEl = (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, apiFetch: apiFetch, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: minimal ? handleSelectSessionMinimal : handleSelectSession, onOpenInSplit: handleOpenSessionInSplit, onNewSession: handleCreateForInstance, connected: bridge.connected, getDisplayName: getDisplayName, getSessionUIState: bridge.getSessionUIState, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList }));
+    }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace, handleMarkSessionDone, handlePendingStarted]);
+    const sessionListEl = (_jsx(SessionList, { sessions: bridge.sessions, instances: instances.instances, machines: machines.machines, harnesses: harnesses, basePath: basePath, apiFetch: apiFetch, instancesPath: routes.instances, defaultInstanceId: defaultInstanceId, openSessionIds: openSessionIds, focusedSessionId: focusedSessionId, onSelect: minimal ? handleSelectSessionMinimal : handleSelectSession, onOpenInSplit: handleOpenSessionInSplit, onNewChat: handleNewChatForInstance, connected: bridge.connected, getDisplayName: getDisplayName, getSessionUIState: bridge.getSessionUIState, onRename: handleRenameSession, folders: folders, onAfterFolderChange: bridge.refreshSessions, onToggleCollapse: toggleSessionList }));
     return (_jsxs("div", { className: `bc-container ${collapseState.sessionList ? 'bc-sidebar-collapsed' : ''} ${minimal ? 'bc-minimal' : ''}`, children: [minimal && _jsx(MinimalTopBar, { title: minimalTitle }), minimal && _jsx(MinimalPaneSwitch, {}), _jsxs("div", { className: "bc-main", children: [!minimal && (collapseState.sessionList ? (_jsxs("button", { className: "bc-sidebar-strip", onClick: toggleSessionList, title: "Show sessions", "aria-label": "Show sessions", children: [_jsx("span", { className: "bc-sidebar-strip-chevron", children: "\u25B8" }), _jsx("span", { className: "bc-sidebar-strip-label", children: "Sessions" })] })) : sessionListEl), _jsx("div", { className: "bc-workspaces", children: !layout ? (_jsx("div", { className: "bc-workspaces-empty", children: _jsx("div", { className: "bc-workspaces-empty-hint", children: "No workspaces open. Pick a session from the sidebar (or use the + button next to one) to open one." }) })) : (_jsx(WorkspaceLayout, { node: layout, renderLeaf: renderLeaf, onResize: (path, sizes) => setLayout(prev => prev ? applySizes(prev, path, sizes) : prev) })) })] }), minimal && (_jsxs(_Fragment, { children: [_jsx(SessionDrawer, { children: sessionListEl }), _jsx(ChromeSheet, {})] })), showReengage && (_jsx("button", { type: "button", className: "bc-mc-reengage", onClick: () => setOverride(null), "aria-label": "Switch to mobile layout", children: "Use mobile layout" }))] }));
 }
 function applySizes(node, path, sizes) {

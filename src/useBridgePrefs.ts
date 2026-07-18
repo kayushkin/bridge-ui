@@ -13,26 +13,35 @@ interface BridgePrefsOptions {
 export function useBridgePrefs(options: BridgePrefsOptions = {}) {
   const { fetch: fetchFn, endpoint, storagePrefix = 'bridge-prefs' } = options
   const [prefs, setPrefs] = useState<BridgePrefs>({})
+  // Flips true once the initial load resolves (from server or localStorage).
+  // Consumers that key a first-render decision off a pref — e.g. the chat's
+  // pending-new-chat bootstrap, which needs last_instance_id — gate on this
+  // so they don't act on an empty prefs snapshot and pick the wrong default.
+  const [loaded, setLoaded] = useState(false)
   const serverMode = !!(fetchFn && endpoint)
 
   // Load prefs on mount
   useEffect(() => {
+    let cancelled = false
     ;(async () => {
       if (serverMode) {
         try {
           const res = await fetchFn!(endpoint!)
-          if (!res.ok) return
-          const data: BridgePrefs = await res.json()
-          setPrefs(data)
+          if (res.ok) {
+            const data: BridgePrefs = await res.json()
+            if (!cancelled) setPrefs(data)
+          }
         } catch { /* ignore */ }
       } else {
         // localStorage-only mode
         try {
           const stored = localStorage.getItem(storagePrefix)
-          if (stored) setPrefs(JSON.parse(stored))
+          if (stored && !cancelled) setPrefs(JSON.parse(stored))
         } catch { /* ignore */ }
       }
+      if (!cancelled) setLoaded(true)
     })()
+    return () => { cancelled = true }
   }, [fetchFn, endpoint, serverMode, storagePrefix])
 
   const updatePrefs = useCallback(async (partial: BridgePrefs) => {
@@ -99,6 +108,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
 
   return useMemo(() => ({
     prefs,
+    loaded,
     setLastHarness,
     setLastInstanceId,
     setLastSession,
@@ -109,6 +119,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     getLastSession,
   }), [
     prefs,
+    loaded,
     setLastHarness,
     setLastInstanceId,
     setLastSession,

@@ -2566,8 +2566,52 @@
 
 .bc-new-session { display: flex; align-items: center; gap: 6px; }
 .bc-new-session .bc-new-session-wrap { flex: 1; position: relative; }
-.bc-new-session .bc-new-session-btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.bc-new-session-caret { font-size: 0.8em; color: var(--text-dim); }
+
+/* Split "+ New" control: a wide main action (opens a new chat in the last
+   instance) welded to a caret button (opens the harness/env picker). */
+.bc-new-session-split { display: flex; align-items: stretch; width: 100%; }
+.bc-new-session-split .bc-new-session-btn {
+  flex: 1;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.bc-new-session-plus { color: var(--accent); font-weight: 600; }
+.bc-new-session-label { color: var(--accent); }
+.bc-new-session-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.bc-new-session-target-emoji { font-size: 0.95em; line-height: 1; }
+.bc-new-session-target-img { width: 14px; height: 14px; border-radius: 3px; object-fit: contain; }
+.bc-new-session-target-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-new-session-caret-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.bc-new-session-caret-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.bc-new-session-caret-btn:disabled { opacity: 0.4; cursor: default; }
+.bc-new-session-caret { font-size: 0.8em; }
 
 /* New-session popover */
 .bc-new-session-menu {

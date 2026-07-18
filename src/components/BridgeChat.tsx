@@ -93,6 +93,12 @@ function makeWorkspace(sessionId: string | null, seed?: Partial<WorkspaceState>)
   }
 }
 
+// A "pending" new chat: a workspace with a live composer but no server
+// session. The session is created on first send (see Workspace.handleSend).
+function makePendingWorkspace(instanceId: string, harness: string): WorkspaceState {
+  return makeWorkspace(null, { pending: { instanceId, harness } })
+}
+
 export function BridgeChat() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
   const bridge = useBridgeSession()
@@ -151,8 +157,7 @@ export function BridgeChat() {
   // root). With a non-empty tree, 'replace' falls back to a directional split
   // so the new workspace is never orphaned. 'split-auto' picks h or v based
   // on which dimension of the focused pane is longer.
-  const addWorkspace = useCallback((sessionId: string | null, mode: SplitMode): string => {
-    const ws = makeWorkspace(sessionId)
+  const placeWorkspace = useCallback((ws: WorkspaceState, mode: SplitMode): string => {
     setWorkspaces(prev => [...prev, ws])
     setLayout(prev => {
       if (!prev) return { kind: 'leaf', workspaceId: ws.id }
@@ -167,6 +172,10 @@ export function BridgeChat() {
     return ws.id
   }, [focusedWorkspaceId])
 
+  const addWorkspace = useCallback((sessionId: string | null, mode: SplitMode): string => {
+    return placeWorkspace(makeWorkspace(sessionId), mode)
+  }, [placeWorkspace])
+
   // Plain click on a session row: focus existing workspace if one exists for
   // that session, else retarget the focused workspace, else spawn one. Use
   // the per-row split buttons (or the New Session menu's split modes) to
@@ -177,7 +186,7 @@ export function BridgeChat() {
     if (existing) {
       setFocusedWorkspaceId(existing.id)
     } else if (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId)) {
-      setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id } : w))
+      setWorkspaces(prev => prev.map(w => w.id === focusedWorkspaceId ? { ...w, sessionId: id, pending: undefined } : w))
     } else {
       addWorkspace(id, 'replace')
     }
@@ -205,23 +214,29 @@ export function BridgeChat() {
     }).catch(() => {})
   }, [apiFetch, basePath])
 
-  // Bootstrap one workspace from the last-used instance's last session on
-  // first ready render — but only if nothing was restored from localStorage.
+  // Bootstrap on first ready render: open a fresh pending "new chat" so a new
+  // window / reload lands on a ready-to-type composer rather than the last
+  // conversation. Only fires when nothing real was restored from localStorage
+  // (restored splits are left as-is — we don't stack an empty pane on top of
+  // them). The pending chat targets the most-recently-used instance, falling
+  // back to the first enabled instance. Gated on bridgePrefs.loaded so the
+  // last-instance choice isn't lost to an empty prefs snapshot.
   useEffect(() => {
     if (bootstrappedRef.current) return
-    if (instances.loading) return
+    if (instances.loading || !bridgePrefs.loaded) return
     bootstrappedRef.current = true
     if (workspaces.length > 0) return
     const lastInstanceId = bridgePrefs.prefs.last_instance_id
-    if (!lastInstanceId || !instances.instanceMap.has(lastInstanceId)) return
-    const lastId = bridgePrefs.getLastSession(lastInstanceId)
-    if (lastId) {
-      const ws = makeWorkspace(lastId)
-      setWorkspaces([ws])
-      setLayout(buildFlatLayout([ws.id]))
-      setFocusedWorkspaceId(ws.id)
-    }
-  }, [bridgePrefs, instances.loading, instances.instanceMap, workspaces.length])
+    const lastInst = lastInstanceId ? instances.instanceMap.get(lastInstanceId) : undefined
+    const inst = (lastInst && lastInst.enabled)
+      ? lastInst
+      : instances.instances.find(i => i.enabled)
+    if (!inst) return
+    const ws = makePendingWorkspace(inst.id, inst.harness_type)
+    setWorkspaces([ws])
+    setLayout(buildFlatLayout([ws.id]))
+    setFocusedWorkspaceId(ws.id)
+  }, [bridgePrefs.loaded, bridgePrefs.prefs.last_instance_id, instances.loading, instances.instanceMap, instances.instances, workspaces.length])
 
   // Deeplink support: ?session=<bridge_id> opens that session and clears the
   // param. Used by kanban cards (and BridgeSessions) to send the user into
@@ -249,46 +264,39 @@ export function BridgeChat() {
     return session.display_name || session.agent_id || ''
   }, [])
 
-  // New chat creation. Default mode = replace focused workspace's session
-  // (matches sidebar select behavior); any 'split-*' mode spawns a new
-  // workspace via addWorkspace (which resolves 'split-auto' to a direction).
-  const handleCreateForInstance = useCallback(async (instanceId: string, mode: SplitMode = 'replace') => {
+  // Open a new chat. This creates NO server session — it drops a "pending"
+  // workspace with a live composer; the real session is created lazily on
+  // first send (Workspace.handleSend). That makes new-chat open instantly
+  // (no round-trip, so the chat pane no longer lags behind the sidebar) and
+  // means an abandoned new chat never leaves a dangling session behind.
+  // Default mode = replace focused workspace (matches sidebar select
+  // behavior); any 'split-*' mode spawns a new pane.
+  const handleNewChatForInstance = useCallback((instanceId: string, mode: SplitMode = 'replace') => {
     const inst = instances.instanceMap.get(instanceId)
     if (!inst) return
     const harness = inst.harness_type
     const harnessInfo = harnesses.find(h => h.name === harness)
     if (!harnessInfo?.available) return
-    const defaults = bridgePrefs.getDefaults(harness)
-    // Permission gating runs as a PreToolUse HTTP hook injected by
-    // bridge-server (--settings → /permission/cc-prehook). The bypass
-    // pref is read on every prehook call, so no per-session
-    // permission_mode flag is needed — the harness always launches in
-    // bypassPermissions to disable CC's own gate.
-    const sess = await bridge.createSession({
-      harness,
-      instance_id: instanceId,
-      display_name: '',
-    })
-    if (!sess) return
+    // Remember the chosen instance so the "+ New" button reflects it next time.
     bridgePrefs.setLastInstanceId(instanceId)
-    bridgePrefs.setLastSession(instanceId, sess.session_id)
-    if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
-      bridge.sendConfig({
-        model: defaults.model,
-        effort: defaults.effort,
-        max_budget: defaults.max_budget,
-        disabled_tools: defaults.disabled_tools,
-      })
-    }
-    // Replace focused workspace's session when possible — only spawn a new
-    // workspace if the user chose split-h/-v or no workspace is focused.
+    const ws = makePendingWorkspace(instanceId, harness)
     const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId)
     if (mode === 'replace' && focused) {
-      setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...w, sessionId: sess.session_id } : w))
+      // Reuse the focused pane's id so the layout is undisturbed.
+      setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...ws, id: w.id } : w))
+      setFocusedWorkspaceId(focused.id)
     } else {
-      addWorkspace(sess.session_id, mode === 'replace' ? 'replace' : mode)
+      placeWorkspace(ws, mode === 'replace' ? 'replace' : mode)
     }
-  }, [bridge, bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, addWorkspace])
+  }, [bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, placeWorkspace])
+
+  // Called by a pending workspace once its first send has created the real
+  // session — persist it as this instance's last session so nav / reopen
+  // land on it.
+  const handlePendingStarted = useCallback((instanceId: string, sessionId: string) => {
+    bridgePrefs.setLastInstanceId(instanceId)
+    bridgePrefs.setLastSession(instanceId, sessionId)
+  }, [bridgePrefs])
 
   const handleRenameSession = useCallback((id: string, name: string) => {
     bridge.renameSession(id, name)
@@ -346,6 +354,7 @@ export function BridgeChat() {
         onUpdate={fn => updateWorkspace(w.id, fn)}
         onClose={() => closeWorkspace(w.id)}
         onMarkDone={handleMarkSessionDone}
+        onStartPending={handlePendingStarted}
         harnesses={harnesses}
         instances={instances.instances}
         machines={machines.machines}
@@ -357,7 +366,7 @@ export function BridgeChat() {
         }}
       />
     )
-  }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace, handleMarkSessionDone])
+  }, [workspaces, focusedWorkspaceId, harnesses, instances.instances, machines.machines, storeModels, bridgePrefs, updateWorkspace, closeWorkspace, handleMarkSessionDone, handlePendingStarted])
 
   const sessionListEl = (
     <SessionList
@@ -373,7 +382,7 @@ export function BridgeChat() {
       focusedSessionId={focusedSessionId}
       onSelect={minimal ? handleSelectSessionMinimal : handleSelectSession}
       onOpenInSplit={handleOpenSessionInSplit}
-      onNewSession={handleCreateForInstance}
+      onNewChat={handleNewChatForInstance}
       connected={bridge.connected}
       getDisplayName={getDisplayName}
       getSessionUIState={bridge.getSessionUIState}
