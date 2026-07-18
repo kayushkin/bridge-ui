@@ -131,6 +131,19 @@
 .bc-new-session-btn:hover { border-color: var(--accent); }
 .bc-new-session-btn:disabled { opacity: 0.4; cursor: default; }
 .bc-session-list-empty { padding: 16px; color: var(--text-dim); font-size: 0.85em; text-align: center; }
+.bc-session-search { padding: 0 12px 8px; display: flex; align-items: center; gap: 6px; }
+.bc-session-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 0.85em;
+}
+.bc-session-search-input:focus { outline: none; border-color: var(--accent); }
+.bc-session-search-status { font-size: 0.75em; color: var(--text-dim); white-space: nowrap; }
 .bc-session-item {
   display: flex;
   align-items: center;

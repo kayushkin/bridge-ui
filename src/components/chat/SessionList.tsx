@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
+import type { BridgeInstance, FetchFn, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import { ARCHIVE_FOLDER, type UseBridgeFoldersReturn } from '../../useBridgeFolders'
 import { EditableName } from './EditableName'
 import { HarnessFilterBar, sessionMode, sessionStatusGroup } from './HarnessFilterBar'
@@ -16,12 +16,13 @@ import {
 } from './persistence'
 import type { CtxMenuState, SplitMode } from './types'
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
   harnesses: HarnessInfo[]
   basePath: string
+  apiFetch: FetchFn
   instancesPath: string
   defaultInstanceId?: string
   openSessionIds: Set<string>
@@ -106,6 +107,47 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     [...filtered].sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [filtered]
   )
+
+  // Free-text search over the sidebar. Matches instantly on display name or
+  // session id (client-side); a debounced call to the same message-content
+  // search the Sessions page uses (/sessions/search) unions in sessions whose
+  // transcript text matches. When a query is active we search ALL sessions —
+  // ignoring the exclude-chips and folder grouping — so a hit can never hide
+  // inside a collapsed or archived folder.
+  const [searchText, setSearchText] = useState('')
+  const [contentHits, setContentHits] = useState<Set<string> | null>(null)
+  const [searching, setSearching] = useState(false)
+  const query = searchText.trim()
+  const searchActive = query.length > 0
+
+  useEffect(() => {
+    if (!query) { setContentHits(null); setSearching(false); return }
+    let cancelled = false
+    setSearching(true)
+    const t = setTimeout(() => {
+      apiFetch(`${basePath}/sessions/search?q=${encodeURIComponent(query)}`)
+        .then(async r => {
+          if (!r.ok) throw new Error(`search failed: ${r.status}`)
+          const hits: { session_id: string }[] = (await r.json()) ?? []
+          if (!cancelled) setContentHits(new Set(hits.map(h => h.session_id)))
+        })
+        .catch(() => { if (!cancelled) setContentHits(new Set()) })
+        .finally(() => { if (!cancelled) setSearching(false) })
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [query, apiFetch, basePath])
+
+  const searchResults = useMemo(() => {
+    if (!searchActive) return []
+    const q = query.toLowerCase()
+    return sessions
+      .filter(s =>
+        getDisplayName(s).toLowerCase().includes(q) ||
+        s.session_id.toLowerCase().includes(q) ||
+        (contentHits ? contentHits.has(s.session_id) : false)
+      )
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  }, [searchActive, query, sessions, getDisplayName, contentHits])
 
   const { unfiled, grouped } = useMemo(() => {
     const known = new Set(folders.folderOrder)
@@ -315,6 +357,21 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
 
+      <div className="bc-session-search">
+        <input
+          type="search"
+          className="bc-session-search-input"
+          placeholder="Search name, id, or message text…"
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+        />
+        {searchActive && (
+          <span className="bc-session-search-status">
+            {searching ? 'searching…' : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}`}
+          </span>
+        )}
+      </div>
+
       <HarnessFilterBar
         machines={machines}
         harnesses={harnesses}
@@ -336,33 +393,45 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         onToggleCollapsed={toggleFilterCollapsed}
       />
 
-      {sorted.length === 0 && (
-        <div className="bc-session-list-empty">
-          {!connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter')}
-        </div>
-      )}
-
-      {unfiled.map(renderSession)}
-
-      {grouped.map(({ name, sessions: entries }) => {
-        const isCollapsed = collapsed[name] ?? false
-        const hasActive = entries.some(s => openSessionIds.has(s.session_id))
-        return (
-          <div key={name}>
-            <button
-              className={`bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`}
-              onClick={() => toggleFolder(name)}
-              onContextMenu={e => openFolderMenu(e, name)}
-            >
-              <span className="bc-folder-chevron">{isCollapsed ? '▸' : '▾'}</span>
-              <span className="bc-folder-icon">📁</span>
-              <span className="bc-folder-name">{name}</span>
-              <span className="bc-folder-count">{entries.length}</span>
-            </button>
-            {!isCollapsed && entries.map(renderSession)}
+      {searchActive ? (
+        searchResults.length === 0 ? (
+          <div className="bc-session-list-empty">
+            {searching ? 'Searching…' : 'No sessions match this search'}
           </div>
+        ) : (
+          searchResults.map(renderSession)
         )
-      })}
+      ) : (
+        <>
+          {sorted.length === 0 && (
+            <div className="bc-session-list-empty">
+              {!connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter')}
+            </div>
+          )}
+
+          {unfiled.map(renderSession)}
+
+          {grouped.map(({ name, sessions: entries }) => {
+            const isCollapsed = collapsed[name] ?? false
+            const hasActive = entries.some(s => openSessionIds.has(s.session_id))
+            return (
+              <div key={name}>
+                <button
+                  className={`bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`}
+                  onClick={() => toggleFolder(name)}
+                  onContextMenu={e => openFolderMenu(e, name)}
+                >
+                  <span className="bc-folder-chevron">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="bc-folder-icon">📁</span>
+                  <span className="bc-folder-name">{name}</span>
+                  <span className="bc-folder-count">{entries.length}</span>
+                </button>
+                {!isCollapsed && entries.map(renderSession)}
+              </div>
+            )
+          })}
+        </>
+      )}
 
       {ctxMenu && (
         <div

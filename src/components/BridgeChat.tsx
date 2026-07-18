@@ -357,6 +357,7 @@ export function BridgeChat() {
       machines={machines.machines}
       harnesses={harnesses}
       basePath={basePath}
+      apiFetch={apiFetch}
       instancesPath={routes.instances}
       defaultInstanceId={defaultInstanceId}
       openSessionIds={openSessionIds}

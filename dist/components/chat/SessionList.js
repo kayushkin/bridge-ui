@@ -7,7 +7,7 @@ import { NewSessionMenu } from './NewSessionMenu';
 import { SplitButtons } from './SplitButtons';
 import { StatusDot } from './StatusDot';
 import { loadExcludedHarnesses, loadExcludedMachines, loadFolderCollapsed, loadExcludedTypes, loadExcludedPurposes, loadExcludedModes, loadExcludedStatuses, loadFilterCollapsed, saveExcludedHarnesses, saveExcludedMachines, saveFolderCollapsed, saveExcludedTypes, saveExcludedPurposes, saveExcludedModes, saveExcludedStatuses, saveFilterCollapsed, } from './persistence';
-export function SessionList({ sessions, instances, machines, harnesses, basePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }) {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }) {
     const [collapsed, setCollapsed] = useState(loadFolderCollapsed);
     const [ctxMenu, setCtxMenu] = useState(null);
     const [showNewFolder, setShowNewFolder] = useState(false);
@@ -71,6 +71,51 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         return true;
     }), [sessions, excludedHarnesses, excludedMachines, excludedTypes, excludedPurposes, excludedModes, excludedStatuses, statusOf, instanceMachineByID]);
     const sorted = useMemo(() => [...filtered].sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [filtered]);
+    // Free-text search over the sidebar. Matches instantly on display name or
+    // session id (client-side); a debounced call to the same message-content
+    // search the Sessions page uses (/sessions/search) unions in sessions whose
+    // transcript text matches. When a query is active we search ALL sessions —
+    // ignoring the exclude-chips and folder grouping — so a hit can never hide
+    // inside a collapsed or archived folder.
+    const [searchText, setSearchText] = useState('');
+    const [contentHits, setContentHits] = useState(null);
+    const [searching, setSearching] = useState(false);
+    const query = searchText.trim();
+    const searchActive = query.length > 0;
+    useEffect(() => {
+        if (!query) {
+            setContentHits(null);
+            setSearching(false);
+            return;
+        }
+        let cancelled = false;
+        setSearching(true);
+        const t = setTimeout(() => {
+            apiFetch(`${basePath}/sessions/search?q=${encodeURIComponent(query)}`)
+                .then(async (r) => {
+                if (!r.ok)
+                    throw new Error(`search failed: ${r.status}`);
+                const hits = (await r.json()) ?? [];
+                if (!cancelled)
+                    setContentHits(new Set(hits.map(h => h.session_id)));
+            })
+                .catch(() => { if (!cancelled)
+                setContentHits(new Set()); })
+                .finally(() => { if (!cancelled)
+                setSearching(false); });
+        }, 300);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [query, apiFetch, basePath]);
+    const searchResults = useMemo(() => {
+        if (!searchActive)
+            return [];
+        const q = query.toLowerCase();
+        return sessions
+            .filter(s => getDisplayName(s).toLowerCase().includes(q) ||
+            s.session_id.toLowerCase().includes(q) ||
+            (contentHits ? contentHits.has(s.session_id) : false))
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    }, [searchActive, query, sessions, getDisplayName, contentHits]);
     const { unfiled, grouped } = useMemo(() => {
         const known = new Set(folders.folderOrder);
         const buckets = new Map();
@@ -219,11 +264,11 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                                 : _jsx("span", { className: "bc-session-harness-emoji", children: hinfo?.emoji || '·' }) }), _jsx(StatusDot, { state: sessUIState, title: sessTitle }), _jsx(EditableName, { value: getDisplayName(s), onSave: name => onRename(s.session_id, name), className: "bc-session-label" })] }), _jsx(SplitButtons, { onSplit: mode => onOpenInSplit(s.session_id, mode), autoTitle: "Open session in a new split (auto direction)", chooseTitle: "Choose split direction for this session" }), _jsx("span", { className: "bc-session-menu-btn", role: "button", tabIndex: 0, onClick: e => openSessionMenu(e, s.session_id), title: "Move to folder", children: "\u22EF" })] }, s.session_id));
     };
     const enabledInstanceCount = useMemo(() => instances.filter(i => i.enabled).length, [instances]);
-    return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsxs("div", { className: "bc-new-session-wrap", children: [_jsxs("button", { className: "bc-new-session-btn", onClick: () => setShowNewMenu(s => !s), disabled: !connected || enabledInstanceCount === 0, "aria-haspopup": "menu", "aria-expanded": showNewMenu, children: ["+ New Session ", _jsx("span", { className: "bc-new-session-caret", children: "\u25BE" })] }), showNewMenu && (_jsx(NewSessionMenu, { instances: instances, harnesses: harnesses, defaultInstanceId: defaultInstanceId, basePath: basePath, instancesPath: instancesPath, onPick: handlePickInstance, onClose: () => setShowNewMenu(false) }))] }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), _jsx(HarnessFilterBar, { machines: machines, harnesses: harnesses, sessions: sessions, instanceMachineByID: instanceMachineByID, excludedHarnesses: excludedHarnesses, excludedMachines: excludedMachines, excludedTypes: excludedTypes, excludedPurposes: excludedPurposes, excludedModes: excludedModes, excludedStatuses: excludedStatuses, statusOf: statusOf, onToggleHarness: toggleHarness, onToggleMachine: toggleMachine, onToggleClass: toggleClass, onClear: clearSessionFilter, basePath: basePath, collapsed: filterCollapsed, onToggleCollapsed: toggleFilterCollapsed }), sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: !connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter') })), unfiled.map(renderSession), grouped.map(({ name, sessions: entries }) => {
-                const isCollapsed = collapsed[name] ?? false;
-                const hasActive = entries.some(s => openSessionIds.has(s.session_id));
-                return (_jsxs("div", { children: [_jsxs("button", { className: `bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`, onClick: () => toggleFolder(name), onContextMenu: e => openFolderMenu(e, name), children: [_jsx("span", { className: "bc-folder-chevron", children: isCollapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-folder-icon", children: "\uD83D\uDCC1" }), _jsx("span", { className: "bc-folder-name", children: name }), _jsx("span", { className: "bc-folder-count", children: entries.length })] }), !isCollapsed && entries.map(renderSession)] }, name));
-            }), ctxMenu && (_jsxs("div", { className: "bc-ctx-menu", style: { top: ctxMenu.y, left: ctxMenu.x }, onClick: e => e.stopPropagation(), children: [ctxMenu.type === 'session' && (_jsxs(_Fragment, { children: [(() => {
+    return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsxs("div", { className: "bc-new-session-wrap", children: [_jsxs("button", { className: "bc-new-session-btn", onClick: () => setShowNewMenu(s => !s), disabled: !connected || enabledInstanceCount === 0, "aria-haspopup": "menu", "aria-expanded": showNewMenu, children: ["+ New Session ", _jsx("span", { className: "bc-new-session-caret", children: "\u25BE" })] }), showNewMenu && (_jsx(NewSessionMenu, { instances: instances, harnesses: harnesses, defaultInstanceId: defaultInstanceId, basePath: basePath, instancesPath: instancesPath, onPick: handlePickInstance, onClose: () => setShowNewMenu(false) }))] }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), _jsxs("div", { className: "bc-session-search", children: [_jsx("input", { type: "search", className: "bc-session-search-input", placeholder: "Search name, id, or message text\u2026", value: searchText, onChange: e => setSearchText(e.target.value) }), searchActive && (_jsx("span", { className: "bc-session-search-status", children: searching ? 'searching…' : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}` }))] }), _jsx(HarnessFilterBar, { machines: machines, harnesses: harnesses, sessions: sessions, instanceMachineByID: instanceMachineByID, excludedHarnesses: excludedHarnesses, excludedMachines: excludedMachines, excludedTypes: excludedTypes, excludedPurposes: excludedPurposes, excludedModes: excludedModes, excludedStatuses: excludedStatuses, statusOf: statusOf, onToggleHarness: toggleHarness, onToggleMachine: toggleMachine, onToggleClass: toggleClass, onClear: clearSessionFilter, basePath: basePath, collapsed: filterCollapsed, onToggleCollapsed: toggleFilterCollapsed }), searchActive ? (searchResults.length === 0 ? (_jsx("div", { className: "bc-session-list-empty", children: searching ? 'Searching…' : 'No sessions match this search' })) : (searchResults.map(renderSession))) : (_jsxs(_Fragment, { children: [sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: !connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter') })), unfiled.map(renderSession), grouped.map(({ name, sessions: entries }) => {
+                        const isCollapsed = collapsed[name] ?? false;
+                        const hasActive = entries.some(s => openSessionIds.has(s.session_id));
+                        return (_jsxs("div", { children: [_jsxs("button", { className: `bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`, onClick: () => toggleFolder(name), onContextMenu: e => openFolderMenu(e, name), children: [_jsx("span", { className: "bc-folder-chevron", children: isCollapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-folder-icon", children: "\uD83D\uDCC1" }), _jsx("span", { className: "bc-folder-name", children: name }), _jsx("span", { className: "bc-folder-count", children: entries.length })] }), !isCollapsed && entries.map(renderSession)] }, name));
+                    })] })), ctxMenu && (_jsxs("div", { className: "bc-ctx-menu", style: { top: ctxMenu.y, left: ctxMenu.x }, onClick: e => e.stopPropagation(), children: [ctxMenu.type === 'session' && (_jsxs(_Fragment, { children: [(() => {
                                 const sess = sessions.find(s => s.session_id === ctxMenu.id);
                                 const current = sess?.folder_name ?? '';
                                 const isDone = current === ARCHIVE_FOLDER;
