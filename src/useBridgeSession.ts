@@ -780,6 +780,27 @@ export function useBridgeSession(): UseBridgeSessionReturn {
       if (!sessionsRef.current.find(s => s.session_id === id)) {
         await refreshSessionsImpl()
       }
+      // The /sessions list omits the heavy `info` blob (harness tools, slash
+      // commands, skills, MCP servers) to keep the list small. A live session
+      // gets its info back via the session-list SSE upsert, but an idle one
+      // that emits no upsert would leave the tools panel and system-prompt
+      // modal empty. Hydrate it once on select: GET /sessions/{id} always
+      // includes info. omitempty means a missing info won't clobber an
+      // existing one, so this is safe to merge.
+      if (!sessionsRef.current.find(s => s.session_id === id)?.info) {
+        try {
+          const res = await fetchFn(`${basePath}/sessions/${id}`)
+          if (res.ok && activeSessionIdRef.current === id) {
+            const full = await res.json() as ManagedSession
+            if (full?.info) {
+              setSessions(prev => prev.map(s =>
+                s.session_id === id ? { ...s, info: full.info } : s))
+            }
+          }
+        } catch {
+          // Non-fatal — panel stays empty until a session_info event arrives.
+        }
+      }
       await loadHistory(id)
       // Hydrate the sticky-banner state. /hooks/pending returns the
       // awaiting_resolution events that haven't been closed by a matching
