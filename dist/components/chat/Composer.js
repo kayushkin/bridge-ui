@@ -53,8 +53,21 @@ export function Composer({ sessionId, connected, streaming, paused, onSend, onSt
             handleSubmit();
         }
     };
-    useEffect(() => { if (connected)
-        inputRef.current?.focus(); }, [connected]);
+    // Focus the composer once per session — when a session is first selected and
+    // its connection comes up. Keying this on `connected` alone (as it used to be)
+    // re-fired on every SSE reconnect, stealing focus back into the textarea. For
+    // Vimium users that silently drops the page into insert mode (and can yank you
+    // out of an open hint selection) every time the stream blips. Tracking the last
+    // session we focused for means a bare reconnect — same session, `connected`
+    // flips false→true again — no longer refocuses.
+    const focusedForSession = useRef(null);
+    useEffect(() => {
+        const sid = sessionId ?? '';
+        if (connected && sid && focusedForSession.current !== sid) {
+            inputRef.current?.focus();
+            focusedForSession.current = sid;
+        }
+    }, [connected, sessionId]);
     // Auto-grow: reset to 0 to shrink on delete, then size to scrollHeight up to cap.
     useLayoutEffect(() => {
         const el = inputRef.current;

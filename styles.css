@@ -150,6 +150,8 @@
 .bc-new-session-btn:hover { border-color: var(--accent); }
 .bc-new-session-btn:disabled { opacity: 0.4; cursor: default; }
 .bc-session-list-empty { padding: 16px; color: var(--text-dim); font-size: 0.85em; text-align: center; }
+.bc-session-show-more { display: block; width: calc(100% - 16px); margin: 4px 8px 8px; padding: 6px; background: none; border: 1px dashed var(--border, #333); border-radius: 6px; color: var(--text-dim); font-size: 0.8em; cursor: pointer; }
+.bc-session-show-more:hover { color: var(--text); border-color: var(--text-dim); }
 .bc-session-search { padding: 0 12px 8px; display: flex; align-items: center; gap: 6px; }
 .bc-session-search-input {
   flex: 1;

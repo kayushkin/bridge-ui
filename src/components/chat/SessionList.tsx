@@ -16,6 +16,10 @@ import {
 } from './persistence'
 import type { CtxMenuState, SplitMode } from './types'
 
+// Max session rows rendered per list before a "Show N more" button. Keeps the
+// sidebar DOM small so a large Archive folder can't balloon it to 10k+ nodes.
+const SESSION_LIST_CAP = 50
+
 export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewSession, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
@@ -51,6 +55,14 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   const [excludedStatuses, setExcludedStatuses] = useState<Set<string>>(loadExcludedStatuses)
   const [filterCollapsed, setFilterCollapsed] = useState<boolean>(loadFilterCollapsed)
   const [showNewMenu, setShowNewMenu] = useState(false)
+  // Per-list render cap. Each session row is ~30-40 DOM nodes, so an expanded
+  // folder of a few hundred (typically the Archive of done sessions) mounts
+  // 10k+ nodes at once — enough to bloat React reconciliation and, for Vimium
+  // users, to push `f`/link-hint latency past 200ms because Vimium walks the
+  // whole document per activation. We render at most SESSION_LIST_CAP rows per
+  // list and offer an explicit reveal for the rest; search below covers the
+  // find-a-specific-session case without expanding.
+  const [listCaps, setListCaps] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!ctxMenu) return
@@ -338,6 +350,27 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     )
   }
 
+  // Render a session list capped to SESSION_LIST_CAP rows, with an explicit
+  // "show the rest" button when there are more. `key` scopes the reveal so
+  // expanding one folder doesn't expand another. Revealing sets the cap to the
+  // full length in one click — a deliberate opt-in to the DOM cost.
+  const renderCappedList = (key: string, entries: ManagedSession[]) => {
+    const cap = listCaps[key] ?? SESSION_LIST_CAP
+    if (entries.length <= cap) return entries.map(renderSession)
+    const hidden = entries.length - cap
+    return (
+      <>
+        {entries.slice(0, cap).map(renderSession)}
+        <button
+          className="bc-session-show-more"
+          onClick={() => setListCaps(c => ({ ...c, [key]: entries.length }))}
+        >
+          Show {hidden} more
+        </button>
+      </>
+    )
+  }
+
   const enabledInstanceCount = useMemo(() => instances.filter(i => i.enabled).length, [instances])
 
   return (
@@ -410,7 +443,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
             {searching ? 'Searching…' : 'No sessions match this search'}
           </div>
         ) : (
-          searchResults.map(renderSession)
+          renderCappedList('__search__', searchResults)
         )
       ) : (
         <>
@@ -420,7 +453,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
             </div>
           )}
 
-          {unfiled.map(renderSession)}
+          {renderCappedList('__unfiled__', unfiled)}
 
           {grouped.map(({ name, sessions: entries }) => {
             const isCollapsed = collapsed[name] ?? false
@@ -437,7 +470,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                   <span className="bc-folder-name">{name}</span>
                   <span className="bc-folder-count">{entries.length}</span>
                 </button>
-                {!isCollapsed && entries.map(renderSession)}
+                {!isCollapsed && renderCappedList(name, entries)}
               </div>
             )
           })}
