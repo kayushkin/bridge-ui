@@ -270,15 +270,14 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         setShowNewMenu(false);
         onNewChat(id, mode);
     };
-    // The instance the bare "+ New" button launches into: the most-recently-used
-    // one (defaultInstanceId) when it's still enabled, else the first enabled
-    // instance. Its harness supplies the emoji/label shown on the button.
+    // The instance the bare "+ New" button launches into: strictly the
+    // most-recently-used one (defaultInstanceId), when it's still enabled. No
+    // fallback to "first enabled" — if there is no recorded last instance we
+    // don't guess one; the button just opens the picker instead.
     const primaryInstance = useMemo(() => {
-        const preferred = defaultInstanceId ? instanceMap.get(defaultInstanceId) : undefined;
-        if (preferred?.enabled)
-            return preferred;
-        return instances.find(i => i.enabled);
-    }, [defaultInstanceId, instanceMap, instances]);
+        const last = defaultInstanceId ? instanceMap.get(defaultInstanceId) : undefined;
+        return last?.enabled ? last : undefined;
+    }, [defaultInstanceId, instanceMap]);
     const primaryHarness = primaryInstance ? harnessMap.get(primaryInstance.harness_type) : undefined;
     const primaryMachine = useMemo(() => primaryInstance ? machines.find(m => m.id === primaryInstance.machine_id) : undefined, [primaryInstance, machines]);
     const renderSession = (s) => {
@@ -310,9 +309,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         return (_jsxs(_Fragment, { children: [entries.slice(0, cap).map(renderSession), _jsxs("button", { className: "bc-session-show-more", onClick: () => setListCaps(c => ({ ...c, [key]: entries.length })), children: ["Show ", hidden, " more"] })] }));
     };
     const enabledInstanceCount = useMemo(() => instances.filter(i => i.enabled).length, [instances]);
-    return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsxs("div", { className: "bc-new-session-wrap", children: [_jsxs("div", { className: "bc-new-session-split", children: [_jsxs("button", { className: "bc-new-session-btn", onClick: () => primaryInstance && onNewChat(primaryInstance.id, 'replace'), disabled: !connected || !primaryInstance, title: primaryInstance
+    return (_jsxs("div", { className: "bc-session-list", children: [_jsxs("div", { className: "bc-new-session", children: [_jsxs("div", { className: "bc-new-session-wrap", children: [_jsxs("div", { className: "bc-new-session-split", children: [_jsxs("button", { className: "bc-new-session-btn", onClick: () => primaryInstance ? onNewChat(primaryInstance.id, 'replace') : setShowNewMenu(true), disabled: !connected || enabledInstanceCount === 0, title: primaryInstance
                                             ? `New chat in ${primaryInstance.name}${primaryHarness ? ` (${primaryHarness.label}` : ''}${primaryMachine ? ` on ${primaryMachine.name})` : primaryHarness ? ')' : ''}`
-                                            : 'No instances configured', children: [_jsx("span", { className: "bc-new-session-plus", "aria-hidden": true, children: "+" }), _jsx("span", { className: "bc-new-session-label", children: "New" }), primaryInstance && (_jsxs("span", { className: "bc-new-session-target", "aria-label": `${primaryHarness?.label || primaryInstance.harness_type} on ${primaryMachine?.name || 'machine'}`, children: [primaryHarness?.image
+                                            : 'New chat — choose a harness / environment', children: [_jsx("span", { className: "bc-new-session-plus", "aria-hidden": true, children: "+" }), _jsx("span", { className: "bc-new-session-label", children: "New" }), primaryInstance && (_jsxs("span", { className: "bc-new-session-target", "aria-label": `${primaryHarness?.label || primaryInstance.harness_type} on ${primaryMachine?.name || 'machine'}`, children: [primaryHarness?.image
                                                         ? _jsx("img", { className: "bc-new-session-target-img", src: `${basePath}${primaryHarness.image}`, alt: "" })
                                                         : primaryHarness?.emoji
                                                             ? _jsx("span", { className: "bc-new-session-target-emoji", "aria-hidden": true, children: primaryHarness.emoji })

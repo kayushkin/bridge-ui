@@ -244,25 +244,25 @@ export function BridgeChat() {
   // window / reload lands on a ready-to-type composer rather than the last
   // conversation. Only fires when nothing real was restored from localStorage
   // (restored splits are left as-is — we don't stack an empty pane on top of
-  // them). The pending chat targets the most-recently-used instance, falling
-  // back to the first enabled instance. Gated on bridgePrefs.loaded so the
-  // last-instance choice isn't lost to an empty prefs snapshot.
+  // them). The pending chat targets the recorded most-recently-used instance
+  // only; if none is recorded it does not open one. Gated on bridgePrefs.loaded
+  // so the last-instance choice isn't lost to an empty prefs snapshot.
   useEffect(() => {
     if (bootstrappedRef.current) return
     if (instances.loading || !bridgePrefs.loaded) return
     bootstrappedRef.current = true
     if (workspaces.length > 0) return
+    // Strictly the recorded last-used instance. No fallback to "first enabled"
+    // — if none is recorded we don't guess; the empty state stands until the
+    // user opens a chat from the picker.
     const lastInstanceId = bridgePrefs.prefs.last_instance_id
-    const lastInst = lastInstanceId ? instances.instanceMap.get(lastInstanceId) : undefined
-    const inst = (lastInst && lastInst.enabled)
-      ? lastInst
-      : instances.instances.find(i => i.enabled)
-    if (!inst) return
+    const inst = lastInstanceId ? instances.instanceMap.get(lastInstanceId) : undefined
+    if (!inst || !inst.enabled) return
     const ws = makePendingWorkspace(inst.id, inst.harness_type)
     setWorkspaces([ws])
     setLayout(buildFlatLayout([ws.id]))
     setFocusedWorkspaceId(ws.id)
-  }, [bridgePrefs.loaded, bridgePrefs.prefs.last_instance_id, instances.loading, instances.instanceMap, instances.instances, workspaces.length])
+  }, [bridgePrefs.loaded, bridgePrefs.prefs.last_instance_id, instances.loading, instances.instanceMap, workspaces.length])
 
   // Deeplink support: ?session=<bridge_id> opens that session and clears the
   // param. Used by kanban cards (and BridgeSessions) to send the user into

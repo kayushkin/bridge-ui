@@ -304,14 +304,14 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     onNewChat(id, mode)
   }
 
-  // The instance the bare "+ New" button launches into: the most-recently-used
-  // one (defaultInstanceId) when it's still enabled, else the first enabled
-  // instance. Its harness supplies the emoji/label shown on the button.
+  // The instance the bare "+ New" button launches into: strictly the
+  // most-recently-used one (defaultInstanceId), when it's still enabled. No
+  // fallback to "first enabled" — if there is no recorded last instance we
+  // don't guess one; the button just opens the picker instead.
   const primaryInstance = useMemo(() => {
-    const preferred = defaultInstanceId ? instanceMap.get(defaultInstanceId) : undefined
-    if (preferred?.enabled) return preferred
-    return instances.find(i => i.enabled)
-  }, [defaultInstanceId, instanceMap, instances])
+    const last = defaultInstanceId ? instanceMap.get(defaultInstanceId) : undefined
+    return last?.enabled ? last : undefined
+  }, [defaultInstanceId, instanceMap])
   const primaryHarness = primaryInstance ? harnessMap.get(primaryInstance.harness_type) : undefined
   const primaryMachine = useMemo(
     () => primaryInstance ? machines.find(m => m.id === primaryInstance.machine_id) : undefined,
@@ -399,11 +399,11 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                 case; the caret beside it picks a specific harness/env. */}
             <button
               className="bc-new-session-btn"
-              onClick={() => primaryInstance && onNewChat(primaryInstance.id, 'replace')}
-              disabled={!connected || !primaryInstance}
+              onClick={() => primaryInstance ? onNewChat(primaryInstance.id, 'replace') : setShowNewMenu(true)}
+              disabled={!connected || enabledInstanceCount === 0}
               title={primaryInstance
                 ? `New chat in ${primaryInstance.name}${primaryHarness ? ` (${primaryHarness.label}` : ''}${primaryMachine ? ` on ${primaryMachine.name})` : primaryHarness ? ')' : ''}`
-                : 'No instances configured'}
+                : 'New chat — choose a harness / environment'}
             >
               <span className="bc-new-session-plus" aria-hidden>+</span>
               <span className="bc-new-session-label">New</span>
