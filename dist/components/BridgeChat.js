@@ -148,6 +148,27 @@ export function BridgeChat() {
             return;
         saveWorkspacesState({ workspaces, focusedWorkspaceId, layout });
     }, [workspaces, focusedWorkspaceId, layout]);
+    // The instance a new chat (landing bootstrap + "+ New" button) targets,
+    // resolved from recorded prefs only — never a first-enabled guess:
+    //   1. the exact recorded last instance (last_instance_id), if still enabled;
+    //   2. else an enabled instance of the recorded last harness (last_harness) —
+    //      preferring one that's actually been used (has a last_session entry) —
+    //      so the shown harness is the user's real last one, not an invented one;
+    //   3. else undefined: nothing recorded, so we don't invent a target.
+    const primaryInstanceId = useMemo(() => {
+        const { last_instance_id, last_harness, last_session } = bridgePrefs.prefs;
+        if (last_instance_id) {
+            const inst = instances.instanceMap.get(last_instance_id);
+            if (inst?.enabled)
+                return inst.id;
+        }
+        if (last_harness) {
+            const ofHarness = instances.instances.filter(i => i.enabled && i.harness_type === last_harness);
+            const used = ofHarness.find(i => last_session && i.id in last_session);
+            return (used ?? ofHarness[0])?.id;
+        }
+        return undefined;
+    }, [bridgePrefs.prefs, instances.instances, instances.instanceMap]);
     const toggleSessionList = useCallback(() => {
         setCollapseState(s => { const next = { ...s, sessionList: !s.sessionList }; saveCollapseState(next); return next; });
     }, []);
@@ -251,18 +272,14 @@ export function BridgeChat() {
         bootstrappedRef.current = true;
         if (workspaces.length > 0)
             return;
-        // Strictly the recorded last-used instance. No fallback to "first enabled"
-        // — if none is recorded we don't guess; the empty state stands until the
-        // user opens a chat from the picker.
-        const lastInstanceId = bridgePrefs.prefs.last_instance_id;
-        const inst = lastInstanceId ? instances.instanceMap.get(lastInstanceId) : undefined;
+        const inst = primaryInstanceId ? instances.instanceMap.get(primaryInstanceId) : undefined;
         if (!inst || !inst.enabled)
             return;
         const ws = makePendingWorkspace(inst.id, inst.harness_type);
         setWorkspaces([ws]);
         setLayout(buildFlatLayout([ws.id]));
         setFocusedWorkspaceId(ws.id);
-    }, [bridgePrefs.loaded, bridgePrefs.prefs.last_instance_id, instances.loading, instances.instanceMap, workspaces.length]);
+    }, [bridgePrefs.loaded, primaryInstanceId, instances.loading, instances.instanceMap, workspaces.length]);
     // Deeplink support: ?session=<bridge_id> opens that session and clears the
     // param. Used by kanban cards (and BridgeSessions) to send the user into
     // chat focused on a specific session. Runs once; takes precedence over the
@@ -338,7 +355,7 @@ export function BridgeChat() {
         const ws = workspaces.find(w => w.id === focusedWorkspaceId);
         return ws?.sessionId ?? null;
     }, [workspaces, focusedWorkspaceId]);
-    const defaultInstanceId = bridgePrefs.prefs.last_instance_id;
+    const defaultInstanceId = primaryInstanceId;
     const { minimal, setDrawerOpen, override, setOverride } = useMinimalChrome();
     const [vw, setVw] = useState(() => typeof window === 'undefined' ? 1024 : window.innerWidth);
     useEffect(() => {
