@@ -138,7 +138,11 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     })
   }, [bridge.activeSession])
 
-  const activeHarness = activeChat?.harness ?? ''
+  // A pending (unstarted) pane has no active session, so fall back to the
+  // harness recorded on its pending marker. This lets harnessDefaults /
+  // capabilities / harnessModels resolve before the session exists, so the
+  // model & effort controls can render for a pending chat.
+  const activeHarness = activeChat?.harness ?? workspace.pending?.harness ?? ''
   // Server-registered HarnessInfo for the active harness — single source
   // of truth for label / emoji / image / tint. No client-side fallbacks;
   // missing fields mean the server registration needs fixing.
@@ -305,13 +309,24 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
       if (!sess) return
       onStartPending?.(instanceId, sess.session_id)
       const defaults = bridgePrefs.getDefaults(harness)
-      if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
+      // A pending chat can pick model / effort in the controls bar before the
+      // first send; that choice lives in pendingConfigRef. Apply it over the
+      // saved defaults so the selection is honored, and persist it as the new
+      // default like the running-session path below.
+      const override = pendingConfigRef.current
+      const model = override?.model ?? defaults.model
+      const effort = override?.effort ?? defaults.effort
+      if (model || effort || defaults.max_budget || defaults.disabled_tools?.length) {
         bridge.sendConfig({
-          model: defaults.model,
-          effort: defaults.effort,
+          model,
+          effort,
           max_budget: defaults.max_budget,
           disabled_tools: defaults.disabled_tools,
         }, sess.session_id)
+      }
+      if (override) {
+        bridgePrefs.setHarnessDefaults(harness, override)
+        pendingConfigRef.current = null
       }
       // Bind the pane to the new session and drop its pending marker.
       onUpdate(w => ({ ...w, sessionId: sess.session_id, pending: undefined }))
@@ -333,6 +348,10 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     if (activeChat?.sessionId) bridge.renameSession(activeChat.sessionId, name)
   }, [bridge, activeChat])
 
+  // Model & effort are pre-start settings, so they render for a pending chat
+  // (no active session yet) as well as a running one. The remaining controls
+  // act on a live session and stay gated on bridge.activeSession.
+  const showConfigControls = !!bridge.activeSession || isPending
   const controlsBar = (
     <div className="bc-controls-bar">
       {bridge.activeSession && (
@@ -345,22 +364,26 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
               onSwitch={mode => bridge.switchMode(bridge.activeSession!.session_id, mode)}
             />
           )}
-          {capabilities.has('model') && harnessModels.length > 0 && (
-            <select className="bc-ctrl-select" value={configModel} onChange={e => setConfigModel(e.target.value)} title="Model">
-              <option value="">Model</option>
-              {harnessModels.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          )}
-          {capabilities.has('effort') && (
-            <select className="bc-ctrl-select" value={configEffort} onChange={e => setConfigEffort(e.target.value)} title="Effort">
-              <option value="">Effort</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="xhigh">XHigh</option>
-              <option value="max">Max</option>
-            </select>
-          )}
+        </>
+      )}
+      {showConfigControls && capabilities.has('model') && harnessModels.length > 0 && (
+        <select className="bc-ctrl-select" value={configModel} onChange={e => setConfigModel(e.target.value)} title="Model">
+          <option value="">Model</option>
+          {harnessModels.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+      )}
+      {showConfigControls && capabilities.has('effort') && (
+        <select className="bc-ctrl-select" value={configEffort} onChange={e => setConfigEffort(e.target.value)} title="Effort">
+          <option value="">Effort</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="xhigh">XHigh</option>
+          <option value="max">Max</option>
+        </select>
+      )}
+      {bridge.activeSession && (
+        <>
           {capabilities.has('compact') && (
             <button
               className={`bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`}

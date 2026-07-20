@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBridgeConfig } from '../../context';
@@ -110,7 +110,11 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
             displayName: sess.display_name || agent,
         });
     }, [bridge.activeSession]);
-    const activeHarness = activeChat?.harness ?? '';
+    // A pending (unstarted) pane has no active session, so fall back to the
+    // harness recorded on its pending marker. This lets harnessDefaults /
+    // capabilities / harnessModels resolve before the session exists, so the
+    // model & effort controls can render for a pending chat.
+    const activeHarness = activeChat?.harness ?? workspace.pending?.harness ?? '';
     // Server-registered HarnessInfo for the active harness — single source
     // of truth for label / emoji / image / tint. No client-side fallbacks;
     // missing fields mean the server registration needs fixing.
@@ -277,13 +281,24 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
                 return;
             onStartPending?.(instanceId, sess.session_id);
             const defaults = bridgePrefs.getDefaults(harness);
-            if (defaults.model || defaults.effort || defaults.max_budget || defaults.disabled_tools?.length) {
+            // A pending chat can pick model / effort in the controls bar before the
+            // first send; that choice lives in pendingConfigRef. Apply it over the
+            // saved defaults so the selection is honored, and persist it as the new
+            // default like the running-session path below.
+            const override = pendingConfigRef.current;
+            const model = override?.model ?? defaults.model;
+            const effort = override?.effort ?? defaults.effort;
+            if (model || effort || defaults.max_budget || defaults.disabled_tools?.length) {
                 bridge.sendConfig({
-                    model: defaults.model,
-                    effort: defaults.effort,
+                    model,
+                    effort,
                     max_budget: defaults.max_budget,
                     disabled_tools: defaults.disabled_tools,
                 }, sess.session_id);
+            }
+            if (override) {
+                bridgePrefs.setHarnessDefaults(harness, override);
+                pendingConfigRef.current = null;
             }
             // Bind the pane to the new session and drop its pending marker.
             onUpdate(w => ({ ...w, sessionId: sess.session_id, pending: undefined }));
@@ -305,9 +320,13 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         if (activeChat?.sessionId)
             bridge.renameSession(activeChat.sessionId, name);
     }, [bridge, activeChat]);
-    const controlsBar = (_jsx("div", { className: "bc-controls-bar", children: bridge.activeSession && (_jsxs(_Fragment, { children: [_jsx(StatusChip, { uiState: bridge.uiState, activity: bridge.activity, compacting: bridge.compacting }), activeHarnessInfo?.pty && (_jsx(ModeToggle, { currentMode: bridge.activeSession.mode, busy: bridge.uiState === 'running', onSwitch: mode => bridge.switchMode(bridge.activeSession.session_id, mode) })), capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), capabilities.has('compact') && (_jsxs("button", { className: `bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`, onClick: handleCompact, title: contextInfo.tokens && contextInfo.limit
-                        ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
-                        : 'Compact context', style: { ['--ctx-pct']: `${contextInfo.pct}%` }, children: [_jsx("span", { className: "bc-ctrl-btn-bar", "aria-hidden": true }), _jsxs("span", { className: "bc-ctrl-btn-text", children: ["Compact", contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''] })] })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] })), _jsx(SessionPermissionMode, { session: bridge.activeSession, harnesses: harnesses })] })) }));
+    // Model & effort are pre-start settings, so they render for a pending chat
+    // (no active session yet) as well as a running one. The remaining controls
+    // act on a live session and stay gated on bridge.activeSession.
+    const showConfigControls = !!bridge.activeSession || isPending;
+    const controlsBar = (_jsxs("div", { className: "bc-controls-bar", children: [bridge.activeSession && (_jsxs(_Fragment, { children: [_jsx(StatusChip, { uiState: bridge.uiState, activity: bridge.activity, compacting: bridge.compacting }), activeHarnessInfo?.pty && (_jsx(ModeToggle, { currentMode: bridge.activeSession.mode, busy: bridge.uiState === 'running', onSwitch: mode => bridge.switchMode(bridge.activeSession.session_id, mode) }))] })), showConfigControls && capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), showConfigControls && capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('compact') && (_jsxs("button", { className: `bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`, onClick: handleCompact, title: contextInfo.tokens && contextInfo.limit
+                            ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
+                            : 'Compact context', style: { ['--ctx-pct']: `${contextInfo.pct}%` }, children: [_jsx("span", { className: "bc-ctrl-btn-bar", "aria-hidden": true }), _jsxs("span", { className: "bc-ctrl-btn-text", children: ["Compact", contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''] })] })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] })), _jsx(SessionPermissionMode, { session: bridge.activeSession, harnesses: harnesses })] }))] }));
     // In minimal mode, the focused workspace's controls go into the bottom
     // sheet via a portal. Non-focused workspaces hide their controls
     // entirely on mobile (only the focused one is reachable). In normal
