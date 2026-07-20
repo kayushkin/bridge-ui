@@ -323,15 +323,25 @@ export function BridgeChat() {
     // Remember the chosen instance so the "+ New" button reflects it next time.
     bridgePrefs.setLastInstanceId(instanceId)
     const ws = makePendingWorkspace(instanceId, harness)
-    const focused = focusedWorkspaceId && workspaces.find(w => w.id === focusedWorkspaceId)
-    if (mode === 'replace' && focused) {
-      // Reuse the focused pane's id so the layout is undisturbed.
-      setWorkspaces(prev => prev.map(w => w.id === focused.id ? { ...ws, id: w.id } : w))
-      setFocusedWorkspaceId(focused.id)
-    } else {
-      placeWorkspace(ws, mode === 'replace' ? 'replace' : mode)
+    // 'replace' means "swap the current window for a new chat" — the same
+    // behavior as clicking a session in the sidebar. Target the focused pane,
+    // or the first pane when focus is stale, and reuse its id so the layout is
+    // undisturbed. Without the firstLeafId fallback a missing focus dropped
+    // through to placeWorkspace, which splits a non-empty layout — so the bare
+    // "+ New" button spawned a side-by-side pane instead of replacing. Only an
+    // explicit split mode (from the caret menu) reaches placeWorkspace now.
+    if (mode === 'replace') {
+      const targetId = (focusedWorkspaceId && workspaces.some(w => w.id === focusedWorkspaceId))
+        ? focusedWorkspaceId
+        : firstLeafId(layout)
+      if (targetId) {
+        setWorkspaces(prev => prev.map(w => w.id === targetId ? { ...ws, id: w.id } : w))
+        setFocusedWorkspaceId(targetId)
+        return
+      }
     }
-  }, [bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, placeWorkspace])
+    placeWorkspace(ws, mode)
+  }, [bridgePrefs, instances.instanceMap, harnesses, focusedWorkspaceId, workspaces, layout, placeWorkspace])
 
   // Called by a pending workspace once its first send has created the real
   // session — persist it as this instance's last session so nav / reopen
