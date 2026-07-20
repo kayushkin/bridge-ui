@@ -5,6 +5,14 @@ import remarkGfm from 'remark-gfm';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { UsageLine } from './UsageLine';
 import { formatHMS } from './utils';
+import { remarkRefChips } from './refChips/remarkRefChips';
+import { RefChip } from './refChips/RefChip';
+// remark plugins and the components map are module constants so react-markdown
+// sees stable references across renders. `ref-chip` is the custom hast element
+// remarkRefChips emits for a detected session/todo id; react-markdown routes it
+// to the RefChip component. The cast lets the map carry a non-HTML tag name.
+const REMARK_PLUGINS = [remarkGfm, remarkRefChips];
+const MD_COMPONENTS = { 'ref-chip': RefChip };
 // Persisted on/off state for rendering assistant response bodies as markdown.
 // Defaults to on; any value other than "off" is treated as enabled so the
 // first-run default and unparseable values both render markdown.
@@ -19,7 +27,7 @@ function readMarkdownPref() {
 }
 function ResponseBody({ text, markdown }) {
     if (markdown) {
-        return (_jsx("div", { className: "bc-turns-text bc-turns-md", children: _jsx(ReactMarkdown, { remarkPlugins: [remarkGfm], children: text }) }));
+        return (_jsx("div", { className: "bc-turns-text bc-turns-md", children: _jsx(ReactMarkdown, { remarkPlugins: REMARK_PLUGINS, components: MD_COMPONENTS, children: text }) }));
     }
     return _jsx("div", { className: "bc-turns-text", children: text });
 }

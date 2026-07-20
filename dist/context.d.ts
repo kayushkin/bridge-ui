@@ -33,6 +33,10 @@ export interface BridgeConfig {
     /** Base path for kanban-store API (e.g. "/api/kanban"). No trailing slash.
      * If empty, the Kanban tab is hidden. */
     kanbanStoreBasePath: string;
+    /** Base path for the noteboard API (e.g. "/api/noteboard"). No trailing
+     * slash. Used by chat reference chips to resolve a todo/item id to its
+     * title/status. If empty, todo chips render but say lookup isn't configured. */
+    noteboardBasePath: string;
     /** Base path for llm-bridge-adapter API (e.g. "/api/llm-bridge-adapter"). No
      * trailing slash. Used to resolve bus_session_id → bridge_id when a kanban
      * card is linked by entity_type=bus_session. If empty, those cards' chat

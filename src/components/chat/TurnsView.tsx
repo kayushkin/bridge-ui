@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import type { ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { LogRow } from '../../types'
@@ -6,6 +7,15 @@ import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { UsageLine } from './UsageLine'
 import { formatHMS } from './utils'
 import type { TurnsItem } from './types'
+import { remarkRefChips } from './refChips/remarkRefChips'
+import { RefChip } from './refChips/RefChip'
+
+// remark plugins and the components map are module constants so react-markdown
+// sees stable references across renders. `ref-chip` is the custom hast element
+// remarkRefChips emits for a detected session/todo id; react-markdown routes it
+// to the RefChip component. The cast lets the map carry a non-HTML tag name.
+const REMARK_PLUGINS = [remarkGfm, remarkRefChips]
+const MD_COMPONENTS = { 'ref-chip': RefChip } as unknown as ComponentProps<typeof ReactMarkdown>['components']
 
 // Persisted on/off state for rendering assistant response bodies as markdown.
 // Defaults to on; any value other than "off" is treated as enabled so the
@@ -20,7 +30,7 @@ function ResponseBody({ text, markdown }: { text: string; markdown: boolean }) {
   if (markdown) {
     return (
       <div className="bc-turns-text bc-turns-md">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>{text}</ReactMarkdown>
       </div>
     )
   }
