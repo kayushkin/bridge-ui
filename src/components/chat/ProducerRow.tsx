@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { BridgeInstance, FetchFn, ManagedSession } from '../../types'
 
-// The bridge instance the Producer chat runs on. Matched by name; created once
-// (claude_code, working_dir = the producer repo's agent/ persona home).
-const PRODUCER_INSTANCE_NAME = 'Producer'
+// The bridge instance the Orchestrator chat runs on. Matched by name; created
+// once (claude_code, working_dir = the repo's agent/ persona home).
+const ORCHESTRATOR_INSTANCE_NAME = 'Orchestrator'
 
 // ProducerConfig mirrors the configView the producer service returns from
 // GET/PUT /config and POST /config/reset-week.
@@ -16,7 +16,7 @@ interface ProducerConfig {
   week_resets_at: string
 }
 
-// ProducerRow is the pinned "Producer" entry at the top of the session sidebar.
+// ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar.
 // It is deliberately self-contained: it fetches its own state from the producer
 // service (proxied at producerBasePath) using the same apiFetch the rest of the
 // sidebar uses, so it needs no new provider wiring. If the service is
@@ -88,23 +88,23 @@ export function ProducerRow({ apiFetch, producerBasePath, instances, sessions, o
   const enabled = cfg?.enabled ?? false
   const unreachable = !cfg && !!error
 
-  const producerInstance = instances.find(i => i.name === PRODUCER_INSTANCE_NAME && i.enabled)
+  const orchestratorInstance = instances.find(i => i.name === ORCHESTRATOR_INSTANCE_NAME && i.enabled)
 
-  // Open the Producer chat: focus the most recent existing session on the
-  // Producer instance, or start a fresh one. If the instance is missing, open
-  // the panel with a hint rather than silently doing nothing.
+  // Open the Orchestrator chat: focus the most recent existing session on the
+  // Orchestrator instance, or start a fresh one. If the instance is missing,
+  // open the panel with a hint rather than silently doing nothing.
   const openChat = useCallback(() => {
-    if (!producerInstance) {
+    if (!orchestratorInstance) {
       setExpanded(true)
-      setError('No "Producer" chat instance found — create one in Instances (claude_code).')
+      setError('No "Orchestrator" chat instance found — create one in Instances (claude_code).')
       return
     }
     const existing = sessions
-      .filter(s => s.instance_id === producerInstance.id)
+      .filter(s => s.instance_id === orchestratorInstance.id)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
     if (existing) onSelect(existing.session_id)
-    else onNewChat(producerInstance.id, 'replace')
-  }, [producerInstance, sessions, onSelect, onNewChat])
+    else onNewChat(orchestratorInstance.id, 'replace')
+  }, [orchestratorInstance, sessions, onSelect, onNewChat])
 
   const saveLimit = () => {
     const v = parseFloat(limitDraft)
@@ -121,25 +121,25 @@ export function ProducerRow({ apiFetch, producerBasePath, instances, sessions, o
         <button
           className="bc-session-item-main"
           onClick={openChat}
-          title={unreachable ? 'Producer service unreachable' : 'Open the Producer chat'}
+          title={unreachable ? 'Orchestrator service unreachable' : 'Open the Orchestrator chat'}
         >
           <span className="bc-session-harness bc-producer-badge" aria-hidden>🎬</span>
           <span className={`bc-producer-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
-          <span className="bc-session-label bc-producer-label">Producer</span>
+          <span className="bc-session-label bc-producer-label">Orchestrator</span>
         </button>
         <span
           className="bc-session-menu-btn bc-producer-caret"
           role="button"
           tabIndex={0}
           onClick={() => setExpanded(x => !x)}
-          title="Producer settings"
+          title="Orchestrator settings"
         >{expanded ? '▾' : '⚙'}</span>
       </div>
 
       {expanded && (
         <div className="bc-producer-panel">
           {unreachable ? (
-            <div className="bc-producer-error">Producer offline ({error})</div>
+            <div className="bc-producer-error">Orchestrator offline ({error})</div>
           ) : cfg ? (
             <>
               <div className="bc-producer-hint">Click the row to open the chat.</div>
@@ -148,7 +148,7 @@ export function ProducerRow({ apiFetch, producerBasePath, instances, sessions, o
                 className={`bc-producer-enable ${enabled ? 'on' : 'off'}`}
                 disabled={busy}
                 onClick={() => patch({ enabled: !enabled })}
-                title="Autonomous mode: lets the Producer run scheduled sweeps and ping you. Chatting works either way."
+                title="Autonomous mode: lets the Orchestrator run scheduled sweeps and ping you. Chatting works either way."
               >
                 {enabled ? '● Autonomous mode on — click to disable' : '○ Enable autonomous mode'}
               </button>
