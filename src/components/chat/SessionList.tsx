@@ -4,6 +4,7 @@ import { ARCHIVE_FOLDER, type UseBridgeFoldersReturn } from '../../useBridgeFold
 import { EditableName } from './EditableName'
 import { HarnessFilterBar, sessionMode, sessionStatusGroup } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
+import { ProducerRow } from './ProducerRow'
 import { SplitButtons } from './SplitButtons'
 import { StatusDot } from './StatusDot'
 import {
@@ -20,13 +21,17 @@ import type { CtxMenuState, SplitMode } from './types'
 // sidebar DOM small so a large Archive folder can't balloon it to 10k+ nodes.
 const SESSION_LIST_CAP = 50
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, producerBasePath = '/api/producer', instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
   harnesses: HarnessInfo[]
   basePath: string
   apiFetch: FetchFn
+  // Base path the pinned Producer row calls (its /config lives behind this
+  // proxy). Defaults to the dash/llmux convention so no provider change is
+  // needed; a consumer without the proxy simply shows the row as offline.
+  producerBasePath?: string
   instancesPath: string
   defaultInstanceId?: string
   openSessionIds: Set<string>
@@ -455,6 +460,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         </div>
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
+
+      <ProducerRow apiFetch={apiFetch} producerBasePath={producerBasePath} />
 
       <div className="bc-session-search">
         <input
