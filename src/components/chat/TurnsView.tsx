@@ -65,7 +65,64 @@ function isHarnessNotification(text: string): boolean {
   return t.startsWith('<task-notification>') && t.endsWith('</task-notification>')
 }
 
-function rowsToTurns(rows: LogRow[]): TurnsItem[] {
+// Assistant responses can reach the render edge from two sources, exactly like
+// user prompts. The stream-json / rollout parser is authoritative for the
+// assistant's text on the healthy path; llm-bridge-claudecode additionally
+// carries Claude Code's OTel `assistant_response` log as a last-resort recovery
+// for turns where stream-json emits no `result` (the drainUntilResult hang —
+// parent todo a367a8d1). That OTel copy is tagged `extensions.source = "otel"`
+// with the same tag `tagOTelSource` stamps on the user_prompt copy, and — like
+// the prompt copies — it carries its own message_id / turn_id with no shared
+// correlation id, so text is the only key.
+//
+// When both copies exist the OTel one is redundant and must not double-render;
+// when only the OTel copy exists (stream-json dropped the final turn) it must
+// still render, because that is the recovery. Absorb OTel assistant copies
+// against a per-text COUNT of harness-sourced copies — never by adjacency (the
+// OTel exporter batches ~1s, so the copy can land after the reply) and never
+// with a Set (N harness copies absorb N OTel copies; any surplus OTel copy
+// still renders, keeping the two sources genuinely redundant). This mirrors the
+// user_message dedup inside rowsToTurns below.
+//
+// Exported for isolated unit testing: the mechanism must be provable without a
+// live dual-emit, because the OTel assistant_response emit (sibling child todo)
+// has not landed yet — this is defensive infra ahead of its consumer.
+export function dedupOTelAssistantRows(rows: LogRow[]): LogRow[] {
+  // Count harness-sourced (non-OTel) assistant text per exact text value.
+  const harnessAssistantTextCounts = new Map<string, number>()
+  for (const r of rows) {
+    if (r.actor !== 'assistant') continue
+    if (r.kind !== 'text' && r.kind !== 'result') continue
+    const t = r.text || r.meta?.text
+    if (!t) continue
+    if (!isOTelSourced(r)) {
+      harnessAssistantTextCounts.set(t, (harnessAssistantTextCounts.get(t) ?? 0) + 1)
+    }
+  }
+  if (harnessAssistantTextCounts.size === 0) return rows
+
+  return rows.filter((r) => {
+    if (r.actor !== 'assistant') return true
+    if (r.kind !== 'text' && r.kind !== 'result') return true
+    const t = r.text || r.meta?.text
+    if (!t) return true
+    if (!isOTelSourced(r)) return true
+    const remaining = harnessAssistantTextCounts.get(t) ?? 0
+    if (remaining > 0) {
+      // A harness copy stands in for this OTel copy — drop it.
+      harnessAssistantTextCounts.set(t, remaining - 1)
+      return false
+    }
+    // Unmatched OTel copy — keep it; this is the recovered final turn.
+    return true
+  })
+}
+
+function rowsToTurns(inputRows: LogRow[]): TurnsItem[] {
+  // Drop the redundant OTel copy of an assistant response before anything else
+  // consumes the rows, so turn detection, merging, and the fallback per-row
+  // path all see the deduped view. User-prompt dedup stays inline below.
+  const rows = dedupOTelAssistantRows(inputRows)
   // Within one assistant turn, the harness can emit several text blocks
   // separated by tool calls (e.g. "Let me check…" → tool → "Found it…" →
   // tool → "Done."). Each block is its own message_id, but they all share

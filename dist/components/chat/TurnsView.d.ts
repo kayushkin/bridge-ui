@@ -1,4 +1,5 @@
 import type { LogRow } from '../../types';
+export declare function dedupOTelAssistantRows(rows: LogRow[]): LogRow[];
 export declare function TurnsView({ rows, agent, compacting, onToggleCollapse, style, paneKey }: {
     rows: LogRow[];
     agent: string;
