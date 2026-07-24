@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { FetchFn } from '../../types'
+import type { BridgeInstance, FetchFn, ManagedSession } from '../../types'
+
+// The bridge instance the Producer chat runs on. Matched by name; created once
+// (claude_code, working_dir = the producer repo's agent/ persona home).
+const PRODUCER_INSTANCE_NAME = 'Producer'
 
 // ProducerConfig mirrors the configView the producer service returns from
 // GET/PUT /config and POST /config/reset-week.
@@ -18,9 +22,13 @@ interface ProducerConfig {
 // sidebar uses, so it needs no new provider wiring. If the service is
 // unreachable the row still renders, showing an offline state rather than
 // breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath }: {
+export function ProducerRow({ apiFetch, producerBasePath, instances, sessions, onSelect, onNewChat }: {
   apiFetch: FetchFn
   producerBasePath: string
+  instances: BridgeInstance[]
+  sessions: ManagedSession[]
+  onSelect: (id: string) => void
+  onNewChat: (instanceId: string, mode: 'replace') => void
 }) {
   const [cfg, setCfg] = useState<ProducerConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -80,6 +88,24 @@ export function ProducerRow({ apiFetch, producerBasePath }: {
   const enabled = cfg?.enabled ?? false
   const unreachable = !cfg && !!error
 
+  const producerInstance = instances.find(i => i.name === PRODUCER_INSTANCE_NAME && i.enabled)
+
+  // Open the Producer chat: focus the most recent existing session on the
+  // Producer instance, or start a fresh one. If the instance is missing, open
+  // the panel with a hint rather than silently doing nothing.
+  const openChat = useCallback(() => {
+    if (!producerInstance) {
+      setExpanded(true)
+      setError('No "Producer" chat instance found — create one in Instances (claude_code).')
+      return
+    }
+    const existing = sessions
+      .filter(s => s.instance_id === producerInstance.id)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
+    if (existing) onSelect(existing.session_id)
+    else onNewChat(producerInstance.id, 'replace')
+  }, [producerInstance, sessions, onSelect, onNewChat])
+
   const saveLimit = () => {
     const v = parseFloat(limitDraft)
     if (!Number.isNaN(v) && v >= 0 && v !== cfg?.week_limit_usd) patch({ week_limit_usd: v })
@@ -94,8 +120,8 @@ export function ProducerRow({ apiFetch, producerBasePath }: {
       <div className="bc-session-item bc-producer-row">
         <button
           className="bc-session-item-main"
-          onClick={() => setExpanded(x => !x)}
-          title={unreachable ? 'Producer service unreachable' : 'Producer — your single point of contact'}
+          onClick={openChat}
+          title={unreachable ? 'Producer service unreachable' : 'Open the Producer chat'}
         >
           <span className="bc-session-harness bc-producer-badge" aria-hidden>🎬</span>
           <span className={`bc-producer-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
@@ -116,12 +142,15 @@ export function ProducerRow({ apiFetch, producerBasePath }: {
             <div className="bc-producer-error">Producer offline ({error})</div>
           ) : cfg ? (
             <>
+              <div className="bc-producer-hint">Click the row to open the chat.</div>
+
               <button
                 className={`bc-producer-enable ${enabled ? 'on' : 'off'}`}
                 disabled={busy}
                 onClick={() => patch({ enabled: !enabled })}
+                title="Autonomous mode: lets the Producer run scheduled sweeps and ping you. Chatting works either way."
               >
-                {enabled ? '● Enabled — click to disable' : '○ Start / enable chat'}
+                {enabled ? '● Autonomous mode on — click to disable' : '○ Enable autonomous mode'}
               </button>
 
               <label className="bc-producer-limit">
