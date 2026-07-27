@@ -8,35 +8,58 @@ function str(o, k) {
     const v = o[k];
     return typeof v === 'string' ? v : '';
 }
-export async function fetchSessionRef(fetchFn, basePath, sessionId) {
-    const raw = await getJSON(fetchFn, `${basePath}/sessions/${encodeURIComponent(sessionId)}`);
-    const o = (raw ?? {});
-    const info = (o.info ?? {});
-    const harnessSessionId = str(o, 'harness_session_id');
-    return {
-        display_name: str(o, 'display_name'),
-        state: str(o, 'state'),
-        type: str(o, 'type'),
-        harness: str(o, 'harness'),
-        model: str(info, 'model'),
-        updated_at: str(o, 'updated_at'),
-        cost_usd: await lookupCost(fetchFn, basePath, sessionId, harnessSessionId),
-    };
+// Eager fetches (session core + todo) run once per chip on mount. A chat with
+// the same id repeated many times would otherwise refetch per chip, so results
+// are cached by id for a short window and shared across chips.
+const CORE_TTL_MS = 30_000;
+const sessionCoreCache = new Map();
+const todoCache = new Map();
+function cached(cache, key, make) {
+    const now = Date.now();
+    const hit = cache.get(key);
+    if (hit && now - hit.at < CORE_TTL_MS)
+        return hit.p;
+    const p = make();
+    cache.set(key, { at: now, p });
+    // A rejected fetch must not be cached as a permanent failure.
+    p.catch(() => { if (cache.get(key)?.p === p)
+        cache.delete(key); });
+    return p;
 }
-export async function fetchTodoRef(fetchFn, noteboardBasePath, itemId) {
-    const raw = await getJSON(fetchFn, `${noteboardBasePath}/api/items/${encodeURIComponent(itemId)}`);
-    const o = (raw ?? {});
-    const tags = Array.isArray(o.tags) ? o.tags.filter((t) => typeof t === 'string') : [];
-    return {
-        title: str(o, 'title'),
-        status: str(o, 'status'),
-        priority: typeof o.priority === 'number' ? o.priority : 0,
-        tags,
-        due_at: str(o, 'due_at'),
-        updated_at: str(o, 'updated_at'),
-        held_at: typeof o.held_at === 'string' ? o.held_at : null,
-        deleted_at: typeof o.deleted_at === 'string' ? o.deleted_at : null,
-    };
+export function fetchSessionCore(fetchFn, basePath, sessionId) {
+    return cached(sessionCoreCache, sessionId, async () => {
+        const raw = await getJSON(fetchFn, `${basePath}/sessions/${encodeURIComponent(sessionId)}`);
+        const o = (raw ?? {});
+        const info = (o.info ?? {});
+        return {
+            session_id: str(o, 'session_id'),
+            harness_session_id: str(o, 'harness_session_id'),
+            display_name: str(o, 'display_name'),
+            state: str(o, 'state'),
+            type: str(o, 'type'),
+            purpose: str(o, 'purpose'),
+            harness: str(o, 'harness'),
+            model: str(info, 'model'),
+            updated_at: str(o, 'updated_at'),
+        };
+    });
+}
+export function fetchTodoRef(fetchFn, noteboardBasePath, itemId) {
+    return cached(todoCache, itemId, async () => {
+        const raw = await getJSON(fetchFn, `${noteboardBasePath}/api/items/${encodeURIComponent(itemId)}`);
+        const o = (raw ?? {});
+        const tags = Array.isArray(o.tags) ? o.tags.filter((t) => typeof t === 'string') : [];
+        return {
+            title: str(o, 'title'),
+            status: str(o, 'status'),
+            priority: typeof o.priority === 'number' ? o.priority : 0,
+            tags,
+            due_at: str(o, 'due_at'),
+            updated_at: str(o, 'updated_at'),
+            held_at: typeof o.held_at === 'string' ? o.held_at : null,
+            deleted_at: typeof o.deleted_at === 'string' ? o.deleted_at : null,
+        };
+    });
 }
 let aggCache = null;
 const AGG_TTL_MS = 30_000;
@@ -54,7 +77,7 @@ async function loadAggregates(fetchFn, basePath) {
     aggCache = { at: now, rows };
     return rows;
 }
-async function lookupCost(fetchFn, basePath, sessionId, harnessSessionId) {
+export async function fetchSessionCost(fetchFn, basePath, sessionId, harnessSessionId) {
     try {
         const rows = await loadAggregates(fetchFn, basePath);
         const hit = rows.find(r => r.session_id === sessionId || (harnessSessionId !== '' && r.session_id === harnessSessionId));
@@ -63,5 +86,22 @@ async function lookupCost(fetchFn, basePath, sessionId, harnessSessionId) {
     catch {
         return null;
     }
+}
+// The chip label emoji categorizes a session the same way the filter bar does:
+// by stored `type` (interactive | autonomous | system) refined with `purpose`
+// (autoworker / herald) and the id prefix, since herald and autoworker are
+// purposes of an autonomous/herald session, not distinct types.
+export function sessionEmoji(type, purpose, sessionId) {
+    if (type === 'herald' || purpose === 'herald' || sessionId.startsWith('herald-'))
+        return '📣';
+    if (purpose === 'autoworker' || sessionId.startsWith('autoworker-'))
+        return '🤖';
+    if (type === 'interactive')
+        return '💬';
+    if (type === 'system')
+        return '⚙️';
+    if (type === 'autonomous')
+        return '🛠️';
+    return '🔗';
 }
 //# sourceMappingURL=refData.js.map

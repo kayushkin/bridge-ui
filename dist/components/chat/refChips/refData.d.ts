@@ -1,12 +1,14 @@
 import type { FetchFn } from '../../../types';
-export interface SessionRef {
+export interface SessionCore {
+    session_id: string;
+    harness_session_id: string;
     display_name: string;
     state: string;
     type: string;
+    purpose: string;
     harness: string;
     model: string;
     updated_at: string;
-    cost_usd: number | null;
 }
 export interface TodoRef {
     title: string;
@@ -18,6 +20,8 @@ export interface TodoRef {
     held_at: string | null;
     deleted_at: string | null;
 }
-export declare function fetchSessionRef(fetchFn: FetchFn, basePath: string, sessionId: string): Promise<SessionRef>;
+export declare function fetchSessionCore(fetchFn: FetchFn, basePath: string, sessionId: string): Promise<SessionCore>;
 export declare function fetchTodoRef(fetchFn: FetchFn, noteboardBasePath: string, itemId: string): Promise<TodoRef>;
+export declare function fetchSessionCost(fetchFn: FetchFn, basePath: string, sessionId: string, harnessSessionId: string): Promise<number | null>;
+export declare function sessionEmoji(type: string, purpose: string, sessionId: string): string;
 //# sourceMappingURL=refData.d.ts.map

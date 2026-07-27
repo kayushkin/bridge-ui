@@ -4864,20 +4864,21 @@
    Inline chips rendered inside chat message bodies for a detected bridge
    session id or a cue-prefixed noteboard todo id. Clicking opens a small
    info dropdown (see RefChip.tsx). Colours reuse the shared tokens. */
-.bc-ref-wrap { position: relative; display: inline-flex; vertical-align: baseline; }
+.bc-ref-wrap { position: relative; display: inline-flex; align-items: center; vertical-align: baseline; }
 .bc-ref {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 0 6px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   background: color-mix(in srgb, var(--accent) 7%, transparent);
   color: var(--accent);
   font-size: 0.82em;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: inherit;
   line-height: 1.5;
   cursor: pointer;
+  text-decoration: none;
   transition: border-color .15s ease, background .15s ease;
 }
 .bc-ref:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
@@ -4885,14 +4886,35 @@
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
+/* Session chip = a chat link (left) fused to a caret button (right). */
+.bc-ref-session { border-radius: 999px 0 0 999px; border-right-width: 0; }
+.bc-ref-caret-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 0 999px 999px 0;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--accent);
+  font-size: 0.8em;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.bc-ref-caret-btn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.bc-ref-caret-btn.bc-ref-open {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
 .bc-ref-todo {
+  border-radius: 999px;
   border-color: color-mix(in srgb, var(--text) 22%, var(--border));
   background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
 }
 .bc-ref-todo:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
-.bc-ref-glyph { font-size: 0.9em; opacity: .8; }
-.bc-ref-id { font-variant-numeric: tabular-nums; }
+.bc-ref-glyph { font-size: 0.9em; opacity: .9; }
+.bc-ref-label { font-variant-numeric: tabular-nums; }
 .bc-ref-caret { font-size: 0.8em; opacity: .5; }
 
 .bc-ref-panel {

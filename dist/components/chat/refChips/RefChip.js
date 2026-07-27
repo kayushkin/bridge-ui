@@ -4,10 +4,13 @@ import { Link } from 'react-router-dom';
 import { useBridgeConfig } from '../../../context';
 import { formatCost, timeAgo } from '../../../utils';
 import { idTail } from '../utils';
-import { fetchSessionRef, fetchTodoRef } from './refData';
+import { fetchSessionCore, fetchSessionCost, fetchTodoRef, sessionEmoji, } from './refData';
 function readNodeProp(props, key) {
     const v = props.node?.properties?.[key];
     return typeof v === 'string' ? v : undefined;
+}
+function truncate(s, n = 24) {
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 export function RefChip(props) {
     const kind = readNodeProp(props, 'kind');
@@ -16,9 +19,28 @@ export function RefChip(props) {
     // rather than an empty chip so nothing is silently dropped.
     if (!kind || !refId)
         return _jsx(_Fragment, { children: refId ?? '' });
-    return _jsx(RefChipInner, { kind: kind, refId: refId });
+    return kind === 'session'
+        ? _jsx(SessionChip, { refId: refId })
+        : _jsx(TodoChip, { refId: refId });
 }
-function RefChipInner({ kind, refId }) {
+// Lazy/eager load state machine shared by both chips: idle → loading → loaded.
+function useRefLoad(loader) {
+    const [data, setData] = useState(null);
+    const [error, setError] = useState(null);
+    useEffect(() => {
+        let live = true;
+        loader().then(d => { if (live)
+            setData(d); }, (e) => { if (live)
+            setError(e instanceof Error ? e.message : String(e)); });
+        return () => { live = false; };
+        // loader closes over the stable refId; run once on mount.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return { data, error };
+}
+// Shared dropdown open/close behaviour: click-outside + Escape, anchored to a
+// wrapper ref. Returns the ref to attach and the open state + toggler.
+function useDropdown() {
     const [open, setOpen] = useState(false);
     const wrapRef = useRef(null);
     useEffect(() => {
@@ -39,57 +61,61 @@ function RefChipInner({ kind, refId }) {
             document.removeEventListener('keydown', onKey);
         };
     }, [open]);
-    return (_jsxs("span", { className: "bc-ref-wrap", ref: wrapRef, children: [_jsxs("button", { type: "button", className: `bc-ref bc-ref-${kind}${open ? ' bc-ref-open' : ''}`, onClick: () => setOpen(o => !o), "aria-expanded": open, title: `${kind === 'session' ? 'Session' : 'Todo'} ${refId} · click for details`, children: [_jsx("span", { className: "bc-ref-glyph", "aria-hidden": true, children: kind === 'session' ? '⧉' : '☑' }), _jsx("span", { className: "bc-ref-id", children: idTail(refId, 12) }), _jsx("span", { className: "bc-ref-caret", "aria-hidden": true, children: "\u25BE" })] }), open && (kind === 'session'
-                ? _jsx(SessionRefPanel, { refId: refId })
-                : _jsx(TodoRefPanel, { refId: refId }))] }));
+    return { open, setOpen, wrapRef };
 }
-// Small state machine shared by both panels: idle → loading → loaded | error.
-// Fetch is lazy — it fires on first open only.
-function useRefLoad(loader) {
-    const [data, setData] = useState(null);
-    const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(true);
+function SessionChip({ refId }) {
+    const cfg = useBridgeConfig();
+    const { open, setOpen, wrapRef } = useDropdown();
+    const { data: core, error } = useRefLoad(() => fetchSessionCore(cfg.fetch, cfg.basePath, refId));
+    const emoji = core ? sessionEmoji(core.type, core.purpose, refId) : '💬';
+    const label = core && core.display_name ? truncate(core.display_name) : idTail(refId, 12);
+    const chatHref = `${cfg.routes.chat}?session=${encodeURIComponent(refId)}`;
+    return (_jsxs("span", { className: "bc-ref-wrap", ref: wrapRef, children: [_jsxs(Link, { className: "bc-ref bc-ref-session", to: chatHref, title: `Open chat — ${core?.display_name || refId}`, children: [_jsx("span", { className: "bc-ref-glyph", "aria-hidden": true, children: emoji }), _jsx("span", { className: "bc-ref-label", children: label })] }), _jsx("button", { type: "button", className: `bc-ref-caret-btn${open ? ' bc-ref-open' : ''}`, onClick: () => setOpen(o => !o), "aria-expanded": open, "aria-label": "Session details", title: "Details", children: "\u25BE" }), open && _jsx(SessionRefPanel, { core: core, error: error, refId: refId })] }));
+}
+function SessionRefPanel({ core, error, refId }) {
+    const cfg = useBridgeConfig();
+    // Cost is the one heavy join (whole aggregates array) — fetch it only now,
+    // when the panel is actually open, keyed off the already-loaded core.
+    const [cost, setCost] = useState(null);
     useEffect(() => {
+        if (!core)
+            return;
         let live = true;
-        setLoading(true);
-        setError(null);
-        loader().then(d => { if (live) {
-            setData(d);
-            setLoading(false);
-        } }, (e) => { if (live) {
-            setError(e instanceof Error ? e.message : String(e));
-            setLoading(false);
-        } });
+        fetchSessionCost(cfg.fetch, cfg.basePath, core.session_id || refId, core.harness_session_id)
+            .then(c => { if (live)
+            setCost(c); });
         return () => { live = false; };
-        // loader identity is stable per-open (panel mounts on open); refId is the
-        // real dependency and it's baked into loader.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    return { data, error, loading };
+    }, [core, cfg, refId]);
+    return (_jsxs("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Session details", children: [!core && !error && _jsx("div", { className: "bc-ref-panel-loading", children: "Loading session\u2026" }), error && _jsxs("div", { className: "bc-ref-panel-error", children: ["Couldn\u2019t load session: ", error] }), core && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ref-panel-title", children: core.display_name || '(untitled session)' }), _jsx(RefRow, { label: "State", value: core.state, badge: stateBadge(core.state) }), core.type && _jsx(RefRow, { label: "Type", value: core.purpose ? `${core.type} · ${core.purpose}` : core.type }), core.model && _jsx(RefRow, { label: "Model", value: core.model }), core.harness && _jsx(RefRow, { label: "Harness", value: core.harness }), cost != null && cost > 0 && _jsx(RefRow, { label: "Cost", value: formatCost(cost) }), core.updated_at && _jsx(RefRow, { label: "Updated", value: timeAgo(core.updated_at) })] }))] }));
 }
-function SessionRefPanel({ refId }) {
+function TodoChip({ refId }) {
     const cfg = useBridgeConfig();
-    const { data, error, loading } = useRefLoad(() => fetchSessionRef(cfg.fetch, cfg.basePath, refId));
-    return (_jsxs("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Session details", children: [loading && _jsx("div", { className: "bc-ref-panel-loading", children: "Loading session\u2026" }), error && _jsxs("div", { className: "bc-ref-panel-error", children: ["Couldn\u2019t load session: ", error] }), data && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ref-panel-title", children: data.display_name || '(untitled session)' }), _jsx(RefRow, { label: "State", value: data.state, badge: stateBadge(data.state) }), data.type && _jsx(RefRow, { label: "Type", value: data.type }), data.model && _jsx(RefRow, { label: "Model", value: data.model }), data.harness && _jsx(RefRow, { label: "Harness", value: data.harness }), data.cost_usd != null && data.cost_usd > 0 && (_jsx(RefRow, { label: "Cost", value: formatCost(data.cost_usd) })), data.updated_at && _jsx(RefRow, { label: "Updated", value: timeAgo(data.updated_at) }), _jsx("div", { className: "bc-ref-panel-actions", children: _jsx(Link, { className: "bc-ref-panel-link", to: `${cfg.routes.chat}?session=${encodeURIComponent(refId)}`, children: "Open chat \u2192" }) })] }))] }));
-}
-function TodoRefPanel({ refId }) {
-    const cfg = useBridgeConfig();
-    const { data, error, loading } = useRefLoad(() => fetchTodoRef(cfg.fetch, cfg.noteboardBasePath, refId));
-    if (!cfg.noteboardBasePath) {
-        return (_jsx("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Todo details", children: _jsx("div", { className: "bc-ref-panel-loading", children: "Todo lookup isn\u2019t configured here." }) }));
-    }
-    return (_jsxs("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Todo details", children: [loading && _jsx("div", { className: "bc-ref-panel-loading", children: "Loading todo\u2026" }), error && _jsxs("div", { className: "bc-ref-panel-error", children: ["Couldn\u2019t load todo: ", error] }), data && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ref-panel-title", children: data.title || '(untitled todo)' }), _jsx(RefRow, { label: "Status", value: data.status, badge: data.held_at ? 'held' : (data.deleted_at ? 'deleted' : undefined) }), data.priority != null && data.priority !== 0 && _jsx(RefRow, { label: "Priority", value: String(data.priority) }), data.tags && data.tags.length > 0 && _jsx(RefRow, { label: "Tags", value: data.tags.join(', ') }), data.due_at && _jsx(RefRow, { label: "Due", value: timeAgo(data.due_at) }), data.updated_at && _jsx(RefRow, { label: "Updated", value: timeAgo(data.updated_at) })] }))] }));
+    const { open, setOpen, wrapRef } = useDropdown();
+    const configured = !!cfg.noteboardBasePath;
+    const { data: todo, error } = useRefLoad(() => configured ? fetchTodoRef(cfg.fetch, cfg.noteboardBasePath, refId) : Promise.reject(new Error('noteboard not configured')));
+    const label = todo && todo.title ? truncate(todo.title) : idTail(refId, 12);
+    const emoji = todo ? todoEmoji(todo) : '☑';
+    return (_jsxs("span", { className: "bc-ref-wrap", ref: wrapRef, children: [_jsxs("button", { type: "button", className: `bc-ref bc-ref-todo${open ? ' bc-ref-open' : ''}`, onClick: () => setOpen(o => !o), "aria-expanded": open, title: `Todo — ${todo?.title || refId}`, children: [_jsx("span", { className: "bc-ref-glyph", "aria-hidden": true, children: emoji }), _jsx("span", { className: "bc-ref-label", children: label }), _jsx("span", { className: "bc-ref-caret", "aria-hidden": true, children: "\u25BE" })] }), open && (_jsxs("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Todo details", children: [!configured && _jsx("div", { className: "bc-ref-panel-loading", children: "Todo lookup isn\u2019t configured here." }), configured && !todo && !error && _jsx("div", { className: "bc-ref-panel-loading", children: "Loading todo\u2026" }), error && configured && _jsxs("div", { className: "bc-ref-panel-error", children: ["Couldn\u2019t load todo: ", error] }), todo && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ref-panel-title", children: todo.title || '(untitled todo)' }), _jsx(RefRow, { label: "Status", value: todo.status, badge: todo.held_at ? 'held' : (todo.deleted_at ? 'deleted' : undefined) }), todo.priority !== 0 && _jsx(RefRow, { label: "Priority", value: String(todo.priority) }), todo.tags.length > 0 && _jsx(RefRow, { label: "Tags", value: todo.tags.join(', ') }), todo.due_at && _jsx(RefRow, { label: "Due", value: timeAgo(todo.due_at) }), todo.updated_at && _jsx(RefRow, { label: "Updated", value: timeAgo(todo.updated_at) })] }))] }))] }));
 }
 function RefRow({ label, value, badge }) {
     return (_jsxs("div", { className: "bc-ref-panel-row", children: [_jsx("span", { className: "bc-ref-panel-label", children: label }), _jsxs("span", { className: "bc-ref-panel-value", children: [value, badge && _jsx("span", { className: `bc-ref-badge bc-ref-badge-${badge}`, children: badge })] })] }));
 }
-// A tiny presentation map: the "needs you" states get a badge so a question or
-// a blocked approval stands out in the chip panel.
+// The "needs you" states get a badge so a question or a blocked approval stands
+// out in the chip panel.
 function stateBadge(state) {
     if (state === 'awaiting_user')
         return 'question';
     if (state === 'awaiting_permission')
         return 'approval';
     return undefined;
+}
+function todoEmoji(todo) {
+    if (todo.deleted_at)
+        return '🗑';
+    if (todo.held_at)
+        return '⏸';
+    if (todo.status === 'done')
+        return '✅';
+    return '☑';
 }
 //# sourceMappingURL=RefChip.js.map
