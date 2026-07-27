@@ -1,0 +1,92 @@
+import { useCallback, useEffect, useState } from 'react'
+
+// Compact in-chat view of the orchestrator's injected context. The full review
+// surface (WAL, prior versions, filters) lives on the standalone /orchestrator
+// page; this pane is the at-a-glance "what would the orchestrator see right now"
+// with per-part token counts, as an optional split alongside the chat.
+
+interface Version { part: string; title: string; content: string; tokens: number }
+interface PartState { part: string; title: string; latest: Version; version_count: number }
+
+const ORDER = ['agents', 'tasks', 'convo_summary', 'convo_current']
+const PRODUCER_BASE = '/api/producer'
+const LINK_RE = /\[(session|task|todo):([^\]]+)\]/g
+
+function hrefFor(kind: string, id: string): string {
+  if (kind === 'session') return `/?session=${encodeURIComponent(id)}`
+  if (kind === 'task') return '/kanban'
+  if (kind === 'todo') return '/notes'
+  return '#'
+}
+
+function Linkified({ text }: { text: string }) {
+  const out: React.ReactNode[] = []
+  let last = 0, i = 0, m: RegExpExecArray | null
+  LINK_RE.lastIndex = 0
+  while ((m = LINK_RE.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index))
+    const [tok, kind, id] = m
+    out.push(<a key={i++} href={hrefFor(kind, id)} style={{ color: 'var(--accent,#818cf8)' }}>{tok}</a>)
+    last = m.index + tok.length
+  }
+  if (last < text.length) out.push(text.slice(last))
+  return <>{out}</>
+}
+
+export function OrchestratorPanel({ onToggleCollapse, style }: {
+  onToggleCollapse: () => void
+  style?: React.CSSProperties
+}) {
+  const [parts, setParts] = useState<PartState[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${PRODUCER_BASE}/context`, { credentials: 'include' })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      setParts(await r.json()); setError(null)
+    } catch (e) { setError(String((e as Error).message ?? e)) }
+  }, [])
+
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 15000)
+    return () => clearInterval(t)
+  }, [load])
+
+  const ordered = [
+    ...ORDER.map(id => parts.find(p => p.part === id)).filter(Boolean) as PartState[],
+    ...parts.filter(p => !ORDER.includes(p.part)),
+  ]
+  const total = ordered.reduce((a, p) => a + (p.latest?.tokens ?? 0), 0)
+
+  return (
+    <div className="bc-split-pane" style={style} data-pane="orchestrator">
+      <div
+        className="bc-split-pane-header bc-header-clickable"
+        onClick={onToggleCollapse}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() } }}
+        role="button"
+        tabIndex={0}
+        title="Hide orchestrator context"
+      >
+        <span className="bc-split-pane-title">🎬 Orchestrator context</span>
+        <span className="bc-spacer" />
+        <span style={{ fontSize: 12, opacity: 0.7 }}>~{total.toLocaleString()} tok</span>
+        <a href="/orchestrator" onClick={e => e.stopPropagation()} title="Open full review page" style={{ marginLeft: 8, textDecoration: 'none' }}>↗</a>
+        <span className="bc-split-collapse-btn" aria-hidden="true" style={{ marginLeft: 8 }}>×</span>
+      </div>
+      <div style={{ overflow: 'auto', padding: 8, fontSize: 12 }}>
+        {error && <div style={{ color: '#ef4444' }}>Producer offline ({error})</div>}
+        {ordered.map(p => (
+          <details key={p.part} open={p.part === 'agents' || p.part === 'tasks'} style={{ marginBottom: 8 }}>
+            <summary style={{ cursor: 'pointer', opacity: 0.85 }}>
+              {p.title} <span style={{ opacity: 0.5 }}>· ~{p.latest.tokens.toLocaleString()} tok · v{p.version_count}</span>
+            </summary>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><Linkified text={p.latest.content} /></pre>
+          </details>
+        ))}
+      </div>
+    </div>
+  )
+}

@@ -338,7 +338,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
             return createPortal(controlsBar, controlsSlot);
         return null;
     })();
-    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: headerChat, session: bridge.activeSession, harnessInfo: headerHarnessInfo, machine: headerMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onMarkDone: onMarkDone && bridge.activeSession
+    return (_jsxs("div", { className: `bc-workspace${focused ? ' bc-workspace-focused' : ''}${minimal ? ' bc-workspace-minimal' : ''}`, onMouseDownCapture: onFocus, onFocusCapture: onFocus, children: [!minimal && _jsx(SessionHeader, { chat: headerChat, session: bridge.activeSession, harnessInfo: headerHarnessInfo, machine: headerMachine, machineReachable: activeReachable, basePath: basePath, uiState: bridge.uiState, rows: bridge.logRows, onRename: handleRename, onPrev: handlePrevSession, onNext: handleNextSession, hasPrev: navIndex > 0, hasNext: navIndex >= 0 && navIndex < navOrder.length - 1, panesHidden: workspace.panesHidden, onToggleTurns: () => togglePane('turns'), onToggleThread: () => togglePane('thread'), onToggleTimeline: () => togglePane('timeline'), onToggleGit: () => togglePane('git'), onToggleKanban: () => togglePane('kanban'), onToggleOrchestrator: () => togglePane('orchestrator'), onToggleAttach: () => togglePane('attach'), attachAvailable: bridge.activeSession?.mode === 'pty', onMarkDone: onMarkDone && bridge.activeSession
                     ? (done) => onMarkDone(bridge.activeSession.session_id, done)
                     : undefined, onCloseWorkspace: onClose, gitRepos: gitRepos, selectedRepo: selectedRepo, onSelectRepo: setSelectedRepo }), _jsxs(WorkspaceProvider, { value: {
                     chat: activeChat,
@@ -356,7 +356,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
                     // workspace's persisted panesHidden/layout are left untouched —
                     // the user keeps their split layout when they return to full mode.
                     panesHidden: minimal
-                        ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban', attach: mobilePane !== 'attach' }
+                        ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban', orchestrator: mobilePane !== 'orchestrator', attach: mobilePane !== 'attach' }
                         : workspace.panesHidden,
                     paneSizes: workspace.paneSizes,
                     togglePane,

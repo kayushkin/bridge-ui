@@ -458,6 +458,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         onToggleTimeline={() => togglePane('timeline')}
         onToggleGit={() => togglePane('git')}
         onToggleKanban={() => togglePane('kanban')}
+        onToggleOrchestrator={() => togglePane('orchestrator')}
         onToggleAttach={() => togglePane('attach')}
         attachAvailable={bridge.activeSession?.mode === 'pty'}
         onMarkDone={onMarkDone && bridge.activeSession
@@ -484,7 +485,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         // workspace's persisted panesHidden/layout are left untouched —
         // the user keeps their split layout when they return to full mode.
         panesHidden: minimal
-          ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban', attach: mobilePane !== 'attach' }
+          ? { turns: mobilePane !== 'turns', thread: mobilePane !== 'thread', timeline: mobilePane !== 'timeline', git: mobilePane !== 'git', kanban: mobilePane !== 'kanban', orchestrator: mobilePane !== 'orchestrator', attach: mobilePane !== 'attach' }
           : workspace.panesHidden,
         paneSizes: workspace.paneSizes,
         togglePane,

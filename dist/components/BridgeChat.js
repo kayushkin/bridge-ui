@@ -27,14 +27,15 @@ const DEFAULT_INNER_TREE = {
         { kind: 'leaf', viewType: 'timeline' },
         { kind: 'leaf', viewType: 'git' },
         { kind: 'leaf', viewType: 'kanban' },
+        { kind: 'leaf', viewType: 'orchestrator' },
         { kind: 'leaf', viewType: 'attach' },
     ],
 };
 // 'attach' is hidden by default and auto-shown by Workspace when the
 // active session enters pty mode. Keeping it hidden by default avoids
 // cluttering events-mode workspaces with an inert terminal pane.
-const DEFAULT_PANES_HIDDEN = { turns: false, thread: true, timeline: true, git: true, kanban: true, attach: true };
-const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1, attach: 1 };
+const DEFAULT_PANES_HIDDEN = { turns: false, thread: true, timeline: true, git: true, kanban: true, orchestrator: true, attach: true };
+const DEFAULT_PANE_SIZES = { turns: 1, thread: 1, timeline: 1, git: 1, kanban: 1, orchestrator: 1, attach: 1 };
 // Backfill missing PaneKey leaves into a persisted workspace's inner layout
 // tree. New PaneKeys (e.g. 'kanban' added 2026-05-07, 'attach' added
 // 2026-05-14) need to be present in the tree of pre-existing workspaces
@@ -49,7 +50,7 @@ function ensurePaneLeaves(node) {
         n.children.forEach(walk);
     };
     walk(node);
-    const missing = ['turns', 'thread', 'timeline', 'git', 'kanban', 'attach']
+    const missing = ['turns', 'thread', 'timeline', 'git', 'kanban', 'orchestrator', 'attach']
         .filter(k => !present.has(k))
         .map(k => ({ kind: 'leaf', viewType: k }));
     if (missing.length === 0)

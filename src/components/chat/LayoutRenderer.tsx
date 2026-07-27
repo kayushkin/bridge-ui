@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BridgeAttach } from '../BridgeAttach'
 import { GitPanel } from '../GitPanel'
 import { LinkedKanbanPanel } from './LinkedKanbanPanel'
+import { OrchestratorPanel } from './OrchestratorPanel'
 import { SplitResizer } from './SplitResizer'
 import { Thread } from './Thread'
 import { Timeline } from './Timeline'
@@ -81,6 +82,13 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           onToggleCollapse={() => ws.togglePane('kanban')}
           style={style}
           paneKey="kanban"
+        />
+      )
+    case 'orchestrator':
+      return (
+        <OrchestratorPanel
+          onToggleCollapse={() => ws.togglePane('orchestrator')}
+          style={style}
         />
       )
     case 'attach':
@@ -195,6 +203,7 @@ export function LayoutRenderer({ tree }: { tree: InnerNode }) {
   if (ws.panesHidden.timeline) hidden.add('timeline')
   if (ws.panesHidden.git) hidden.add('git')
   if (ws.panesHidden.kanban) hidden.add('kanban')
+  if (ws.panesHidden.orchestrator) hidden.add('orchestrator')
   // The Terminal pane only makes sense for pty sessions. Force-hide it
   // for events sessions regardless of the persisted panesHidden state,
   // so a user who flips between modes doesn't accidentally see an

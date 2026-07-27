@@ -1,12 +1,13 @@
 import type { PaneKey, PanesHidden } from './types'
 
-export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable }: {
+export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleOrchestrator, onToggleAttach, attachAvailable }: {
   panesHidden: PanesHidden
   onToggleTurns: () => void
   onToggleThread: () => void
   onToggleTimeline: () => void
   onToggleGit: () => void
   onToggleKanban: () => void
+  onToggleOrchestrator: () => void
   onToggleAttach: () => void
   attachAvailable: boolean
 }) {
@@ -29,6 +30,7 @@ export function PaneToggles({ panesHidden, onToggleTurns, onToggleThread, onTogg
       {pill('timeline', 'Timeline', '⏱', onToggleTimeline)}
       {pill('git', 'Git', '🌿', onToggleGit)}
       {pill('kanban', 'Kanban', '🗂', onToggleKanban)}
+      {pill('orchestrator', 'Orchestrator', '🎬', onToggleOrchestrator)}
       {attachAvailable && pill('attach', 'Terminal', '⌨', onToggleAttach)}
     </div>
   )

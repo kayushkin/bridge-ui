@@ -9,7 +9,7 @@ import { StatusDot } from './StatusDot'
 import type { ChatSession, PanesHidden } from './types'
 import type { GitRepo } from './WorkspaceContext'
 
-export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleAttach, attachAvailable, onMarkDone, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
+export function SessionHeader({ chat, session, harnessInfo, machine, machineReachable, basePath, uiState, rows, onRename, onPrev, onNext, hasPrev, hasNext, panesHidden, onToggleTurns, onToggleThread, onToggleTimeline, onToggleGit, onToggleKanban, onToggleOrchestrator, onToggleAttach, attachAvailable, onMarkDone, onCloseWorkspace, gitRepos, selectedRepo, onSelectRepo }: {
   chat: ChatSession | null
   /** Full session row from the bridge — drives the details dropdown
    * (source, folder, instance, mode, IDs, timestamps). Undefined when
@@ -40,6 +40,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
   onToggleTimeline: () => void
   onToggleGit: () => void
   onToggleKanban: () => void
+  onToggleOrchestrator: () => void
   onToggleAttach: () => void
   // attachAvailable hides the Attach toggle entirely when the active
   // session isn't pty-mode. Avoids exposing a control that would do
@@ -205,6 +206,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
             onToggleTimeline={onToggleTimeline}
             onToggleGit={onToggleGit}
             onToggleKanban={onToggleKanban}
+            onToggleOrchestrator={onToggleOrchestrator}
             onToggleAttach={onToggleAttach}
             attachAvailable={attachAvailable}
           />
