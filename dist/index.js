@@ -32,7 +32,6 @@ export { BridgePermissions } from './components/BridgePermissions';
 export { BridgeAgents } from './components/BridgeAgents';
 export { BridgeFiles } from './components/BridgeFiles';
 export { BridgeKanban } from './components/BridgeKanban';
-export { BridgePotentialEvents } from './components/BridgePotentialEvents';
 export { BridgeAttach } from './components/BridgeAttach';
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';

@@ -3,7 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useMinimalChrome } from './minimal/MinimalChromeContext';
 export function BridgeLayout({ showConformance = true }) {
-    const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, eventsStoreBasePath } = useBridgeConfig();
+    const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath } = useBridgeConfig();
     const { minimal } = useMinimalChrome();
     const tabs = [
         { to: routes.chat, label: 'Chat', end: true },
@@ -18,7 +18,6 @@ export function BridgeLayout({ showConformance = true }) {
         ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
         ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
         ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
-        ...(eventsStoreBasePath ? [{ to: routes.potentialEvents, label: 'Potential Events', end: false }] : []),
         ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
     ];
     return (_jsxs("div", { className: `bridge-layout ${minimal ? 'bridge-layout-minimal' : ''}`, children: [!minimal && _jsx("nav", { className: "bridge-nav", children: tabs.map(t => (_jsx(NavLink, { to: t.to, end: t.end, className: ({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`, children: t.label }, t.to))) }), _jsx("div", { className: "bridge-content", children: _jsx(Outlet, {}) })] }));
