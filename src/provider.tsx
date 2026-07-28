@@ -17,6 +17,11 @@ interface BridgeProviderProps {
   permissionStoreBasePath?: string
   /** Base path for kanban-store API. If omitted, the Kanban tab is hidden. */
   kanbanStoreBasePath?: string
+  /** Base path for event-store API. If omitted, the Potential Events tab is hidden. */
+  eventsStoreBasePath?: string
+  /** Full path for the host's Google Calendar create endpoint. If omitted, the
+   * "+ Calendar" action on Potential Events is hidden. */
+  calendarBasePath?: string
   /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
    * an item's title/status and say so. */
   noteboardBasePath?: string
@@ -41,6 +46,8 @@ export function BridgeProvider({
   toolStoreBasePath = '',
   permissionStoreBasePath = '',
   kanbanStoreBasePath = '',
+  eventsStoreBasePath = '',
+  calendarBasePath = '',
   noteboardBasePath = '',
   bridgeAdapterBasePath = '',
   usageStoreBasePath = '',
@@ -55,12 +62,14 @@ export function BridgeProvider({
     toolStoreBasePath,
     permissionStoreBasePath,
     kanbanStoreBasePath,
+    eventsStoreBasePath,
+    calendarBasePath,
     noteboardBasePath,
     bridgeAdapterBasePath,
     usageStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, noteboardBasePath, bridgeAdapterBasePath, usageStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, eventsStoreBasePath, calendarBasePath, noteboardBasePath, bridgeAdapterBasePath, usageStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

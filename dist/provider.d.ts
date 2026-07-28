@@ -14,6 +14,11 @@ interface BridgeProviderProps {
     permissionStoreBasePath?: string;
     /** Base path for kanban-store API. If omitted, the Kanban tab is hidden. */
     kanbanStoreBasePath?: string;
+    /** Base path for event-store API. If omitted, the Potential Events tab is hidden. */
+    eventsStoreBasePath?: string;
+    /** Full path for the host's Google Calendar create endpoint. If omitted, the
+     * "+ Calendar" action on Potential Events is hidden. */
+    calendarBasePath?: string;
     /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
      * an item's title/status and say so. */
     noteboardBasePath?: string;
@@ -30,6 +35,6 @@ interface BridgeProviderProps {
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, noteboardBasePath, bridgeAdapterBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, eventsStoreBasePath, calendarBasePath, noteboardBasePath, bridgeAdapterBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map

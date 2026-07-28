@@ -16,6 +16,7 @@ export interface BridgeRoutes {
   permissions: string
   conformance: string
   kanban: string
+  potentialEvents: string
 }
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
@@ -32,6 +33,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   permissions: '/bridge/permissions',
   conformance: '/bridge/conformance',
   kanban: '/bridge/kanban',
+  potentialEvents: '/bridge/potential-events',
 }
 
 export interface BridgeConfig {
@@ -51,6 +53,13 @@ export interface BridgeConfig {
   /** Base path for kanban-store API (e.g. "/api/kanban"). No trailing slash.
    * If empty, the Kanban tab is hidden. */
   kanbanStoreBasePath: string
+  /** Base path for event-store API (e.g. "/api/events"). No trailing slash.
+   * If empty, the Potential Events tab is hidden. */
+  eventsStoreBasePath: string
+  /** Full path for the host's Google Calendar create endpoint (e.g.
+   * "/api/calendar/google"). If empty, the "+ Calendar" action on Potential
+   * Events is hidden (e.g. hosts without a calendar handler). */
+  calendarBasePath: string
   /** Base path for the noteboard API (e.g. "/api/noteboard"). No trailing
    * slash. Used by chat reference chips to resolve a todo/item id to its
    * title/status. If empty, todo chips render but say lookup isn't configured. */

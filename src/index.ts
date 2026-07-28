@@ -96,6 +96,7 @@ export { BridgePermissions } from './components/BridgePermissions'
 export { BridgeAgents } from './components/BridgeAgents'
 export { BridgeFiles } from './components/BridgeFiles'
 export { BridgeKanban } from './components/BridgeKanban'
+export { BridgePotentialEvents } from './components/BridgePotentialEvents'
 export { BridgeAttach } from './components/BridgeAttach'
 export type { BridgeAttachProps } from './components/BridgeAttach'
 

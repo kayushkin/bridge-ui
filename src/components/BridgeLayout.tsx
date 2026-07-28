@@ -8,7 +8,7 @@ interface BridgeLayoutProps {
 }
 
 export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
-  const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath } = useBridgeConfig()
+  const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, eventsStoreBasePath } = useBridgeConfig()
   const { minimal } = useMinimalChrome()
   const tabs = [
     { to: routes.chat, label: 'Chat', end: true },
@@ -23,6 +23,7 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
     ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
     ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
+    ...(eventsStoreBasePath ? [{ to: routes.potentialEvents, label: 'Potential Events', end: false }] : []),
     ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
   ]
 
