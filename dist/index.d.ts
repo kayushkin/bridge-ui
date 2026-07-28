@@ -40,6 +40,20 @@ export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from
 export type { ToolRendererProps } from './components/tools';
 export { StatusDot } from './components/chat/StatusDot';
 export type { StatusDotState } from './components/chat/StatusDot';
+export { ToolsPanel } from './components/chat/ToolsPanel';
+export type { ToolsPanelProps } from './components/chat/ToolsPanel';
+export { SystemPromptModal } from './components/chat/SystemPromptModal';
+export type { SystemPromptModalProps } from './components/chat/SystemPromptModal';
+export { SessionPermissionMode } from './components/chat/SessionPermissionMode';
+export type { SessionPermissionModeProps } from './components/chat/SessionPermissionMode';
+export { CostBreakdown } from './components/chat/CostBreakdown';
+export type { CostBreakdownProps, CostAggregate } from './components/chat/CostBreakdown';
+export { UsageLine } from './components/chat/UsageLine';
+export type { UsageLineProps } from './components/chat/UsageLine';
+export { MessageStats } from './components/chat/MessageStats';
+export type { MessageStatsProps } from './components/chat/MessageStats';
+export { EditableName } from './components/chat/EditableName';
+export type { EditableNameProps } from './components/chat/EditableName';
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
 //# sourceMappingURL=index.d.ts.map

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 
-export function EditableName({ value, onSave, className }: {
+export interface EditableNameProps {
   value: string
   onSave: (name: string) => void
   className?: string
-}) {
+}
+
+export function EditableName({ value, onSave, className }: EditableNameProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const inputRef = useRef<HTMLInputElement>(null)

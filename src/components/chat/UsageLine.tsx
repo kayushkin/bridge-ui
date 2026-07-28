@@ -1,7 +1,11 @@
 import type { TokenUsage } from '../../types'
 import { formatTokens } from '../../utils'
 
-export function UsageLine({ usage }: { usage: TokenUsage }) {
+export interface UsageLineProps {
+  usage: TokenUsage
+}
+
+export function UsageLine({ usage }: UsageLineProps) {
   const parts: string[] = []
   if (usage.input_tokens) parts.push(`in ${formatTokens(usage.input_tokens)}`)
   if (usage.output_tokens) parts.push(`out ${formatTokens(usage.output_tokens)}`)

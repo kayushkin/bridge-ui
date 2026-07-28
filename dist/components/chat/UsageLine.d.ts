@@ -1,5 +1,6 @@
 import type { TokenUsage } from '../../types';
-export declare function UsageLine({ usage }: {
+export interface UsageLineProps {
     usage: TokenUsage;
-}): import("react/jsx-runtime").JSX.Element | null;
+}
+export declare function UsageLine({ usage }: UsageLineProps): import("react/jsx-runtime").JSX.Element | null;
 //# sourceMappingURL=UsageLine.d.ts.map

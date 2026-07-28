@@ -88,13 +88,15 @@ const CUSTOM_PANEL_SCHEMAS: Record<string, {
   },
 }
 
+export interface SessionPermissionModeProps {
+  session: ManagedSession
+  harnesses?: HarnessInfo[]
+}
+
 export function SessionPermissionMode({
   session,
   harnesses,
-}: {
-  session: ManagedSession
-  harnesses?: HarnessInfo[]
-}) {
+}: SessionPermissionModeProps) {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const cfg = session.harness_config as Record<string, unknown> | undefined
   const initial = useMemo(() => readMode(cfg), [cfg])

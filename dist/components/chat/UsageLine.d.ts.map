@@ -1,1 +1,1 @@
-{"version":3,"file":"UsageLine.d.ts","sourceRoot":"","sources":["../../../src/components/chat/UsageLine.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,aAAa,CAAA;AAG7C,wBAAgB,SAAS,CAAC,EAAE,KAAK,EAAE,EAAE;IAAE,KAAK,EAAE,UAAU,CAAA;CAAE,kDAQzD"}
+{"version":3,"file":"UsageLine.d.ts","sourceRoot":"","sources":["../../../src/components/chat/UsageLine.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,aAAa,CAAA;AAG7C,MAAM,WAAW,cAAc;IAC7B,KAAK,EAAE,UAAU,CAAA;CAClB;AAED,wBAAgB,SAAS,CAAC,EAAE,KAAK,EAAE,EAAE,cAAc,kDAQlD"}
