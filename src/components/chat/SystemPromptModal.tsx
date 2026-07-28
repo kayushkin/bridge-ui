@@ -1,9 +1,11 @@
 import type { SessionInfo } from '../../types'
 
-export function SystemPromptModal({ info, onClose }: {
+export interface SystemPromptModalProps {
   info: SessionInfo
   onClose: () => void
-}) {
+}
+
+export function SystemPromptModal({ info, onClose }: SystemPromptModalProps) {
   const hasPrompt = !!info.system_prompt || !!info.append_system_prompt
   return (
     <div className="bc-modal-overlay" onClick={onClose}>

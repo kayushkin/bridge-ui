@@ -1,5 +1,6 @@
 import type { MessageMeta } from '../../types';
-export declare function MessageStats({ meta }: {
+export interface MessageStatsProps {
     meta: MessageMeta;
-}): import("react/jsx-runtime").JSX.Element;
+}
+export declare function MessageStats({ meta }: MessageStatsProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=MessageStats.d.ts.map

@@ -13,14 +13,36 @@ import { formatCost } from '../../utils'
 // "Fallback" here is presentation-layer pick-the-best-source, not data
 // fabrication: each path reads a real signal the session actually
 // produced. Nothing is invented to fill in missing data.
-export function CostBreakdown({ rows, fallbackTotalUSD, fallbackTitle }: {
-  rows: LogRow[]
-  fallbackTotalUSD: number
+// CostAggregate is a pre-computed cost object a standalone consumer can feed
+// directly instead of the raw LogRow stream. When supplied it takes
+// precedence over the rows/fallback paths and drives a drill-down chip from
+// the aggregate alone — the dashv2 page uses this because it already holds an
+// aggregated cost total per session and never materializes the row stream.
+export interface CostAggregate {
+  totalUsd: number
+  byModel?: Record<string, number>
+  bySource?: Record<string, number>
+}
+
+export interface CostBreakdownProps {
+  /** Raw log rows to scan for the latest api_spend_total (default path used
+   * by the live BridgeChat `/` page). Optional so an `aggregate`-only
+   * consumer need not supply it. */
+  rows?: LogRow[]
+  /** Per-turn EventResult.Cost sum used when no api_call telemetry exists.
+   * Optional (defaults to 0) so an `aggregate`-only consumer need not supply
+   * it. */
+  fallbackTotalUSD?: number
   /** Tooltip carried over from SessionHeader (e.g. context-tokens info)
    * shown when the fallback figure is displayed. */
   fallbackTitle?: string
-}) {
-  const apiSpend = latestApiSpend(rows)
+  /** Pre-aggregated cost object. When present, it wins over rows/fallback
+   * and renders a drill-down chip from the aggregate directly. */
+  aggregate?: CostAggregate
+}
+
+export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggregate }: CostBreakdownProps) {
+  const apiSpend = latestApiSpend(rows ?? [])
 
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -38,6 +60,58 @@ export function CostBreakdown({ rows, fallbackTotalUSD, fallbackTitle }: {
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
+
+  // Pre-aggregated path: a consumer handed us a finished cost object, so
+  // render the chip + drill-down straight from it without touching the
+  // rows/fallback logic below.
+  if (aggregate) {
+    const byModel = mapEntriesSortedDesc(aggregate.byModel)
+    const bySource = mapEntriesSortedDesc(aggregate.bySource)
+    return (
+      <div className="bc-cost-wrap" ref={ref}>
+        <button
+          type="button"
+          className={`bc-cost bc-cost-clickable${open ? ' bc-cost-open' : ''}`}
+          onClick={() => setOpen(o => !o)}
+          title="click for breakdown"
+          aria-expanded={open}
+        >
+          {formatCost(aggregate.totalUsd)}
+          <span className="bc-cost-caret" aria-hidden>▾</span>
+        </button>
+        {open && (
+          <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
+            <div className="bc-cost-panel-row bc-cost-panel-total">
+              <span className="bc-cost-panel-label">API spend</span>
+              <span className="bc-cost-panel-value">{formatCost(aggregate.totalUsd)}</span>
+            </div>
+            {byModel.length > 0 && (
+              <div className="bc-cost-panel-group">
+                <div className="bc-cost-panel-group-label">By model</div>
+                {byModel.map(([k, v]) => (
+                  <div key={`m_${k}`} className="bc-cost-panel-row">
+                    <span className="bc-cost-panel-label">{k}</span>
+                    <span className="bc-cost-panel-value">{formatCost(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {bySource.length > 0 && (
+              <div className="bc-cost-panel-group">
+                <div className="bc-cost-panel-group-label">By source</div>
+                {bySource.map(([k, v]) => (
+                  <div key={`s_${k}`} className="bc-cost-panel-row">
+                    <span className="bc-cost-panel-label">{k}</span>
+                    <span className="bc-cost-panel-value">{formatCost(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (apiSpend && apiSpend.calls > 0) {
     return (

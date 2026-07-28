@@ -1,6 +1,7 @@
 import { type HarnessInfo, type ManagedSession } from '../../types';
-export declare function SessionPermissionMode({ session, harnesses, }: {
+export interface SessionPermissionModeProps {
     session: ManagedSession;
     harnesses?: HarnessInfo[];
-}): import("react/jsx-runtime").JSX.Element;
+}
+export declare function SessionPermissionMode({ session, harnesses, }: SessionPermissionModeProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=SessionPermissionMode.d.ts.map

@@ -1,19 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from 'react';
 import { formatCost } from '../../utils';
-// CostBreakdown renders the session's running cost. When an
-// EventAPISpendTotal (server-derived from per-call OTel telemetry) has
-// landed, its cumulative TotalUSD is canonical and the chip opens a
-// drill-down with ByModel + ByQuerySource breakdowns. When the session
-// has no api_call telemetry yet (legacy claudecode runs, harnesses that
-// don't emit it), the chip falls back to the per-turn EventResult.Cost
-// sum the SessionHeader was computing before.
-//
-// "Fallback" here is presentation-layer pick-the-best-source, not data
-// fabrication: each path reads a real signal the session actually
-// produced. Nothing is invented to fill in missing data.
-export function CostBreakdown({ rows, fallbackTotalUSD, fallbackTitle }) {
-    const apiSpend = latestApiSpend(rows);
+export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggregate }) {
+    const apiSpend = latestApiSpend(rows ?? []);
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
     useEffect(() => {
@@ -34,6 +23,14 @@ export function CostBreakdown({ rows, fallbackTotalUSD, fallbackTitle }) {
             document.removeEventListener('keydown', onKey);
         };
     }, [open]);
+    // Pre-aggregated path: a consumer handed us a finished cost object, so
+    // render the chip + drill-down straight from it without touching the
+    // rows/fallback logic below.
+    if (aggregate) {
+        const byModel = mapEntriesSortedDesc(aggregate.byModel);
+        const bySource = mapEntriesSortedDesc(aggregate.bySource);
+        return (_jsxs("div", { className: "bc-cost-wrap", ref: ref, children: [_jsxs("button", { type: "button", className: `bc-cost bc-cost-clickable${open ? ' bc-cost-open' : ''}`, onClick: () => setOpen(o => !o), title: "click for breakdown", "aria-expanded": open, children: [formatCost(aggregate.totalUsd), _jsx("span", { className: "bc-cost-caret", "aria-hidden": true, children: "\u25BE" })] }), open && (_jsxs("div", { className: "bc-cost-panel", role: "dialog", "aria-label": "Cost breakdown", children: [_jsxs("div", { className: "bc-cost-panel-row bc-cost-panel-total", children: [_jsx("span", { className: "bc-cost-panel-label", children: "API spend" }), _jsx("span", { className: "bc-cost-panel-value", children: formatCost(aggregate.totalUsd) })] }), byModel.length > 0 && (_jsxs("div", { className: "bc-cost-panel-group", children: [_jsx("div", { className: "bc-cost-panel-group-label", children: "By model" }), byModel.map(([k, v]) => (_jsxs("div", { className: "bc-cost-panel-row", children: [_jsx("span", { className: "bc-cost-panel-label", children: k }), _jsx("span", { className: "bc-cost-panel-value", children: formatCost(v) })] }, `m_${k}`)))] })), bySource.length > 0 && (_jsxs("div", { className: "bc-cost-panel-group", children: [_jsx("div", { className: "bc-cost-panel-group-label", children: "By source" }), bySource.map(([k, v]) => (_jsxs("div", { className: "bc-cost-panel-row", children: [_jsx("span", { className: "bc-cost-panel-label", children: k }), _jsx("span", { className: "bc-cost-panel-value", children: formatCost(v) })] }, `s_${k}`)))] }))] }))] }));
+    }
     if (apiSpend && apiSpend.calls > 0) {
         return (_jsxs("div", { className: "bc-cost-wrap", ref: ref, children: [_jsxs("button", { type: "button", className: `bc-cost bc-cost-clickable${open ? ' bc-cost-open' : ''}`, onClick: () => setOpen(o => !o), title: `${apiSpend.calls} API call${apiSpend.calls === 1 ? '' : 's'} · click for breakdown`, "aria-expanded": open, children: [formatCost(apiSpend.total_usd), _jsx("span", { className: "bc-cost-caret", "aria-hidden": true, children: "\u25BE" })] }), open && _jsx(CostDrilldownPanel, { spend: apiSpend, fallbackTotalUSD: fallbackTotalUSD })] }));
     }

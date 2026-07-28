@@ -107,6 +107,26 @@ export type { ToolRendererProps } from './components/tools'
 export { StatusDot } from './components/chat/StatusDot'
 export type { StatusDotState } from './components/chat/StatusDot'
 
+// Presentation / self-fetching chat sub-components — exported for standalone
+// consumers (e.g. dashv2) that compose the chat surface themselves rather
+// than mounting BridgeChat. Behaviour is identical to their use inside
+// BridgeChat; each takes its data via props (SessionPermissionMode also reads
+// the public BridgeConfig via useBridgeConfig).
+export { ToolsPanel } from './components/chat/ToolsPanel'
+export type { ToolsPanelProps } from './components/chat/ToolsPanel'
+export { SystemPromptModal } from './components/chat/SystemPromptModal'
+export type { SystemPromptModalProps } from './components/chat/SystemPromptModal'
+export { SessionPermissionMode } from './components/chat/SessionPermissionMode'
+export type { SessionPermissionModeProps } from './components/chat/SessionPermissionMode'
+export { CostBreakdown } from './components/chat/CostBreakdown'
+export type { CostBreakdownProps, CostAggregate } from './components/chat/CostBreakdown'
+export { UsageLine } from './components/chat/UsageLine'
+export type { UsageLineProps } from './components/chat/UsageLine'
+export { MessageStats } from './components/chat/MessageStats'
+export type { MessageStatsProps } from './components/chat/MessageStats'
+export { EditableName } from './components/chat/EditableName'
+export type { EditableNameProps } from './components/chat/EditableName'
+
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually. The body gets a

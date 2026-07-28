@@ -2,7 +2,11 @@ import { useState } from 'react'
 import type { MessageMeta } from '../../types'
 import { flattenToRows } from './utils'
 
-export function MessageStats({ meta }: { meta: MessageMeta }) {
+export interface MessageStatsProps {
+  meta: MessageMeta
+}
+
+export function MessageStats({ meta }: MessageStatsProps) {
   const [open, setOpen] = useState(false)
   const rows = flattenToRows(meta as unknown as Record<string, unknown>)
 

@@ -1,6 +1,10 @@
 import type { SessionInfo } from '../../types'
 
-export function ToolsPanel({ info }: { info: SessionInfo }) {
+export interface ToolsPanelProps {
+  info: SessionInfo
+}
+
+export function ToolsPanel({ info }: ToolsPanelProps) {
   const tools = info.tools ?? []
   const slashCommands = info.slash_commands ?? []
   const agents = info.agents ?? []

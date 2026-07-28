@@ -1,5 +1,6 @@
 import type { SessionInfo } from '../../types';
-export declare function ToolsPanel({ info }: {
+export interface ToolsPanelProps {
     info: SessionInfo;
-}): import("react/jsx-runtime").JSX.Element;
+}
+export declare function ToolsPanel({ info }: ToolsPanelProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=ToolsPanel.d.ts.map
