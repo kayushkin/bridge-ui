@@ -461,14 +461,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
 
-      <ProducerRow
-        apiFetch={apiFetch}
-        producerBasePath={producerBasePath}
-        instances={instances}
-        sessions={sessions}
-        onSelect={onSelect}
-        onNewChat={onNewChat}
-      />
+      <ProducerRow apiFetch={apiFetch} producerBasePath={producerBasePath} />
 
       <div className="bc-session-search">
         <input

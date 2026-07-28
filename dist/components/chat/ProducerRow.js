@@ -1,15 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useState } from 'react';
-// The bridge instance the Orchestrator chat runs on. Matched by name; created
-// once (claude_code, working_dir = the repo's agent/ persona home).
-const ORCHESTRATOR_INSTANCE_NAME = 'Orchestrator';
 // ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar.
 // It is deliberately self-contained: it fetches its own state from the producer
 // service (proxied at producerBasePath) using the same apiFetch the rest of the
 // sidebar uses, so it needs no new provider wiring. If the service is
 // unreachable the row still renders, showing an offline state rather than
 // breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath, instances, sessions, onSelect, onNewChat }) {
+export function ProducerRow({ apiFetch, producerBasePath }) {
     const [cfg, setCfg] = useState(null);
     const [error, setError] = useState(null);
     const [expanded, setExpanded] = useState(false);
@@ -69,24 +66,9 @@ export function ProducerRow({ apiFetch, producerBasePath, instances, sessions, o
     }, [apiFetch, producerBasePath]);
     const enabled = cfg?.enabled ?? false;
     const unreachable = !cfg && !!error;
-    const orchestratorInstance = instances.find(i => i.name === ORCHESTRATOR_INSTANCE_NAME && i.enabled);
-    // Open the Orchestrator chat: focus the most recent existing session on the
-    // Orchestrator instance, or start a fresh one. If the instance is missing,
-    // open the panel with a hint rather than silently doing nothing.
-    const openChat = useCallback(() => {
-        if (!orchestratorInstance) {
-            setExpanded(true);
-            setError('No "Orchestrator" chat instance found — create one in Instances (claude_code).');
-            return;
-        }
-        const existing = sessions
-            .filter(s => s.instance_id === orchestratorInstance.id)
-            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
-        if (existing)
-            onSelect(existing.session_id);
-        else
-            onNewChat(orchestratorInstance.id, 'replace');
-    }, [orchestratorInstance, sessions, onSelect, onNewChat]);
+    // The orchestrator is NOT a chat session — it's a stateless-per-run runtime —
+    // so the row opens its dedicated surface page, not a bridge session.
+    const openChat = useCallback(() => { window.location.assign('/orchestrator'); }, []);
     const saveLimit = () => {
         const v = parseFloat(limitDraft);
         if (!Number.isNaN(v) && v >= 0 && v !== cfg?.week_limit_usd)
