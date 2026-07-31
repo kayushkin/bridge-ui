@@ -60,6 +60,11 @@ export interface BridgeConfig {
    * card is linked by entity_type=bus_session. If empty, those cards' chat
    * deeplinks are disabled. */
   bridgeAdapterBasePath: string
+  /** Base path for the producer (orchestrator) API (e.g. "/api/producer"). No
+   * trailing slash. Used by the sidebar's Orchestrator row and the in-chat
+   * orchestrator-context pane. If empty, both say the producer isn't
+   * configured instead of guessing a path. */
+  producerBasePath: string
   /** Base path for usage-store API (e.g. "/api/usage"). No trailing slash.
    * If empty, the spend/limits sections of the Usage tab are hidden and only
    * per-session aggregates from llm-bridge-server are shown. */

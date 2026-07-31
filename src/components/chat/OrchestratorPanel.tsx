@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useBridgeConfig } from '../../context'
 
 // Compact in-chat view of the orchestrator's injected context. The full review
 // surface (WAL, prior versions, filters) lives on the standalone /orchestrator
@@ -9,7 +10,6 @@ interface Version { part: string; title: string; content: string; tokens: number
 interface PartState { part: string; title: string; latest: Version; version_count: number }
 
 const ORDER = ['agents', 'tasks', 'convo_summary', 'convo_current']
-const PRODUCER_BASE = '/api/producer'
 const LINK_RE = /\[(session|task|todo):([^\]]+)\]/g
 
 function hrefFor(kind: string, id: string): string {
@@ -37,22 +37,25 @@ export function OrchestratorPanel({ onToggleCollapse, style }: {
   onToggleCollapse: () => void
   style?: React.CSSProperties
 }) {
+  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
   const [parts, setParts] = useState<PartState[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!producerBasePath) return
     try {
-      const r = await fetch(`${PRODUCER_BASE}/context`, { credentials: 'include' })
+      const r = await apiFetch(`${producerBasePath}/context`)
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       setParts(await r.json()); setError(null)
     } catch (e) { setError(String((e as Error).message ?? e)) }
-  }, [])
+  }, [apiFetch, producerBasePath])
 
   useEffect(() => {
+    if (!producerBasePath) return
     load()
     const t = setInterval(load, 15000)
     return () => clearInterval(t)
-  }, [load])
+  }, [load, producerBasePath])
 
   const ordered = [
     ...ORDER.map(id => parts.find(p => p.part === id)).filter(Boolean) as PartState[],
@@ -77,6 +80,7 @@ export function OrchestratorPanel({ onToggleCollapse, style }: {
         <span className="bc-split-collapse-btn" aria-hidden="true" style={{ marginLeft: 8 }}>×</span>
       </div>
       <div style={{ overflow: 'auto', padding: 8, fontSize: 12 }}>
+        {!producerBasePath && <div style={{ opacity: 0.7 }}>No producer configured — set producerBasePath on BridgeProvider.</div>}
         {error && <div style={{ color: '#ef4444' }}>Producer offline ({error})</div>}
         {ordered.map(p => (
           <details key={p.part} open={p.part === 'agents' || p.part === 'tasks'} style={{ marginBottom: 8 }}>

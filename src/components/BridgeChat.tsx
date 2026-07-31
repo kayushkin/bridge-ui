@@ -120,7 +120,7 @@ function isFreshTab(): boolean {
 }
 
 export function BridgeChat() {
-  const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
+  const { fetch: apiFetch, basePath, producerBasePath, routes } = useBridgeConfig()
   const bridge = useBridgeSession()
   const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` })
   const instances = useBridgeInstances()
@@ -430,6 +430,7 @@ export function BridgeChat() {
       harnesses={harnesses}
       basePath={basePath}
       apiFetch={apiFetch}
+      producerBasePath={producerBasePath}
       instancesPath={routes.instances}
       defaultInstanceId={defaultInstanceId}
       openSessionIds={openSessionIds}

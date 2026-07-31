@@ -21,7 +21,7 @@ import type { CtxMenuState, SplitMode } from './types'
 // sidebar DOM small so a large Archive folder can't balloon it to 10k+ nodes.
 const SESSION_LIST_CAP = 50
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, producerBasePath = '/api/producer', instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, producerBasePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -29,9 +29,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   basePath: string
   apiFetch: FetchFn
   // Base path the pinned Producer row calls (its /config lives behind this
-  // proxy). Defaults to the dash/llmux convention so no provider change is
-  // needed; a consumer without the proxy simply shows the row as offline.
-  producerBasePath?: string
+  // proxy). Comes from `producerBasePath` on BridgeProvider; empty means the
+  // consumer proxies no producer, and the row is left out entirely.
+  producerBasePath: string
   instancesPath: string
   defaultInstanceId?: string
   openSessionIds: Set<string>
@@ -461,7 +461,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
 
-      <ProducerRow apiFetch={apiFetch} producerBasePath={producerBasePath} />
+      {producerBasePath && <ProducerRow apiFetch={apiFetch} producerBasePath={producerBasePath} />}
 
       <div className="bc-session-search">
         <input

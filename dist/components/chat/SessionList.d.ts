@@ -8,7 +8,7 @@ export declare function SessionList({ sessions, instances, machines, harnesses, 
     harnesses: HarnessInfo[];
     basePath: string;
     apiFetch: FetchFn;
-    producerBasePath?: string;
+    producerBasePath: string;
     instancesPath: string;
     defaultInstanceId?: string;
     openSessionIds: Set<string>;
