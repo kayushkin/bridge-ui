@@ -46,6 +46,7 @@ export { ToolsPanel } from './components/chat/ToolsPanel';
 export { SystemPromptModal } from './components/chat/SystemPromptModal';
 export { SessionPermissionMode } from './components/chat/SessionPermissionMode';
 export { CostBreakdown } from './components/chat/CostBreakdown';
+export { BudgetCeilingBanner } from './components/chat/BudgetCeilingBanner';
 export { UsageLine } from './components/chat/UsageLine';
 export { MessageStats } from './components/chat/MessageStats';
 export { EditableName } from './components/chat/EditableName';

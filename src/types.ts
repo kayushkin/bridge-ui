@@ -35,6 +35,7 @@ import type {
 } from '@kayushkin/llm-bridge-types'
 
 export {
+  ErrCodeBudgetExceeded,
   HookSourceHook,
   HookSourcePermission,
   HookSourceUserInput,
@@ -262,6 +263,32 @@ export interface BridgeEvent {
 
 // --- Hook return types ---
 
+// BudgetHalt is the client's record that bridge-server's spend ceiling has
+// stopped this session. It is set from either half of the server-side gate:
+//
+//   - the mid-turn interrupt, which arrives as an EventError carrying
+//     ErrCodeBudgetExceeded on the session's SSE stream;
+//   - the between-turns refusal, a 402 with a JSON body naming both dollar
+//     figures, returned by send / resume / mode-switch.
+//
+// spendUSD and maxBudgetUSD are optional because only the 402 half carries
+// them. The error event carries a sentence and no numbers, so a halt raised
+// that way leaves them undefined and the surface falls back to `message` —
+// the server's own words — rather than inventing a figure.
+export interface BudgetHalt {
+  /** Bridge session id the halt belongs to. A halt never outlives its own
+   * session: switching sessions clears it. */
+  sessionId: string
+  /** The server's own description of the halt. Always present. */
+  message: string
+  /** Spend recorded against the ceiling at the moment of refusal, in USD.
+   * Undefined when the halt came from the mid-turn error event. */
+  spendUSD?: number
+  /** The ceiling that was breached, in USD. Undefined when the halt came
+   * from the mid-turn error event. */
+  maxBudgetUSD?: number
+}
+
 export interface UseBridgeSessionReturn {
   sessions: ManagedSession[]
   activeSession: ManagedSession | null
@@ -303,6 +330,18 @@ export interface UseBridgeSessionReturn {
   renameSession: (bridgeID: string, displayName: string) => Promise<void>
   sendConfig: (config: { model?: string; effort?: string; disabled_tools?: string[]; max_budget?: number }, explicitSessionId?: string) => void
   refreshSessions: () => void
+
+  // budgetHalt is set while the active session is stopped at its spend
+  // ceiling, and null otherwise. Drives BudgetCeilingBanner. Null for every
+  // session with no ceiling, and for every server that predates the gate —
+  // neither can produce the 402 nor the error code that sets it.
+  budgetHalt: BudgetHalt | null
+  // raiseBudgetCeiling sets a new ceiling on the halted session and clears
+  // the halt. This is the escape hatch out of a budget halt, and it works on
+  // a session whose process the gate already killed: bridge-server persists
+  // the ceiling itself and only forwards to the harness when there is one.
+  // Resolves to the error text when the server refused, null on success.
+  raiseBudgetCeiling: (maxBudgetUSD: number, explicitSessionId?: string) => Promise<string | null>
 
   // Awaiting-resolution HookEvents for the active session: events whose
   // phase="awaiting_resolution" has not yet been closed by a matching

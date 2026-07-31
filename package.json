@@ -21,7 +21,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "vite --config standalone/vite.config.ts",
-    "build:standalone": "vite build --config standalone/vite.config.ts"
+    "build:standalone": "vite build --config standalone/vite.config.ts",
+    "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs"
   },
   "dependencies": {
     "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts",
@@ -43,6 +44,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.25.12",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",

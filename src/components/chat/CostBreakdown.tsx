@@ -24,6 +24,35 @@ export interface CostAggregate {
   bySource?: Record<string, number>
 }
 
+// SpendCeiling is the session's server-side spend cap and its spend against
+// it — ManagedSession.max_budget_usd and .spend_usd, straight off the session
+// row.
+//
+// Both numbers come from the session row on purpose, and not from the rows
+// the rest of this component reads. bridge-server's halt gate compares
+// exactly these two fields, so they are the only pair whose ratio predicts
+// when the session actually stops. The drill-down's "API spend" is the
+// best-available figure for display and can differ: it moves during a turn
+// before the row is persisted, and on a harness that emits no api_call
+// telemetry it falls back to per-turn cost, which the gate never sees.
+// Showing that number against a ceiling would draw a bar that fills while
+// nothing enforces it.
+export interface SpendCeiling {
+  spendUSD: number
+  maxBudgetUSD: number
+}
+
+// ceilingTone grades spend against the ceiling for the chip's colour.
+// Matches the context-tokens thresholds SessionHeader already uses, so the
+// two budget-ish readouts in the header change colour on the same scale.
+function ceilingTone(spendUSD: number, maxBudgetUSD: number): '' | 'warn' | 'crit' {
+  if (maxBudgetUSD <= 0) return ''
+  const pct = (spendUSD / maxBudgetUSD) * 100
+  if (pct >= 90) return 'crit'
+  if (pct >= 70) return 'warn'
+  return ''
+}
+
 export interface CostBreakdownProps {
   /** Raw log rows to scan for the latest api_spend_total (default path used
    * by the live BridgeChat `/` page). Optional so an `aggregate`-only
@@ -39,10 +68,27 @@ export interface CostBreakdownProps {
   /** Pre-aggregated cost object. When present, it wins over rows/fallback
    * and renders a drill-down chip from the aggregate directly. */
   aggregate?: CostAggregate
+  /** The session's spend ceiling and its spend against it. Supply it only
+   * for a session that has one (max_budget_usd > 0): with no ceiling the
+   * chip renders exactly as it did before, and a server that predates the
+   * ceiling cannot send one, so nothing appears. */
+  ceiling?: SpendCeiling
 }
 
-export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggregate }: CostBreakdownProps) {
+export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggregate, ceiling }: CostBreakdownProps) {
   const apiSpend = latestApiSpend(rows ?? [])
+
+  // With a ceiling, the chip reads "$3.00 / $10.00" and the ceiling's own
+  // pair drives both the text and the colour — see SpendCeiling for why it
+  // is that pair and not the drill-down's figure.
+  const tone = ceiling ? ceilingTone(ceiling.spendUSD, ceiling.maxBudgetUSD) : ''
+  const chipClass = ceiling ? ` bc-cost-ceiling${tone ? ` bc-cost-ceiling-${tone}` : ''}` : ''
+  const ceilingLabel = ceiling
+    ? `${formatCost(ceiling.spendUSD)} / ${formatCost(ceiling.maxBudgetUSD)}`
+    : ''
+  const ceilingTitle = ceiling
+    ? `${formatCost(ceiling.spendUSD)} spent of this session's ${formatCost(ceiling.maxBudgetUSD)} ceiling — bridge-server stops the session here`
+    : ''
 
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -71,16 +117,17 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
       <div className="bc-cost-wrap" ref={ref}>
         <button
           type="button"
-          className={`bc-cost bc-cost-clickable${open ? ' bc-cost-open' : ''}`}
+          className={`bc-cost bc-cost-clickable${chipClass}${open ? ' bc-cost-open' : ''}`}
           onClick={() => setOpen(o => !o)}
-          title="click for breakdown"
+          title={ceiling ? `${ceilingTitle}\nclick for breakdown` : 'click for breakdown'}
           aria-expanded={open}
         >
-          {formatCost(aggregate.totalUsd)}
+          {ceiling ? ceilingLabel : formatCost(aggregate.totalUsd)}
           <span className="bc-cost-caret" aria-hidden>▾</span>
         </button>
         {open && (
           <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
+            <CeilingPanelRows ceiling={ceiling} />
             <div className="bc-cost-panel-row bc-cost-panel-total">
               <span className="bc-cost-panel-label">API spend</span>
               <span className="bc-cost-panel-value">{formatCost(aggregate.totalUsd)}</span>
@@ -114,19 +161,52 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
   }
 
   if (apiSpend && apiSpend.calls > 0) {
+    const callsTitle = `${apiSpend.calls} API call${apiSpend.calls === 1 ? '' : 's'} · click for breakdown`
     return (
       <div className="bc-cost-wrap" ref={ref}>
         <button
           type="button"
-          className={`bc-cost bc-cost-clickable${open ? ' bc-cost-open' : ''}`}
+          className={`bc-cost bc-cost-clickable${chipClass}${open ? ' bc-cost-open' : ''}`}
           onClick={() => setOpen(o => !o)}
-          title={`${apiSpend.calls} API call${apiSpend.calls === 1 ? '' : 's'} · click for breakdown`}
+          title={ceiling ? `${ceilingTitle}\n${callsTitle}` : callsTitle}
           aria-expanded={open}
         >
-          {formatCost(apiSpend.total_usd)}
+          {ceiling ? ceilingLabel : formatCost(apiSpend.total_usd)}
           <span className="bc-cost-caret" aria-hidden>▾</span>
         </button>
-        {open && <CostDrilldownPanel spend={apiSpend} fallbackTotalUSD={fallbackTotalUSD} />}
+        {open && <CostDrilldownPanel spend={apiSpend} fallbackTotalUSD={fallbackTotalUSD} ceiling={ceiling} />}
+      </div>
+    )
+  }
+
+  if (ceiling) {
+    // A ceiling with no api_call telemetry behind it. Worth showing — the
+    // ceiling is a fact the user set, and the session's spend against it is
+    // the number the server gates on whether or not any call has been
+    // itemised yet.
+    //
+    // This branch renders the same clickable chip as the others rather than
+    // a static one. It used to be a bare span, which made the drill-down
+    // unreachable in exactly the state that reaches it: a session with a
+    // ceiling and no itemised calls, i.e. every freshly-loaded one. A group
+    // of rows nothing can open is a group of rows that does not exist.
+    return (
+      <div className="bc-cost-wrap" ref={ref}>
+        <button
+          type="button"
+          className={`bc-cost bc-cost-clickable${chipClass}${open ? ' bc-cost-open' : ''}`}
+          onClick={() => setOpen(o => !o)}
+          title={`${ceilingTitle}\nclick for breakdown`}
+          aria-expanded={open}
+        >
+          {ceilingLabel}
+          <span className="bc-cost-caret" aria-hidden>▾</span>
+        </button>
+        {open && (
+          <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
+            <CeilingPanelRows ceiling={ceiling} />
+          </div>
+        )}
       </div>
     )
   }
@@ -142,9 +222,39 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
   return null
 }
 
-function CostDrilldownPanel({ spend, fallbackTotalUSD }: {
+// CeilingPanelRows adds the gated pair to a drill-down panel. Renders
+// nothing without a ceiling, which is every session that has none.
+//
+// It is a separate row rather than a footnote on "API spend" because the
+// two figures answer different questions and can hold different numbers:
+// this one is what the server compares, that one is what the session has
+// been billed for as best the client can tell.
+function CeilingPanelRows({ ceiling }: { ceiling?: SpendCeiling }) {
+  if (!ceiling) return null
+  const remaining = ceiling.maxBudgetUSD - ceiling.spendUSD
+  return (
+    <div className="bc-cost-panel-group bc-cost-panel-ceiling">
+      <div className="bc-cost-panel-group-label">Spend ceiling</div>
+      <div className="bc-cost-panel-row">
+        <span className="bc-cost-panel-label">gated spend</span>
+        <span className="bc-cost-panel-value">{formatCost(ceiling.spendUSD)}</span>
+      </div>
+      <div className="bc-cost-panel-row">
+        <span className="bc-cost-panel-label">ceiling</span>
+        <span className="bc-cost-panel-value">{formatCost(ceiling.maxBudgetUSD)}</span>
+      </div>
+      <div className="bc-cost-panel-row">
+        <span className="bc-cost-panel-label">{remaining > 0 ? 'remaining' : 'over by'}</span>
+        <span className="bc-cost-panel-value">{formatCost(Math.abs(remaining))}</span>
+      </div>
+    </div>
+  )
+}
+
+function CostDrilldownPanel({ spend, fallbackTotalUSD, ceiling }: {
   spend: APISpendTotalEvent
   fallbackTotalUSD: number
+  ceiling?: SpendCeiling
 }) {
   const byModel = mapEntriesSortedDesc(spend.by_model)
   const bySource = mapEntriesSortedDesc(spend.by_query_source)
@@ -158,6 +268,7 @@ function CostDrilldownPanel({ spend, fallbackTotalUSD }: {
 
   return (
     <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
+      <CeilingPanelRows ceiling={ceiling} />
       <div className="bc-cost-panel-row bc-cost-panel-total">
         <span className="bc-cost-panel-label">API spend</span>
         <span className="bc-cost-panel-value">{formatCost(spend.total_usd)}</span>

@@ -6,7 +6,11 @@ export function formatTokens(n) {
     return `${n}`;
 }
 export function formatCost(n) {
-    if (n < 0.01)
+    // Sub-cent amounts need the extra digits to say anything at all. Exactly
+    // zero does not: it is not a small quantity, it is none, and "$0.0000"
+    // reads as a measurement precise to four places rather than as nothing
+    // spent.
+    if (n > 0 && n < 0.01)
         return `$${n.toFixed(4)}`;
     return `$${n.toFixed(2)}`;
 }

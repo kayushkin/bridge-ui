@@ -4972,3 +4972,46 @@
 .bc-ref-badge-approval { background: color-mix(in srgb, #e0a24a 26%, transparent); color: #e0a24a; }
 .bc-ref-badge-held { background: color-mix(in srgb, #e0a24a 26%, transparent); color: #e0a24a; }
 .bc-ref-badge-deleted { background: color-mix(in srgb, var(--danger, #e0706a) 24%, transparent); color: var(--danger, #e0706a); }
+
+/* Spend ceiling — the cost chip against ManagedSession.max_budget_usd, and
+   the banner for a session bridge-server has halted at that ceiling.
+   Both are absent for a session with no ceiling, which is the default. */
+.bc-cost-ceiling { font-variant-numeric: tabular-nums; }
+.bc-cost-ceiling-warn { color: #f59e0b; }
+.bc-cost-ceiling-crit { color: #ef4444; }
+.bc-cost-ceiling-warn.bc-cost-clickable:hover { border-color: color-mix(in srgb, #f59e0b 45%, var(--border)); background: color-mix(in srgb, #f59e0b 8%, transparent); }
+.bc-cost-ceiling-crit.bc-cost-clickable:hover { border-color: color-mix(in srgb, #ef4444 45%, var(--border)); background: color-mix(in srgb, #ef4444 8%, transparent); }
+.bc-cost-panel-ceiling .bc-cost-panel-group-label { color: var(--text); }
+
+.bc-budget-banner {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 16px; margin: 0;
+  background: color-mix(in srgb, #ef4444 8%, var(--bg-surface));
+  border-bottom: 1px solid color-mix(in srgb, #ef4444 45%, var(--border));
+  position: sticky; top: 0; z-index: 5;
+}
+.bc-budget-banner-head { display: flex; gap: 8px; align-items: baseline; }
+.bc-budget-banner-icon { font-size: 0.95em; }
+.bc-budget-banner-title { color: #ef4444; font-weight: 600; font-size: 0.9em; }
+.bc-budget-banner-body { margin: 0; font-size: 0.85em; color: var(--text); }
+.bc-budget-banner-body strong { font-variant-numeric: tabular-nums; }
+.bc-budget-banner-actions { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.bc-budget-banner-field { display: flex; flex-direction: column; gap: 3px; }
+.bc-budget-banner-field-label { font-size: 0.72em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.bc-budget-banner-input {
+  width: 110px; padding: 5px 8px; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--bg-surface); color: var(--text);
+  font-size: 0.85em; font-variant-numeric: tabular-nums;
+}
+.bc-budget-banner-raise {
+  padding: 6px 14px; border-radius: 5px; border: 1px solid var(--border);
+  background: none; color: var(--text); cursor: pointer; font-size: 0.82em;
+  transition: border-color 0.15s, background 0.15s;
+}
+.bc-budget-banner-raise:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.bc-budget-banner-raise:disabled { opacity: 0.4; cursor: default; }
+.bc-budget-banner-hint { font-size: 0.78em; color: var(--text-muted); padding-bottom: 6px; }
+.bc-budget-banner-failure { font-size: 0.8em; color: #e57373; }
+/* CeilingPanelRows is the first group in every drill-down that has one, and
+   a group separator above the first row is a line to nothing. */
+.bc-cost-panel > .bc-cost-panel-group:first-child { border-top: none; margin-top: 0; padding-top: 0; }

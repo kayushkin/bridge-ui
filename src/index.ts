@@ -31,6 +31,7 @@ export type {
   BridgeEvent,
   EventData,
   UseBridgeSessionReturn,
+  BudgetHalt,
 } from './types'
 
 // Constants
@@ -120,6 +121,9 @@ export { SessionPermissionMode } from './components/chat/SessionPermissionMode'
 export type { SessionPermissionModeProps } from './components/chat/SessionPermissionMode'
 export { CostBreakdown } from './components/chat/CostBreakdown'
 export type { CostBreakdownProps, CostAggregate } from './components/chat/CostBreakdown'
+export type { SpendCeiling } from './components/chat/CostBreakdown'
+export { BudgetCeilingBanner } from './components/chat/BudgetCeilingBanner'
+export type { BudgetCeilingBannerProps } from './components/chat/BudgetCeilingBanner'
 export { UsageLine } from './components/chat/UsageLine'
 export type { UsageLineProps } from './components/chat/UsageLine'
 export { MessageStats } from './components/chat/MessageStats'

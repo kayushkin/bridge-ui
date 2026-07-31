@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { HarnessInfo, LogRow, Machine, ManagedSession } from '../../types'
 import { ARCHIVE_FOLDER } from '../../useBridgeFolders'
-import { formatTokens } from '../../utils'
+import { formatCost, formatTokens } from '../../utils'
 import { CostBreakdown } from './CostBreakdown'
 import { EditableName } from './EditableName'
 import { PaneToggles } from './PaneToggles'
@@ -106,6 +106,17 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
 
   const sourceLabel = session?.purpose || 'chat'
 
+  // Zero means no ceiling — the convention Claude Code's own
+  // --max-budget-usd uses and the one ManagedSession.max_budget_usd
+  // documents, so an absent or zero cap renders the cost chip exactly as it
+  // rendered before this existed. spend_usd defaults to 0 rather than being
+  // treated as missing: a capped session that has not spent anything yet has
+  // genuinely spent nothing.
+  const maxBudgetUSD = session?.max_budget_usd ?? 0
+  const spendCeiling = maxBudgetUSD > 0
+    ? { spendUSD: session?.spend_usd ?? 0, maxBudgetUSD }
+    : undefined
+
   // A session is "done" once it has been marked and moved into the Archive
   // folder — the same signal the sidebar uses to flip its menu label.
   const isDone = session?.folder_name === ARCHIVE_FOLDER
@@ -176,6 +187,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
           rows={rows}
           fallbackTotalUSD={totalCost}
           fallbackTitle={contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined}
+          ceiling={spendCeiling}
         />
         {repoCount > 0 && currentRepo && (
           <label
@@ -263,6 +275,13 @@ function SessionDetailsPanel({ session }: { session: ManagedSession }) {
     ['parent', fmt(session.parent_id), true],
     ['spawned by', fmt(session.manager_session_id), true],
     ['pid', session.pid ? String(session.pid) : '—'],
+    // The persisted pair bridge-server's halt gate compares. Both read "—"
+    // when the field is absent rather than "$0.00": a ceiling of 0 is no
+    // ceiling at all, and a server that predates the gate sends no spend at
+    // all — printing a dollar figure for a number nobody reported would
+    // invent a measurement for every session on this box.
+    ['spend', session.spend_usd === undefined ? '—' : formatCost(session.spend_usd)],
+    ['ceiling', (session.max_budget_usd ?? 0) > 0 ? formatCost(session.max_budget_usd!) : '—'],
     ['created', fmtDate(session.created_at)],
     ['updated', fmtDate(session.updated_at)],
   ]

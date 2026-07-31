@@ -4,6 +4,7 @@ import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../..
 import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
+import { BudgetCeilingBanner } from './BudgetCeilingBanner'
 import { Composer } from './Composer'
 import { LayoutRenderer } from './LayoutRenderer'
 import { PendingPermissionsBanner } from './PendingPermissionsBanner'
@@ -500,6 +501,16 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         resolveHook: bridge.resolveHook,
       }}>
         <PendingPermissionsBanner />
+        {/* Sits beside the permissions banner for the same reason: a halt the
+            user has to un-hide a pane to notice is a session that just looks
+            broken. The sessionId guard keeps one workspace's halt off another
+            workspace's chat — the hook clears it on select, this covers the
+            gap while a select is in flight. */}
+        <BudgetCeilingBanner
+          halt={bridge.budgetHalt?.sessionId === bridge.activeSession?.session_id ? bridge.budgetHalt : null}
+          session={bridge.activeSession}
+          onRaiseCeiling={bridge.raiseBudgetCeiling}
+        />
         <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
       </WorkspaceProvider>
       {renderControls}

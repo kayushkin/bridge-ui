@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from 'react';
 import { ARCHIVE_FOLDER } from '../../useBridgeFolders';
-import { formatTokens } from '../../utils';
+import { formatCost, formatTokens } from '../../utils';
 import { CostBreakdown } from './CostBreakdown';
 import { EditableName } from './EditableName';
 import { PaneToggles } from './PaneToggles';
@@ -54,6 +54,16 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
         };
     }, [detailsOpen]);
     const sourceLabel = session?.purpose || 'chat';
+    // Zero means no ceiling — the convention Claude Code's own
+    // --max-budget-usd uses and the one ManagedSession.max_budget_usd
+    // documents, so an absent or zero cap renders the cost chip exactly as it
+    // rendered before this existed. spend_usd defaults to 0 rather than being
+    // treated as missing: a capped session that has not spent anything yet has
+    // genuinely spent nothing.
+    const maxBudgetUSD = session?.max_budget_usd ?? 0;
+    const spendCeiling = maxBudgetUSD > 0
+        ? { spendUSD: session?.spend_usd ?? 0, maxBudgetUSD }
+        : undefined;
     // A session is "done" once it has been marked and moved into the Archive
     // folder — the same signal the sidebar uses to flip its menu label.
     const isDone = session?.folder_name === ARCHIVE_FOLDER;
@@ -73,7 +83,7 @@ export function SessionHeader({ chat, session, harnessInfo, machine, machineReac
                                             ? 'bc-machine-chip-dot-ok'
                                             : 'bc-machine-chip-dot-fail'), "aria-hidden": true })] })), session && (_jsxs("div", { className: "bc-details-wrap", ref: detailsRef, children: [_jsxs("button", { type: "button", className: `bc-source-chip${detailsOpen ? ' bc-source-chip-open' : ''}`, onClick: () => setDetailsOpen(o => !o), "data-source": session.purpose || 'chat', title: `source: ${sourceLabel}\nclick for full session details`, "aria-expanded": detailsOpen, "aria-label": "Session details", children: [_jsx("span", { className: "bc-source-chip-label", children: sourceLabel }), _jsx("span", { className: "bc-source-chip-caret", "aria-hidden": true, children: "\u25BE" })] }), detailsOpen && _jsx(SessionDetailsPanel, { session: session })] })), chat
                         ? _jsx(EditableName, { value: chat.displayName, onSave: onRename, className: "bc-session-name" })
-                        : _jsx("span", { className: "bc-session-name bc-session-name-empty", children: "\u2014" }), _jsx(CostBreakdown, { rows: rows, fallbackTotalUSD: totalCost, fallbackTitle: contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined }), repoCount > 0 && currentRepo && (_jsxs("label", { className: "bc-repo-chip", title: `${currentRepo.path}${repoCount > 1 ? ` — ${repoCount} repos discovered` : ''}`, children: [_jsx("span", { className: "bc-repo-chip-icon", "aria-hidden": true, children: "\u25C6" }), _jsx("span", { className: "bc-repo-chip-name", children: currentRepo.name }), repoCount > 1 && _jsxs("span", { className: "bc-repo-chip-count", "aria-hidden": true, children: ["+", repoCount - 1] }), _jsx("select", { className: "bc-repo-chip-select", value: selectedRepo, onChange: e => onSelectRepo(e.target.value), "aria-label": "Switch repository", children: gitRepos.map(r => (_jsx("option", { value: r.path, children: r.name }, r.path))) }), _jsx("span", { className: "bc-repo-chip-caret", "aria-hidden": true, children: "\u25BE" })] })), _jsxs("div", { className: "bc-header-right", children: [_jsx(PaneToggles, { panesHidden: panesHidden, onToggleTurns: onToggleTurns, onToggleThread: onToggleThread, onToggleTimeline: onToggleTimeline, onToggleGit: onToggleGit, onToggleKanban: onToggleKanban, onToggleOrchestrator: onToggleOrchestrator, onToggleAttach: onToggleAttach, attachAvailable: attachAvailable }), session && onMarkDone && (_jsx("button", { className: `bc-mark-done${isDone ? ' bc-mark-done-active' : ''}`, onClick: () => onMarkDone(!isDone), title: isDone ? 'Reopen this session' : 'Mark this session done', "aria-label": isDone ? 'Reopen session' : 'Mark session done', "aria-pressed": isDone, children: isDone ? '↺ Reopen' : '✓ Done' })), onCloseWorkspace && (_jsx("button", { className: "bc-workspace-close", onClick: onCloseWorkspace, title: "Close workspace", "aria-label": "Close workspace", children: "\u00D7" }))] })] }), contextTokens > 0 && contextLimit > 0 && (_jsx("div", { className: `bc-header-context ${contextTone ? `bc-header-context-${contextTone}` : ''}`, style: { width: `${contextPct}%` } }))] }));
+                        : _jsx("span", { className: "bc-session-name bc-session-name-empty", children: "\u2014" }), _jsx(CostBreakdown, { rows: rows, fallbackTotalUSD: totalCost, fallbackTitle: contextTokens && contextLimit ? `${formatTokens(contextTokens)} / ${formatTokens(contextLimit)} context tokens (${contextPct}%)` : undefined, ceiling: spendCeiling }), repoCount > 0 && currentRepo && (_jsxs("label", { className: "bc-repo-chip", title: `${currentRepo.path}${repoCount > 1 ? ` — ${repoCount} repos discovered` : ''}`, children: [_jsx("span", { className: "bc-repo-chip-icon", "aria-hidden": true, children: "\u25C6" }), _jsx("span", { className: "bc-repo-chip-name", children: currentRepo.name }), repoCount > 1 && _jsxs("span", { className: "bc-repo-chip-count", "aria-hidden": true, children: ["+", repoCount - 1] }), _jsx("select", { className: "bc-repo-chip-select", value: selectedRepo, onChange: e => onSelectRepo(e.target.value), "aria-label": "Switch repository", children: gitRepos.map(r => (_jsx("option", { value: r.path, children: r.name }, r.path))) }), _jsx("span", { className: "bc-repo-chip-caret", "aria-hidden": true, children: "\u25BE" })] })), _jsxs("div", { className: "bc-header-right", children: [_jsx(PaneToggles, { panesHidden: panesHidden, onToggleTurns: onToggleTurns, onToggleThread: onToggleThread, onToggleTimeline: onToggleTimeline, onToggleGit: onToggleGit, onToggleKanban: onToggleKanban, onToggleOrchestrator: onToggleOrchestrator, onToggleAttach: onToggleAttach, attachAvailable: attachAvailable }), session && onMarkDone && (_jsx("button", { className: `bc-mark-done${isDone ? ' bc-mark-done-active' : ''}`, onClick: () => onMarkDone(!isDone), title: isDone ? 'Reopen this session' : 'Mark this session done', "aria-label": isDone ? 'Reopen session' : 'Mark session done', "aria-pressed": isDone, children: isDone ? '↺ Reopen' : '✓ Done' })), onCloseWorkspace && (_jsx("button", { className: "bc-workspace-close", onClick: onCloseWorkspace, title: "Close workspace", "aria-label": "Close workspace", children: "\u00D7" }))] })] }), contextTokens > 0 && contextLimit > 0 && (_jsx("div", { className: `bc-header-context ${contextTone ? `bc-header-context-${contextTone}` : ''}`, style: { width: `${contextPct}%` } }))] }));
 }
 function SessionDetailsPanel({ session }) {
     const fmt = (v) => v && v.length ? v : '—';
@@ -98,6 +108,13 @@ function SessionDetailsPanel({ session }) {
         ['parent', fmt(session.parent_id), true],
         ['spawned by', fmt(session.manager_session_id), true],
         ['pid', session.pid ? String(session.pid) : '—'],
+        // The persisted pair bridge-server's halt gate compares. Both read "—"
+        // when the field is absent rather than "$0.00": a ceiling of 0 is no
+        // ceiling at all, and a server that predates the gate sends no spend at
+        // all — printing a dollar figure for a number nobody reported would
+        // invent a measurement for every session on this box.
+        ['spend', session.spend_usd === undefined ? '—' : formatCost(session.spend_usd)],
+        ['ceiling', (session.max_budget_usd ?? 0) > 0 ? formatCost(session.max_budget_usd) : '—'],
         ['created', fmtDate(session.created_at)],
         ['updated', fmtDate(session.updated_at)],
     ];

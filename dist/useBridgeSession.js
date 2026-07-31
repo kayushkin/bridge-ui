@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
 import { connectSSE, connectSessionListSSE } from './bridgeSSE';
+import { ErrCodeBudgetExceeded } from './types';
 // --- Event envelope ---
 //
 // Unified shape for both live SSE events and history-replayed events. History
@@ -21,6 +22,36 @@ function eventIdOf(ev) {
     if (ev.id)
         return Number(ev.id) || 0;
     return 0;
+}
+// --- Spend ceiling ---
+// budgetHaltFromRefusal reads bridge-server's between-turns refusal: a 402
+// whose JSON body names the code and both dollar figures, so a client can
+// say what happened without a second round trip.
+//
+// Reports null for everything else, including a 402 that is not a budget
+// refusal and a body that does not parse. The caller then falls through to
+// its ordinary error path, so a refusal shape this code does not recognise
+// still reaches the user as text instead of being swallowed into a banner
+// that would describe it wrongly.
+function budgetHaltFromRefusal(sessionId, status, body) {
+    if (status !== 402)
+        return null;
+    let parsed;
+    try {
+        parsed = JSON.parse(body);
+    }
+    catch {
+        return null;
+    }
+    const err = parsed.error;
+    if (!err || err.code !== ErrCodeBudgetExceeded)
+        return null;
+    return {
+        sessionId,
+        message: err.message || 'this session has reached its spend ceiling',
+        spendUSD: err.spend_usd,
+        maxBudgetUSD: err.max_budget_usd,
+    };
 }
 // --- LogRow reducer ---
 //
@@ -403,6 +434,13 @@ export function useBridgeSession() {
     // sticky permission banner — without this, "ask" verdicts park the
     // tool call indefinitely with no UI surface.
     const [pendingHooks, setPendingHooks] = useState({});
+    // budgetHalt is the sticky record that the server's spend ceiling stopped
+    // this session — see BudgetHalt. It deliberately does not go through
+    // setError: the plain error string lives in the Thread pane, which the
+    // user can hide, and a halt the user cannot see is a session that looks
+    // merely broken. BudgetCeilingBanner renders it alongside the composer
+    // instead, with the control that lifts the ceiling.
+    const [budgetHalt, setBudgetHalt] = useState(null);
     const sseAbort = useRef(null);
     const lastEventId = useRef(undefined);
     const activeSessionRef = useRef(null);
@@ -674,7 +712,20 @@ export function useBridgeSession() {
                     refreshSessionsImpl();
                     break;
                 case 'error': {
-                    setError(data.error?.message || 'Stream error');
+                    const message = data.error?.message || 'Stream error';
+                    // The mid-turn half of the spend gate: bridge-server interrupts
+                    // the session and announces the breach once, as an error event
+                    // carrying this code. It is a halt with an escape hatch, not a
+                    // failure, so it goes to the banner rather than the error line.
+                    // The event carries no dollar figures — refreshSessions pulls the
+                    // session row, which does, and the banner reads them from there.
+                    if (data.error?.code === ErrCodeBudgetExceeded) {
+                        setBudgetHalt({ sessionId: sessId, message });
+                        refreshSessions();
+                    }
+                    else {
+                        setError(message);
+                    }
                     setActivity({ kind: 'idle' });
                     patchSessionState(sessId, 'error');
                     break;
@@ -776,6 +827,9 @@ export function useBridgeSession() {
     const selectSession = useCallback((id) => {
         closeSSE();
         setError(null);
+        // A halt belongs to the session that hit its ceiling. Carrying it across
+        // a switch would put another session's banner over an unrelated chat.
+        setBudgetHalt(null);
         setActivity({ kind: 'idle' });
         clearCompacting();
         if (!id) {
@@ -991,6 +1045,11 @@ export function useBridgeSession() {
                 body: JSON.stringify({ mode }),
             });
             if (!res.ok) {
+                const halt = budgetHaltFromRefusal(sessionId, res.status, await res.text());
+                if (halt) {
+                    setBudgetHalt(halt);
+                    return null;
+                }
                 setError(`Failed to switch mode: ${res.statusText}`);
                 return null;
             }
@@ -1053,6 +1112,11 @@ export function useBridgeSession() {
             });
             if (!res.ok) {
                 const err = await res.text();
+                const halt = budgetHaltFromRefusal(targetSessionId, res.status, err);
+                if (halt) {
+                    setBudgetHalt(halt);
+                    return;
+                }
                 setError(`Send failed: ${err}`);
                 return;
             }
@@ -1101,6 +1165,11 @@ export function useBridgeSession() {
         try {
             const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/resume`, { method: 'POST' });
             if (!res.ok) {
+                const halt = budgetHaltFromRefusal(activeSessionId, res.status, await res.text());
+                if (halt) {
+                    setBudgetHalt(halt);
+                    return;
+                }
                 setError(`Resume failed: ${res.statusText}`);
                 return;
             }
@@ -1191,21 +1260,61 @@ export function useBridgeSession() {
         }
         await refreshSessionsImpl();
     }, [fetchFn, basePath, refreshSessionsImpl]);
-    const sendConfig = useCallback(async (config, explicitSessionId) => {
-        const targetSessionId = explicitSessionId || activeSessionId;
-        if (!targetSessionId)
-            return;
+    // postConfig is the shared body of sendConfig and raiseBudgetCeiling.
+    // Reports the server's refusal text, or null when the config was applied.
+    //
+    // The refusal used to be dropped on the floor: the response was awaited
+    // and never examined, so a rejected max_budget, a 404 on a deleted
+    // session and a successful change were indistinguishable to the caller.
+    // That is tolerable for a preference the user can see did not take; it is
+    // not tolerable for the control that lifts a spend halt, where silence
+    // reads as "raised" and the very next send is refused again.
+    const postConfig = useCallback(async (config, sessionId) => {
         try {
-            await fetchFn(`${basePath}/sessions/${targetSessionId}/config`, {
+            const res = await fetchFn(`${basePath}/sessions/${sessionId}/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config),
             });
+            if (!res.ok) {
+                const body = (await res.text()).trim();
+                return body || res.statusText || `HTTP ${res.status}`;
+            }
+            return null;
         }
         catch (err) {
-            setError(`Config update failed: ${err}`);
+            return String(err);
         }
-    }, [fetchFn, basePath, activeSessionId]);
+    }, [fetchFn, basePath]);
+    const sendConfig = useCallback(async (config, explicitSessionId) => {
+        const targetSessionId = explicitSessionId || activeSessionId;
+        if (!targetSessionId)
+            return;
+        const failure = await postConfig(config, targetSessionId);
+        if (failure) {
+            setError(`Config update failed: ${failure}`);
+            return;
+        }
+        refreshSessions();
+    }, [postConfig, activeSessionId, refreshSessions]);
+    // raiseBudgetCeiling is the escape hatch out of a spend halt. The ceiling
+    // is server state, so bridge-server persists it and only forwards to the
+    // harness when one is still running — which, after a halt, it is not.
+    //
+    // The halt is cleared only once the server has confirmed the new ceiling.
+    // Clearing it optimistically would hide the banner while the session was
+    // still capped, and the next send would be refused with no visible cause.
+    const raiseBudgetCeiling = useCallback(async (maxBudgetUSD, explicitSessionId) => {
+        const targetSessionId = explicitSessionId || activeSessionId;
+        if (!targetSessionId)
+            return 'no active session';
+        const failure = await postConfig({ max_budget: maxBudgetUSD }, targetSessionId);
+        if (failure)
+            return failure;
+        setBudgetHalt(prev => (prev && prev.sessionId === targetSessionId ? null : prev));
+        refreshSessions();
+        return null;
+    }, [postConfig, activeSessionId, refreshSessions]);
     const resolveHook = useCallback(async (input) => {
         if (!activeSessionId) {
             setError('resolve hook: no active session');
@@ -1276,6 +1385,8 @@ export function useBridgeSession() {
         renameSession,
         sendConfig,
         refreshSessions,
+        budgetHalt,
+        raiseBudgetCeiling,
         pendingHooks: pendingHooksList,
         resolveHook,
         attachTokens,
@@ -1303,6 +1414,8 @@ export function useBridgeSession() {
         renameSession,
         sendConfig,
         refreshSessions,
+        budgetHalt,
+        raiseBudgetCeiling,
         pendingHooksList,
         resolveHook,
         attachTokens,

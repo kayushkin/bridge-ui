@@ -1,5 +1,5 @@
 export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, BridgeInstance, BridgeSession, CreateSessionRequest, } from './types';
-export type { FetchFn, ToolEvent, MessageMeta, Message, LogRow, LogRowActor, LogRowKind, SessionUIState, ActivityKind, BridgeEvent, EventData, UseBridgeSessionReturn, } from './types';
+export type { FetchFn, ToolEvent, MessageMeta, Message, LogRow, LogRowActor, LogRowKind, SessionUIState, ActivityKind, BridgeEvent, EventData, UseBridgeSessionReturn, BudgetHalt, } from './types';
 export { TRANSPORT_LABEL } from './constants';
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context';
 export type { BridgeConfig, BridgeRoutes } from './context';
@@ -48,6 +48,9 @@ export { SessionPermissionMode } from './components/chat/SessionPermissionMode';
 export type { SessionPermissionModeProps } from './components/chat/SessionPermissionMode';
 export { CostBreakdown } from './components/chat/CostBreakdown';
 export type { CostBreakdownProps, CostAggregate } from './components/chat/CostBreakdown';
+export type { SpendCeiling } from './components/chat/CostBreakdown';
+export { BudgetCeilingBanner } from './components/chat/BudgetCeilingBanner';
+export type { BudgetCeilingBannerProps } from './components/chat/BudgetCeilingBanner';
 export { UsageLine } from './components/chat/UsageLine';
 export type { UsageLineProps } from './components/chat/UsageLine';
 export { MessageStats } from './components/chat/MessageStats';

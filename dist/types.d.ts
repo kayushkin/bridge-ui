@@ -1,5 +1,5 @@
 import type { TokenUsage, Cost, Event, Instance, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, APICallEvent, APISpendTotalEvent, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest } from '@kayushkin/llm-bridge-types';
-export { HookSourceHook, HookSourcePermission, HookSourceUserInput, PermissionModeAsk, PermissionModeAskAll, PermissionModeAuto, PermissionModeBlockAll, PermissionModeBypass, PermissionModeCustom, PermissionModePlan, PermissionModeRead, } from '@kayushkin/llm-bridge-types';
+export { ErrCodeBudgetExceeded, HookSourceHook, HookSourcePermission, HookSourceUserInput, PermissionModeAsk, PermissionModeAskAll, PermissionModeAuto, PermissionModeBlockAll, PermissionModeBypass, PermissionModeCustom, PermissionModePlan, PermissionModeRead, } from '@kayushkin/llm-bridge-types';
 export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, SessionInfo, ToolInfo, MCPServerInfo, HookEvent, HookResolution, APICallEvent, APISpendTotalEvent, CreateSessionRequest, CreateMachineRequest, UpdateMachineRequest, };
 export type { Instance as BridgeInstance };
 export type { ManagedSession as BridgeSession };
@@ -88,6 +88,19 @@ export interface BridgeEvent {
     type: string;
     data: EventData;
 }
+export interface BudgetHalt {
+    /** Bridge session id the halt belongs to. A halt never outlives its own
+     * session: switching sessions clears it. */
+    sessionId: string;
+    /** The server's own description of the halt. Always present. */
+    message: string;
+    /** Spend recorded against the ceiling at the moment of refusal, in USD.
+     * Undefined when the halt came from the mid-turn error event. */
+    spendUSD?: number;
+    /** The ceiling that was breached, in USD. Undefined when the halt came
+     * from the mid-turn error event. */
+    maxBudgetUSD?: number;
+}
 export interface UseBridgeSessionReturn {
     sessions: ManagedSession[];
     activeSession: ManagedSession | null;
@@ -118,6 +131,8 @@ export interface UseBridgeSessionReturn {
         max_budget?: number;
     }, explicitSessionId?: string) => void;
     refreshSessions: () => void;
+    budgetHalt: BudgetHalt | null;
+    raiseBudgetCeiling: (maxBudgetUSD: number, explicitSessionId?: string) => Promise<string | null>;
     pendingHooks: HookEvent[];
     resolveHook: (input: {
         requestId: string;
