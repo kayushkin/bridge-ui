@@ -2,7 +2,12 @@ import { useCallback, useState, type ReactNode } from 'react'
 import { useBridgeConfig } from '../../context'
 import type { Signal, SignalAnswer } from '../../types'
 import { SignalKindNotification, SignalSeverityWarn } from '../../types'
-import { declineSignalQuestions, resolveSignalQuestions, type SignalRequest } from './signalData'
+import {
+  answerDerivedQuestion,
+  declineSignalQuestions,
+  resolveSignalQuestions,
+  type SignalRequest,
+} from './signalData'
 
 export interface SignalCardProps {
   signal: Signal
@@ -138,9 +143,16 @@ export function SignalRequestCard({ request, onResolved, header, compact }: Sign
     setBusy(true)
     setError(null)
     try {
-      const payload: Record<string, string> = {}
-      for (const signal of questions) payload[signal.title] = answerText(answers[signal.id])
-      await resolveSignalQuestions(fetchFn, basePath, request.sessionId, request.requestId, payload)
+      if (request.requestId) {
+        const payload: Record<string, string> = {}
+        for (const signal of questions) payload[signal.title] = answerText(answers[signal.id])
+        await resolveSignalQuestions(fetchFn, basePath, request.sessionId, request.requestId, payload)
+      } else {
+        // A derived question has no parked hook, so it resolves by becoming
+        // the session's next user message. Grouping puts exactly one derived
+        // signal in a group, so there is one answer to send.
+        await answerDerivedQuestion(fetchFn, basePath, request.sessionId, answerText(answers[questions[0].id]))
+      }
       onResolved?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -171,23 +183,26 @@ export function SignalRequestCard({ request, onResolved, header, compact }: Sign
           key={signal.id}
           signal={signal}
           answer={answers[signal.id]}
-          // A signal with no request_id came from the derived producer, whose
-          // resolve verb (POST /sessions/{id}/send) lands with P3. Until then
-          // its inputs stay read-only rather than composing an answer with
-          // nowhere to send it.
-          onChangeAnswer={request.requestId ? a => setAnswer(signal.id, a) : undefined}
+          // Notifications are acknowledged, not answered, and the ack verb
+          // lands with P4 — so they compose nothing on either producer's path.
+          onChangeAnswer={signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a)}
           busy={busy}
           compact={compact}
         />
       ))}
-      {questions.length > 0 && request.requestId && (
+      {questions.length > 0 && (
         <div className="bc-signal-actions">
           <button type="button" className="bc-signal-submit" disabled={busy || !allAnswered} onClick={submit}>
-            Submit
+            {request.requestId ? 'Submit' : 'Send answer'}
           </button>
-          <button type="button" className="bc-signal-decline" disabled={busy} onClick={decline}>
-            Decline
-          </button>
+          {/* Declining means denying a parked tool call. A derived question
+              parked nothing, so there is nothing to deny — it simply stays
+              open until the session's next turn supersedes it. */}
+          {request.requestId && (
+            <button type="button" className="bc-signal-decline" disabled={busy} onClick={decline}>
+              Decline
+            </button>
+          )}
         </div>
       )}
       {error && <p className="bc-signal-error">{error}</p>}

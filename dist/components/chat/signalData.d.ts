@@ -35,6 +35,18 @@ export declare function groupSignalsByRequest(signals: Signal[]): SignalRequest[
  * longer parked there is nothing to answer, and that is an error the user sees
  * rather than a resolve posted into the void. */
 export declare function resolveSignalQuestions(fetchFn: FetchFn, basePath: string, sessionId: string, requestId: string, answers: Record<string, string>): Promise<void>;
+/** Answer a derived question by sending its answer as the session's next user
+ * message.
+ *
+ * Derived signals carry no request_id — no hook was ever parked for them — so
+ * the hook-resolve verb cannot reach them. Sending a message IS their resolve
+ * verb (SESSION-SIGNALS.md, "Resolve — per kind and source").
+ *
+ * The record closes server-side, in the /send handler, not here: a derived
+ * question answered from the CLI or by an orchestrator has to close the same
+ * way as one answered from this card, and only the server sees all of them. So
+ * this posts the message and nothing else. */
+export declare function answerDerivedQuestion(fetchFn: FetchFn, basePath: string, sessionId: string, text: string): Promise<void>;
 /** Decline every question in one parked request. Unlike answering, this needs
  * no parked input: a deny carries no updated_input, and bridge-server records
  * the decision (and closes the signal rows) even for a request whose park is

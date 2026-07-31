@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useState } from 'react';
 import { useBridgeConfig } from '../../context';
 import { SignalKindNotification, SignalSeverityWarn } from '../../types';
-import { declineSignalQuestions, resolveSignalQuestions } from './signalData';
+import { answerDerivedQuestion, declineSignalQuestions, resolveSignalQuestions, } from './signalData';
 /** SignalCard renders exactly one signal record, by kind. It takes everything
  * through props and reads no session context, so the same card renders in the
  * raising session's chat, in the cross-session inbox, and inside another
@@ -46,10 +46,18 @@ export function SignalRequestCard({ request, onResolved, header, compact }) {
         setBusy(true);
         setError(null);
         try {
-            const payload = {};
-            for (const signal of questions)
-                payload[signal.title] = answerText(answers[signal.id]);
-            await resolveSignalQuestions(fetchFn, basePath, request.sessionId, request.requestId, payload);
+            if (request.requestId) {
+                const payload = {};
+                for (const signal of questions)
+                    payload[signal.title] = answerText(answers[signal.id]);
+                await resolveSignalQuestions(fetchFn, basePath, request.sessionId, request.requestId, payload);
+            }
+            else {
+                // A derived question has no parked hook, so it resolves by becoming
+                // the session's next user message. Grouping puts exactly one derived
+                // signal in a group, so there is one answer to send.
+                await answerDerivedQuestion(fetchFn, basePath, request.sessionId, answerText(answers[questions[0].id]));
+            }
             onResolved?.();
         }
         catch (e) {
@@ -76,10 +84,8 @@ export function SignalRequestCard({ request, onResolved, header, compact }) {
         }
     }, [busy, fetchFn, basePath, request, onResolved]);
     return (_jsxs("div", { className: "bc-signal-request", children: [header, request.signals.map(signal => (_jsx(SignalCard, { signal: signal, answer: answers[signal.id], 
-                // A signal with no request_id came from the derived producer, whose
-                // resolve verb (POST /sessions/{id}/send) lands with P3. Until then
-                // its inputs stay read-only rather than composing an answer with
-                // nowhere to send it.
-                onChangeAnswer: request.requestId ? a => setAnswer(signal.id, a) : undefined, busy: busy, compact: compact }, signal.id))), questions.length > 0 && request.requestId && (_jsxs("div", { className: "bc-signal-actions", children: [_jsx("button", { type: "button", className: "bc-signal-submit", disabled: busy || !allAnswered, onClick: submit, children: "Submit" }), _jsx("button", { type: "button", className: "bc-signal-decline", disabled: busy, onClick: decline, children: "Decline" })] })), error && _jsx("p", { className: "bc-signal-error", children: error })] }));
+                // Notifications are acknowledged, not answered, and the ack verb
+                // lands with P4 — so they compose nothing on either producer's path.
+                onChangeAnswer: signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a), busy: busy, compact: compact }, signal.id))), questions.length > 0 && (_jsxs("div", { className: "bc-signal-actions", children: [_jsx("button", { type: "button", className: "bc-signal-submit", disabled: busy || !allAnswered, onClick: submit, children: request.requestId ? 'Submit' : 'Send answer' }), request.requestId && (_jsx("button", { type: "button", className: "bc-signal-decline", disabled: busy, onClick: decline, children: "Decline" }))] })), error && _jsx("p", { className: "bc-signal-error", children: error })] }));
 }
 //# sourceMappingURL=SignalCard.js.map
