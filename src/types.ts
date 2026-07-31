@@ -32,6 +32,9 @@ import type {
   CreateSessionRequest,
   CreateMachineRequest,
   UpdateMachineRequest,
+  Signal,
+  SignalAnswer,
+  SignalOption,
 } from '@kayushkin/llm-bridge-types'
 
 export {
@@ -46,6 +49,18 @@ export {
   PermissionModeCustom,
   PermissionModePlan,
   PermissionModeRead,
+  SignalKindNotification,
+  SignalKindQuestion,
+  SignalSeverityInfo,
+  SignalSeverityWarn,
+  SignalSourceDerived,
+  SignalSourceTool,
+  SignalStateAcknowledged,
+  SignalStateAnswered,
+  SignalStateDismissed,
+  SignalStateOpen,
+  SignalSurfaceChat,
+  SignalSurfaceKanban,
 } from '@kayushkin/llm-bridge-types'
 
 // Re-export canonical types for consumers.
@@ -73,6 +88,9 @@ export type {
   CreateSessionRequest,
   CreateMachineRequest,
   UpdateMachineRequest,
+  Signal,
+  SignalAnswer,
+  SignalOption,
 }
 
 // Re-export with backward-compatible aliases where names differ.

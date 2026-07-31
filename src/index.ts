@@ -127,6 +127,20 @@ export type { MessageStatsProps } from './components/chat/MessageStats'
 export { EditableName } from './components/chat/EditableName'
 export type { EditableNameProps } from './components/chat/EditableName'
 
+// Session signals — one record for a question or a notification a session
+// raises, one card that renders it. SignalCard is the card itself;
+// SessionSignals and SignalsInbox are the self-fetching surfaces mounted in
+// chat, the sidebar inbox and the RefChip session panel.
+export { SignalCard, SignalRequestCard } from './components/chat/SignalCard'
+export type { SignalCardProps, SignalRequestCardProps } from './components/chat/SignalCard'
+export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals'
+export type { SessionSignalsProps, SignalsInboxProps } from './components/chat/SessionSignals'
+export {
+  fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions,
+  declineSignalQuestions, useOpenChatSignals,
+} from './components/chat/signalData'
+export type { SignalRequest, SignalsResult, UseOpenChatSignals } from './components/chat/signalData'
+
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually. The body gets a

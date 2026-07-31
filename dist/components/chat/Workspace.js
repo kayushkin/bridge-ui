@@ -9,6 +9,7 @@ import { LayoutRenderer } from './LayoutRenderer';
 import { PendingPermissionsBanner } from './PendingPermissionsBanner';
 import { SessionPermissionMode } from './SessionPermissionMode';
 import { SessionHeader } from './SessionHeader';
+import { SessionSignals } from './SessionSignals';
 import { StatusDot } from './StatusDot';
 import { SystemPromptModal } from './SystemPromptModal';
 import { ToolsPanel } from './ToolsPanel';
@@ -369,7 +370,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
                     refreshGitRepos,
                     pendingHooks: bridge.pendingHooks,
                     resolveHook: bridge.resolveHook,
-                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? (isPending ? workspace.id : null), connected: (bridge.connected && !!bridge.activeSession) || isPending, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+                }, children: [_jsx(PendingPermissionsBanner, {}), bridge.activeSession && (_jsx(SessionSignals, { sessionId: bridge.activeSession.session_id, excludeRequestIds: bridge.pendingHooks.map(hook => hook.request_id || '') })), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? (isPending ? workspace.id : null), connected: (bridge.connected && !!bridge.activeSession) || isPending, streaming: bridge.uiState === 'running', paused: bridge.uiState === 'paused', onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 // ModeToggle surfaces the events/pty mode switcher for harnesses that
 // support pty. Disabled while a turn is in flight — switching mid-

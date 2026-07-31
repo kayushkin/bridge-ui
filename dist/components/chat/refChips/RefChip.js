@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useBridgeConfig } from '../../../context';
 import { formatCost, timeAgo } from '../../../utils';
 import { idTail } from '../utils';
+import { SessionSignals } from '../SessionSignals';
 import { fetchSessionCore, fetchSessionCost, fetchTodoRef, sessionEmoji, } from './refData';
 function readNodeProp(props, key) {
     const v = props.node?.properties?.[key];
@@ -86,7 +87,7 @@ function SessionRefPanel({ core, error, refId }) {
             setCost(c); });
         return () => { live = false; };
     }, [core, cfg, refId]);
-    return (_jsxs("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Session details", children: [!core && !error && _jsx("div", { className: "bc-ref-panel-loading", children: "Loading session\u2026" }), error && _jsxs("div", { className: "bc-ref-panel-error", children: ["Couldn\u2019t load session: ", error] }), core && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ref-panel-title", children: core.display_name || '(untitled session)' }), _jsx(RefRow, { label: "State", value: core.state, badge: stateBadge(core.state) }), core.type && _jsx(RefRow, { label: "Type", value: core.purpose ? `${core.type} · ${core.purpose}` : core.type }), core.model && _jsx(RefRow, { label: "Model", value: core.model }), core.harness && _jsx(RefRow, { label: "Harness", value: core.harness }), cost != null && cost > 0 && _jsx(RefRow, { label: "Cost", value: formatCost(cost) }), core.updated_at && _jsx(RefRow, { label: "Updated", value: timeAgo(core.updated_at) })] }))] }));
+    return (_jsxs("div", { className: "bc-ref-panel", role: "dialog", "aria-label": "Session details", children: [!core && !error && _jsx("div", { className: "bc-ref-panel-loading", children: "Loading session\u2026" }), error && _jsxs("div", { className: "bc-ref-panel-error", children: ["Couldn\u2019t load session: ", error] }), core && (_jsxs(_Fragment, { children: [_jsx("div", { className: "bc-ref-panel-title", children: core.display_name || '(untitled session)' }), _jsx(RefRow, { label: "State", value: core.state, badge: stateBadge(core.state) }), core.type && _jsx(RefRow, { label: "Type", value: core.purpose ? `${core.type} · ${core.purpose}` : core.type }), core.model && _jsx(RefRow, { label: "Model", value: core.model }), core.harness && _jsx(RefRow, { label: "Harness", value: core.harness }), cost != null && cost > 0 && _jsx(RefRow, { label: "Cost", value: formatCost(cost) }), core.updated_at && _jsx(RefRow, { label: "Updated", value: timeAgo(core.updated_at) }), _jsx(SessionSignals, { sessionId: core.session_id || refId, compact: true })] }))] }));
 }
 function TodoChip({ refId }) {
     const cfg = useBridgeConfig();

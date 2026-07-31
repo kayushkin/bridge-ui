@@ -54,6 +54,12 @@ export { MessageStats } from './components/chat/MessageStats';
 export type { MessageStatsProps } from './components/chat/MessageStats';
 export { EditableName } from './components/chat/EditableName';
 export type { EditableNameProps } from './components/chat/EditableName';
+export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
+export type { SignalCardProps, SignalRequestCardProps } from './components/chat/SignalCard';
+export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals';
+export type { SessionSignalsProps, SignalsInboxProps } from './components/chat/SessionSignals';
+export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, } from './components/chat/signalData';
+export type { SignalRequest, SignalsResult, UseOpenChatSignals } from './components/chat/signalData';
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
 //# sourceMappingURL=index.d.ts.map

@@ -1,0 +1,196 @@
+import { useCallback, useState, type ReactNode } from 'react'
+import { useBridgeConfig } from '../../context'
+import type { Signal, SignalAnswer } from '../../types'
+import { SignalKindNotification, SignalSeverityWarn } from '../../types'
+import { declineSignalQuestions, resolveSignalQuestions, type SignalRequest } from './signalData'
+
+export interface SignalCardProps {
+  signal: Signal
+  /** The answer being composed for this signal. A signal is answered with an
+   * option or with freeform text, never both — picking one clears the other. */
+  answer?: SignalAnswer
+  onChangeAnswer?: (answer: SignalAnswer) => void
+  /** Acknowledge a notification. Notifications resolve through a signal verb
+   * the server does not have yet (P4), so no surface passes this today and the
+   * action stays off the card rather than rendering a button that does
+   * nothing. */
+  onAcknowledge?: () => void
+  busy?: boolean
+  /** Drops descriptions and the freeform box for tight surfaces (the RefChip
+   * session panel). The question and its options still render — a compact card
+   * is still answerable. */
+  compact?: boolean
+}
+
+/** SignalCard renders exactly one signal record, by kind. It takes everything
+ * through props and reads no session context, so the same card renders in the
+ * raising session's chat, in the cross-session inbox, and inside another
+ * session's RefChip panel.
+ *
+ * It composes an answer but never submits one: a tool question is one of
+ * several sharing a parked request, and that whole request resolves at once.
+ * SignalRequestCard below owns the submit. */
+export function SignalCard({ signal, answer, onChangeAnswer, onAcknowledge, busy, compact }: SignalCardProps) {
+  const isNotification = signal.kind === SignalKindNotification
+  const options = signal.options ?? []
+  const chosen = answer?.option ?? ''
+  const text = answer?.text ?? ''
+
+  return (
+    <div className={`bc-signal-card${compact ? ' bc-signal-card-compact' : ''}`}>
+      <div className="bc-signal-card-header">
+        <span className={`bc-signal-kind bc-signal-kind-${isNotification ? 'notification' : 'question'}`}>
+          {isNotification ? 'notification' : 'question'}
+        </span>
+        {isNotification && signal.severity === SignalSeverityWarn && (
+          <span className="bc-signal-severity">warn</span>
+        )}
+      </div>
+
+      <p className="bc-signal-title">{signal.title}</p>
+      {signal.body && !compact && <p className="bc-signal-body">{signal.body}</p>}
+
+      {!isNotification && options.length > 0 && (
+        <div className="bc-signal-options">
+          {options.map(option => (
+            <label
+              key={option.value || option.label}
+              className={`bc-signal-option${chosen === (option.value || option.label) ? ' bc-signal-option-selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name={`bc-signal-${signal.id}`}
+                checked={chosen === (option.value || option.label)}
+                disabled={busy || !onChangeAnswer}
+                onChange={() => onChangeAnswer?.({ option: option.value || option.label })}
+              />
+              <span className="bc-signal-option-body">
+                <span className="bc-signal-option-label">{option.label}</span>
+                {option.description && !compact && (
+                  <span className="bc-signal-option-desc">{option.description}</span>
+                )}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {!isNotification && signal.allow_freeform && !compact && (
+        <textarea
+          className="bc-signal-freeform"
+          placeholder={options.length > 0 ? '…or answer in your own words' : 'Type your answer'}
+          value={text}
+          disabled={busy || !onChangeAnswer}
+          onChange={e => onChangeAnswer?.({ text: e.target.value })}
+          rows={2}
+        />
+      )}
+
+      {isNotification && onAcknowledge && (
+        <div className="bc-signal-actions">
+          <button type="button" className="bc-signal-ack" disabled={busy} onClick={onAcknowledge}>
+            Acknowledge
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** answerText is what goes on the wire for one signal: the picked option's
+ * value, or the typed text. Empty means unanswered. */
+function answerText(answer: SignalAnswer | undefined): string {
+  return (answer?.option || answer?.text || '').trim()
+}
+
+export interface SignalRequestCardProps {
+  request: SignalRequest
+  /** Called after a successful resolve so the surface can refetch. */
+  onResolved?: () => void
+  /** Rendered above the questions — the inbox uses it for a link to the
+   * raising session, the in-session surfaces pass nothing. */
+  header?: ReactNode
+  compact?: boolean
+}
+
+/** SignalRequestCard renders every signal minted by one parked request and
+ * submits their answers together.
+ *
+ * One AskUserQuestion call carries several questions and resolves once, so
+ * answering a single question in isolation would resolve the whole request
+ * with the rest unanswered. Submit stays disabled until every question in the
+ * request has an answer. */
+export function SignalRequestCard({ request, onResolved, header, compact }: SignalRequestCardProps) {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const [answers, setAnswers] = useState<Record<string, SignalAnswer>>({})
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const questions = request.signals.filter(s => s.kind !== SignalKindNotification)
+  const allAnswered = questions.length > 0 && questions.every(s => answerText(answers[s.id]) !== '')
+
+  const setAnswer = useCallback((signalID: string, answer: SignalAnswer) => {
+    setAnswers(prev => ({ ...prev, [signalID]: answer }))
+  }, [])
+
+  const submit = useCallback(async () => {
+    if (busy || !allAnswered) return
+    setBusy(true)
+    setError(null)
+    try {
+      const payload: Record<string, string> = {}
+      for (const signal of questions) payload[signal.title] = answerText(answers[signal.id])
+      await resolveSignalQuestions(fetchFn, basePath, request.sessionId, request.requestId, payload)
+      onResolved?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, allAnswered, questions, answers, fetchFn, basePath, request, onResolved])
+
+  const decline = useCallback(async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await declineSignalQuestions(fetchFn, basePath, request.sessionId, request.requestId)
+      onResolved?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, fetchFn, basePath, request, onResolved])
+
+  return (
+    <div className="bc-signal-request">
+      {header}
+      {request.signals.map(signal => (
+        <SignalCard
+          key={signal.id}
+          signal={signal}
+          answer={answers[signal.id]}
+          // A signal with no request_id came from the derived producer, whose
+          // resolve verb (POST /sessions/{id}/send) lands with P3. Until then
+          // its inputs stay read-only rather than composing an answer with
+          // nowhere to send it.
+          onChangeAnswer={request.requestId ? a => setAnswer(signal.id, a) : undefined}
+          busy={busy}
+          compact={compact}
+        />
+      ))}
+      {questions.length > 0 && request.requestId && (
+        <div className="bc-signal-actions">
+          <button type="button" className="bc-signal-submit" disabled={busy || !allAnswered} onClick={submit}>
+            Submit
+          </button>
+          <button type="button" className="bc-signal-decline" disabled={busy} onClick={decline}>
+            Decline
+          </button>
+        </div>
+      )}
+      {error && <p className="bc-signal-error">{error}</p>}
+    </div>
+  )
+}
