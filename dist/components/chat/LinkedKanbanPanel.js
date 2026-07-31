@@ -14,6 +14,14 @@ const LINKED_KANBAN_REFRESH_MS = 15000;
 export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey }) {
     const { routes, kanbanStoreBasePath } = useBridgeConfig();
     const kanban = useKanban(null, { loadBoards: false, loadEntityTypes: false });
+    // Depend on the two calls, not on the hook's whole return value. That value
+    // is a useMemo over the hook's state as well as its callbacks, so it takes a
+    // new identity when the hook's own mount fetch flips `loading` — which would
+    // re-run the refresh effect milliseconds after the first one, issuing a
+    // second pair of requests and re-arming the interval. These two are
+    // useCallbacks over fetchFn, kanbanStoreBasePath and enabled, all of which
+    // come from a memoized provider config, so they hold still.
+    const { listCardsForEntity, listEntityTags } = kanban;
     const [cards, setCards] = useState([]);
     const [tags, setTags] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -38,8 +46,8 @@ export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey 
             setLoading(true);
         try {
             const [nextCards, nextTags] = await Promise.all([
-                kanban.listCardsForEntity('session', sessionId),
-                kanban.listEntityTags('session', sessionId),
+                listCardsForEntity('session', sessionId),
+                listEntityTags('session', sessionId),
             ]);
             setCards(prev => preserveUnchangedKanbanPayload(prev, nextCards));
             setTags(prev => preserveUnchangedKanbanPayload(prev, nextTags));
@@ -55,7 +63,7 @@ export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey 
             if (!background)
                 setLoading(false);
         }
-    }, [kanban, kanbanStoreBasePath, sessionId]);
+    }, [listCardsForEntity, listEntityTags, kanbanStoreBasePath, sessionId]);
     useEffect(() => {
         refresh();
         if (!kanbanStoreBasePath || !sessionId)
