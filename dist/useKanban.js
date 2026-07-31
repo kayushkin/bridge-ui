@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
+// kanbanPollWouldFetch reports whether the 15-second refresh has anything to
+// ask for. It mirrors the guards at the top of fetchBoards and fetchView, which
+// are what decide whether a poll issues an HTTP request or returns immediately.
+// Exported so the render checks can pin it against those guards.
+export function kanbanPollWouldFetch(enabled, loadBoards, boardID) {
+    if (!enabled)
+        return false;
+    return loadBoards || Boolean(boardID);
+}
 /**
  * useKanban — list/create boards and (when a board id is given) load its
  * full BoardView with cards joined to noteboard items. Polls every 15s.
@@ -75,9 +84,18 @@ export function useKanban(boardID, options = {}) {
                 setLoading(false);
         };
         run();
+        // Only run the timer when one of the two calls it makes can actually fetch.
+        // The chat pane's LinkedKanbanPanel constructs this hook with loadBoards
+        // false and no board id, and both callbacks then return at their first line
+        // — so the interval fired every 15 seconds, per open chat pane, and issued no
+        // request at all. (The cards that panel does show are refreshed on mount
+        // only; that they never refresh is a separate defect, not this timer's job.)
+        if (!kanbanPollWouldFetch(enabled, loadBoards, boardID)) {
+            return () => { cancelled = true; };
+        }
         const t = setInterval(() => { fetchBoards(); fetchView(); }, 15000);
         return () => { cancelled = true; clearInterval(t); };
-    }, [fetchBoards, fetchView, fetchEntityTypes]);
+    }, [fetchBoards, fetchView, fetchEntityTypes, enabled, loadBoards, boardID]);
     const createBoard = useCallback(async (args) => {
         if (!enabled)
             return null;

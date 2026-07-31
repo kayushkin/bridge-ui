@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
 import { connectSSE, connectSessionListSSE } from './bridgeSSE';
+import { createSSEEventBatcher, isDeferrableEventType } from './sseEventBatching';
 import { ErrCodeBudgetExceeded } from './types';
 // --- Event envelope ---
 //
@@ -293,7 +294,10 @@ function applyDelta(row, ev) {
             return base;
     }
 }
-function applyEventToRows(rows, ev) {
+// Exported for the render checks, which assert that applying a batch of events
+// in one pass lands on exactly the rows that applying them one at a time does.
+// Nothing outside this module and those checks calls it.
+export function applyEventToRows(rows, ev) {
     const evId = eventIdOf(ev);
     const gKey = groupKeyFor(ev);
     if (gKey) {
@@ -333,6 +337,18 @@ function applyEventToRows(rows, ev) {
     const updated = applyDelta(fresh, ev);
     updated.eventIds = evId ? [evId] : [];
     return [...rows, updated];
+}
+// sameActivity reports whether two activity values say the same thing.
+//
+// The tool name is part of what the indicator shows, so two `tool` activities
+// naming different tools are different; every other kind carries no payload and
+// is decided by the kind alone. Exported for the render checks.
+export function sameActivity(a, b) {
+    if (a.kind !== b.kind)
+        return false;
+    if (a.kind === 'tool' && b.kind === 'tool')
+        return a.name === b.name;
+    return true;
 }
 // --- Debounce helper ---
 function debounce(fn, ms) {
@@ -427,6 +443,14 @@ export function useBridgeSession() {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [activity, setActivity] = useState({ kind: 'idle' });
     const [compacting, setCompacting] = useState(false);
+    // Every stream delta reports the activity it implies, and for a whole model
+    // response that is the same value thousands of times over. A fresh object each
+    // time is a fresh identity, so React re-rendered every consumer of `activity`
+    // for a value that had not changed. Keep the previous object when it says the
+    // same thing and React bails out instead.
+    const setActivityIfChanged = useCallback((next) => {
+        setActivity(prev => (sameActivity(prev, next) ? prev : next));
+    }, []);
     const [interruptedIds, setInterruptedIds] = useState(loadInterruptedIds);
     // pendingHooks is keyed by request_id so SSE updates can patch in O(1).
     // Sourced from /hooks/pending on session select; updated by EventHook
@@ -442,6 +466,15 @@ export function useBridgeSession() {
     // instead, with the control that lifts the ceiling.
     const [budgetHalt, setBudgetHalt] = useState(null);
     const sseAbort = useRef(null);
+    // One batcher for the hook's lifetime. It coalesces a frame's stream deltas
+    // into a single rows commit; see sseEventBatching.ts for why a frame is the
+    // right granularity and why this cannot delay visible text.
+    const eventBatcher = useRef(null);
+    if (eventBatcher.current === null) {
+        eventBatcher.current = createSSEEventBatcher(events => {
+            setLogRows(prev => events.reduce(applyEventToRows, prev));
+        });
+    }
     const lastEventId = useRef(undefined);
     const activeSessionRef = useRef(null);
     const historyLoadId = useRef(0);
@@ -600,6 +633,12 @@ export function useBridgeSession() {
             sseAbort.current.abort();
             sseAbort.current = null;
         }
+        // Commit what the closing stream already delivered — do not drop it. A
+        // stream that dies mid-turn is re-attached by the reconnect effect, and that
+        // path runs through here: discarding the buffer would lose up to a frame of
+        // text the server had already sent. Discarding belongs to a session switch,
+        // which says so by calling cancel() itself.
+        eventBatcher.current?.flush();
     }, []);
     const startSSE = useCallback((sessionId) => {
         closeSSE();
@@ -648,7 +687,7 @@ export function useBridgeSession() {
                     ? activeSessionRef.current?.state
                     : undefined;
                 if (!shouldHoldSSE(state)) {
-                    setActivity({ kind: 'idle' });
+                    setActivityIfChanged({ kind: 'idle' });
                     break;
                 }
                 await new Promise(resolve => setTimeout(resolve, retryDelay));
@@ -661,34 +700,41 @@ export function useBridgeSession() {
         function handleSSEEvent(event) {
             const { type, data } = event;
             const sessId = sessionId;
-            setLogRows(prev => applyEventToRows(prev, event));
+            // Deferrable events wait for the next frame; everything else flushes the
+            // buffer and is applied in the same commit, so the handlers below see rows
+            // carrying every delta that arrived before their event. isDeferrableEventType
+            // owns that policy — see sseEventBatching.ts.
+            if (isDeferrableEventType(type))
+                eventBatcher.current.push(event);
+            else
+                eventBatcher.current.pushAndFlush(event);
             switch (type) {
                 case 'stream': {
                     if (data.stream?.delta?.type === 'thinking_delta')
-                        setActivity({ kind: 'thinking' });
+                        setActivityIfChanged({ kind: 'thinking' });
                     else
-                        setActivity({ kind: 'streaming' });
+                        setActivityIfChanged({ kind: 'streaming' });
                     break;
                 }
                 case 'block': {
                     if (data.block?.block?.type === 'thinking')
-                        setActivity({ kind: 'thinking' });
+                        setActivityIfChanged({ kind: 'thinking' });
                     else
-                        setActivity({ kind: 'streaming' });
+                        setActivityIfChanged({ kind: 'streaming' });
                     break;
                 }
                 case 'thinking':
-                    setActivity({ kind: 'thinking' });
+                    setActivityIfChanged({ kind: 'thinking' });
                     break;
                 case 'tool_call': {
-                    setActivity({ kind: 'tool', name: data.tool_call?.name || '' });
+                    setActivityIfChanged({ kind: 'tool', name: data.tool_call?.name || '' });
                     break;
                 }
                 case 'tool_result':
-                    setActivity({ kind: 'streaming' });
+                    setActivityIfChanged({ kind: 'streaming' });
                     break;
                 case 'result':
-                    setActivity({ kind: 'idle' });
+                    setActivityIfChanged({ kind: 'idle' });
                     unmarkInterrupted(sessId);
                     patchSessionState(sessId, 'completed');
                     refreshSessions();
@@ -726,18 +772,18 @@ export function useBridgeSession() {
                     else {
                         setError(message);
                     }
-                    setActivity({ kind: 'idle' });
+                    setActivityIfChanged({ kind: 'idle' });
                     patchSessionState(sessId, 'error');
                     break;
                 }
                 case 'session_state': {
                     const state = data.state?.state;
                     if (state === 'idle' && !interruptedIdsRef.current.has(sessId))
-                        setActivity({ kind: 'idle' });
+                        setActivityIfChanged({ kind: 'idle' });
                     else if (state === 'running')
                         unmarkInterrupted(sessId);
                     else if (state === 'completed') {
-                        setActivity({ kind: 'idle' });
+                        setActivityIfChanged({ kind: 'idle' });
                         unmarkInterrupted(sessId);
                     }
                     if (state)
@@ -764,7 +810,7 @@ export function useBridgeSession() {
                     break;
                 }
                 case 'close':
-                    setActivity({ kind: 'idle' });
+                    setActivityIfChanged({ kind: 'idle' });
                     patchSessionState(sessId, 'completed');
                     closeSSE();
                     refreshSessions();
@@ -830,10 +876,11 @@ export function useBridgeSession() {
         // A halt belongs to the session that hit its ceiling. Carrying it across
         // a switch would put another session's banner over an unrelated chat.
         setBudgetHalt(null);
-        setActivity({ kind: 'idle' });
+        setActivityIfChanged({ kind: 'idle' });
         clearCompacting();
         if (!id) {
             setActiveSessionId(null);
+            eventBatcher.current?.cancel();
             setLogRows([]);
             setPendingHooks({});
             return;
@@ -846,6 +893,9 @@ export function useBridgeSession() {
         setActiveSessionId(id);
         activeSessionIdRef.current = id;
         if (switching) {
+            // Discard, not flush: these events belong to the session being left, and
+            // the rows they would land in are about to be another session's.
+            eventBatcher.current?.cancel();
             setLogRows([]);
             setPendingHooks({});
             lastEventId.current = undefined;
@@ -1152,7 +1202,7 @@ export function useBridgeSession() {
             await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' });
             markInterrupted(activeSessionId);
             markLastAssistantDone();
-            setActivity({ kind: 'idle' });
+            setActivityIfChanged({ kind: 'idle' });
             refreshSessions();
         }
         catch (err) {
@@ -1189,7 +1239,7 @@ export function useBridgeSession() {
             closeSSE();
             markLastAssistantDone();
             unmarkInterrupted(activeSessionId);
-            setActivity({ kind: 'idle' });
+            setActivityIfChanged({ kind: 'idle' });
             refreshSessions();
         }
         catch (err) {

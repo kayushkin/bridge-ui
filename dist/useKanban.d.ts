@@ -1,4 +1,5 @@
 import type { Board, BoardView, CardLink, EntityCardView, EntityTypeInfo, EntityTag } from './types-kanban';
+export declare function kanbanPollWouldFetch(enabled: boolean, loadBoards: boolean, boardID: string | null): boolean;
 export interface CreateBoardArgs {
     name: string;
     description?: string;

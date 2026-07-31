@@ -1,3 +1,5 @@
-import type { UseBridgeSessionReturn } from './types';
+import type { BridgeEvent, ActivityKind, LogRow, UseBridgeSessionReturn } from './types';
+export declare function applyEventToRows(rows: LogRow[], ev: BridgeEvent): LogRow[];
+export declare function sameActivity(a: ActivityKind, b: ActivityKind): boolean;
 export declare function useBridgeSession(): UseBridgeSessionReturn;
 //# sourceMappingURL=useBridgeSession.d.ts.map

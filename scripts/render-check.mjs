@@ -14,6 +14,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
 import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
+import { applyEventToRows, sameActivity } from '../src/useBridgeSession.ts'
+import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
+import { kanbanPollWouldFetch } from '../src/useKanban.ts'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -108,6 +111,206 @@ console.log('BudgetCeilingBanner')
     onRaiseCeiling: async () => null,
   }))
   check('falls back to the session row for the pair', html.includes('$4.00') && html.includes('$3.50'), html)
+}
+
+// --- SSE event batching -----------------------------------------------------
+//
+// These are not render assertions. They cover the reducer and the frame batcher
+// that feeds it, because that path had no repeatable check at all: the O(n^2)
+// row-merge fix was verified with a scratch harness that was thrown away.
+//
+// The load-bearing one is the differential check. Batching is only allowed to be
+// faster, never to land on different rows, so it asserts that applying a mixed
+// event sequence in frame-sized batches produces exactly what applying it one
+// event at a time does.
+
+console.log('\nsameActivity')
+{
+  check('same kind is unchanged', sameActivity({ kind: 'streaming' }, { kind: 'streaming' }))
+  check('different kind is a change', !sameActivity({ kind: 'streaming' }, { kind: 'thinking' }))
+  check('same tool is unchanged', sameActivity({ kind: 'tool', name: 'Read' }, { kind: 'tool', name: 'Read' }))
+  // The tool name is on screen, so a switch between tools has to re-render even
+  // though the kind is identical.
+  check('a different tool is a change', !sameActivity({ kind: 'tool', name: 'Read' }, { kind: 'tool', name: 'Edit' }))
+}
+
+// A scheduler the test steps by hand. A real frame clock cannot be asserted on:
+// the point is what a batch *contained*, which needs the flush to happen when
+// the test says so.
+function manualScheduler() {
+  const queued = new Map()
+  let next = 1
+  return {
+    scheduler: {
+      request(callback) { queued.set(next, callback); return next++ },
+      cancel(handle) { queued.delete(handle) },
+    },
+    frames() { return queued.size },
+    runFrame() {
+      const entries = [...queued.entries()]
+      queued.clear()
+      for (const [, callback] of entries) callback()
+    },
+  }
+}
+
+let seq = 0
+const streamEvent = (messageId, text) => ({
+  id: String(++seq),
+  type: 'stream',
+  data: {
+    event_id: seq, message_id: messageId, turn_id: 't1',
+    timestamp: '2026-07-31T20:00:00Z',
+    stream: { delta: { index: 0, type: 'text_delta', text } },
+  },
+})
+const thinkingDelta = (messageId, text) => ({
+  id: String(++seq),
+  type: 'stream',
+  data: {
+    event_id: seq, message_id: messageId, turn_id: 't1',
+    timestamp: '2026-07-31T20:00:00Z',
+    stream: { delta: { index: 0, type: 'thinking_delta', thinking: text } },
+  },
+})
+const plainEvent = (type, extra) => ({
+  id: String(++seq),
+  type,
+  data: { event_id: seq, turn_id: 't1', timestamp: '2026-07-31T20:00:00Z', ...extra },
+})
+
+console.log('\ncreateSSEEventBatcher')
+{
+  const m = manualScheduler()
+  const delivered = []
+  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
+  batcher.push(streamEvent('m1', 'a'))
+  batcher.push(streamEvent('m1', 'b'))
+  batcher.push(streamEvent('m1', 'c'))
+  check('three pushes schedule one frame, not three', m.frames() === 1, `frames=${m.frames()}`)
+  check('nothing is delivered before the frame runs', delivered.length === 0)
+  check('three pending', batcher.pending() === 3, `pending=${batcher.pending()}`)
+  m.runFrame()
+  check('the frame delivers one batch', delivered.length === 1, `batches=${delivered.length}`)
+  check('the batch holds all three, in order',
+    delivered[0].length === 3 && delivered[0].map(e => e.data.stream.delta.text).join('') === 'abc',
+    JSON.stringify(delivered[0].map(e => e.data.stream.delta.text)))
+  check('the buffer is empty afterwards', batcher.pending() === 0)
+}
+{
+  const m = manualScheduler()
+  const delivered = []
+  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
+  batcher.push(streamEvent('m1', 'a'))
+  batcher.pushAndFlush(plainEvent('result', { result: { text: 'done' } }))
+  // This is what keeps a `result` handler honest: it runs straight after this
+  // call and must see rows that already carry the delta buffered ahead of it.
+  check('pushAndFlush delivers immediately', delivered.length === 1, `batches=${delivered.length}`)
+  check('the flush carries the buffered delta first, then the event',
+    delivered[0].length === 2 && delivered[0][0].type === 'stream' && delivered[0][1].type === 'result',
+    JSON.stringify(delivered[0].map(e => e.type)))
+  check('the pending frame is cancelled, so it cannot deliver twice', m.frames() === 0, `frames=${m.frames()}`)
+  m.runFrame()
+  check('running the frame anyway delivers nothing', delivered.length === 1, `batches=${delivered.length}`)
+}
+{
+  const m = manualScheduler()
+  const delivered = []
+  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
+  batcher.push(streamEvent('m1', 'a'))
+  batcher.cancel()
+  m.runFrame()
+  // A session switch closes the stream and clears the rows. A batch landing a
+  // frame later would write the old session's deltas into the new one's pane.
+  check('cancel drops the buffer', batcher.pending() === 0)
+  check('cancel means the frame delivers nothing', delivered.length === 0, `batches=${delivered.length}`)
+}
+{
+  const m = manualScheduler()
+  const delivered = []
+  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
+  batcher.flush()
+  m.runFrame()
+  check('flushing an empty buffer delivers nothing', delivered.length === 0, `batches=${delivered.length}`)
+}
+
+console.log('\nkanbanPollWouldFetch')
+{
+  // These four cases are the guards at useKanban.ts fetchBoards:62 and
+  // fetchView:75, restated. If either guard changes, this must change with it —
+  // a poll that is scheduled but returns at its first line is a timer doing
+  // nothing, which is what the chat pane was running.
+  check('the chat pane shape fetches nothing', !kanbanPollWouldFetch(true, false, null))
+  check('a board id alone is worth polling', kanbanPollWouldFetch(true, false, 'board_1'))
+  check('loading the board list is worth polling', kanbanPollWouldFetch(true, true, null))
+  check('disabled never polls', !kanbanPollWouldFetch(false, true, 'board_1'))
+}
+
+console.log('\nclosing a stream commits, switching session discards')
+{
+  // The hook's two teardown paths are not the same thing, and conflating them
+  // costs real text. A stream that dies mid-turn is re-attached by the reconnect
+  // effect, and that path closes the old one first — so close has to commit what
+  // it is holding. A session switch is about to replace the rows entirely, so it
+  // has to throw the same buffer away instead.
+  const m = manualScheduler()
+  const delivered = []
+  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
+  batcher.push(streamEvent('m1', 'half a sentence'))
+  batcher.flush() // what closeSSE does
+  check('closing a stream commits its buffered deltas', delivered.length === 1, `batches=${delivered.length}`)
+  check('and commits the actual text', delivered[0][0].data.stream.delta.text === 'half a sentence')
+
+  batcher.push(streamEvent('m1', 'more'))
+  batcher.cancel() // what a session switch does
+  m.runFrame()
+  check('switching session discards its buffered deltas', delivered.length === 1, `batches=${delivered.length}`)
+}
+
+console.log('\nbatched rows == unbatched rows')
+{
+  // A mixed sequence: two turns of text and thinking deltas with tool calls and
+  // their results interleaved, plus the session-state and result events that a
+  // real turn carries. 240 events, which is a little over one second of the
+  // measured 195 deltas/s.
+  const events = []
+  for (const turn of ['m1', 'm2']) {
+    events.push(plainEvent('user_message', { result: { text: `ask ${turn}` } }))
+    for (let i = 0; i < 40; i++) events.push(thinkingDelta(turn, `t${i} `))
+    events.push(plainEvent('tool_call', { message_id: turn, tool_call: { tool_id: `${turn}_x`, name: 'Read', input: {} } }))
+    for (let i = 0; i < 60; i++) events.push(streamEvent(turn, `w${i} `))
+    events.push(plainEvent('tool_result', { message_id: turn, tool_result: { tool_id: `${turn}_x`, content: 'ok' } }))
+    events.push(plainEvent('session_state', { state: { state: 'running' } }))
+    for (let i = 0; i < 15; i++) events.push(streamEvent(turn, `z${i} `))
+    events.push(plainEvent('result', { result: { text: 'done' } }))
+  }
+
+  const oneAtATime = events.reduce(applyEventToRows, [])
+
+  // Replay through the real batcher with the same policy the hook applies:
+  // stream defers to the next frame, everything else flushes.
+  const m = manualScheduler()
+  let batched = []
+  let batchCount = 0
+  const batcher = createSSEEventBatcher(batch => {
+    batchCount++
+    batched = batch.reduce(applyEventToRows, batched)
+  }, m.scheduler)
+  events.forEach((ev, i) => {
+    if (isDeferrableEventType(ev.type)) batcher.push(ev)
+    else batcher.pushAndFlush(ev)
+    // A frame boundary every 32 events, so the deltas really do arrive in
+    // batches rather than each landing on its own flush.
+    if (i % 32 === 31) m.runFrame()
+  })
+  batcher.flush()
+
+  check(`${events.length} events collapse to ${batchCount} commits`, batchCount < events.length / 4, `commits=${batchCount}`)
+  check('same number of rows', batched.length === oneAtATime.length, `${batched.length} vs ${oneAtATime.length}`)
+  check('identical rows', JSON.stringify(batched) === JSON.stringify(oneAtATime),
+    JSON.stringify(batched.map(r => [r.key, (r.text || '').length, (r.thinking || '').length])) +
+    ' vs ' +
+    JSON.stringify(oneAtATime.map(r => [r.key, (r.text || '').length, (r.thinking || '').length])))
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
