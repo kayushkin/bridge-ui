@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useBridgeConfig } from '../../context'
+import type { BridgeRoutes } from '../../context'
 
 // Compact in-chat view of the orchestrator's injected context. The full review
-// surface (WAL, prior versions, filters) lives on the standalone /orchestrator
-// page; this pane is the at-a-glance "what would the orchestrator see right now"
-// with per-part token counts, as an optional split alongside the chat.
+// surface (WAL, prior versions, filters) lives on the host's own orchestrator
+// page, wherever `routes.orchestrator` says; this pane is the at-a-glance "what
+// would the orchestrator see right now" with per-part token counts, as an
+// optional split alongside the chat.
 
 interface Version { part: string; title: string; content: string; tokens: number }
 interface PartState { part: string; title: string; latest: Version; version_count: number }
@@ -12,21 +14,29 @@ interface PartState { part: string; title: string; latest: Version; version_coun
 const ORDER = ['agents', 'tasks', 'convo_summary', 'convo_current']
 const LINK_RE = /\[(session|task|todo):([^\]]+)\]/g
 
-function hrefFor(kind: string, id: string): string {
-  if (kind === 'session') return `/?session=${encodeURIComponent(id)}`
-  if (kind === 'task') return '/kanban'
-  if (kind === 'todo') return '/notes'
-  return '#'
+// Where a [kind:id] reference points on THIS host. Every path comes from the
+// consumer's `routes`, never from a literal: the same panel runs in a host that
+// mounts chat at `/` and in one that mounts it at `/bridge`. An empty route
+// means the host has no such page, and the reference renders as plain text
+// rather than as a link to somewhere that doesn't exist.
+function hrefFor(routes: BridgeRoutes, kind: string, id: string): string {
+  if (kind === 'session') return `${routes.chat}?session=${encodeURIComponent(id)}`
+  if (kind === 'task') return routes.kanban
+  if (kind === 'todo') return routes.notes
+  return ''
 }
 
-function Linkified({ text }: { text: string }) {
+function Linkified({ text, routes }: { text: string; routes: BridgeRoutes }) {
   const out: React.ReactNode[] = []
   let last = 0, i = 0, m: RegExpExecArray | null
   LINK_RE.lastIndex = 0
   while ((m = LINK_RE.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index))
     const [tok, kind, id] = m
-    out.push(<a key={i++} href={hrefFor(kind, id)} style={{ color: 'var(--accent,#818cf8)' }}>{tok}</a>)
+    const href = hrefFor(routes, kind, id)
+    out.push(href
+      ? <a key={i++} href={href} style={{ color: 'var(--accent,#818cf8)' }}>{tok}</a>
+      : <span key={i++}>{tok}</span>)
     last = m.index + tok.length
   }
   if (last < text.length) out.push(text.slice(last))
@@ -37,7 +47,7 @@ export function OrchestratorPanel({ onToggleCollapse, style }: {
   onToggleCollapse: () => void
   style?: React.CSSProperties
 }) {
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
+  const { fetch: apiFetch, producerBasePath, routes } = useBridgeConfig()
   const [parts, setParts] = useState<PartState[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -76,7 +86,9 @@ export function OrchestratorPanel({ onToggleCollapse, style }: {
         <span className="bc-split-pane-title">🎬 Orchestrator context</span>
         <span className="bc-spacer" />
         <span style={{ fontSize: 12, opacity: 0.7 }}>~{total.toLocaleString()} tok</span>
-        <a href="/orchestrator" onClick={e => e.stopPropagation()} title="Open full review page" style={{ marginLeft: 8, textDecoration: 'none' }}>↗</a>
+        {routes.orchestrator && (
+          <a href={routes.orchestrator} onClick={e => e.stopPropagation()} title="Open full review page" style={{ marginLeft: 8, textDecoration: 'none' }}>↗</a>
+        )}
         <span className="bc-split-collapse-btn" aria-hidden="true" style={{ marginLeft: 8 }}>×</span>
       </div>
       <div style={{ overflow: 'auto', padding: 8, fontSize: 12 }}>
@@ -87,7 +99,7 @@ export function OrchestratorPanel({ onToggleCollapse, style }: {
             <summary style={{ cursor: 'pointer', opacity: 0.85 }}>
               {p.title} <span style={{ opacity: 0.5 }}>· ~{p.latest.tokens.toLocaleString()} tok · v{p.version_count}</span>
             </summary>
-            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><Linkified text={p.latest.content} /></pre>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><Linkified text={p.latest.content} routes={routes} /></pre>
           </details>
         ))}
       </div>

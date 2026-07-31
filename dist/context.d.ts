@@ -14,6 +14,12 @@ export interface BridgeRoutes {
     permissions: string;
     conformance: string;
     kanban: string;
+    /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
+    notes: string;
+    /** The producer's full review surface (WAL, prior versions, filters), linked
+     *  from the sidebar's Orchestrator row and the in-chat orchestrator pane.
+     *  Empty means the host doesn't mount it. */
+    orchestrator: string;
 }
 export declare const DEFAULT_BRIDGE_ROUTES: BridgeRoutes;
 export interface BridgeConfig {

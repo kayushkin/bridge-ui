@@ -431,6 +431,7 @@ export function BridgeChat() {
       basePath={basePath}
       apiFetch={apiFetch}
       producerBasePath={producerBasePath}
+      orchestratorPath={routes.orchestrator}
       instancesPath={routes.instances}
       defaultInstanceId={defaultInstanceId}
       openSessionIds={openSessionIds}

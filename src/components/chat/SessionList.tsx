@@ -21,7 +21,7 @@ import type { CtxMenuState, SplitMode } from './types'
 // sidebar DOM small so a large Archive folder can't balloon it to 10k+ nodes.
 const SESSION_LIST_CAP = 50
 
-export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, producerBasePath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
+export function SessionList({ sessions, instances, machines, harnesses, basePath, apiFetch, producerBasePath, orchestratorPath, instancesPath, defaultInstanceId, openSessionIds, focusedSessionId, onSelect, onOpenInSplit, onNewChat, connected, getDisplayName, getSessionUIState, onRename, folders, onAfterFolderChange, onToggleCollapse }: {
   sessions: ManagedSession[]
   instances: BridgeInstance[]
   machines: Machine[]
@@ -32,6 +32,8 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   // proxy). Comes from `producerBasePath` on BridgeProvider; empty means the
   // consumer proxies no producer, and the row is left out entirely.
   producerBasePath: string
+  // Where this host mounts the producer's review page, from `routes.orchestrator`.
+  orchestratorPath: string
   instancesPath: string
   defaultInstanceId?: string
   openSessionIds: Set<string>
@@ -461,7 +463,7 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         <button className="bc-sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sessions" aria-label="Collapse sessions">◂</button>
       </div>
 
-      {producerBasePath && <ProducerRow apiFetch={apiFetch} producerBasePath={producerBasePath} />}
+      {producerBasePath && <ProducerRow apiFetch={apiFetch} producerBasePath={producerBasePath} orchestratorPath={orchestratorPath} />}
 
       <div className="bc-session-search">
         <input

@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import type { FetchFn } from './types'
 
 export interface BridgeRoutes {
+  // Where the consumer mounted each page this library exports. Every entry here
+  // has a matching exported component, so a default path is always meaningful.
   chat: string
   instances: string
   sessions: string
@@ -16,6 +18,17 @@ export interface BridgeRoutes {
   permissions: string
   conformance: string
   kanban: string
+
+  // Pages the consumer owns and this library does not provide. There is no
+  // sensible default for these — dash has both, llmux has neither — so they
+  // default to empty and a link to an empty route is not rendered at all. The
+  // library never guesses a path for a page it doesn't ship.
+  /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
+  notes: string
+  /** The producer's full review surface (WAL, prior versions, filters), linked
+   *  from the sidebar's Orchestrator row and the in-chat orchestrator pane.
+   *  Empty means the host doesn't mount it. */
+  orchestrator: string
 }
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
@@ -32,6 +45,8 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   permissions: '/bridge/permissions',
   conformance: '/bridge/conformance',
   kanban: '/bridge/kanban',
+  notes: '',
+  orchestrator: '',
 }
 
 export interface BridgeConfig {

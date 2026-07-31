@@ -18,9 +18,12 @@ interface ProducerConfig {
 // sidebar uses, so it needs no new provider wiring. If the service is
 // unreachable the row still renders, showing an offline state rather than
 // breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath }: {
+export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: {
   apiFetch: FetchFn
   producerBasePath: string
+  // Where this host mounts the producer's review page, from `routes.orchestrator`.
+  // Empty means it mounts none, and the row stops offering to open it.
+  orchestratorPath: string
 }) {
   const [cfg, setCfg] = useState<ProducerConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,8 +84,12 @@ export function ProducerRow({ apiFetch, producerBasePath }: {
   const unreachable = !cfg && !!error
 
   // The orchestrator is NOT a chat session — it's a stateless-per-run runtime —
-  // so the row opens its dedicated surface page, not a bridge session.
-  const openChat = useCallback(() => { window.location.assign('/orchestrator') }, [])
+  // so the row opens its dedicated surface page, not a bridge session. A host
+  // that mounts no such page gets the settings panel instead of a dead link.
+  const openReviewPage = useCallback(() => {
+    if (orchestratorPath) window.location.assign(orchestratorPath)
+    else setExpanded(x => !x)
+  }, [orchestratorPath])
 
   const saveLimit = () => {
     const v = parseFloat(limitDraft)
@@ -98,8 +105,10 @@ export function ProducerRow({ apiFetch, producerBasePath }: {
       <div className="bc-session-item bc-producer-row">
         <button
           className="bc-session-item-main"
-          onClick={openChat}
-          title={unreachable ? 'Orchestrator service unreachable' : 'Open the Orchestrator chat'}
+          onClick={openReviewPage}
+          title={unreachable
+            ? 'Orchestrator service unreachable'
+            : orchestratorPath ? 'Open the Orchestrator review page' : 'Orchestrator settings'}
         >
           <span className="bc-session-harness bc-producer-badge" aria-hidden>🎬</span>
           <span className={`bc-producer-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
@@ -120,7 +129,7 @@ export function ProducerRow({ apiFetch, producerBasePath }: {
             <div className="bc-producer-error">Orchestrator offline ({error})</div>
           ) : cfg ? (
             <>
-              <div className="bc-producer-hint">Click the row to open the chat.</div>
+              {orchestratorPath && <div className="bc-producer-hint">Click the row to open the review page.</div>}
 
               <button
                 className={`bc-producer-enable ${enabled ? 'on' : 'off'}`}

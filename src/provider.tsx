@@ -33,7 +33,9 @@ interface BridgeProviderProps {
   /** Optional render hook for per-harness Settings-tab extensions. Return null
    * for harnesses that don't need a custom panel. */
   renderHarnessExtension?: (harnessName: string) => ReactNode
-  /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES. */
+  /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES,
+   * which means `notes` and `orchestrator` — pages this library doesn't ship —
+   * stay empty and their links aren't rendered until a host names them. */
   routes?: Partial<BridgeRoutes>
   children: ReactNode
 }
