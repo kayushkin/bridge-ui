@@ -18,6 +18,18 @@ export function kanbanPollWouldFetch(enabled: boolean, loadBoards: boolean, boar
   return loadBoards || Boolean(boardID)
 }
 
+// preserveUnchangedKanbanPayload returns the previous list when the refreshed
+// one is identical to it, so a caller can hand it straight to a state setter
+// and let React bail out of the re-render. A background refresh that fires
+// while the pane is open mostly brings back exactly what is already on screen;
+// storing a fresh array for that would re-render the pane, and everything below
+// it, on every tick for no visible change. Same technique as fetchView's
+// lastViewJSON, expressed as a value so callers need no ref of their own.
+// Exported so the render checks can pin both directions.
+export function preserveUnchangedKanbanPayload<T>(previous: T[], next: T[]): T[] {
+  return JSON.stringify(previous) === JSON.stringify(next) ? previous : next
+}
+
 export interface CreateBoardArgs { name: string; description?: string }
 export interface UseKanbanOptions {
   loadBoards?: boolean
@@ -118,8 +130,9 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     // The chat pane's LinkedKanbanPanel constructs this hook with loadBoards
     // false and no board id, and both callbacks then return at their first line
     // — so the interval fired every 15 seconds, per open chat pane, and issued no
-    // request at all. (The cards that panel does show are refreshed on mount
-    // only; that they never refresh is a separate defect, not this timer's job.)
+    // request at all. The cards that panel shows come from listCardsForEntity
+    // and listEntityTags, which this timer has never called; the panel runs its
+    // own refresh over those two, at the same cadence.
     if (!kanbanPollWouldFetch(enabled, loadBoards, boardID)) {
       return () => { cancelled = true }
     }
@@ -345,23 +358,24 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     return true
   }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
 
+  // These two throw rather than reporting through the hook's `error`, because
+  // their only caller renders its own error and never reads that field. An
+  // empty array returned for a failed request is indistinguishable from a
+  // session that genuinely has no linked cards, and the caller refreshes on a
+  // timer — so a single blip would replace a real list with "No linked cards
+  // yet" and leave it there, silently, until the next tick. Failing loudly is
+  // what lets the caller keep the last good answer on screen.
   const listCardsForEntity = useCallback(async (entityType: string, entityRef: string): Promise<EntityCardView[]> => {
     if (!enabled) return []
     const res = await fetchFn(`${kanbanStoreBasePath}/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityRef)}/cards`)
-    if (!res.ok) {
-      setError(`listCardsForEntity HTTP ${res.status}`)
-      return []
-    }
+    if (!res.ok) throw new Error(`listCardsForEntity HTTP ${res.status}`)
     return (await res.json()) ?? []
   }, [fetchFn, kanbanStoreBasePath, enabled])
 
   const listEntityTags = useCallback(async (entityType: string, entityRef: string): Promise<EntityTag[]> => {
     if (!enabled) return []
     const res = await fetchFn(`${kanbanStoreBasePath}/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityRef)}/tags`)
-    if (!res.ok) {
-      setError(`listEntityTags HTTP ${res.status}`)
-      return []
-    }
+    if (!res.ok) throw new Error(`listEntityTags HTTP ${res.status}`)
     return (await res.json()) ?? []
   }, [fetchFn, kanbanStoreBasePath, enabled])
 

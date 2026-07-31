@@ -1,9 +1,16 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBridgeConfig } from '../../context';
-import { useKanban } from '../../useKanban';
+import { preserveUnchangedKanbanPayload, useKanban } from '../../useKanban';
 const DO_NOT_TRACK_TAGS = ['kanban-do-not-track', 'kanban:do-not-track'];
+// How often an open pane re-reads its session's cards. kanban-store has no SSE
+// and no notifier of any kind, so a poll is the only way this pane can learn
+// that something moved — and things move on their own: the kanban-curator and
+// the classifier both run on a scheduler tick and rewrite cards under it.
+// 15 seconds is the cadence every other chat-pane timer already uses
+// (Workspace's reachability check, OrchestratorPanel, useKanban's board view).
+const LINKED_KANBAN_REFRESH_MS = 15000;
 export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey }) {
     const { routes, kanbanStoreBasePath } = useBridgeConfig();
     const kanban = useKanban(null, { loadBoards: false, loadEntityTypes: false });
@@ -12,33 +19,50 @@ export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey 
     const [loading, setLoading] = useState(false);
     const [toggling, setToggling] = useState(false);
     const [error, setError] = useState(null);
-    const refresh = useCallback(async () => {
+    const requestInFlight = useRef(false);
+    // background: this refresh came from the timer rather than from the user
+    // opening the pane or toggling tracking. It stays silent — no "Loading…" in
+    // place of cards that are already on screen — and it yields to a request that
+    // is still running instead of stacking a second one behind it.
+    const refresh = useCallback(async ({ background = false } = {}) => {
         if (!kanbanStoreBasePath || !sessionId) {
             setCards([]);
             setTags([]);
             setError(null);
             return;
         }
-        setLoading(true);
-        setError(null);
+        if (background && requestInFlight.current)
+            return;
+        requestInFlight.current = true;
+        if (!background)
+            setLoading(true);
         try {
             const [nextCards, nextTags] = await Promise.all([
                 kanban.listCardsForEntity('session', sessionId),
                 kanban.listEntityTags('session', sessionId),
             ]);
-            setCards(nextCards);
-            setTags(nextTags);
+            setCards(prev => preserveUnchangedKanbanPayload(prev, nextCards));
+            setTags(prev => preserveUnchangedKanbanPayload(prev, nextTags));
+            setError(null);
         }
         catch (err) {
+            // Keep whatever is on screen. A failed read tells us nothing about the
+            // session's cards, and blanking the list would claim it has none.
             setError(err instanceof Error ? err.message : String(err));
         }
         finally {
-            setLoading(false);
+            requestInFlight.current = false;
+            if (!background)
+                setLoading(false);
         }
     }, [kanban, kanbanStoreBasePath, sessionId]);
     useEffect(() => {
         refresh();
-    }, [refresh]);
+        if (!kanbanStoreBasePath || !sessionId)
+            return;
+        const timer = setInterval(() => { refresh({ background: true }); }, LINKED_KANBAN_REFRESH_MS);
+        return () => clearInterval(timer);
+    }, [refresh, kanbanStoreBasePath, sessionId]);
     const doNotTrackTags = useMemo(() => tags.filter(tag => DO_NOT_TRACK_TAGS.includes(tag.tag)), [tags]);
     const trackingDisabled = doNotTrackTags.length > 0;
     const handleToggleTracking = useCallback(async () => {

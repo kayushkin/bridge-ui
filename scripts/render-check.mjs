@@ -16,7 +16,7 @@ import { createElement as h } from 'react'
 import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
 import { applyEventToRows, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
-import { kanbanPollWouldFetch } from '../src/useKanban.ts'
+import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
 import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
 
@@ -246,6 +246,43 @@ console.log('\nkanbanPollWouldFetch')
   check('a board id alone is worth polling', kanbanPollWouldFetch(true, false, 'board_1'))
   check('loading the board list is worth polling', kanbanPollWouldFetch(true, true, null))
   check('disabled never polls', !kanbanPollWouldFetch(false, true, 'board_1'))
+}
+
+console.log('\npreserveUnchangedKanbanPayload')
+{
+  // LinkedKanbanPanel now re-reads its session's cards every 15 seconds,
+  // because kanban-store has no notifier and the curator moves cards under an
+  // open pane. Most of those reads bring back exactly what is already shown, so
+  // the identity guard is what keeps a poll from re-rendering the chat pane
+  // once a tick forever. If this stops returning the previous reference for an
+  // unchanged payload, the fix turns into a permanent render loop.
+  const shown = [{ card_id: 'c1', item: { title: 'Ship it', status: 'open' } }]
+  const sameFromServer = [{ card_id: 'c1', item: { title: 'Ship it', status: 'open' } }]
+  check('an unchanged payload keeps the previous reference',
+    preserveUnchangedKanbanPayload(shown, sameFromServer) === shown)
+
+  const moved = [{ card_id: 'c1', item: { title: 'Ship it', status: 'done' } }]
+  check('a card that moved is a new reference',
+    preserveUnchangedKanbanPayload(shown, moved) === moved)
+
+  const added = [...shown, { card_id: 'c2', item: { title: 'Second', status: 'open' } }]
+  check('a newly linked card is a new reference',
+    preserveUnchangedKanbanPayload(shown, added) === added)
+
+  // The empty cases are the ones a failing poll used to reach: before this
+  // pass, listCardsForEntity returned [] for an HTTP error, so a blip looked
+  // exactly like "this session has no cards". It throws now, and the panel
+  // keeps its list — but an honestly empty answer still has to land.
+  check('an emptied list is a new reference', preserveUnchangedKanbanPayload(shown, []).length === 0)
+  const alreadyEmpty = []
+  check('two empty lists keep the previous reference',
+    preserveUnchangedKanbanPayload(alreadyEmpty, []) === alreadyEmpty)
+
+  const tags = [{ tag: 'kanban-do-not-track' }]
+  check('unchanged tags keep the previous reference',
+    preserveUnchangedKanbanPayload(tags, [{ tag: 'kanban-do-not-track' }]) === tags)
+  check('a removed tag is a new reference',
+    preserveUnchangedKanbanPayload(tags, []) !== tags)
 }
 
 console.log('\nclosing a stream commits, switching session discards')
