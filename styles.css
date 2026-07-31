@@ -4703,6 +4703,37 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* A signal raised by a session working this todo. Louder than the ceiling
+   line and quieter than the hold banner: somebody has to act, but the work is
+   not parked. A question outranks a notification because it is blocking a
+   session right now.
+
+   The kind colours the LABEL and the left border, never the title. The title
+   is the signal's own words and has to stay readable, and tinting it muted
+   grey (or fading it with opacity) took it to 3.9:1 — below WCAG AA at this
+   size. Colour is what the label is for. */
+.bk-card-signal {
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 0.78em;
+  margin: 4px 0;
+  padding: 3px 6px;
+  border-left: 2px solid var(--text-muted);
+  border-radius: 2px;
+}
+/* A question is blocking a session that cannot proceed, so it takes the
+   warning colour rather than --accent: accent is what this board already
+   paints its own buttons and borders with, so an accent badge reads as page
+   chrome instead of as something asking for you. */
+.bk-card-signal-question { border-left-color: var(--warning); }
+.bk-card-signal-question .bk-card-signal-label { color: var(--warning); }
+.bk-card-signal-notification { border-left-color: var(--text-muted); }
+.bk-card-signal-notification .bk-card-signal-label { color: var(--text-muted); }
+.bk-card-signal-label { font-weight: 600; }
+.bk-card-signal-title {
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* Spend ceiling. Distinct from the held banner: this is the ceiling that has
    NOT yet been hit — informational, not a stop. */
 .bk-card-ceiling {

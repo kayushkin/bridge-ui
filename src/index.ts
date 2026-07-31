@@ -138,6 +138,10 @@ export type { SessionSignalsProps, SignalsInboxProps } from './components/chat/S
 export {
   fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions,
   declineSignalQuestions, useOpenChatSignals,
+  // Todo propagation: which todos have an open signal against them. The board
+  // takes the whole map in one request; a view that already knows its one todo
+  // narrows server-side instead.
+  fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo,
 } from './components/chat/signalData'
 export type { SignalRequest, SignalsResult, UseOpenChatSignals } from './components/chat/signalData'
 

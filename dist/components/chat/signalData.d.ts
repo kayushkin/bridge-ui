@@ -8,6 +8,23 @@ export type SignalsResult = Signal[] | null;
 /** Open chat-surface signals, newest first. Pass a sessionId to scope to one
  * session; omit it for the cross-session inbox. */
 export declare function fetchOpenChatSignals(fetchFn: FetchFn, basePath: string, sessionId?: string, limit?: number): Promise<SignalsResult>;
+/** Every open signal that propagates to a noteboard todo, keyed by todo id.
+ *
+ * One request for a whole board, not one per card. The open set is small by
+ * construction — at most one derived row per session, plus whatever tool asks
+ * are parked right now — so asking per card would be N requests for a list the
+ * server can hand over whole.
+ *
+ * Surface is deliberately not filtered. A todo is worked by chat sessions and
+ * by autonomous workers alike, and the badge answers "does this piece of work
+ * need me?", which is true of a signal on either surface. */
+export declare function fetchOpenSignalsByTodo(fetchFn: FetchFn, basePath: string): Promise<Map<string, Signal[]> | null>;
+/** Open signals against exactly one todo — the query a single-todo view makes.
+ *
+ * Narrowed server-side rather than by filtering the whole open set, so a view
+ * that knows its todo id fetches only its own rows. An empty todoID is a 400
+ * from the server, so callers must not call this without one. */
+export declare function fetchOpenSignalsForTodo(fetchFn: FetchFn, basePath: string, todoID: string): Promise<SignalsResult>;
 /** Group signals by the request they were minted from. One AskUserQuestion
  * tool call carries an array of questions and mints one signal per question,
  * all sharing a request_id, and the resolve verb is per-request — so the
@@ -69,4 +86,15 @@ export interface UseOpenChatSignals {
  * the pending-hook set changing, for instance. Callers pass a value derived
  * from state they already track; nothing here polls on a timer. */
 export declare function useOpenChatSignals(sessionId?: string, refreshKey?: string | number): UseOpenChatSignals;
+/** Open signals grouped by the todo they propagate to, for a view that shows
+ * many todos at once. Empty until the first fetch lands, and empty forever
+ * against a bridge-server with no signals route — a board full of todos must
+ * render either way.
+ *
+ * Takes no refresh key, unlike useOpenChatSignals. The query has no dimension
+ * to key on: it asks for every open signal that names a todo, whatever board
+ * or session the caller happens to be looking at. Keying it to the board id
+ * refetched an identical list every time the selection changed. Resolves still
+ * refresh it, through the same in-process announce every signal surface uses. */
+export declare function useOpenSignalsByTodo(): Map<string, Signal[]>;
 //# sourceMappingURL=signalData.d.ts.map

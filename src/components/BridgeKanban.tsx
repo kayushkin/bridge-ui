@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kanban'
+import type { Signal } from '../types'
+import { SignalKindQuestion } from '../types'
+import { useOpenSignalsByTodo } from './chat/signalData'
 
 // Pulls the first session link off a card. Post session-consolidation
 // (2026-05-09) every card_link with entity_type='session' carries the
@@ -61,6 +64,10 @@ export function BridgeKanban() {
   }
 
   const k = useKanban(selectedBoardID)
+  // A card id IS a noteboard todo id here, so the signals a session raised
+  // against its todo land on the card that todo already has. The map covers
+  // every todo, so switching boards needs no refetch.
+  const signalsByTodo = useOpenSignalsByTodo()
 
   useEffect(() => {
     localStorage.setItem(LAYOUT_KEY, layout)
@@ -190,6 +197,7 @@ export function BridgeKanban() {
                 <ColumnPane
                   key={cv.column.id}
                   cv={cv}
+                  signalsByTodo={signalsByTodo}
                   boardColumns={k.view!.columns.map(c => c.column)}
                   collapsed={collapsedColumns.has(cv.column.id)}
                   onToggleCollapse={() => toggleColumnCollapsed(cv.column.id)}
@@ -325,6 +333,7 @@ function NewColumnForm({
 
 function ColumnPane({
   cv,
+  signalsByTodo,
   boardColumns,
   collapsed,
   onToggleCollapse,
@@ -340,6 +349,7 @@ function ColumnPane({
   onDeleteColumn,
 }: {
   cv: ColumnView
+  signalsByTodo: Map<string, Signal[]>
   boardColumns: { id: string; name: string }[]
   collapsed: boolean
   onToggleCollapse: () => void
@@ -400,6 +410,7 @@ function ColumnPane({
             <CardTile
               key={c.placement.card_id}
               card={c}
+              signals={signalsByTodo.get(c.placement.card_id) ?? []}
               currentColumn={cv.column.id}
               boardColumns={boardColumns}
               onMove={onMoveCard}
@@ -485,8 +496,38 @@ function NewCardForm({
   )
 }
 
+/** What a card says when a session working this todo has raised something.
+ *
+ * A question and a notification are different demands and get different words:
+ * a question is blocking a session that cannot proceed without an answer, a
+ * notification is an FYI nobody has read yet. When both are open the question
+ * is what the card leads with — it is the one costing time right now.
+ *
+ * The named one is the newest, matching the order every other signal surface
+ * reads in. The count is what says there are more.
+ *
+ * The badge states the problem and does not offer to solve it. Answering
+ * happens where the signal has a resolve verb: the chat, the inbox, or the
+ * RefChip panel. Putting an inert answer box on a board card would promise a
+ * resolution the board cannot deliver. */
+function SignalBadge({ signals }: { signals: Signal[] }) {
+  if (signals.length === 0) return null
+  const questions = signals.filter(s => s.kind === SignalKindQuestion)
+  const leading = questions[0] ?? signals[0]
+  const label = questions.length > 0
+    ? (questions.length > 1 ? `❓ ${questions.length} open questions` : '❓ open question')
+    : (signals.length > 1 ? `📣 ${signals.length} unread notifications` : '📣 unread notification')
+  return (
+    <div className={`bk-card-signal bk-card-signal-${leading.kind}`} title={leading.title}>
+      <span className="bk-card-signal-label">{label}</span>
+      <span className="bk-card-signal-title">{leading.title}</span>
+    </div>
+  )
+}
+
 function CardTile({
   card,
+  signals,
   currentColumn,
   boardColumns,
   onMove,
@@ -496,6 +537,7 @@ function CardTile({
   onPlay,
 }: {
   card: CardView
+  signals: Signal[]
   currentColumn: string
   boardColumns: { id: string; name: string }[]
   onMove: (cardID: string, columnID: string) => Promise<boolean>
@@ -537,6 +579,7 @@ function CardTile({
           {item.hold_reason ? `: ${item.hold_reason}` : ''}
         </div>
       )}
+      <SignalBadge signals={signals} />
       {tags.length > 0 && (
         <div className="bk-card-tags">
           {tags.map(t => <span key={t} className="bk-tag">{t}</span>)}

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useKanban } from '../useKanban';
+import { SignalKindQuestion } from '../types';
+import { useOpenSignalsByTodo } from './chat/signalData';
 function sessionLink(card) {
     for (const l of card.links ?? []) {
         if (!l.entity_ref)
@@ -53,6 +55,10 @@ export function BridgeKanban() {
         navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
     };
     const k = useKanban(selectedBoardID);
+    // A card id IS a noteboard todo id here, so the signals a session raised
+    // against its todo land on the card that todo already has. The map covers
+    // every todo, so switching boards needs no refetch.
+    const signalsByTodo = useOpenSignalsByTodo();
     useEffect(() => {
         localStorage.setItem(LAYOUT_KEY, layout);
     }, [layout]);
@@ -120,7 +126,7 @@ export function BridgeKanban() {
                                     const ok = await k.createColumn(args);
                                     if (ok)
                                         setShowNewColumn(false);
-                                }, onCancel: () => setShowNewColumn(false) })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: k.view.columns.map(cv => (_jsx(ColumnPane, { cv: cv, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
+                                }, onCancel: () => setShowNewColumn(false) })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: k.view.columns.map(cv => (_jsx(ColumnPane, { cv: cv, signalsByTodo: signalsByTodo, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
                                         const ok = await k.createCard({ ...args, column_id: cv.column.id });
                                         if (ok)
                                             setComposeColumn(null);
@@ -169,7 +175,7 @@ function NewColumnForm({ onCreate, onCancel, }) {
             });
         }, children: [_jsx("input", { autoFocus: true, placeholder: "Column name", value: name, onChange: e => setName(e.target.value) }), _jsx("input", { placeholder: "WIP limit (optional)", type: "number", min: 1, value: wip, onChange: e => setWip(e.target.value) }), _jsxs("select", { value: autoStatus, onChange: e => setAutoStatus(e.target.value), children: [_jsx("option", { value: "", children: "\u2014 no auto-status \u2014" }), _jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add column" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
 }
-function ColumnPane({ cv, boardColumns, collapsed, onToggleCollapse, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onDeleteColumn, }) {
+function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollapse, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onDeleteColumn, }) {
     const cards = cv.cards ?? [];
     const wip = cv.column.wip_limit;
     const overWIP = wip != null && cards.length > wip;
@@ -178,7 +184,7 @@ function ColumnPane({ cv, boardColumns, collapsed, onToggleCollapse, onCompose, 
         overWIP ? 'bk-column-over-wip' : '',
         collapsed ? 'bk-column-collapsed' : '',
     ].filter(Boolean).join(' ');
-    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", children: [cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" }))] }))] }));
+    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", children: [cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" }))] }))] }));
 }
 function NewCardForm({ onCreate, onCancel, }) {
     const [title, setTitle] = useState('');
@@ -206,7 +212,31 @@ function NewCardForm({ onCreate, onCancel, }) {
             });
         }, children: [_jsx("input", { autoFocus: true, placeholder: "Card title", value: title, onChange: e => setTitle(e.target.value) }), _jsx("textarea", { placeholder: "Body (markdown, optional)", rows: 3, value: body, onChange: e => setBody(e.target.value) }), _jsx("input", { placeholder: "tags (comma-separated)", value: tags, onChange: e => setTags(e.target.value) }), _jsxs("label", { className: "bk-form-check", title: "Create this card parked: no agent will pick it up until you press play.", children: [_jsx("input", { type: "checkbox", checked: hold, onChange: e => setHold(e.target.checked) }), "Start held (agents can't pick this up)"] }), _jsx("input", { type: "number", min: "0", step: "0.50", placeholder: "Auto-hold at $ (optional \u2014 blank = no limit)", value: ceiling, onChange: e => setCeiling(e.target.value), title: "Once this card's agent sessions have cost this much in total, it is held automatically. Each session is also capped at whatever is left." }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add card" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
 }
-function CardTile({ card, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, }) {
+/** What a card says when a session working this todo has raised something.
+ *
+ * A question and a notification are different demands and get different words:
+ * a question is blocking a session that cannot proceed without an answer, a
+ * notification is an FYI nobody has read yet. When both are open the question
+ * is what the card leads with — it is the one costing time right now.
+ *
+ * The named one is the newest, matching the order every other signal surface
+ * reads in. The count is what says there are more.
+ *
+ * The badge states the problem and does not offer to solve it. Answering
+ * happens where the signal has a resolve verb: the chat, the inbox, or the
+ * RefChip panel. Putting an inert answer box on a board card would promise a
+ * resolution the board cannot deliver. */
+function SignalBadge({ signals }) {
+    if (signals.length === 0)
+        return null;
+    const questions = signals.filter(s => s.kind === SignalKindQuestion);
+    const leading = questions[0] ?? signals[0];
+    const label = questions.length > 0
+        ? (questions.length > 1 ? `❓ ${questions.length} open questions` : '❓ open question')
+        : (signals.length > 1 ? `📣 ${signals.length} unread notifications` : '📣 unread notification');
+    return (_jsxs("div", { className: `bk-card-signal bk-card-signal-${leading.kind}`, title: leading.title, children: [_jsx("span", { className: "bk-card-signal-label", children: label }), _jsx("span", { className: "bk-card-signal-title", children: leading.title })] }));
+}
+function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, }) {
     const item = card.item;
     if (!item) {
         return (_jsxs("div", { className: "bk-card bk-card-orphan", onClick: onOpen, children: [_jsx("em", { children: "missing noteboard item" }), _jsx("small", { children: card.placement.card_id })] }));
@@ -218,7 +248,7 @@ function CardTile({ card, currentColumn, boardColumns, onMove, onOpen, onOpenCha
     // button renders on every card in every column, not just in a gate column.
     const held = !!item.held_at;
     const ceiling = typeof item.auto_hold_at_usd === 'number' ? item.auto_hold_at_usd : null;
-    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
+    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
                             ? 'Play — clear the hold so agents may work this, and resume its session if it was paused'
                             : 'Stop — park this work so no agent picks it up, and pause any session already running it', onClick: e => {
                             e.stopPropagation();

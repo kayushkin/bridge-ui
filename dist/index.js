@@ -55,7 +55,11 @@ export { EditableName } from './components/chat/EditableName';
 // chat, the sidebar inbox and the RefChip session panel.
 export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
 export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals';
-export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, } from './components/chat/signalData';
+export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, 
+// Todo propagation: which todos have an open signal against them. The board
+// takes the whole map in one request; a view that already knows its one todo
+// narrows server-side instead.
+fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo, } from './components/chat/signalData';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually. The body gets a
