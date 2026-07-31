@@ -70,12 +70,20 @@ export interface TurnsItem {
   turnId?: string
   usage?: TokenUsage
   isError?: boolean
-  isStreaming?: boolean
+  // True when the turn's assistant text arrived as streamed deltas rather
+  // than in one final result. It says where the text came from, nothing
+  // about whether the turn is still running — see isFinalAssistantTurn.
+  hasStreamedText?: boolean
   isMarker?: boolean
   markerKind?: 'compact'
   thinking?: string
   narration?: string
+  // A completion event (result / error) closed this turn. Reliable when
+  // present and absent for about one turn in nine — never read it alone.
   turnDone?: boolean
+  // The last assistant turn in the log. Every earlier turn is finished by
+  // construction: another turn started after it.
+  isFinalAssistantTurn?: boolean
 }
 
 export interface TimelineItem {

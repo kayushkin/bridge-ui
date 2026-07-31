@@ -17,6 +17,8 @@ import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
 import { applyEventToRows, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch } from '../src/useKanban.ts'
+import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
+import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -311,6 +313,99 @@ console.log('\nbatched rows == unbatched rows')
     JSON.stringify(batched.map(r => [r.key, (r.text || '').length, (r.thinking || '').length])) +
     ' vs ' +
     JSON.stringify(oneAtATime.map(r => [r.key, (r.text || '').length, (r.thinking || '').length])))
+}
+
+// --- the "streaming…" badge -------------------------------------------------
+//
+// The badge was on for 48 of 53 finished turns on the live dashboard, because
+// it was set by the presence of a streamed text row and never cleared.
+// Fixing it needed a completeness signal, and the event log does not carry one
+// that holds: over this host's whole log-store, 748 of the 6,897 Claude Code
+// turns that produced assistant text emit no result, no turn_complete and no
+// error. So the answer is split — the log says which turns are over
+// (everything before the last one, whatever the harness emitted), and the
+// session state says whether the last one is still running.
+
+console.log('\nharnessIsWorkingOnTurn')
+{
+  check('generating is working', harnessIsWorkingOnTurn('model_generating'))
+  check('a running tool is working', harnessIsWorkingOnTurn('tool_running'))
+  check('compacting is working', harnessIsWorkingOnTurn('compacting'))
+  check('idle is not working', !harnessIsWorkingOnTurn('idle'))
+  check('completed is not working', !harnessIsWorkingOnTurn('completed'))
+  // A wait is not production. Both have their own surface — the permission
+  // banner and the status chip — and "streaming…" during either is a lie.
+  check('awaiting permission is not working', !harnessIsWorkingOnTurn('awaiting_permission'))
+  check('rate limited is not working', !harnessIsWorkingOnTurn('rate_limited'))
+}
+
+console.log('\nrowsToTurns marks only the last assistant turn')
+{
+  // message_id is per-event, not per-turn: rowsToTurns drops a result whose
+  // message_id matches an already-rendered text row (that is how the final
+  // result avoids repeating the streamed text), and reusing one id per turn
+  // would erase the streamed text these checks are about.
+  const evt = (type, turnId, messageId, extra) => ({
+    id: String(++seq),
+    type,
+    data: { event_id: seq, turn_id: turnId, message_id: messageId, timestamp: '2026-07-31T20:00:00Z', ...extra },
+  })
+  const delta = (turnId, text) => evt('stream', turnId, `${turnId}_text`, {
+    stream: { delta: { index: 0, type: 'text_delta', text } },
+  })
+
+  // Three turns that each streamed their text. Only the first was ever closed
+  // by a result — the other two are the 11% case, and before this fix all
+  // three said "streaming…" forever.
+  const rows = [
+    evt('user_message', 'ta', 'ta_ask', { result: { text: 'first' } }),
+    delta('ta', 'answer a'),
+    evt('result', 'ta', 'ta_res', { result: { text: 'answer a' } }),
+    evt('user_message', 'tb', 'tb_ask', { result: { text: 'second' } }),
+    delta('tb', 'answer b'),
+    evt('user_message', 'tc', 'tc_ask', { result: { text: 'third' } }),
+    delta('tc', 'answer c'),
+  ].reduce(applyEventToRows, [])
+
+  const turns = rowsToTurns(rows)
+  const assistant = turns.filter(t => t.actor === 'assistant')
+  check('three assistant turns', assistant.length === 3, JSON.stringify(assistant.map(t => t.turnId)))
+  check('all three streamed their text', assistant.every(t => t.hasStreamedText))
+  check('only the closed turn is turnDone', assistant.filter(t => t.turnDone).length === 1,
+    JSON.stringify(assistant.map(t => [t.turnId, t.turnDone])))
+  check('exactly one turn is final', assistant.filter(t => t.isFinalAssistantTurn).length === 1,
+    JSON.stringify(assistant.map(t => [t.turnId, t.isFinalAssistantTurn])))
+  check('and it is the last one', assistant[2].isFinalAssistantTurn === true)
+
+  const renderTurns = working => renderToStaticMarkup(h(TurnsView, {
+    rows, agent: 'claude_code', harnessWorking: working, onToggleCollapse: () => {},
+  }))
+
+  const live = renderTurns(true)
+  check('a working harness marks exactly one turn streaming',
+    (live.match(/bc-turns-streaming-tag/g) || []).length === 1,
+    `count=${(live.match(/bc-turns-streaming-tag/g) || []).length}`)
+
+  const idle = renderTurns(false)
+  check('an idle session marks none', !idle.includes('bc-turns-streaming-tag'), idle)
+  // The symptom as it was reported: replayed history of a session that is not
+  // running must carry no badge at all, however its turns ended.
+  check('and renders no "streaming…" text', !idle.includes('streaming…'), idle)
+
+  // A closed final turn is not live even while the harness works on the next
+  // one, so a badge must not follow a result.
+  const closedLast = [
+    evt('user_message', 'td', 'td_ask', { result: { text: 'fourth' } }),
+    delta('td', 'answer d'),
+    evt('result', 'td', 'td_res', { result: { text: 'answer d' } }),
+  ].reduce(applyEventToRows, [])
+  const closedTurn = rowsToTurns(closedLast).filter(t => t.actor === 'assistant')[0]
+  check('the closed turn did stream its text', closedTurn.hasStreamedText === true, JSON.stringify(closedTurn))
+  check('and it is both final and done', closedTurn.isFinalAssistantTurn === true && closedTurn.turnDone === true)
+  const closedHtml = renderToStaticMarkup(h(TurnsView, {
+    rows: closedLast, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {},
+  }))
+  check('a closed final turn is never streaming', !closedHtml.includes('bc-turns-streaming-tag'), closedHtml)
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)

@@ -1,3 +1,20 @@
+// The states in which the harness holds the turn and more of it is still
+// coming. Everything else — the quiet states (idle, awaiting_user, paused),
+// the waits that need a human or a clock (awaiting_permission,
+// rate_limited), and the terminal ones (completed, error, aborted) — means
+// no further assistant output arrives without a fresh action, so whatever
+// the last turn looks like in the log, nothing is being produced for it now.
+// Those waits have their own surfaces (the permission banner, the status
+// chip); a "streaming…" badge during them would say something untrue.
+const workingStates = new Set([
+    'starting',
+    'model_generating',
+    'tool_running',
+    'compacting',
+]);
+export function harnessIsWorkingOnTurn(state) {
+    return workingStates.has(state);
+}
 export function formatHMS(ts) {
     try {
         const d = new Date(ts);

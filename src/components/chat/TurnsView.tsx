@@ -242,7 +242,7 @@ export function rowsToTurns(inputRows: LogRow[]): TurnsItem[] {
       const narrationParts: string[] = []
       const thinkingParts: string[] = []
       let hasError = false
-      let isStreaming = false
+      let hasStreamedText = false
       let turnDone = false
       let lastUsage: LogRow['usage']
 
@@ -259,7 +259,7 @@ export function rowsToTurns(inputRows: LogRow[]): TurnsItem[] {
           } else {
             parts.push(r.text)
           }
-          isStreaming = true
+          hasStreamedText = true
         } else if (r.kind === 'thinking' && r.thinking) {
           thinkingParts.push(r.thinking)
         } else if (r.kind === 'error' && r.errorMessage) {
@@ -281,7 +281,7 @@ export function rowsToTurns(inputRows: LogRow[]): TurnsItem[] {
           turnId: row.turnId,
           usage: lastUsage,
           isError: hasError,
-          isStreaming,
+          hasStreamedText,
           thinking: thinking || undefined,
           narration: narration || undefined,
           turnDone,
@@ -309,7 +309,7 @@ export function rowsToTurns(inputRows: LogRow[]): TurnsItem[] {
         actor: 'assistant',
         text: row.text,
         ts: row.timestamp,
-        isStreaming: true,
+        hasStreamedText: true,
       })
     } else if (row.kind === 'error' && row.errorMessage) {
       out.push({
@@ -319,6 +319,22 @@ export function rowsToTurns(inputRows: LogRow[]): TurnsItem[] {
         ts: row.timestamp,
         isError: true,
       })
+    }
+  }
+
+  // Only the last assistant turn can still be running. Every earlier one is
+  // finished by construction — another turn started after it — and that fact
+  // holds whatever the harness emitted, which is what makes it worth
+  // computing. No completion event can carry this on its own: across this
+  // host's whole event log, 748 of the 6,897 Claude Code turns that produced
+  // assistant text emit no result, no turn_complete and no error, so a
+  // "finished" test that reads only turnDone is wrong for about one turn in
+  // nine. Whether the final turn is running is a question about the session,
+  // not the log; TurnsView answers it from the session's own state.
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i].actor === 'assistant' && !out[i].isMarker) {
+      out[i].isFinalAssistantTurn = true
+      break
     }
   }
 
@@ -356,10 +372,15 @@ function TurnsAside({ variant, icon, label, text, live }: {
   )
 }
 
-export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, paneKey }: {
+export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey }: {
   rows: LogRow[]
   agent: string
   compacting?: boolean
+  // True while the harness holds the current turn and more of it is coming
+  // (see harnessIsWorkingOnTurn). This is the half of "is this turn still
+  // running" that the event log cannot answer, and without it every turn
+  // that streamed its text says "streaming…" forever.
+  harnessWorking?: boolean
   onToggleCollapse: () => void
   style?: React.CSSProperties
   paneKey?: string
@@ -417,12 +438,19 @@ export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, pa
               </div>
             )
           }
+          // A turn is live only if all three agree: it is the last one, no
+          // completion event closed it, and the harness is still working.
+          // Any one of them alone is the bug this replaced — turnDone is
+          // missing on about one turn in nine, and the last turn of a
+          // finished session is not running just because nothing closed it.
+          const turnIsLive = !!it.isFinalAssistantTurn && !it.turnDone && !!harnessWorking
           const hasAside = !!(it.thinking || it.narration)
-          const asideLive = hasAside && !it.turnDone
+          const asideLive = hasAside && turnIsLive
+          const streaming = turnIsLive && !!it.hasStreamedText
           return (
             <div
               key={it.key}
-              className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`}
+              className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''}`}
             >
               <div className="bc-turns-meta">
                 <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>
@@ -430,7 +458,7 @@ export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, pa
                 {it.usage && <UsageLine usage={it.usage} />}
                 {asideLive && it.thinking && <span className="bc-turns-aside-tag bc-turns-aside-reasoning">reasoning…</span>}
                 {asideLive && it.narration && <span className="bc-turns-aside-tag bc-turns-aside-narration">narration…</span>}
-                {it.isStreaming && !asideLive && <span className="bc-turns-streaming-tag">streaming…</span>}
+                {streaming && !asideLive && <span className="bc-turns-streaming-tag">streaming…</span>}
               </div>
               {it.thinking && (
                 <TurnsAside

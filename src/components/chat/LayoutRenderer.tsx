@@ -7,6 +7,7 @@ import { SplitResizer } from './SplitResizer'
 import { Thread } from './Thread'
 import { Timeline } from './Timeline'
 import { TurnsView } from './TurnsView'
+import { harnessIsWorkingOnTurn } from './utils'
 import { useWorkspace } from './WorkspaceContext'
 import type { InnerNode, PaneKey, ViewType } from './types'
 
@@ -26,6 +27,7 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           rows={ws.rows}
           agent={agent}
           compacting={ws.compacting}
+          harnessWorking={harnessIsWorkingOnTurn(ws.uiState)}
           onToggleCollapse={() => ws.togglePane('turns')}
           style={style}
           paneKey="turns"

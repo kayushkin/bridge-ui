@@ -8,6 +8,7 @@ import { SplitResizer } from './SplitResizer';
 import { Thread } from './Thread';
 import { Timeline } from './Timeline';
 import { TurnsView } from './TurnsView';
+import { harnessIsWorkingOnTurn } from './utils';
 import { useWorkspace } from './WorkspaceContext';
 function hasVisibleLeaf(node, hidden) {
     if (node.kind === 'leaf')
@@ -20,7 +21,7 @@ function ViewLeaf({ viewType, style }) {
     const agent = ws.chat?.agent ?? '';
     switch (viewType) {
         case 'turns':
-            return (_jsx(TurnsView, { rows: ws.rows, agent: agent, compacting: ws.compacting, onToggleCollapse: () => ws.togglePane('turns'), style: style, paneKey: "turns" }));
+            return (_jsx(TurnsView, { rows: ws.rows, agent: agent, compacting: ws.compacting, harnessWorking: harnessIsWorkingOnTurn(ws.uiState), onToggleCollapse: () => ws.togglePane('turns'), style: style, paneKey: "turns" }));
         case 'thread':
             return (_jsxs("div", { className: "bc-split-pane bc-split-pane-thread", style: style, "data-pane": "thread", children: [_jsxs("div", { className: "bc-split-pane-header bc-header-clickable", onClick: () => ws.togglePane('thread'), onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();

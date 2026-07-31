@@ -245,7 +245,7 @@ export function rowsToTurns(inputRows) {
             const narrationParts = [];
             const thinkingParts = [];
             let hasError = false;
-            let isStreaming = false;
+            let hasStreamedText = false;
             let turnDone = false;
             let lastUsage;
             for (const r of rowsByTurnId.get(row.turnId) ?? []) {
@@ -266,7 +266,7 @@ export function rowsToTurns(inputRows) {
                     else {
                         parts.push(r.text);
                     }
-                    isStreaming = true;
+                    hasStreamedText = true;
                 }
                 else if (r.kind === 'thinking' && r.thinking) {
                     thinkingParts.push(r.thinking);
@@ -289,7 +289,7 @@ export function rowsToTurns(inputRows) {
                     turnId: row.turnId,
                     usage: lastUsage,
                     isError: hasError,
-                    isStreaming,
+                    hasStreamedText,
                     thinking: thinking || undefined,
                     narration: narration || undefined,
                     turnDone,
@@ -317,7 +317,7 @@ export function rowsToTurns(inputRows) {
                 actor: 'assistant',
                 text: row.text,
                 ts: row.timestamp,
-                isStreaming: true,
+                hasStreamedText: true,
             });
         }
         else if (row.kind === 'error' && row.errorMessage) {
@@ -330,6 +330,21 @@ export function rowsToTurns(inputRows) {
             });
         }
     }
+    // Only the last assistant turn can still be running. Every earlier one is
+    // finished by construction — another turn started after it — and that fact
+    // holds whatever the harness emitted, which is what makes it worth
+    // computing. No completion event can carry this on its own: across this
+    // host's whole event log, 748 of the 6,897 Claude Code turns that produced
+    // assistant text emit no result, no turn_complete and no error, so a
+    // "finished" test that reads only turnDone is wrong for about one turn in
+    // nine. Whether the final turn is running is a question about the session,
+    // not the log; TurnsView answers it from the session's own state.
+    for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i].actor === 'assistant' && !out[i].isMarker) {
+            out[i].isFinalAssistantTurn = true;
+            break;
+        }
+    }
     return out;
 }
 function TurnsAside({ variant, icon, label, text, live }) {
@@ -339,7 +354,7 @@ function TurnsAside({ variant, icon, label, text, live }) {
     }
     return (_jsxs("details", { className: cls, children: [_jsxs("summary", { children: [_jsx("span", { className: "bc-turns-aside-icon", "aria-hidden": true, children: icon }), _jsx("span", { children: label })] }), _jsx("div", { className: "bc-turns-aside-text", children: text })] }));
 }
-export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, paneKey }) {
+export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey }) {
     const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTurns(rows), [rows]);
     const [markdown, setMarkdown] = useState(readMarkdownPref);
@@ -363,9 +378,16 @@ export function TurnsView({ rows, agent, compacting, onToggleCollapse, style, pa
                         if (it.isMarker) {
                             return (_jsxs("div", { className: `bc-turns-marker bc-turns-marker-${it.markerKind}`, role: "separator", children: [_jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true }), _jsx("span", { className: "bc-turns-marker-text", children: it.text }), _jsx("span", { className: "bc-turns-marker-ts", children: formatHMS(it.ts) }), _jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true })] }, it.key));
                         }
+                        // A turn is live only if all three agree: it is the last one, no
+                        // completion event closed it, and the harness is still working.
+                        // Any one of them alone is the bug this replaced — turnDone is
+                        // missing on about one turn in nine, and the last turn of a
+                        // finished session is not running just because nothing closed it.
+                        const turnIsLive = !!it.isFinalAssistantTurn && !it.turnDone && !!harnessWorking;
                         const hasAside = !!(it.thinking || it.narration);
-                        const asideLive = hasAside && !it.turnDone;
-                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${it.isStreaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), asideLive && it.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && it.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), it.isStreaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: it.thinking, live: asideLive })), it.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: it.narration, live: asideLive })), it.text && _jsx(ResponseBody, { text: it.text, markdown: markdown && it.actor === 'assistant' })] }, it.key));
+                        const asideLive = hasAside && turnIsLive;
+                        const streaming = turnIsLive && !!it.hasStreamedText;
+                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), asideLive && it.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && it.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), streaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: it.thinking, live: asideLive })), it.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: it.narration, live: asideLive })), it.text && _jsx(ResponseBody, { text: it.text, markdown: markdown && it.actor === 'assistant' })] }, it.key));
                     }), compacting && (_jsxs("div", { className: "bc-turns-compacting", role: "status", "aria-live": "polite", children: [_jsx("span", { className: "bc-turns-compacting-bar", "aria-hidden": true }), _jsx("span", { className: "bc-turns-compacting-text", children: "Compacting context\u2026" })] })), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }));
 }
 //# sourceMappingURL=TurnsView.js.map

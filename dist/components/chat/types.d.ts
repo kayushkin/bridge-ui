@@ -60,12 +60,13 @@ export interface TurnsItem {
     turnId?: string;
     usage?: TokenUsage;
     isError?: boolean;
-    isStreaming?: boolean;
+    hasStreamedText?: boolean;
     isMarker?: boolean;
     markerKind?: 'compact';
     thinking?: string;
     narration?: string;
     turnDone?: boolean;
+    isFinalAssistantTurn?: boolean;
 }
 export interface TimelineItem {
     key: string;
