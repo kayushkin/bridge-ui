@@ -116,7 +116,10 @@ export function dedupOTelAssistantRows(rows) {
         return true;
     });
 }
-function rowsToTurns(inputRows) {
+// Exported so the grouping can be measured and diffed outside React. This runs
+// on every render of every open pane, and a chat pane re-renders once per SSE
+// delta, so its cost is the single hottest thing in the chat surface.
+export function rowsToTurns(inputRows) {
     // Drop the redundant OTel copy of an assistant response before anything else
     // consumes the rows, so turn detection, merging, and the fallback per-row
     // path all see the deduped view. User-prompt dedup stays inline below.
@@ -148,7 +151,20 @@ function rowsToTurns(inputRows) {
     // appears exactly once — and a real re-send of identical text still appears
     // twice, because it contributes its own harness copy to the count.
     const harnessUserTextCounts = new Map();
+    // turnId -> every row carrying that turnId, in document order. Merging a turn
+    // needs all of its rows, and they are scattered through the log; collecting
+    // them in this pass costs one walk of the rows for the whole log. Rescanning
+    // the full log per turn instead — which is what this did before — is
+    // rows × turns work on every render, and both factors grow with the session.
+    const rowsByTurnId = new Map();
     for (const r of rows) {
+        if (r.turnId) {
+            const turnRows = rowsByTurnId.get(r.turnId);
+            if (turnRows)
+                turnRows.push(r);
+            else
+                rowsByTurnId.set(r.turnId, [r]);
+        }
         if (r.kind === 'result' && r.done && r.messageId && r.turnId) {
             let s = turnResultMsgIds.get(r.turnId);
             if (!s) {
@@ -232,9 +248,7 @@ function rowsToTurns(inputRows) {
             let isStreaming = false;
             let turnDone = false;
             let lastUsage;
-            for (const r of rows) {
-                if (r.turnId !== row.turnId)
-                    continue;
+            for (const r of rowsByTurnId.get(row.turnId) ?? []) {
                 if (r.kind === 'result' && r.done) {
                     const t = r.text || r.meta?.text;
                     if (t)
