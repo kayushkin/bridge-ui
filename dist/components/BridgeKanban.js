@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useKanban } from '../useKanban';
 import { SignalKindQuestion } from '../types';
-import { useOpenSignalsByTodo } from './chat/signalData';
+import { groupSignalsByRequest, useOpenSignalsByTodo, useOpenSignalsForTodo } from './chat/signalData';
+import { SignalRequestCard } from './chat/SignalCard';
 function sessionLink(card) {
     for (const l of card.links ?? []) {
         if (!l.entity_ref)
@@ -255,6 +256,34 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
                             held ? onPlay(card.placement.card_id) : onStop(card.placement.card_id);
                         }, children: held ? '▶' : '⏸' }), session && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
 }
+/** Every open signal raised against this card's todo, read and closed in the
+ * drawer.
+ *
+ * This is the fourth surface `SignalCard` mounts on, and the one the `kanban`
+ * surface was minted for: an autonomous worker's signal has carried
+ * `surface:"kanban"` since the record existed, and until now nothing rendered
+ * it anywhere it could be answered.
+ *
+ * A card id IS a noteboard item id, so the drawer knows its todo without a
+ * lookup. It reads its own rows rather than indexing the board-wide map behind
+ * `SignalBadge` — the badge and this are different things at different depths,
+ * and the badge stays exactly as it is.
+ *
+ * Renders nothing at all when there is nothing open, including against a
+ * bridge-server with no signals route: a drawer is a card editor first, and
+ * every board would otherwise open onto an error until the gateway carries the
+ * route. */
+function CardSignals({ todoID }) {
+    const signals = useOpenSignalsForTodo(todoID);
+    if (signals.length === 0)
+        return null;
+    return (_jsxs("section", { className: "bk-drawer-signals", children: [_jsx("h4", { children: "Needs you" }), groupSignalsByRequest(signals).map(request => (_jsx(SignalRequestCard, { request: request, 
+                // A worker's blocker can be answered here, or closed unanswered —
+                // but never acknowledged. SignalCard offers Acknowledge for
+                // notifications only, and the server refuses it for a question, so
+                // an unanswered blocker can never read as handled.
+                allowDismissWithoutAnswer: true }, request.requestId || request.signals[0].id)))] }));
+}
 function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, }) {
     const item = card.item;
     const [title, setTitle] = useState(item?.title ?? '');
@@ -282,7 +311,7 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
         if (ok)
             setDirty(false);
     };
-    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
+    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx(CardSignals, { todoID: card.placement.card_id }), _jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
                                         onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [links.map(l => {
                                     const isSessionLink = l.entity_type === 'session' && !!l.entity_ref;
                                     return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));

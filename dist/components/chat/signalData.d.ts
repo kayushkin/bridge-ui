@@ -113,4 +113,19 @@ export declare function useOpenChatSignals(sessionId?: string, refreshKey?: stri
  * refetched an identical list every time the selection changed. Resolves still
  * refresh it, through the same in-process announce every signal surface uses. */
 export declare function useOpenSignalsByTodo(): Map<string, Signal[]>;
+/** Open signals against exactly one todo, for a view that is already looking
+ * at that todo alone — the kanban card drawer.
+ *
+ * Deliberately not a lookup into useOpenSignalsByTodo's map. That map is the
+ * board's read and answers "which of these many cards needs me?"; a drawer
+ * knows its own todo id and asks the server for its own rows, so it is right
+ * whether or not a board-wide read ever ran.
+ *
+ * Surface is not filtered here either, for the reason fetchOpenSignalsByTodo
+ * gives: a todo is worked by chat sessions and by autonomous workers alike,
+ * and both raise signals the person opening the card has to answer.
+ *
+ * Empty against a bridge-server with no signals route, and empty when the read
+ * fails: a drawer is a card editor first, and it must open either way. */
+export declare function useOpenSignalsForTodo(todoID: string): Signal[];
 //# sourceMappingURL=signalData.d.ts.map

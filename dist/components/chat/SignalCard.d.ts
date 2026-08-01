@@ -34,6 +34,18 @@ export interface SignalRequestCardProps {
      * raising session, the in-session surfaces pass nothing. */
     header?: ReactNode;
     compact?: boolean;
+    /** Offer to close a question nobody is going to answer.
+     *
+     * Only meaningful for a derived question: a parked tool question already has
+     * Decline, which denies the call the question came from, and that is the
+     * honest close there. A derived question parked nothing, so without this it
+     * stays open until the session's next turn happens to supersede it — which,
+     * on a card raised by a worker that has since stopped, is never.
+     *
+     * Off by default so the three chat surfaces keep answering as their only
+     * close. The kanban drawer passes it because a card is where work is
+     * abandoned as well as where it is answered. */
+    allowDismissWithoutAnswer?: boolean;
 }
 /** SignalRequestCard renders every signal minted by one parked request and
  * submits their answers together.
@@ -42,5 +54,5 @@ export interface SignalRequestCardProps {
  * answering a single question in isolation would resolve the whole request
  * with the rest unanswered. Submit stays disabled until every question in the
  * request has an answer. */
-export declare function SignalRequestCard({ request, onResolved, header, compact }: SignalRequestCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function SignalRequestCard({ request, onResolved, header, compact, allowDismissWithoutAnswer, }: SignalRequestCardProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=SignalCard.d.ts.map

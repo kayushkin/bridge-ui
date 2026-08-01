@@ -146,6 +146,7 @@ export {
   // takes the whole map in one request; a view that already knows its one todo
   // narrows server-side instead.
   fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo,
+  useOpenSignalsForTodo,
 } from './components/chat/signalData'
 export type { SignalRequest, SignalsResult, UseOpenChatSignals } from './components/chat/signalData'
 

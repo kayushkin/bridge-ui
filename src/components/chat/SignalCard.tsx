@@ -6,6 +6,7 @@ import {
   acknowledgeSignal,
   answerDerivedQuestion,
   declineSignalQuestions,
+  dismissSignal,
   resolveSignalQuestions,
   type SignalRequest,
 } from './signalData'
@@ -116,6 +117,18 @@ export interface SignalRequestCardProps {
    * raising session, the in-session surfaces pass nothing. */
   header?: ReactNode
   compact?: boolean
+  /** Offer to close a question nobody is going to answer.
+   *
+   * Only meaningful for a derived question: a parked tool question already has
+   * Decline, which denies the call the question came from, and that is the
+   * honest close there. A derived question parked nothing, so without this it
+   * stays open until the session's next turn happens to supersede it — which,
+   * on a card raised by a worker that has since stopped, is never.
+   *
+   * Off by default so the three chat surfaces keep answering as their only
+   * close. The kanban drawer passes it because a card is where work is
+   * abandoned as well as where it is answered. */
+  allowDismissWithoutAnswer?: boolean
 }
 
 /** SignalRequestCard renders every signal minted by one parked request and
@@ -125,7 +138,13 @@ export interface SignalRequestCardProps {
  * answering a single question in isolation would resolve the whole request
  * with the rest unanswered. Submit stays disabled until every question in the
  * request has an answer. */
-export function SignalRequestCard({ request, onResolved, header, compact }: SignalRequestCardProps) {
+export function SignalRequestCard({
+  request,
+  onResolved,
+  header,
+  compact,
+  allowDismissWithoutAnswer,
+}: SignalRequestCardProps) {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
   const [answers, setAnswers] = useState<Record<string, SignalAnswer>>({})
   const [busy, setBusy] = useState(false)
@@ -175,6 +194,23 @@ export function SignalRequestCard({ request, onResolved, header, compact }: Sign
     }
   }, [busy, fetchFn, basePath, onResolved])
 
+  const dismiss = useCallback(async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      // A group of derived signals holds exactly one row today, but closing
+      // every question in the group is what "dismiss this" means either way —
+      // leaving a sibling open would be a half-closed request.
+      for (const signal of questions) await dismissSignal(fetchFn, basePath, signal.id)
+      onResolved?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, questions, fetchFn, basePath, onResolved])
+
   const decline = useCallback(async () => {
     if (busy) return
     setBusy(true)
@@ -217,6 +253,14 @@ export function SignalRequestCard({ request, onResolved, header, compact }: Sign
           {request.requestId && (
             <button type="button" className="bc-signal-decline" disabled={busy} onClick={decline}>
               Decline
+            </button>
+          )}
+          {/* Dismiss is the derived half of the same act: it says out loud
+              that no answer is coming, which is the only thing that closes a
+              derived question short of answering it. */}
+          {!request.requestId && allowDismissWithoutAnswer && (
+            <button type="button" className="bc-signal-dismiss" disabled={busy} onClick={dismiss}>
+              Dismiss
             </button>
           )}
         </div>
