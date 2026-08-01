@@ -22,6 +22,7 @@ import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from
 import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
+import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
 import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
@@ -717,6 +718,47 @@ async function sharedPollChecks() {
     // the single harness, hiding exactly the membership change this catches.
     check('two names cannot run together into one',
       harnessNameKey([{ name: 'a' }, { name: 'b' }]) !== harnessNameKey([{ name: 'a\nb' }]))
+  }
+
+  console.log('the sessions list token column')
+  {
+    // The column used to fetch every session's FULL message history and add
+    // the usage up in the browser — 306MB and 52s for one long session, which
+    // is why it was capped at 30 rows. It reads log-store's per-session
+    // aggregate now. These pin the two halves that make one request enough:
+    // when to ask, and that the answer settles.
+    const rows = [
+      { session_id: 'a', state: 'idle' },
+      { session_id: 'b', state: 'running' },
+      { session_id: 'gone', state: 'idle' },
+      { session_id: 'never-ran', state: 'empty' },
+    ]
+    const aggregates = [
+      { session_id: 'a', input_tokens: 5503, output_tokens: 8535 },
+      { session_id: 'b', input_tokens: 7, output_tokens: 159 },
+      { session_id: 'unrelated', input_tokens: 1, output_tokens: 1 },
+    ]
+    check('an empty map with rows on screen asks the server',
+      sessionTokenTotalsAreMissing(rows, new Map()))
+    check('a session that never took a turn is not worth asking about',
+      !sessionTokenTotalsAreMissing([{ session_id: 'never-ran', state: 'empty' }], new Map()))
+
+    const settled = applySessionAggregates(new Map(), aggregates, rows)
+    check('a row takes both totals from its aggregate',
+      settled.get('a')?.input === 5503 && settled.get('a')?.output === 8535,
+      JSON.stringify(settled.get('a')))
+    // log-store omits sessions with no usage. Left absent they read as missing
+    // forever, and the page re-fetches the whole aggregate on every render.
+    check('a row the aggregate omits settles at zero',
+      settled.get('gone')?.input === 0 && settled.get('gone')?.output === 0,
+      JSON.stringify(settled.get('gone')))
+    check('one response answers every row on screen',
+      !sessionTokenTotalsAreMissing(rows, settled))
+    check('a session that never took a turn stays out of the map',
+      !settled.has('never-ran'))
+    // A row arriving after the fetch is the only thing that should ask again.
+    check('a newly-appeared row asks again',
+      sessionTokenTotalsAreMissing([...rows, { session_id: 'new', state: 'idle' }], settled))
   }
 
   console.log('the components that used to fetch /harnesses themselves')

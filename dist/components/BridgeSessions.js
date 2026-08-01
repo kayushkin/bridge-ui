@@ -9,6 +9,31 @@ const STATE_COLORS = {
     running: '#22c55e', idle: '#60a5fa', completed: '#888',
     error: '#ef4444', aborted: '#ef4444', waiting_on_approval: '#f59e0b',
 };
+/** True when some session on screen has no token total yet, which is what
+ *  makes the page ask the server for the aggregate. */
+export function sessionTokenTotalsAreMissing(sessions, known) {
+    return sessions.some(s => s.state !== 'empty' && !known.has(s.session_id));
+}
+/**
+ * Folds one GET /sessions/aggregates response into the token map.
+ *
+ * Sessions the aggregate omits (log-store leaves out any session with no
+ * usage at all) are recorded as zero rather than left absent. Without that,
+ * `sessionTokenTotalsAreMissing` would stay true for them forever and the
+ * page would re-fetch the whole aggregate on every render.
+ */
+export function applySessionAggregates(known, aggregates, onScreen) {
+    const next = new Map(known);
+    for (const a of aggregates) {
+        next.set(a.session_id, { input: a.input_tokens || 0, output: a.output_tokens || 0 });
+    }
+    for (const s of onScreen) {
+        if (s.state !== 'empty' && !next.has(s.session_id)) {
+            next.set(s.session_id, { input: 0, output: 0 });
+        }
+    }
+    return next;
+}
 export function BridgeSessions() {
     const { fetch: apiFetch, basePath, routes } = useBridgeConfig();
     const [sessions, setSessions] = useState([]);
@@ -83,33 +108,29 @@ export function BridgeSessions() {
     }, [sessions, filterHarness, filterState, filterInstance, searchHits]);
     const tokensMapRef = useRef(tokensMap);
     tokensMapRef.current = tokensMap;
+    // Token totals for the rows come from the server-side aggregate, one request
+    // covering every session. This column used to fetch each session's FULL
+    // message history and add the usage up in the browser, capped at 30 sessions
+    // because a single one of those downloads reaches 306MB / 52s on a long
+    // session. The aggregate is the same sum over the same result events — see
+    // log-store ListSessionAggregates — so the number is unchanged, and the cap
+    // is gone with the cost that forced it.
     useEffect(() => {
         const current = tokensMapRef.current;
-        const toLoad = filtered.filter(s => s.state !== 'empty' && !current.has(s.session_id)).slice(0, 30);
-        if (toLoad.length === 0)
+        if (!sessionTokenTotalsAreMissing(filtered, current))
             return;
         let cancelled = false;
         (async () => {
-            const next = new Map(current);
-            for (const s of toLoad) {
-                try {
-                    const res = await apiFetch(`${basePath}/sessions/${s.session_id}/messages`);
-                    if (!res.ok)
-                        continue;
-                    const msgs = await res.json() ?? [];
-                    let input = 0, output = 0;
-                    for (const m of msgs) {
-                        if (m.role === 'assistant' && m.meta?.usage) {
-                            input += m.meta.usage.input_tokens || 0;
-                            output += m.meta.usage.output_tokens || 0;
-                        }
-                    }
-                    next.set(s.session_id, { input, output });
-                }
-                catch { /* skip */ }
+            try {
+                const res = await apiFetch(`${basePath}/sessions/aggregates`);
+                if (!res.ok)
+                    return;
+                const aggregates = await res.json() ?? [];
+                if (cancelled)
+                    return;
+                setTokensMap(applySessionAggregates(current, aggregates, filtered));
             }
-            if (!cancelled)
-                setTokensMap(next);
+            catch { /* leave the column blank */ }
         })();
         return () => { cancelled = true; };
     }, [filtered, apiFetch, basePath]);

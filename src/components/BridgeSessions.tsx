@@ -17,6 +17,53 @@ interface SearchHit { session_id: string; match_count: number }
 
 interface SessionTokens { input: number; output: number }
 
+// One row of GET /sessions/aggregates — log-store's per-session projection of
+// the result events, the same source BridgeUsage reads. Only the token totals
+// are used here; the rest of the row is ignored.
+interface SessionAggregate {
+  session_id: string
+  input_tokens: number
+  output_tokens: number
+}
+
+/** A session the token column can show a number for. `empty` sessions never
+ *  had a turn, so they are excluded here and never counted as missing. */
+type TokenColumnSession = { session_id: string; state: string }
+
+/** True when some session on screen has no token total yet, which is what
+ *  makes the page ask the server for the aggregate. */
+export function sessionTokenTotalsAreMissing(
+  sessions: TokenColumnSession[],
+  known: Map<string, SessionTokens>,
+): boolean {
+  return sessions.some(s => s.state !== 'empty' && !known.has(s.session_id))
+}
+
+/**
+ * Folds one GET /sessions/aggregates response into the token map.
+ *
+ * Sessions the aggregate omits (log-store leaves out any session with no
+ * usage at all) are recorded as zero rather than left absent. Without that,
+ * `sessionTokenTotalsAreMissing` would stay true for them forever and the
+ * page would re-fetch the whole aggregate on every render.
+ */
+export function applySessionAggregates(
+  known: Map<string, SessionTokens>,
+  aggregates: SessionAggregate[],
+  onScreen: TokenColumnSession[],
+): Map<string, SessionTokens> {
+  const next = new Map(known)
+  for (const a of aggregates) {
+    next.set(a.session_id, { input: a.input_tokens || 0, output: a.output_tokens || 0 })
+  }
+  for (const s of onScreen) {
+    if (s.state !== 'empty' && !next.has(s.session_id)) {
+      next.set(s.session_id, { input: 0, output: 0 })
+    }
+  }
+  return next
+}
+
 export function BridgeSessions() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
   const [sessions, setSessions] = useState<BridgeSession[]>([])
@@ -87,30 +134,26 @@ export function BridgeSessions() {
   const tokensMapRef = useRef(tokensMap)
   tokensMapRef.current = tokensMap
 
+  // Token totals for the rows come from the server-side aggregate, one request
+  // covering every session. This column used to fetch each session's FULL
+  // message history and add the usage up in the browser, capped at 30 sessions
+  // because a single one of those downloads reaches 306MB / 52s on a long
+  // session. The aggregate is the same sum over the same result events — see
+  // log-store ListSessionAggregates — so the number is unchanged, and the cap
+  // is gone with the cost that forced it.
   useEffect(() => {
     const current = tokensMapRef.current
-    const toLoad = filtered.filter(s => s.state !== 'empty' && !current.has(s.session_id)).slice(0, 30)
-    if (toLoad.length === 0) return
+    if (!sessionTokenTotalsAreMissing(filtered, current)) return
 
     let cancelled = false
     ;(async () => {
-      const next = new Map(current)
-      for (const s of toLoad) {
-        try {
-          const res = await apiFetch(`${basePath}/sessions/${s.session_id}/messages`)
-          if (!res.ok) continue
-          const msgs: Array<{ role: string; meta?: { usage?: Record<string, number> } }> = await res.json() ?? []
-          let input = 0, output = 0
-          for (const m of msgs) {
-            if (m.role === 'assistant' && m.meta?.usage) {
-              input += m.meta.usage.input_tokens || 0
-              output += m.meta.usage.output_tokens || 0
-            }
-          }
-          next.set(s.session_id, { input, output })
-        } catch { /* skip */ }
-      }
-      if (!cancelled) setTokensMap(next)
+      try {
+        const res = await apiFetch(`${basePath}/sessions/aggregates`)
+        if (!res.ok) return
+        const aggregates: SessionAggregate[] = await res.json() ?? []
+        if (cancelled) return
+        setTokensMap(applySessionAggregates(current, aggregates, filtered))
+      } catch { /* leave the column blank */ }
     })()
     return () => { cancelled = true }
   }, [filtered, apiFetch, basePath])
