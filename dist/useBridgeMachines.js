@@ -1,42 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useBridgeConfig } from './context';
+import { SharedPoll, loadJSONList, sharedPoll, useSharedPoll } from './sharedPoll';
+/** The one `/machines` poll for this (fetch, basePath) — same store the
+ *  instances hook uses, keyed on a different URL. */
+function machinesPoll(fetchFn, basePath) {
+    return sharedPoll(fetchFn, `machines ${basePath}`, () => new SharedPoll(() => loadJSONList(fetchFn, `${basePath}/machines`), []));
+}
 // useBridgeMachines manages the host registry that instances bind to.
 // Mirrors useBridgeInstances' poll-and-snapshot pattern so the two hooks
 // can be combined without a second source of truth.
 export function useBridgeMachines() {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
-    const [machines, setMachines] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const lastJsonRef = useRef('');
-    const fetchMachines = useCallback(async () => {
-        try {
-            const res = await fetchFn(`${basePath}/machines`);
-            if (res.ok) {
-                const data = (await res.json()) ?? [];
-                const json = JSON.stringify(data);
-                if (json !== lastJsonRef.current) {
-                    lastJsonRef.current = json;
-                    setMachines(data);
-                }
-                setError(null);
-            }
-            else {
-                setError(`HTTP ${res.status}`);
-            }
-        }
-        catch (err) {
-            setError(`${err}`);
-        }
-        finally {
-            setLoading(false);
-        }
-    }, [fetchFn, basePath]);
-    useEffect(() => {
-        fetchMachines();
-        const interval = setInterval(fetchMachines, 30000);
-        return () => clearInterval(interval);
-    }, [fetchMachines]);
+    const poll = useMemo(() => machinesPoll(fetchFn, basePath), [fetchFn, basePath]);
+    const { data: machines, loading, error } = useSharedPoll(poll);
+    const fetchMachines = poll.refresh;
     const createMachine = useCallback(async (data) => {
         try {
             const res = await fetchFn(`${basePath}/machines`, {

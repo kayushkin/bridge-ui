@@ -17,6 +17,7 @@ import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
 import { applyEventToRows, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
+import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
 import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
 
@@ -445,5 +446,185 @@ console.log('\nrowsToTurns marks only the last assistant turn')
   check('a closed final turn is never streaming', !closedHtml.includes('bc-turns-streaming-tag'), closedHtml)
 }
 
-console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
-process.exit(failures === 0 ? 0 : 1)
+// SharedPoll — the store behind useBridgeInstances/useBridgeMachines. These
+// checks drive it directly rather than through React, because what they need
+// to pin is how many requests and timers N subscribers cost, and that is
+// invisible in rendered markup.
+async function sharedPollChecks() {
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+  const after = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+  console.log('SharedPoll — one poll, many subscribers')
+  {
+    let loads = 0
+    const poll = new SharedPoll(async () => { loads++; return { ok: true, value: [{ id: 'a' }] } }, [], 20)
+    check('nobody watching means no request', loads === 0 && poll.polling === false)
+
+    const notified = [0, 0, 0]
+    const off = [0, 1, 2].map(i => poll.subscribe(() => { notified[i]++ }))
+    await settle()
+    check('three subscribers cost one request', loads === 1, `loads=${loads}`)
+    check('and one timer', poll.polling === true)
+    check('all three saw the answer', notified.every(n => n === 1), JSON.stringify(notified))
+    check('and read the same array', poll.getSnapshot().data.length === 1 && poll.getSnapshot().loading === false)
+
+    // A fourth component mounting later must not pay for its own request.
+    const late = poll.subscribe(() => {})
+    await settle()
+    check('a late subscriber reuses the answer', loads === 1, `loads=${loads}`)
+    late()
+
+    // The interval belongs to the store, so it ticks once for everyone.
+    await after(70)
+    const ticked = loads
+    check('the shared timer ticks once per interval', ticked >= 2 && ticked <= 5, `loads=${ticked}`)
+
+    // Two components can pass the same callback. A Set collapses them into one
+    // entry, so counting entries would stop the timer under a live subscriber.
+    const same = () => {}
+    const offSameA = poll.subscribe(same)
+    const offSameB = poll.subscribe(same)
+    offSameA()
+    check('two subscribers sharing a callback still count as two', poll.subscriberCount === 4, `count=${poll.subscriberCount}`)
+    offSameB()
+
+    off[0]()
+    off[0]() // React can unsubscribe twice; the count must not go negative.
+    off[1]()
+    check('still polling while one subscriber remains', poll.polling === true, `count=${poll.subscriberCount}`)
+    check('and a repeated unsubscribe did not double-count', poll.subscriberCount === 1, `count=${poll.subscriberCount}`)
+    off[2]()
+    check('the last one out stops the timer', poll.polling === false && poll.subscriberCount === 0)
+
+    const idle = loads
+    await after(70)
+    check('and no request fires once nobody is watching', loads === idle, `loads=${loads} idle=${idle}`)
+
+    // Coming back (a tab switch, a route change) renders the last answer at
+    // once instead of flashing empty, and refreshes behind it.
+    const back = poll.subscribe(() => {})
+    check('resubscribing keeps the cached answer', poll.getSnapshot().data.length === 1 && poll.getSnapshot().loading === false)
+    await settle()
+    check('and refreshes it', loads === idle + 1, `loads=${loads}`)
+    back()
+  }
+
+  console.log('SharedPoll — what a subscriber sees')
+  {
+    let payload = [{ id: 'a' }]
+    let fail = null
+    const poll = new SharedPoll(async () => (fail ? { ok: false, error: fail } : { ok: true, value: payload }), [], 100000)
+    let notifications = 0
+    const off = poll.subscribe(() => { notifications++ })
+    await settle()
+    const first = poll.getSnapshot().data
+    check('the first answer arrives', first.length === 1 && notifications === 1)
+
+    // Re-serving the same JSON must keep the old array, or every consumer's
+    // useMemo recomputes and the pane re-renders on every tick for nothing.
+    payload = [{ id: 'a' }]
+    await poll.refresh()
+    check('an unchanged payload keeps the old array', poll.getSnapshot().data === first)
+    check('and notifies nobody', notifications === 1, `notifications=${notifications}`)
+
+    payload = [{ id: 'a' }, { id: 'b' }]
+    await poll.refresh()
+    check('a changed payload replaces it', poll.getSnapshot().data.length === 2)
+    check('and notifies once', notifications === 2, `notifications=${notifications}`)
+
+    const good = poll.getSnapshot().data
+    fail = 'HTTP 503'
+    await poll.refresh()
+    check('a failed refresh keeps the last good data', poll.getSnapshot().data === good)
+    check('and reports the error', poll.getSnapshot().error === 'HTTP 503')
+    check('and does not go back to loading', poll.getSnapshot().loading === false)
+
+    fail = null
+    await poll.refresh()
+    check('recovering clears the error', poll.getSnapshot().error === null)
+    off()
+  }
+
+  console.log('SharedPoll — concurrent refreshes')
+  {
+    let loads = 0
+    // Every in-flight load is held here, not just the newest: if the dedupe
+    // ever breaks, this check must still finish and report, not deadlock on a
+    // request nobody kept a handle to.
+    const held = []
+    const poll = new SharedPoll(async () => {
+      loads++
+      await new Promise(resolve => held.push(resolve))
+      return { ok: true, value: [] }
+    }, [], 100000)
+    const releaseAll = () => { while (held.length) held.pop()() }
+
+    // Three components each awaiting a refresh after a write used to be three
+    // GETs of the same URL.
+    const all = Promise.all([poll.refresh(), poll.refresh(), poll.refresh()])
+    await settle()
+    check('three concurrent refreshes share one request', loads === 1, `loads=${loads}`)
+    releaseAll()
+    await all
+    // Sharing is only for requests in flight — once one lands, the next
+    // refresh must actually go to the server.
+    const next = poll.refresh()
+    await settle()
+    releaseAll()
+    await next
+    check('and a later refresh is a new request', loads === 2, `loads=${loads}`)
+  }
+
+  console.log('SharedPoll — loading, and a load that throws')
+  {
+    const poll = new SharedPoll(async () => { throw new Error('boom') }, [], 100000)
+    check('loading is true before the first attempt settles', poll.getSnapshot().loading === true)
+    await poll.refresh()
+    check('a throwing load does not stay loading', poll.getSnapshot().loading === false)
+    check('and is reported, not swallowed', poll.getSnapshot().error === 'Error: boom', String(poll.getSnapshot().error))
+  }
+
+  console.log('SharedPoll — the registry')
+  {
+    const ownerA = () => {}
+    const ownerB = () => {}
+    const make = () => new SharedPoll(async () => ({ ok: true, value: [] }), [], 100000)
+    const first = sharedPoll(ownerA, 'instances /api/bridge', make)
+    check('the same fetch and URL get the same store', sharedPoll(ownerA, 'instances /api/bridge', make) === first)
+    check('a different URL gets its own', sharedPoll(ownerA, 'machines /api/bridge', make) !== first)
+    // Two providers can serve one basePath with different credentials; sharing
+    // across them would serve one tenant's answer to the other.
+    check('a different fetch gets its own', sharedPoll(ownerB, 'instances /api/bridge', make) !== first)
+  }
+
+  console.log('loadJSONList — the error wording the hooks have always used')
+  {
+    const ok = await loadJSONList(async () => ({ ok: true, json: async () => [{ id: 'a' }] }), '/u')
+    check('a good response yields the list', ok.ok === true && ok.value.length === 1)
+
+    const nullBody = await loadJSONList(async () => ({ ok: true, json: async () => null }), '/u')
+    check('a null body reads as an empty list', nullBody.ok === true && nullBody.value.length === 0)
+
+    const refused = await loadJSONList(async () => ({ ok: false, status: 500, json: async () => null }), '/u')
+    check('a refused request reads "HTTP 500"', refused.ok === false && refused.error === 'HTTP 500', JSON.stringify(refused))
+
+    const threw = await loadJSONList(async () => { throw new TypeError('offline') }, '/u')
+    check('a thrown fetch keeps its own wording', threw.ok === false && threw.error === 'TypeError: offline', JSON.stringify(threw))
+  }
+}
+
+// Failing by default until the report is printed. The async checks await real
+// promises, so a bug that leaves one pending would otherwise drain the event
+// loop and let node exit 0 with the report never reached — a silent pass for a
+// run that never finished.
+process.exitCode = 1
+sharedPollChecks().then(
+  () => {
+    console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
+    process.exit(failures === 0 ? 0 : 1)
+  },
+  err => {
+    console.log(`  FAIL the async checks threw — ${err && err.stack ? err.stack : err}`)
+    process.exit(1)
+  },
+)

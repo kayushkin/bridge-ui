@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useBridgeConfig } from './context'
-import type { Machine, CreateMachineRequest, UpdateMachineRequest } from './types'
+import { SharedPoll, loadJSONList, sharedPoll, useSharedPoll } from './sharedPoll'
+import type { FetchFn, Machine, CreateMachineRequest, UpdateMachineRequest } from './types'
+
+/** The one `/machines` poll for this (fetch, basePath) — same store the
+ *  instances hook uses, keyed on a different URL. */
+function machinesPoll(fetchFn: FetchFn, basePath: string): SharedPoll<Machine[]> {
+  return sharedPoll(fetchFn, `machines ${basePath}`, () =>
+    new SharedPoll<Machine[]>(() => loadJSONList<Machine>(fetchFn, `${basePath}/machines`), []))
+}
 
 // useBridgeMachines manages the host registry that instances bind to.
 // Mirrors useBridgeInstances' poll-and-snapshot pattern so the two hooks
@@ -8,38 +16,9 @@ import type { Machine, CreateMachineRequest, UpdateMachineRequest } from './type
 export function useBridgeMachines() {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
 
-  const [machines, setMachines] = useState<Machine[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const lastJsonRef = useRef('')
-
-  const fetchMachines = useCallback(async () => {
-    try {
-      const res = await fetchFn(`${basePath}/machines`)
-      if (res.ok) {
-        const data = (await res.json()) ?? []
-        const json = JSON.stringify(data)
-        if (json !== lastJsonRef.current) {
-          lastJsonRef.current = json
-          setMachines(data)
-        }
-        setError(null)
-      } else {
-        setError(`HTTP ${res.status}`)
-      }
-    } catch (err) {
-      setError(`${err}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [fetchFn, basePath])
-
-  useEffect(() => {
-    fetchMachines()
-    const interval = setInterval(fetchMachines, 30000)
-    return () => clearInterval(interval)
-  }, [fetchMachines])
+  const poll = useMemo(() => machinesPoll(fetchFn, basePath), [fetchFn, basePath])
+  const { data: machines, loading, error } = useSharedPoll(poll)
+  const fetchMachines = poll.refresh
 
   const createMachine = useCallback(
     async (data: CreateMachineRequest): Promise<Machine | null> => {

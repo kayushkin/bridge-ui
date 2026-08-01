@@ -1,43 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useBridgeConfig } from './context'
-import type { InstanceStatus, InstanceCredential } from './types'
+import { SharedPoll, loadJSONList, sharedPoll, useSharedPoll } from './sharedPoll'
+import type { FetchFn, InstanceStatus, InstanceCredential } from './types'
 import type { Instance } from '@kayushkin/llm-bridge-types'
+
+/** The one `/instances` poll for this (fetch, basePath). Every component that
+ *  calls the hook reads this store, so the page runs one timer no matter how
+ *  many of them there are. */
+function instancesPoll(fetchFn: FetchFn, basePath: string): SharedPoll<Instance[]> {
+  return sharedPoll(fetchFn, `instances ${basePath}`, () =>
+    new SharedPoll<Instance[]>(() => loadJSONList<Instance>(fetchFn, `${basePath}/instances`), []))
+}
 
 export function useBridgeInstances() {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
 
-  const [instances, setInstances] = useState<Instance[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const lastJsonRef = useRef('')
-
-  const fetchInstances = useCallback(async () => {
-    try {
-      const res = await fetchFn(`${basePath}/instances`)
-      if (res.ok) {
-        const data = await res.json() ?? []
-        const json = JSON.stringify(data)
-        if (json !== lastJsonRef.current) {
-          lastJsonRef.current = json
-          setInstances(data)
-        }
-        setError(null)
-      } else {
-        setError(`HTTP ${res.status}`)
-      }
-    } catch (err) {
-      setError(`${err}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [fetchFn, basePath])
-
-  useEffect(() => {
-    fetchInstances()
-    const interval = setInterval(fetchInstances, 30000)
-    return () => clearInterval(interval)
-  }, [fetchInstances])
+  const poll = useMemo(() => instancesPoll(fetchFn, basePath), [fetchFn, basePath])
+  const { data: instances, loading, error } = useSharedPoll(poll)
+  const fetchInstances = poll.refresh
 
   const instancesByHarness = useCallback((harness: string): Instance[] => {
     return instances.filter(i => i.harness_type === harness && i.enabled)
