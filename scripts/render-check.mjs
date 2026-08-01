@@ -19,6 +19,9 @@ import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBat
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
+import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
+import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
+import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
 import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
 
@@ -662,6 +665,54 @@ async function sharedPollChecks() {
     // the single harness, hiding exactly the membership change this catches.
     check('two names cannot run together into one',
       harnessNameKey([{ name: 'a' }, { name: 'b' }]) !== harnessNameKey([{ name: 'a\nb' }]))
+  }
+
+  console.log('the components that used to fetch /harnesses themselves')
+  {
+    // These five components each owned an inline fetch of the list. They read
+    // the shared store now, and nothing else here proves they are still wired
+    // to it — a hook that returned an empty list would leave the pages looking
+    // structurally fine and simply missing every harness.
+    //
+    // Rendering them against a populated store is what catches that. Only the
+    // two that put harness markup on screen at rest are covered: BridgeInstances
+    // hides its list behind an unopened form, and BridgeChat and BridgeSessions
+    // want a router.
+    const harnesses = [
+      { name: 'claude_code', label: 'Claude Code', image: '/images/harnesses/claude_code.png', available: true, capabilities: ['model', 'effort', 'budget', 'tools'] },
+      { name: 'codex', label: 'Codex', image: null, available: false, capabilities: ['model'] },
+    ]
+    const basePath = '/api/bridge'
+    const fetchFn = async url => ({
+      ok: true,
+      status: 200,
+      json: async () => (url.endsWith('/harnesses') ? harnesses : []),
+    })
+    await harnessesPoll(fetchFn, basePath).refresh()
+    const config = { fetch: fetchFn, basePath, routes: DEFAULT_BRIDGE_ROUTES }
+    const render = Component =>
+      renderToStaticMarkup(h(BridgeContext.Provider, { value: config }, h(Component)))
+
+    const conformance = render(BridgeConformance)
+    check('the conformance matrix has a row per harness',
+      conformance.includes('Claude Code') && conformance.includes('Codex'), conformance.slice(0, 200))
+    check('an empty matrix does not read as "No harnesses registered"',
+      !conformance.includes('No harnesses registered'))
+
+    const settings = render(BridgeSettings)
+    check('the settings page has a card per harness',
+      settings.includes('Claude Code') && settings.includes('Codex'), settings.slice(0, 200))
+    // A HarnessInfo's `image` is server-relative, so a caller with only the map
+    // and no basePath renders a broken logo.
+    check('a harness logo resolves against basePath',
+      settings.includes('/api/bridge/images/harnesses/claude_code.png'), settings.slice(0, 300))
+    // Asserted on the badge class, not the word: the card's own
+    // `bset-unavailable` modifier contains "unavailable" as a substring, so a
+    // looser check passes with the badge deleted.
+    check('a harness the server reports down is badged',
+      settings.includes('bset-unavail-badge'))
+    check('a harness the server reports up is not badged',
+      settings.split('bset-unavail-badge').length - 1 === 1, settings.slice(0, 300))
   }
 }
 
