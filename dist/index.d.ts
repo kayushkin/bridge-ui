@@ -58,7 +58,7 @@ export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
 export type { SignalCardProps, SignalRequestCardProps } from './components/chat/SignalCard';
 export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals';
 export type { SessionSignalsProps, SignalsInboxProps } from './components/chat/SessionSignals';
-export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo, } from './components/chat/signalData';
+export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, acknowledgeSignal, dismissSignal, fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo, } from './components/chat/signalData';
 export type { SignalRequest, SignalsResult, UseOpenChatSignals } from './components/chat/signalData';
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';

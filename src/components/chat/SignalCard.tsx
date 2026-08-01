@@ -3,6 +3,7 @@ import { useBridgeConfig } from '../../context'
 import type { Signal, SignalAnswer } from '../../types'
 import { SignalKindNotification, SignalSeverityWarn } from '../../types'
 import {
+  acknowledgeSignal,
   answerDerivedQuestion,
   declineSignalQuestions,
   resolveSignalQuestions,
@@ -15,10 +16,9 @@ export interface SignalCardProps {
    * option or with freeform text, never both — picking one clears the other. */
   answer?: SignalAnswer
   onChangeAnswer?: (answer: SignalAnswer) => void
-  /** Acknowledge a notification. Notifications resolve through a signal verb
-   * the server does not have yet (P4), so no surface passes this today and the
-   * action stays off the card rather than rendering a button that does
-   * nothing. */
+  /** Acknowledge a notification. Left optional because a surface that cannot
+   * refetch afterwards is better off not offering the button at all — the card
+   * renders no action rather than one that leaves a resolved row on screen. */
   onAcknowledge?: () => void
   busy?: boolean
   /** Drops descriptions and the freeform box for tight surfaces (the RefChip
@@ -161,6 +161,20 @@ export function SignalRequestCard({ request, onResolved, header, compact }: Sign
     }
   }, [busy, allAnswered, questions, answers, fetchFn, basePath, request, onResolved])
 
+  const acknowledge = useCallback(async (signalID: string) => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await acknowledgeSignal(fetchFn, basePath, signalID)
+      onResolved?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, fetchFn, basePath, onResolved])
+
   const decline = useCallback(async () => {
     if (busy) return
     setBusy(true)
@@ -183,9 +197,11 @@ export function SignalRequestCard({ request, onResolved, header, compact }: Sign
           key={signal.id}
           signal={signal}
           answer={answers[signal.id]}
-          // Notifications are acknowledged, not answered, and the ack verb
-          // lands with P4 — so they compose nothing on either producer's path.
+          // Notifications are acknowledged, not answered — they compose
+          // nothing on either producer's path, and close one at a time
+          // through the signal-level verb rather than with the group.
           onChangeAnswer={signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a)}
+          onAcknowledge={signal.kind === SignalKindNotification ? () => acknowledge(signal.id) : undefined}
           busy={busy}
           compact={compact}
         />

@@ -7,10 +7,9 @@ export interface SignalCardProps {
      * option or with freeform text, never both — picking one clears the other. */
     answer?: SignalAnswer;
     onChangeAnswer?: (answer: SignalAnswer) => void;
-    /** Acknowledge a notification. Notifications resolve through a signal verb
-     * the server does not have yet (P4), so no surface passes this today and the
-     * action stays off the card rather than rendering a button that does
-     * nothing. */
+    /** Acknowledge a notification. Left optional because a surface that cannot
+     * refetch afterwards is better off not offering the button at all — the card
+     * renders no action rather than one that leaves a resolved row on screen. */
     onAcknowledge?: () => void;
     busy?: boolean;
     /** Drops descriptions and the freeform box for tight surfaces (the RefChip

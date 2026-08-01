@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useState } from 'react';
 import { useBridgeConfig } from '../../context';
 import { SignalKindNotification, SignalSeverityWarn } from '../../types';
-import { answerDerivedQuestion, declineSignalQuestions, resolveSignalQuestions, } from './signalData';
+import { acknowledgeSignal, answerDerivedQuestion, declineSignalQuestions, resolveSignalQuestions, } from './signalData';
 /** SignalCard renders exactly one signal record, by kind. It takes everything
  * through props and reads no session context, so the same card renders in the
  * raising session's chat, in the cross-session inbox, and inside another
@@ -67,6 +67,22 @@ export function SignalRequestCard({ request, onResolved, header, compact }) {
             setBusy(false);
         }
     }, [busy, allAnswered, questions, answers, fetchFn, basePath, request, onResolved]);
+    const acknowledge = useCallback(async (signalID) => {
+        if (busy)
+            return;
+        setBusy(true);
+        setError(null);
+        try {
+            await acknowledgeSignal(fetchFn, basePath, signalID);
+            onResolved?.();
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            setBusy(false);
+        }
+    }, [busy, fetchFn, basePath, onResolved]);
     const decline = useCallback(async () => {
         if (busy)
             return;
@@ -84,8 +100,9 @@ export function SignalRequestCard({ request, onResolved, header, compact }) {
         }
     }, [busy, fetchFn, basePath, request, onResolved]);
     return (_jsxs("div", { className: "bc-signal-request", children: [header, request.signals.map(signal => (_jsx(SignalCard, { signal: signal, answer: answers[signal.id], 
-                // Notifications are acknowledged, not answered, and the ack verb
-                // lands with P4 — so they compose nothing on either producer's path.
-                onChangeAnswer: signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a), busy: busy, compact: compact }, signal.id))), questions.length > 0 && (_jsxs("div", { className: "bc-signal-actions", children: [_jsx("button", { type: "button", className: "bc-signal-submit", disabled: busy || !allAnswered, onClick: submit, children: request.requestId ? 'Submit' : 'Send answer' }), request.requestId && (_jsx("button", { type: "button", className: "bc-signal-decline", disabled: busy, onClick: decline, children: "Decline" }))] })), error && _jsx("p", { className: "bc-signal-error", children: error })] }));
+                // Notifications are acknowledged, not answered — they compose
+                // nothing on either producer's path, and close one at a time
+                // through the signal-level verb rather than with the group.
+                onChangeAnswer: signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a), onAcknowledge: signal.kind === SignalKindNotification ? () => acknowledge(signal.id) : undefined, busy: busy, compact: compact }, signal.id))), questions.length > 0 && (_jsxs("div", { className: "bc-signal-actions", children: [_jsx("button", { type: "button", className: "bc-signal-submit", disabled: busy || !allAnswered, onClick: submit, children: request.requestId ? 'Submit' : 'Send answer' }), request.requestId && (_jsx("button", { type: "button", className: "bc-signal-decline", disabled: busy, onClick: decline, children: "Decline" }))] })), error && _jsx("p", { className: "bc-signal-error", children: error })] }));
 }
 //# sourceMappingURL=SignalCard.js.map

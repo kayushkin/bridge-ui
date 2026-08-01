@@ -69,6 +69,22 @@ export declare function answerDerivedQuestion(fetchFn: FetchFn, basePath: string
  * the decision (and closes the signal rows) even for a request whose park is
  * already gone. */
 export declare function declineSignalQuestions(fetchFn: FetchFn, basePath: string, sessionId: string, requestId: string): Promise<void>;
+/** Acknowledge a notification: close it without answering anything.
+ *
+ * Notifications are the one signal kind with no answer to deliver, so they
+ * have no producer-specific resolve path — a tool notification and a derived
+ * one both close here, through the signal-level verb
+ * (POST /signals/{id}/resolve).
+ *
+ * The server refuses this for a question on purpose: a question nobody
+ * answered has not been handled, and grading it "seen" would read as handled
+ * on the surface that matters most, a worker's kanban card. Dismiss it
+ * instead. */
+export declare function acknowledgeSignal(fetchFn: FetchFn, basePath: string, signalId: string): Promise<void>;
+/** Close a signal without an answer. Says out loud that no answer is coming,
+ * which is the honest close for a question the user will not take — and, for
+ * a derived question, what walks its session back off awaiting_user. */
+export declare function dismissSignal(fetchFn: FetchFn, basePath: string, signalId: string): Promise<void>;
 export interface UseOpenChatSignals {
     signals: Signal[];
     /** False once the server has answered 404 — this bridge-server has no

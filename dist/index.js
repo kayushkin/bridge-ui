@@ -56,6 +56,10 @@ export { EditableName } from './components/chat/EditableName';
 export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
 export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals';
 export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, 
+// The signal-level close verb: the two resolutions that deliver nothing to
+// the raising session. Everything that carries an answer closes through its
+// producer's own path instead.
+acknowledgeSignal, dismissSignal, 
 // Todo propagation: which todos have an open signal against them. The board
 // takes the whole map in one request; a view that already knows its one todo
 // narrows server-side instead.
