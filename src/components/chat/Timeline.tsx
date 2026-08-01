@@ -274,9 +274,9 @@ export function Timeline({ rows, onToggleCollapse, style, paneKey, sessionId }: 
   onToggleCollapse: () => void
   style?: React.CSSProperties
   paneKey?: string
-  sessionId?: string
+  sessionId: string
 }) {
-  const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
+  const { attachContainer, containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>({ logIdentity: sessionId })
   const items = useMemo(() => rowsToTimeline(rows), [rows])
   const blocks = useMemo(() => groupTimelineByTurn(items), [items])
 
@@ -331,7 +331,7 @@ export function Timeline({ rows, onToggleCollapse, style, paneKey, sessionId }: 
         <span className="bc-spacer" />
         <span className="bc-timeline-collapse-btn" aria-hidden="true">×</span>
       </div>
-      <div ref={containerRef} className="bc-timeline-body">
+      <div ref={attachContainer} className="bc-timeline-body">
         {items.length === 0 && <div className="bc-timeline-empty">No events yet</div>}
         {windowStart > 0 && (
           <PaneEarlierControl

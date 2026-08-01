@@ -432,7 +432,7 @@ console.log('\nrowsToTurns marks only the last assistant turn')
   check('and it is the last one', assistant[2].isFinalAssistantTurn === true)
 
   const renderTurns = working => renderToStaticMarkup(h(TurnsView, {
-    rows, agent: 'claude_code', harnessWorking: working, onToggleCollapse: () => {},
+    rows, agent: 'claude_code', harnessWorking: working, onToggleCollapse: () => {}, sessionId: 'br_check',
   }))
 
   const live = renderTurns(true)
@@ -457,7 +457,7 @@ console.log('\nrowsToTurns marks only the last assistant turn')
   check('the closed turn did stream its text', closedTurn.hasStreamedText === true, JSON.stringify(closedTurn))
   check('and it is both final and done', closedTurn.isFinalAssistantTurn === true && closedTurn.turnDone === true)
   const closedHtml = renderToStaticMarkup(h(TurnsView, {
-    rows: closedLast, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {},
+    rows: closedLast, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {}, sessionId: 'br_check',
   }))
   check('a closed final turn is never streaming', !closedHtml.includes('bc-turns-streaming-tag'), closedHtml)
 }
@@ -904,7 +904,7 @@ console.log('\nrow-memo boundaries')
   // The extraction of TurnRow out of TurnsView's map must not have changed
   // what the pane renders. Assert on the markup rather than trusting the diff.
   const html = renderToStaticMarkup(h(TurnsView, {
-    rows: after, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {},
+    rows: after, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {}, sessionId: 'br_check',
   }))
   check('the pane still renders one item per turns item',
     (html.match(/bc-turns-item/g) || []).length === turnsAfter.length,

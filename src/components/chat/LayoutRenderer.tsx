@@ -31,6 +31,7 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           onToggleCollapse={() => ws.togglePane('turns')}
           style={style}
           paneKey="turns"
+          sessionId={sessionId}
         />
       )
     case 'thread':

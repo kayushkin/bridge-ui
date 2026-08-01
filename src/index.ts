@@ -78,7 +78,7 @@ export type {
   TagCount,
 } from './types-kanban'
 export { useStickyBottomScroll } from './useStickyBottomScroll'
-export type { StickyBottomScroll } from './useStickyBottomScroll'
+export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll'
 
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo } from './utils'

@@ -10,7 +10,7 @@ import { THREAD_WINDOW_INITIAL_ROWS, THREAD_WINDOW_STEP_ROWS, rowsBeforeWindow, 
 import { usePaneWindowBudget } from './usePaneWindowBudget';
 import { typesInRow } from './utils';
 export function Thread({ rows, loading, error, agent, sessionId }) {
-    const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
+    const { attachContainer, containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll({ logIdentity: sessionId });
     const [hidden, setHidden] = useState(() => loadHiddenTypes());
     const { budget: rowBudget, resetBudget, revealMore, revealAll } = usePaneWindowBudget(THREAD_WINDOW_INITIAL_ROWS, THREAD_WINDOW_STEP_ROWS, containerRef);
     const allTypes = useMemo(() => {
@@ -66,7 +66,7 @@ export function Thread({ rows, loading, error, agent, sessionId }) {
         return _jsx("div", { className: "bc-thread", children: _jsx("div", { className: "bc-loading", children: "Loading history..." }) });
     if (rows.length === 0 && !error)
         return _jsx("div", { className: "bc-thread", children: _jsx("div", { className: "bc-empty", children: "Send a message to start" }) });
-    return (_jsx(ToolContext.Provider, { value: { sessionId }, children: _jsxs("div", { className: "bc-thread-wrap", children: [_jsxs("div", { ref: containerRef, className: "bc-thread", children: [_jsx(FilterBar, { types: allTypes, hidden: hidden, onToggle: toggleType }), error && _jsx("div", { className: "bridge-error", children: error }), windowStart > 0 && (_jsx(PaneEarlierControl, { hiddenCount: earlierRowCount, unitNoun: "event", onRevealMore: revealMore, onRevealAll: revealAll })), windowedBlocks.map((b, i) => b.kind === 'turn'
+    return (_jsx(ToolContext.Provider, { value: { sessionId }, children: _jsxs("div", { className: "bc-thread-wrap", children: [_jsxs("div", { ref: attachContainer, className: "bc-thread", children: [_jsx(FilterBar, { types: allTypes, hidden: hidden, onToggle: toggleType }), error && _jsx("div", { className: "bridge-error", children: error }), windowStart > 0 && (_jsx(PaneEarlierControl, { hiddenCount: earlierRowCount, unitNoun: "event", onRevealMore: revealMore, onRevealAll: revealAll })), windowedBlocks.map((b, i) => b.kind === 'turn'
                             ? _jsx(TurnGroupView, { turnId: b.turnId, rows: b.rows, agent: agent }, `turn_${b.turnId}`)
                             : _jsx(LogRowView, { row: b.row, agent: agent }, `row_${b.row.key}_${windowStart + i}`)), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }) }));
 }

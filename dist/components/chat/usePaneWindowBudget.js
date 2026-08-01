@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-// The scroll restore below has to run before the browser paints, or the user
-// sees the content jump and then correct itself. On the server there is no
-// layout to run before, and React warns about the layout variant there — and
-// `npm run pane-cost` and `npm run check` both render these panes through
-// react-dom/server, so the warning would land in the instrument's output.
-const useBeforePaintEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+import { useCallback, useRef, useState } from 'react';
+import { useBeforePaintEffect } from '../../useBeforePaintEffect';
 /**
  * The budget a windowed pane renders to, and the scroll bookkeeping that
  * makes revealing earlier blocks invisible to the reader.

@@ -19,7 +19,7 @@ export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } fro
 export { useKanban } from './useKanban';
 export type { Board, Column, Placement, CardLink, EntityTag, CardView, ColumnView, BoardView, NoteboardItem, EntityTypeInfo, TagCount, } from './types-kanban';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
-export type { StickyBottomScroll } from './useStickyBottomScroll';
+export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll';
 export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
 export { BridgeLayout } from './components/BridgeLayout';
 export { BridgeChat } from './components/BridgeChat';

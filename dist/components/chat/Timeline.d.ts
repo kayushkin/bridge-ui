@@ -15,6 +15,6 @@ export declare function Timeline({ rows, onToggleCollapse, style, paneKey, sessi
     onToggleCollapse: () => void;
     style?: React.CSSProperties;
     paneKey?: string;
-    sessionId?: string;
+    sessionId: string;
 }): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=Timeline.d.ts.map

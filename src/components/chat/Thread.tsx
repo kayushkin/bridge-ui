@@ -23,7 +23,7 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
   agent: string
   sessionId: string
 }) {
-  const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
+  const { attachContainer, containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>({ logIdentity: sessionId })
   const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
   const { budget: rowBudget, resetBudget, revealMore, revealAll } = usePaneWindowBudget(
     THREAD_WINDOW_INITIAL_ROWS, THREAD_WINDOW_STEP_ROWS, containerRef,
@@ -85,7 +85,7 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
   return (
     <ToolContext.Provider value={{ sessionId }}>
     <div className="bc-thread-wrap">
-      <div ref={containerRef} className="bc-thread">
+      <div ref={attachContainer} className="bc-thread">
         <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
         {error && <div className="bridge-error">{error}</div>}
         {windowStart > 0 && (

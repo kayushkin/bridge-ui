@@ -454,7 +454,7 @@ const TurnRow = memo(function TurnRow({ item, agent, markdown, harnessWorking }:
   && prev.harnessWorking === next.harnessWorking
   && sameItemFields(prev.item, next.item))
 
-export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey }: {
+export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey, sessionId }: {
   rows: LogRow[]
   agent: string
   compacting?: boolean
@@ -466,8 +466,9 @@ export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCol
   onToggleCollapse: () => void
   style?: React.CSSProperties
   paneKey?: string
+  sessionId: string
 }) {
-  const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
+  const { attachContainer, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>({ logIdentity: sessionId })
   const items = useMemo(() => rowsToTurns(rows), [rows])
   const [markdown, setMarkdown] = useState<boolean>(readMarkdownPref)
 
@@ -507,7 +508,7 @@ export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCol
         >{markdown ? 'MD' : 'TXT'}</button>
         <span className="bc-turns-collapse-btn" aria-hidden="true">×</span>
       </div>
-      <div ref={containerRef} className="bc-turns-body">
+      <div ref={attachContainer} className="bc-turns-body">
         {items.length === 0 && <div className="bc-turns-empty">No messages yet</div>}
         {items.map(it => (
           <TurnRow

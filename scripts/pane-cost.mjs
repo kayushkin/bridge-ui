@@ -71,8 +71,8 @@ for (const file of files) {
   // single pane — with the table printed only at the end there was no way to
   // tell which pane was slow from a run that had not returned yet.
   const panes = [
-    ['Turns', () => h(TurnsView, { rows, agent: 'claude', onToggleCollapse: () => {} })],
-    ['Timeline', () => h(Timeline, { rows, onToggleCollapse: () => {} })],
+    ['Turns', () => h(TurnsView, { rows, agent: 'claude', onToggleCollapse: () => {}, sessionId: 'measure' })],
+    ['Timeline', () => h(Timeline, { rows, onToggleCollapse: () => {}, sessionId: 'measure' })],
     ['Thread', () => h(Thread, { rows, loading: false, error: null, agent: 'claude', sessionId: 'measure' })],
   ]
   for (const [label, build] of panes) {

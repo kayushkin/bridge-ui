@@ -2,7 +2,7 @@ import type { LogRow } from '../../types';
 import type { TurnsItem } from './types';
 export declare function dedupOTelAssistantRows(rows: LogRow[]): LogRow[];
 export declare function rowsToTurns(inputRows: LogRow[]): TurnsItem[];
-export declare function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey }: {
+export declare function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey, sessionId }: {
     rows: LogRow[];
     agent: string;
     compacting?: boolean;
@@ -10,5 +10,6 @@ export declare function TurnsView({ rows, agent, compacting, harnessWorking, onT
     onToggleCollapse: () => void;
     style?: React.CSSProperties;
     paneKey?: string;
+    sessionId: string;
 }): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=TurnsView.d.ts.map

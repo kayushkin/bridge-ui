@@ -21,7 +21,7 @@ function ViewLeaf({ viewType, style }) {
     const agent = ws.chat?.agent ?? '';
     switch (viewType) {
         case 'turns':
-            return (_jsx(TurnsView, { rows: ws.rows, agent: agent, compacting: ws.compacting, harnessWorking: harnessIsWorkingOnTurn(ws.uiState), onToggleCollapse: () => ws.togglePane('turns'), style: style, paneKey: "turns" }));
+            return (_jsx(TurnsView, { rows: ws.rows, agent: agent, compacting: ws.compacting, harnessWorking: harnessIsWorkingOnTurn(ws.uiState), onToggleCollapse: () => ws.togglePane('turns'), style: style, paneKey: "turns", sessionId: sessionId }));
         case 'thread':
             return (_jsxs("div", { className: "bc-split-pane bc-split-pane-thread", style: style, "data-pane": "thread", children: [_jsxs("div", { className: "bc-split-pane-header bc-header-clickable", onClick: () => ws.togglePane('thread'), onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();

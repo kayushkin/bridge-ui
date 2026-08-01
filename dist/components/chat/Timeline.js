@@ -226,7 +226,7 @@ function renderTimelineNodes(blocks) {
     });
 }
 export function Timeline({ rows, onToggleCollapse, style, paneKey, sessionId }) {
-    const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
+    const { attachContainer, containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll({ logIdentity: sessionId });
     const items = useMemo(() => rowsToTimeline(rows), [rows]);
     const blocks = useMemo(() => groupTimelineByTurn(items), [items]);
     const { budget, resetBudget, revealMore, revealAll } = usePaneWindowBudget(TIMELINE_WINDOW_INITIAL_ITEMS, TIMELINE_WINDOW_STEP_ITEMS, containerRef);
@@ -260,6 +260,6 @@ export function Timeline({ rows, onToggleCollapse, style, paneKey, sessionId }) 
             onToggleCollapse();
         }
     }, [onToggleCollapse]);
-    return (_jsxs("div", { className: "bc-timeline", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-timeline-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide timeline", "aria-label": "Hide timeline", children: [_jsx("span", { className: "bc-timeline-title", children: "Timeline" }), _jsx("span", { className: "bc-timeline-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-timeline-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-timeline-body", children: [items.length === 0 && _jsx("div", { className: "bc-timeline-empty", children: "No events yet" }), windowStart > 0 && (_jsx(PaneEarlierControl, { hiddenCount: earlierItemCount, unitNoun: "event", onRevealMore: revealMore, onRevealAll: revealAll })), renderTimelineNodes(windowedBlocks), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New events" }))] }));
+    return (_jsxs("div", { className: "bc-timeline", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-timeline-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide timeline", "aria-label": "Hide timeline", children: [_jsx("span", { className: "bc-timeline-title", children: "Timeline" }), _jsx("span", { className: "bc-timeline-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-timeline-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: attachContainer, className: "bc-timeline-body", children: [items.length === 0 && _jsx("div", { className: "bc-timeline-empty", children: "No events yet" }), windowStart > 0 && (_jsx(PaneEarlierControl, { hiddenCount: earlierItemCount, unitNoun: "event", onRevealMore: revealMore, onRevealAll: revealAll })), renderTimelineNodes(windowedBlocks), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New events" }))] }));
 }
 //# sourceMappingURL=Timeline.js.map
