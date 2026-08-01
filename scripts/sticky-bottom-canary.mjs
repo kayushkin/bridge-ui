@@ -3,7 +3,12 @@
 //   node scripts/sticky-bottom-canary.mjs                      # against the local
 //                                                              # standalone dev server
 //   BASE=https://dash.kayushkin.com DASH_TOKEN=$(...) \
-//     node scripts/sticky-bottom-canary.mjs [<session_id>] [<sidebar_index>]
+//     node scripts/sticky-bottom-canary.mjs [<session_id>] [<first_sidebar_index>]
+//
+// The sidebar index is where to START looking for a second session, not which
+// one to use: the list is newest-first and this host mints sessions all day,
+// so the script walks forward until it finds one that actually overflows a
+// pane. A session that fits in the pane cannot show this bug.
 //
 // The panes are not remounted when the chat switches session — the rows are
 // replaced under them — so everything about where a newly opened session
@@ -33,6 +38,9 @@
 //     not scroll.
 //   - `.bc-session-item-main` is also what the sidebar's search results use;
 //     index into it only after the list has settled.
+//   - The first child of a pane is a position:sticky filter bar, on screen at
+//     every scroll position, and a single row can be taller than the pane. Any
+//     check that picks a node to watch has to survive both.
 import { chromium } from '/home/kayushkincom/repos/dash/node_modules/playwright/index.mjs'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:5199'
@@ -215,18 +223,37 @@ for (const [name, m] of Object.entries(scrolledUp)) {
 // This is the whole point of the canary. The panes are not remounted, so a
 // pin that only runs on mount never runs again and the new log inherits
 // "the user is not at the bottom" from the log they stopped looking at.
-const target = page.locator('.bc-session-item-main').nth(SIDEBAR_INDEX)
-const targetLabel = (await target.textContent())?.trim().slice(0, 50)
-console.log(`\n3. switching to sidebar session #${SIDEBAR_INDEX}: ${targetLabel}`)
-await target.click({ timeout: 30000 })
-await page.waitForFunction(
-  id => new URL(location.href).searchParams.get('session') !== id,
-  SESSION,
-  { timeout: 60000 },
-)
-await page.waitForTimeout(6000)
+// The sidebar is newest-first and this host mints sessions all day, so a
+// fixed index rots: run it tomorrow and it lands on a nine-row session where
+// nothing overflows and there is nothing to be wrong about. Walk forward
+// until a session actually overflows a pane, and say which one was used.
+console.log('\n3. switching session from the sidebar')
+let switched = null
+let usedIndex = SIDEBAR_INDEX
+for (let i = SIDEBAR_INDEX; i < SIDEBAR_INDEX + 8; i++) {
+  const target = page.locator('.bc-session-item-main').nth(i)
+  if (await target.count() === 0) break
+  const label = (await target.textContent())?.trim().slice(0, 50)
+  const previousId = await page.evaluate(() => new URL(location.href).searchParams.get('session'))
+  await target.click({ timeout: 30000 })
+  await page.waitForFunction(
+    id => new URL(location.href).searchParams.get('session') !== id,
+    previousId,
+    { timeout: 60000 },
+  )
+  await page.waitForTimeout(6000)
+  switched = await measure()
+  usedIndex = i
+  const overflowing = Object.values(switched).filter(m => m.present && m.overflow > THRESHOLD).length
+  console.log(`  #${i}: ${label} — ${overflowing} pane(s) overflowing`)
+  if (overflowing > 0) break
+  // Nothing to measure here, so this pane switch has told us nothing. Scroll
+  // back up before trying the next one, or the next switch starts pinned and
+  // the whole point is lost.
+  await scrollAllToTop()
+  await page.waitForTimeout(1000)
+}
 
-const switched = await measure()
 let measurable = 0
 for (const [name, m] of Object.entries(switched)) {
   if (!m.present) { check(`${name} rendered`, false, 'pane absent'); continue }
@@ -267,10 +294,10 @@ if (await chip.count() === 0) {
 console.log('\n5. scrolled up again, then a second sidebar switch')
 await scrollAllToTop()
 await page.waitForTimeout(1000)
-const second = page.locator('.bc-session-item-main').nth(SIDEBAR_INDEX + 1)
+const second = page.locator('.bc-session-item-main').nth(usedIndex + 1)
 const secondLabel = (await second.textContent())?.trim().slice(0, 50)
 const previousId = await page.evaluate(() => new URL(location.href).searchParams.get('session'))
-console.log(`  switching to sidebar session #${SIDEBAR_INDEX + 1}: ${secondLabel}`)
+console.log(`  switching to sidebar session #${usedIndex + 1}: ${secondLabel}`)
 await second.click({ timeout: 30000 })
 await page.waitForFunction(
   id => new URL(location.href).searchParams.get('session') !== id,
