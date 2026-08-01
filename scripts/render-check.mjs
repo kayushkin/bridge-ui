@@ -19,6 +19,7 @@ import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBat
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
+import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
@@ -448,6 +449,57 @@ console.log('\nrowsToTurns marks only the last assistant turn')
     rows: closedLast, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {},
   }))
   check('a closed final turn is never streaming', !closedHtml.includes('bc-turns-streaming-tag'), closedHtml)
+}
+
+// ?session= reconciliation. The two effects in BridgeChat run one commit
+// apart, so the ordering these checks pin — a deeplink read, then a stale
+// focus value seen in the same commit — is exactly the case that pushed the
+// old id back into the URL and made the app re-open it.
+console.log('\nsessionDeeplink')
+{
+  // A URL with no param says nothing, and a restored session claims the bar.
+  let st = initialSessionDeeplinkState
+  let r = readSessionDeeplink(null, st)
+  check('an absent param opens nothing', r.open === null)
+  st = r.state
+  let w = writeSessionParam('br_restored', st)
+  check('a restored session is written into the URL', w.write === true && w.value === 'br_restored')
+  st = w.state
+  check('and writing again is a no-op', writeSessionParam('br_restored', st).write === false)
+  check('our own param is not read back as a deeplink', readSessionDeeplink('br_restored', st).open === null)
+}
+{
+  // The regression that mattered: the write effect sees the pre-deeplink focus
+  // in the same commit the read fired in.
+  let st = { applied: 'br_open', awaiting: null }
+  const r = readSessionDeeplink('br_link', st)
+  check('an inbound deeplink opens', r.open === 'br_link')
+  st = r.state
+  const stale = writeSessionParam('br_open', st)
+  check('the stale focus does not overwrite the deeplink', stale.write === false)
+  st = stale.state
+  check('the deeplink is still pending', st.awaiting === 'br_link')
+  const landed = writeSessionParam('br_link', st)
+  check('and when focus lands the URL needs no write', landed.write === false)
+  st = landed.state
+  check('the wait is over once it lands', st.awaiting === null)
+  const next = writeSessionParam('br_other', st)
+  check('a later session change does write', next.write === true && next.value === 'br_other')
+}
+{
+  // A pending "new chat" (or no pane at all) must not leave a stale id behind.
+  const st = { applied: 'br_gone', awaiting: null }
+  const w = writeSessionParam(null, st)
+  check('a session-less focus clears the param', w.write === true && w.value === null)
+  check('and nothing is left applied', w.state.applied === null)
+}
+{
+  // An in-app /?session=<id> link has to work more than once per page load —
+  // the old once-only ref meant the second link click did nothing.
+  let st = { applied: 'br_a', awaiting: null }
+  st = writeSessionParam('br_a', st).state
+  const second = readSessionDeeplink('br_b', st)
+  check('a second in-app deeplink still opens', second.open === 'br_b')
 }
 
 // SharedPoll — the store behind useBridgeInstances/useBridgeMachines. These

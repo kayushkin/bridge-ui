@@ -17,6 +17,7 @@ import { MinimalPaneSwitch } from './minimal/MinimalPaneSwitch';
 import { SessionDrawer } from './minimal/SessionDrawer';
 import { ChromeSheet } from './minimal/ChromeSheet';
 import { loadCollapseState, loadWorkspacesState, saveCollapseState, saveWorkspacesState } from './chat/persistence';
+import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../sessionDeeplink';
 import { splitModeAxis } from './chat/types';
 import { buildFlatLayout, firstLeafId, iterateLeafIds, removeLeaf, splitLeaf } from './chat/workspaceTree';
 const DEFAULT_INNER_TREE = {
@@ -282,25 +283,49 @@ export function BridgeChat() {
         setLayout(buildFlatLayout([ws.id]));
         setFocusedWorkspaceId(ws.id);
     }, [bridgePrefs.loaded, primaryInstanceId, instances.loading, instances.instanceMap, workspaces.length]);
-    // Deeplink support: ?session=<bridge_id> opens that session and clears the
-    // param. Used by kanban cards (and BridgeSessions) to send the user into
-    // chat focused on a specific session. Runs once; takes precedence over the
-    // last-used-session bootstrap above.
+    // Deeplink support, both ways: ?session=<bridge_id> opens that session, and
+    // the param then keeps naming whatever session the focused pane holds. Used
+    // by kanban cards (and BridgeSessions) to send the user into chat focused on
+    // a specific session, and it takes precedence over the last-used-session
+    // bootstrap above.
+    //
+    // The param used to be deleted once read, which left the address bar with no
+    // link back to the open session — nothing to bookmark, share or reload into,
+    // even though hrefFor() emits links in exactly that shape. The reconciler in
+    // sessionDeeplink.ts holds the small amount of state that keeps the two
+    // effects below from pushing a stale id at each other; see its header.
     const [searchParams, setSearchParams] = useSearchParams();
-    const deeplinkConsumedRef = useRef(false);
+    const deeplinkRef = useRef(initialSessionDeeplinkState);
+    const urlObservedRef = useRef(false);
     useEffect(() => {
-        if (deeplinkConsumedRef.current)
+        const { open, state } = readSessionDeeplink(searchParams.get('session'), deeplinkRef.current);
+        deeplinkRef.current = state;
+        urlObservedRef.current = true;
+        if (!open)
             return;
-        const id = searchParams.get('session');
-        if (!id)
-            return;
-        deeplinkConsumedRef.current = true;
         bootstrappedRef.current = true;
-        handleSelectSession(id);
+        handleSelectSession(open);
+    }, [searchParams, handleSelectSession]);
+    const focusedSessionId = useMemo(() => {
+        const ws = workspaces.find(w => w.id === focusedWorkspaceId);
+        return ws?.sessionId ?? null;
+    }, [workspaces, focusedWorkspaceId]);
+    useEffect(() => {
+        // Never write before the URL has been read, or a restored session would
+        // overwrite an inbound deeplink before anyone looked at it.
+        if (!urlObservedRef.current)
+            return;
+        const { write, value, state } = writeSessionParam(focusedSessionId, deeplinkRef.current);
+        deeplinkRef.current = state;
+        if (!write)
+            return;
         const next = new URLSearchParams(searchParams);
-        next.delete('session');
+        if (value)
+            next.set('session', value);
+        else
+            next.delete('session');
         setSearchParams(next, { replace: true });
-    }, [searchParams, setSearchParams, handleSelectSession]);
+    }, [focusedSessionId, searchParams, setSearchParams]);
     const getDisplayName = useCallback((session) => {
         return session.display_name || session.agent_id || '';
     }, []);
@@ -359,10 +384,6 @@ export function BridgeChat() {
         bridge.refreshSessions();
     }, [folders, bridge]);
     const openSessionIds = useMemo(() => new Set(workspaces.map(w => w.sessionId).filter((id) => !!id)), [workspaces]);
-    const focusedSessionId = useMemo(() => {
-        const ws = workspaces.find(w => w.id === focusedWorkspaceId);
-        return ws?.sessionId ?? null;
-    }, [workspaces, focusedWorkspaceId]);
     const defaultInstanceId = primaryInstanceId;
     const { minimal, setDrawerOpen, override, setOverride } = useMinimalChrome();
     const [vw, setVw] = useState(() => typeof window === 'undefined' ? 1024 : window.innerWidth);
