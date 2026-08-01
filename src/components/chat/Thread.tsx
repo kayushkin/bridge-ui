@@ -1,11 +1,25 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { ToolContext } from '../tools'
 import { FilterBar } from './FilterBar'
 import { LogRowView, TurnGroupView, groupRowsByTurn } from './LogRowView'
 import { loadHiddenTypes, saveHiddenTypes } from './persistence'
+import {
+  THREAD_WINDOW_INITIAL_ROWS,
+  THREAD_WINDOW_STEP_ROWS,
+  rowsBeforeWindow,
+  threadBlockKey,
+  threadWindowStart,
+} from './threadWindow'
 import { typesInRow } from './utils'
+
+// The scroll restore below has to run before the browser paints, or the user
+// sees the content jump and then correct itself. On the server there is no
+// layout to run before, and React warns about the layout variant there — and
+// `npm run pane-cost` and `npm run check` both render this pane through
+// react-dom/server, so the warning would land in the instrument's output.
+const useBeforePaintEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export function Thread({ rows, loading, error, agent, sessionId }: {
   rows: LogRow[]
@@ -16,6 +30,7 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const [hidden, setHidden] = useState<Set<string>>(() => loadHiddenTypes())
+  const [rowBudget, setRowBudget] = useState(THREAD_WINDOW_INITIAL_ROWS)
 
   const allTypes = useMemo(() => {
     const set = new Set<string>()
@@ -29,6 +44,53 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
   }, [rows, hidden])
 
   const blocks = useMemo(() => groupRowsByTurn(visibleRows), [visibleRows])
+
+  // A different log to look at is a different window: another session, or the
+  // same one with different types filtered out.
+  useEffect(() => { setRowBudget(THREAD_WINDOW_INITIAL_ROWS) }, [sessionId, hidden])
+
+  const budgetStart = useMemo(() => threadWindowStart(blocks, rowBudget), [blocks, rowBudget])
+
+  // While the user is pinned to the bottom the window slides forward with the
+  // log and dropping the oldest blocks off the top is invisible. While they
+  // are scrolled up it must not slide: rows arriving at the bottom would push
+  // blocks out of the top of the window and move the content under their eyes,
+  // which is a regression the un-windowed pane cannot have. So when they are
+  // not at the bottom, hold whichever block is currently first.
+  //
+  // Held by key rather than by index because the list is the thing that is
+  // changing. If that block is gone — a filter toggle rebuilt the list — the
+  // hold lapses and the budget decides again, so this can never wedge the
+  // window onto content that no longer exists.
+  const heldTopKeyRef = useRef<string | null>(null)
+  let windowStart = budgetStart
+  if (!isAtBottom && heldTopKeyRef.current !== null) {
+    const held = blocks.findIndex(b => threadBlockKey(b) === heldTopKeyRef.current)
+    if (held >= 0) windowStart = Math.min(held, budgetStart)
+  }
+  heldTopKeyRef.current = blocks.length > 0 ? threadBlockKey(blocks[windowStart]) : null
+
+  const windowedBlocks = windowStart > 0 ? blocks.slice(windowStart) : blocks
+  const earlierRowCount = rowsBeforeWindow(blocks, windowStart)
+
+  // Revealing earlier blocks inserts them ABOVE the viewport. The browser
+  // keeps scrollTop where it was, so the content the user was reading slides
+  // down out of view. The distance from the bottom is the one quantity that
+  // adding rows at the top leaves unchanged, so record it before the reveal
+  // and restore it after layout.
+  const bottomDistanceRef = useRef<number | null>(null)
+  const revealEarlier = useCallback((nextBudget: (current: number) => number) => {
+    const c = containerRef.current
+    bottomDistanceRef.current = c ? c.scrollHeight - c.scrollTop : null
+    setRowBudget(nextBudget)
+  }, [containerRef])
+
+  useBeforePaintEffect(() => {
+    const c = containerRef.current
+    const distance = bottomDistanceRef.current
+    bottomDistanceRef.current = null
+    if (c && distance !== null) c.scrollTop = c.scrollHeight - distance
+  }, [rowBudget, containerRef])
 
   const toggleType = useCallback((t: string) => {
     setHidden(prev => {
@@ -48,9 +110,27 @@ export function Thread({ rows, loading, error, agent, sessionId }: {
       <div ref={containerRef} className="bc-thread">
         <FilterBar types={allTypes} hidden={hidden} onToggle={toggleType} />
         {error && <div className="bridge-error">{error}</div>}
-        {blocks.map((b, i) => b.kind === 'turn'
+        {windowStart > 0 && (
+          <div className="bc-thread-earlier">
+            <span className="bc-thread-earlier-count">
+              {earlierRowCount.toLocaleString()} earlier event{earlierRowCount === 1 ? '' : 's'} not rendered
+            </span>
+            <button
+              type="button"
+              className="bc-thread-earlier-btn"
+              onClick={() => revealEarlier(b => b + THREAD_WINDOW_STEP_ROWS)}
+            >↑ Show earlier</button>
+            <button
+              type="button"
+              className="bc-thread-earlier-btn bc-thread-earlier-all"
+              onClick={() => revealEarlier(() => Number.POSITIVE_INFINITY)}
+              title="Render the whole log — needed to find text with the browser's own search"
+            >Show all</button>
+          </div>
+        )}
+        {windowedBlocks.map((b, i) => b.kind === 'turn'
           ? <TurnGroupView key={`turn_${b.turnId}`} turnId={b.turnId} rows={b.rows} agent={agent} />
-          : <LogRowView key={`row_${b.row.key}_${i}`} row={b.row} agent={agent} />
+          : <LogRowView key={`row_${b.row.key}_${windowStart + i}`} row={b.row} agent={agent} />
         )}
         <div ref={endRef} />
       </div>

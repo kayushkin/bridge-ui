@@ -26,6 +26,10 @@ import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/com
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
 import { groupRowsByTurn } from '../src/components/chat/LogRowView.tsx'
+import { Thread } from '../src/components/chat/Thread.tsx'
+import {
+  THREAD_WINDOW_INITIAL_ROWS, rowCountOfBlock, rowsBeforeWindow, threadBlockKey, threadWindowStart,
+} from '../src/components/chat/threadWindow.ts'
 import { harnessIsWorkingOnTurn, sameItemFields, sameRowList } from '../src/components/chat/utils.ts'
 
 let failures = 0
@@ -902,6 +906,170 @@ console.log('\nrow-memo boundaries')
     `${(html.match(/bc-turns-item/g) || []).length} vs ${turnsAfter.length}`)
   check('the live turn still carries its badge', html.includes('bc-turns-streaming-tag'), html.slice(0, 400))
   check('the finished turns still render their text', html.includes('answer a') && html.includes('answer b'))
+}
+
+// --- the Thread window ------------------------------------------------------
+//
+// Thread renders the newest `THREAD_WINDOW_INITIAL_ROWS` rows and leaves the
+// rest behind a button. Measured with `npm run pane-cost` on the largest
+// session on this host, that takes the pane from 80,606 elements to 3,773.
+//
+// Two things must hold for that to be a saving rather than a bug: the window
+// must always contain the newest rows (the live turn is the one the user is
+// watching), and it must never cut a turn in half (a turn header states its
+// own event count). Both are asserted here on the block list the pane
+// actually renders, and the markup assertions below prove the pane reads the
+// window rather than merely computing it.
+console.log('\nThread window')
+{
+  let seq = 0
+  const evt = (type, turnId, messageId, extra = {}) => ({
+    type,
+    data: { event_id: ++seq, turn_id: turnId, message_id: messageId, timestamp: '2026-08-01T14:00:00Z', ...extra },
+  })
+
+  // 60 turns of 6 rows each = 360 rows, plus a standalone system row between
+  // every pair of turns. Enough to overrun a 100-row budget many times over
+  // and to put both block kinds on both sides of the window edge.
+  const events = []
+  for (let t = 0; t < 60; t++) {
+    const turn = `t${t}`
+    events.push(evt('system', undefined, `sys_pre_${t}`, { system: { message: `system note ${t}` } }))
+    events.push(evt('user_message', turn, `${turn}_ask`, { result: { text: `question ${t}` } }))
+    events.push(evt('stream', turn, `${turn}_text`, { stream: { delta: { index: 0, type: 'text_delta', text: `answer ${t}` } } }))
+    events.push(evt('tool_call', turn, `${turn}_tool`, { tool_call: { tool_id: `tool_${t}`, name: 'Read', input: {} } }))
+    events.push(evt('tool_result', turn, `${turn}_tool`, { tool_result: { tool_id: `tool_${t}`, content: 'ok' } }))
+    events.push(evt('result', turn, `${turn}_res`, { result: { text: `answer ${t}` } }))
+  }
+  const rows = events.reduce(applyEventToRows, [])
+  const blocks = groupRowsByTurn(rows)
+  const totalRows = blocks.reduce((n, b) => n + rowCountOfBlock(b), 0)
+
+  check('the synthetic log groups into turns and standalone rows',
+    blocks.some(b => b.kind === 'turn') && blocks.some(b => b.kind === 'standalone'),
+    JSON.stringify(blocks.slice(0, 4).map(b => b.kind)))
+  check('every row lands in exactly one block', totalRows === rows.length,
+    `${totalRows} vs ${rows.length}`)
+
+  const start = threadWindowStart(blocks, 100)
+  check('a budget smaller than the log windows it', start > 0, `start=${start}`)
+  const windowed = blocks.slice(start)
+  const windowRows = windowed.reduce((n, b) => n + rowCountOfBlock(b), 0)
+
+  // The budget is a floor, not a ceiling: the block that crosses it is
+  // rendered whole. Both halves matter — meeting the budget is what makes the
+  // window usable, and not exceeding it by more than one block is what makes
+  // it a bound.
+  check('the window holds at least the budget', windowRows >= 100, `${windowRows} rows`)
+  check('and overshoots by at most the block that crossed it',
+    windowRows - rowCountOfBlock(blocks[start]) < 100,
+    `${windowRows} rows, first block ${rowCountOfBlock(blocks[start])}`)
+  check('no block is split — the window is a suffix of the block list',
+    windowed.every((b, i) => b === blocks[start + i]) && windowed.length === blocks.length - start)
+
+  // The newest rows are the point of the window. If it ever slid off the end
+  // the pane would open showing history and not the live turn.
+  check('the window ends at the newest block', windowed[windowed.length - 1] === blocks[blocks.length - 1])
+  check('rowsBeforeWindow and the window account for every row',
+    rowsBeforeWindow(blocks, start) + windowRows === totalRows,
+    `${rowsBeforeWindow(blocks, start)} + ${windowRows} vs ${totalRows}`)
+
+  check('an infinite budget renders the whole log', threadWindowStart(blocks, Number.POSITIVE_INFINITY) === 0)
+  check('a budget larger than the log renders the whole log', threadWindowStart(blocks, totalRows + 1) === 0)
+  check('an empty log windows to nothing', threadWindowStart([], 100) === 0)
+  check('rowsBeforeWindow of an unwindowed pane is zero', rowsBeforeWindow(blocks, 0) === 0)
+
+  // The hold that keeps the window still while the user is scrolled up is
+  // keyed on this. A delta into the live turn must not change the key of any
+  // earlier block, or the hold would lapse on every frame of streaming and
+  // the window would slide under the user after all.
+  const keysBefore = blocks.map(threadBlockKey)
+  const keysAfterDelta = groupRowsByTurn(applyEventToRows(rows, evt('stream', 't59', 't59_text', {
+    stream: { delta: { index: 0, type: 'text_delta', text: ' more' } },
+  }))).map(threadBlockKey)
+  check('a delta changes no block key', keysBefore.every((k, i) => k === keysAfterDelta[i]),
+    JSON.stringify(keysBefore.map((k, i) => [k, keysAfterDelta[i]]).filter(([a, b]) => a !== b).slice(0, 3)))
+
+  // And a turn GROWING A ROW must not change its key either. A live turn
+  // gains a row every time a tool is called, so a key that folded in the
+  // turn's size would lapse the hold several times a turn — and a text delta
+  // alone does not reach that, because it merges into a row that already
+  // exists.
+  const withTool = applyEventToRows(rows, evt('tool_call', 't59', 't59_late', {
+    tool_call: { tool_id: 'tool_late', name: 'Bash', input: {} },
+  }))
+  const grownBlocks = groupRowsByTurn(withTool)
+  const keysAfterRow = grownBlocks.map(threadBlockKey)
+  check('the live turn gained a row', grownBlocks[grownBlocks.length - 1].rows?.length
+    > blocks[blocks.length - 1].rows?.length,
+    `${blocks[blocks.length - 1].rows?.length} -> ${grownBlocks[grownBlocks.length - 1].rows?.length}`)
+  check('and a new row in a turn changes no block key',
+    keysBefore.every((k, i) => k === keysAfterRow[i]),
+    JSON.stringify(keysBefore.map((k, i) => [k, keysAfterRow[i]]).filter(([a, b]) => a !== b).slice(0, 3)))
+  check('block keys are unique', new Set(keysBefore).size === keysBefore.length,
+    `${new Set(keysBefore).size} of ${keysBefore.length}`)
+
+  // `groupRowsByTurn` groups CONSECUTIVE rows, so one turn interrupted by a
+  // row carrying no turn id becomes two blocks with the same turn id. Keying
+  // on the turn id alone would make them indistinguishable, and the hold —
+  // which resolves a key back to an index — would land on the wrong one and
+  // move the window under the user.
+  const splitBlocks = groupRowsByTurn([
+    evt('user_message', 'sp', 'sp_ask', { result: { text: 'ask' } }),
+    evt('system', undefined, 'sp_sys', { system: { message: 'interruption' } }),
+    evt('result', 'sp', 'sp_res', { result: { text: 'answer' } }),
+  ].reduce(applyEventToRows, []))
+  check('one interrupted turn becomes two turn blocks',
+    splitBlocks.filter(b => b.kind === 'turn').length === 2,
+    JSON.stringify(splitBlocks.map(b => b.kind)))
+  check('and its two halves carry the same turn id',
+    splitBlocks.filter(b => b.kind === 'turn').every(b => b.turnId === 'sp'))
+  check('but not the same block key',
+    new Set(splitBlocks.map(threadBlockKey)).size === splitBlocks.length,
+    JSON.stringify(splitBlocks.map(threadBlockKey)))
+
+  // And the pane itself. THREAD_WINDOW_INITIAL_ROWS is what it opens with, so
+  // assert against a log built to exceed it rather than against the constant.
+  const bigRows = (() => {
+    const evs = []
+    for (let t = 0; t < 500; t++) {
+      const turn = `b${t}`
+      evs.push(evt('user_message', turn, `${turn}_ask`, { result: { text: `ask ${t}` } }))
+      evs.push(evt('result', turn, `${turn}_res`, { result: { text: `reply ${t}` } }))
+    }
+    return evs.reduce(applyEventToRows, [])
+  })()
+  check('the big log exceeds the pane default', bigRows.length > THREAD_WINDOW_INITIAL_ROWS,
+    `${bigRows.length} vs ${THREAD_WINDOW_INITIAL_ROWS}`)
+
+  const bigHtml = renderToStaticMarkup(h(Thread, {
+    rows: bigRows, loading: false, error: null, agent: 'claude_code', sessionId: 'br_check',
+  }))
+  check('a long log renders the earlier-events control', bigHtml.includes('bc-thread-earlier'), bigHtml.slice(0, 300))
+  check('it offers both show-earlier and show-all',
+    (bigHtml.match(/bc-thread-earlier-btn/g) || []).length === 2)
+  check('the oldest turn is not in the markup', !bigHtml.includes('ask 0<') && !bigHtml.includes('reply 0<'))
+  check('the newest turn is', bigHtml.includes('reply 499'), bigHtml.slice(-400))
+  check('the windowed pane renders far fewer rows than the log holds',
+    (bigHtml.match(/bc-row /g) || []).length < bigRows.length / 2,
+    `${(bigHtml.match(/bc-row /g) || []).length} rows in markup, ${bigRows.length} in the log`)
+
+  // A log that fits must look exactly like it did before any of this: no
+  // control, nothing withheld. This is the case every live session starts in.
+  // Several blocks, so that "not windowed" is a real answer rather than the
+  // arithmetic one — a single-block log cannot be windowed at any budget,
+  // because a block is never split.
+  const smallEvents = [evt('user_message', 's1', 's1_ask', { result: { text: 'only question' } })]
+  for (let t = 0; t < 6; t++) smallEvents.push(evt('system', undefined, `smallsys_${t}`, { system: { message: `note ${t}` } }))
+  smallEvents.push(evt('result', 's1', 's1_res', { result: { text: 'only answer' } }))
+  const smallRows = smallEvents.reduce(applyEventToRows, [])
+  check('the short log is several blocks', groupRowsByTurn(smallRows).length > 2,
+    `${groupRowsByTurn(smallRows).length} blocks`)
+  const smallHtml = renderToStaticMarkup(h(Thread, {
+    rows: smallRows, loading: false, error: null, agent: 'claude_code', sessionId: 'br_check',
+  }))
+  check('a short log renders no earlier-events control', !smallHtml.includes('bc-thread-earlier'))
+  check('and renders all of its rows', smallHtml.includes('only question') && smallHtml.includes('only answer'))
 }
 
 // Failing by default until the report is printed. The async checks await real
