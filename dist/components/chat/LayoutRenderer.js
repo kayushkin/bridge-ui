@@ -28,7 +28,7 @@ function ViewLeaf({ viewType, style }) {
                             ws.togglePane('thread');
                         } }, role: "button", tabIndex: 0, title: "Hide thread", "aria-label": "Hide thread", children: [_jsx("span", { className: "bc-split-pane-title", children: "Thread" }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-split-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsx(Thread, { rows: ws.rows, loading: ws.loading, error: ws.error, agent: agent, sessionId: sessionId })] }));
         case 'timeline':
-            return (_jsx(Timeline, { rows: ws.rows, onToggleCollapse: () => ws.togglePane('timeline'), style: style, paneKey: "timeline" }));
+            return (_jsx(Timeline, { rows: ws.rows, onToggleCollapse: () => ws.togglePane('timeline'), style: style, paneKey: "timeline", sessionId: sessionId }));
         case 'git':
             return (_jsx(GitPanel, { sessionId: sessionId, uiState: ws.uiState, onToggleCollapse: () => ws.togglePane('git'), style: style, paneKey: "git" }));
         case 'kanban':

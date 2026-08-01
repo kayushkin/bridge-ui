@@ -98,6 +98,13 @@ export interface TimelineItem {
   tone: 'turn' | 'thinking' | 'tool' | 'tool-done' | 'tool-err' | 'task' | 'task-start' | 'result' | 'error' | 'text'
 }
 
+// What Timeline windows over. `groupTimelineByTurn` groups CONSECUTIVE items
+// sharing a turn id, so an item carrying none splits a turn into two blocks —
+// see `timelineBlockKey` for why that matters.
+export type TimelineBlock =
+  | { kind: 'turn'; turnId: string; items: TimelineItem[] }
+  | { kind: 'standalone'; item: TimelineItem }
+
 export type ViewType = PaneKey
 
 export type InnerNode =

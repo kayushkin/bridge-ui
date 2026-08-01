@@ -65,6 +65,7 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
           onToggleCollapse={() => ws.togglePane('timeline')}
           style={style}
           paneKey="timeline"
+          sessionId={sessionId}
         />
       )
     case 'git':

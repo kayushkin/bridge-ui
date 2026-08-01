@@ -1140,10 +1140,10 @@
 .bc-jump-latest:hover { opacity: 1; transform: translateY(-1px); }
 .bc-jump-latest:active { transform: translateY(0); }
 
-/* The top of a windowed Thread: what is above the window, and the two ways
-   to bring it in. Sits in the scroll flow rather than floating, so it is the
-   thing the user meets when they scroll to the top. */
-.bc-thread-earlier {
+/* The top of a windowed pane — Thread or Timeline: what is above the window,
+   and the two ways to bring it in. Sits in the scroll flow rather than
+   floating, so it is the thing the user meets when they scroll to the top. */
+.bc-pane-earlier {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1155,8 +1155,8 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
 }
-.bc-thread-earlier-count { flex: 1; min-width: 0; }
-.bc-thread-earlier-btn {
+.bc-pane-earlier-count { flex: 1; min-width: 0; }
+.bc-pane-earlier-btn {
   padding: 4px 10px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -1166,7 +1166,7 @@
   border-radius: 999px;
   cursor: pointer;
 }
-.bc-thread-earlier-btn:hover { border-color: var(--accent); color: var(--accent); }
+.bc-pane-earlier-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .bc-loading, .bc-empty { color: var(--text-dim); font-size: 0.9em; padding: 32px; text-align: center; }
 .bc-msg { align-self: stretch; max-width: 100%; padding: 0.5rem 0.75rem; border-radius: 4px; min-width: 0; }

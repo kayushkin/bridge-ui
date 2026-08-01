@@ -1,9 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { formatTokens } from '../../utils';
+import { PaneEarlierControl } from './PaneEarlierControl';
+import { TIMELINE_WINDOW_INITIAL_ITEMS, TIMELINE_WINDOW_STEP_ITEMS, itemsBeforeTimelineWindow, timelineBlockKey, timelineWindowStart, } from './timelineWindow';
+import { usePaneWindowBudget } from './usePaneWindowBudget';
 import { formatHMS, oneLine, sameItemFields, toolFullText, toolSnippet } from './utils';
-function rowsToTimeline(rows) {
+export function rowsToTimeline(rows) {
     const out = [];
     const seenTurn = new Set();
     const taskIdxByScope = new Map();
@@ -188,34 +191,75 @@ function renderTurnChildren(items) {
     }
     return out;
 }
-function renderTimelineNodes(items) {
-    const out = [];
+/**
+ * The item list as the blocks the pane renders: runs of consecutive items
+ * sharing a turn id, and the items that carry none.
+ *
+ * Split out of the render walk because the window needs the list before
+ * anything is rendered — it has to count items back from the newest block to
+ * decide where the pane starts, and it must never cut a turn group in half.
+ */
+export function groupTimelineByTurn(items) {
+    const blocks = [];
     let i = 0;
     while (i < items.length) {
-        const it = items[i];
-        if (!it.turnId) {
-            out.push(_jsx(TimelineItemRow, { item: it }, it.key));
+        const item = items[i];
+        if (!item.turnId) {
+            blocks.push({ kind: 'standalone', item });
             i++;
             continue;
         }
-        const turnId = it.turnId;
+        const turnId = item.turnId;
         const start = i;
         while (i < items.length && items[i].turnId === turnId)
             i++;
-        const [header, ...rest] = items.slice(start, i);
-        out.push(_jsxs("div", { className: "bc-tl-turn-group", children: [_jsx("div", { className: "bc-tl-turn-header", children: _jsx(TimelineItemRow, { item: header }, header.key) }), rest.length > 0 && (_jsx("div", { className: "bc-tl-turn-body", children: renderTurnChildren(rest) }))] }, `tg_${turnId}_${start}`));
+        blocks.push({ kind: 'turn', turnId, items: items.slice(start, i) });
     }
-    return out;
+    return blocks;
 }
-export function Timeline({ rows, onToggleCollapse, style, paneKey }) {
+function renderTimelineNodes(blocks) {
+    return blocks.map(block => {
+        if (block.kind === 'standalone')
+            return _jsx(TimelineItemRow, { item: block.item }, block.item.key);
+        const [header, ...rest] = block.items;
+        return (_jsxs("div", { className: "bc-tl-turn-group", children: [_jsx("div", { className: "bc-tl-turn-header", children: _jsx(TimelineItemRow, { item: header }, header.key) }), rest.length > 0 && (_jsx("div", { className: "bc-tl-turn-body", children: renderTurnChildren(rest) }))] }, timelineBlockKey(block)));
+    });
+}
+export function Timeline({ rows, onToggleCollapse, style, paneKey, sessionId }) {
     const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTimeline(rows), [rows]);
+    const blocks = useMemo(() => groupTimelineByTurn(items), [items]);
+    const { budget, resetBudget, revealMore, revealAll } = usePaneWindowBudget(TIMELINE_WINDOW_INITIAL_ITEMS, TIMELINE_WINDOW_STEP_ITEMS, containerRef);
+    // A different session is a different list to window.
+    useEffect(() => { resetBudget(); }, [sessionId, resetBudget]);
+    const budgetStart = useMemo(() => timelineWindowStart(blocks, budget), [blocks, budget]);
+    // While the user is pinned to the bottom the window slides forward with the
+    // session and dropping the oldest blocks off the top is invisible. While
+    // they are scrolled up it must not slide: items arriving at the bottom would
+    // push blocks out of the top of the window and move the content under their
+    // eyes, which is a regression the un-windowed pane cannot have. So when they
+    // are not at the bottom, hold whichever block is currently first.
+    //
+    // Held by key rather than by index because the list is the thing that is
+    // changing. If that block is gone the hold lapses and the budget decides
+    // again, so this can never wedge the window onto content that no longer
+    // exists.
+    const heldTopKeyRef = useRef(null);
+    let windowStart = budgetStart;
+    if (!isAtBottom && heldTopKeyRef.current !== null) {
+        const held = blocks.findIndex(b => timelineBlockKey(b) === heldTopKeyRef.current);
+        if (held >= 0)
+            windowStart = Math.min(held, budgetStart);
+    }
+    heldTopKeyRef.current = blocks.length > 0 ? timelineBlockKey(blocks[windowStart]) : null;
+    const windowedBlocks = windowStart > 0 ? blocks.slice(windowStart) : blocks;
+    const earlierItemCount = itemsBeforeTimelineWindow(blocks, windowStart);
     const onHeaderKey = useCallback((e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onToggleCollapse();
         }
     }, [onToggleCollapse]);
-    return (_jsxs("div", { className: "bc-timeline", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-timeline-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide timeline", "aria-label": "Hide timeline", children: [_jsx("span", { className: "bc-timeline-title", children: "Timeline" }), _jsx("span", { className: "bc-timeline-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-timeline-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-timeline-body", children: [items.length === 0 && _jsx("div", { className: "bc-timeline-empty", children: "No events yet" }), renderTimelineNodes(items), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New events" }))] }));
+    return (_jsxs("div", { className: "bc-timeline", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-timeline-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide timeline", "aria-label": "Hide timeline", children: [_jsx("span", { className: "bc-timeline-title", children: "Timeline" }), _jsx("span", { className: "bc-timeline-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("span", { className: "bc-timeline-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-timeline-body", children: [items.length === 0 && _jsx("div", { className: "bc-timeline-empty", children: "No events yet" }), windowStart > 0 && (_jsx(PaneEarlierControl, { hiddenCount: earlierItemCount, unitNoun: "event", onRevealMore: revealMore, onRevealAll: revealAll })), renderTimelineNodes(windowedBlocks), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New events" }))] }));
 }
 //# sourceMappingURL=Timeline.js.map

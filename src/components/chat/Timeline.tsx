@@ -1,11 +1,20 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { formatTokens } from '../../utils'
+import { PaneEarlierControl } from './PaneEarlierControl'
+import {
+  TIMELINE_WINDOW_INITIAL_ITEMS,
+  TIMELINE_WINDOW_STEP_ITEMS,
+  itemsBeforeTimelineWindow,
+  timelineBlockKey,
+  timelineWindowStart,
+} from './timelineWindow'
+import { usePaneWindowBudget } from './usePaneWindowBudget'
 import { formatHMS, oneLine, sameItemFields, toolFullText, toolSnippet } from './utils'
-import type { TimelineItem } from './types'
+import type { TimelineBlock, TimelineItem } from './types'
 
-function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
+export function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
   const out: TimelineItem[] = []
   const seenTurn = new Set<string>()
   const taskIdxByScope = new Map<string, number>()
@@ -215,22 +224,38 @@ function renderTurnChildren(items: TimelineItem[]): React.ReactNode[] {
   return out
 }
 
-function renderTimelineNodes(items: TimelineItem[]): React.ReactNode[] {
-  const out: React.ReactNode[] = []
+/**
+ * The item list as the blocks the pane renders: runs of consecutive items
+ * sharing a turn id, and the items that carry none.
+ *
+ * Split out of the render walk because the window needs the list before
+ * anything is rendered — it has to count items back from the newest block to
+ * decide where the pane starts, and it must never cut a turn group in half.
+ */
+export function groupTimelineByTurn(items: TimelineItem[]): TimelineBlock[] {
+  const blocks: TimelineBlock[] = []
   let i = 0
   while (i < items.length) {
-    const it = items[i]
-    if (!it.turnId) {
-      out.push(<TimelineItemRow key={it.key} item={it} />)
+    const item = items[i]
+    if (!item.turnId) {
+      blocks.push({ kind: 'standalone', item })
       i++
       continue
     }
-    const turnId = it.turnId
+    const turnId = item.turnId
     const start = i
     while (i < items.length && items[i].turnId === turnId) i++
-    const [header, ...rest] = items.slice(start, i)
-    out.push(
-      <div key={`tg_${turnId}_${start}`} className="bc-tl-turn-group">
+    blocks.push({ kind: 'turn', turnId, items: items.slice(start, i) })
+  }
+  return blocks
+}
+
+function renderTimelineNodes(blocks: TimelineBlock[]): React.ReactNode[] {
+  return blocks.map(block => {
+    if (block.kind === 'standalone') return <TimelineItemRow key={block.item.key} item={block.item} />
+    const [header, ...rest] = block.items
+    return (
+      <div key={timelineBlockKey(block)} className="bc-tl-turn-group">
         <div className="bc-tl-turn-header">
           <TimelineItemRow key={header.key} item={header} />
         </div>
@@ -239,20 +264,52 @@ function renderTimelineNodes(items: TimelineItem[]): React.ReactNode[] {
             {renderTurnChildren(rest)}
           </div>
         )}
-      </div>,
+      </div>
     )
-  }
-  return out
+  })
 }
 
-export function Timeline({ rows, onToggleCollapse, style, paneKey }: {
+export function Timeline({ rows, onToggleCollapse, style, paneKey, sessionId }: {
   rows: LogRow[]
   onToggleCollapse: () => void
   style?: React.CSSProperties
   paneKey?: string
+  sessionId?: string
 }) {
   const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll<HTMLDivElement>()
   const items = useMemo(() => rowsToTimeline(rows), [rows])
+  const blocks = useMemo(() => groupTimelineByTurn(items), [items])
+
+  const { budget, resetBudget, revealMore, revealAll } = usePaneWindowBudget(
+    TIMELINE_WINDOW_INITIAL_ITEMS, TIMELINE_WINDOW_STEP_ITEMS, containerRef,
+  )
+
+  // A different session is a different list to window.
+  useEffect(() => { resetBudget() }, [sessionId, resetBudget])
+
+  const budgetStart = useMemo(() => timelineWindowStart(blocks, budget), [blocks, budget])
+
+  // While the user is pinned to the bottom the window slides forward with the
+  // session and dropping the oldest blocks off the top is invisible. While
+  // they are scrolled up it must not slide: items arriving at the bottom would
+  // push blocks out of the top of the window and move the content under their
+  // eyes, which is a regression the un-windowed pane cannot have. So when they
+  // are not at the bottom, hold whichever block is currently first.
+  //
+  // Held by key rather than by index because the list is the thing that is
+  // changing. If that block is gone the hold lapses and the budget decides
+  // again, so this can never wedge the window onto content that no longer
+  // exists.
+  const heldTopKeyRef = useRef<string | null>(null)
+  let windowStart = budgetStart
+  if (!isAtBottom && heldTopKeyRef.current !== null) {
+    const held = blocks.findIndex(b => timelineBlockKey(b) === heldTopKeyRef.current)
+    if (held >= 0) windowStart = Math.min(held, budgetStart)
+  }
+  heldTopKeyRef.current = blocks.length > 0 ? timelineBlockKey(blocks[windowStart]) : null
+
+  const windowedBlocks = windowStart > 0 ? blocks.slice(windowStart) : blocks
+  const earlierItemCount = itemsBeforeTimelineWindow(blocks, windowStart)
 
   const onHeaderKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleCollapse() }
@@ -276,7 +333,15 @@ export function Timeline({ rows, onToggleCollapse, style, paneKey }: {
       </div>
       <div ref={containerRef} className="bc-timeline-body">
         {items.length === 0 && <div className="bc-timeline-empty">No events yet</div>}
-        {renderTimelineNodes(items)}
+        {windowStart > 0 && (
+          <PaneEarlierControl
+            hiddenCount={earlierItemCount}
+            unitNoun="event"
+            onRevealMore={revealMore}
+            onRevealAll={revealAll}
+          />
+        )}
+        {renderTimelineNodes(windowedBlocks)}
         <div ref={endRef} />
       </div>
       {!isAtBottom && (

@@ -79,6 +79,14 @@ export interface TimelineItem {
     ts: string;
     tone: 'turn' | 'thinking' | 'tool' | 'tool-done' | 'tool-err' | 'task' | 'task-start' | 'result' | 'error' | 'text';
 }
+export type TimelineBlock = {
+    kind: 'turn';
+    turnId: string;
+    items: TimelineItem[];
+} | {
+    kind: 'standalone';
+    item: TimelineItem;
+};
 export type ViewType = PaneKey;
 export type InnerNode = {
     kind: 'leaf';

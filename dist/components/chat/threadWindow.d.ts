@@ -3,17 +3,10 @@ export declare const THREAD_WINDOW_INITIAL_ROWS = 400;
 export declare const THREAD_WINDOW_STEP_ROWS = 800;
 export declare function rowCountOfBlock(block: TurnBlock): number;
 /**
- * The index of the first block the Thread pane renders, counting rows back
- * from the newest block until `rowBudget` is met.
- *
- * A block is never split. A turn header states how many events its turn
- * holds, so rendering half a turn would make that count a lie — and the rows
- * inside one turn are what the reader is comparing against each other. So the
- * pane renders at most `rowBudget` rows plus the whole of the block that
- * crossed it. On the session measured above the largest single turn is 438
- * rows, which is the worst that overshoot gets there.
- *
- * An infinite budget returns 0, which is the un-windowed pane.
+ * The index of the first block the Thread pane renders. See
+ * `windowStartIndex` for what the budget means; on the session measured above
+ * the largest single turn is 438 rows, which is the worst the overshoot gets
+ * there.
  */
 export declare function threadWindowStart(blocks: TurnBlock[], rowBudget: number): number;
 /** How many rows sit above the window — what the "show earlier" control counts. */

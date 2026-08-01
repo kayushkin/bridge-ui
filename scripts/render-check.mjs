@@ -30,6 +30,11 @@ import { Thread } from '../src/components/chat/Thread.tsx'
 import {
   THREAD_WINDOW_INITIAL_ROWS, rowCountOfBlock, rowsBeforeWindow, threadBlockKey, threadWindowStart,
 } from '../src/components/chat/threadWindow.ts'
+import { Timeline, groupTimelineByTurn, rowsToTimeline } from '../src/components/chat/Timeline.tsx'
+import {
+  TIMELINE_WINDOW_INITIAL_ITEMS, itemCountOfTimelineBlock, itemsBeforeTimelineWindow,
+  timelineBlockKey, timelineWindowStart,
+} from '../src/components/chat/timelineWindow.ts'
 import { harnessIsWorkingOnTurn, sameItemFields, sameRowList } from '../src/components/chat/utils.ts'
 
 let failures = 0
@@ -1045,9 +1050,9 @@ console.log('\nThread window')
   const bigHtml = renderToStaticMarkup(h(Thread, {
     rows: bigRows, loading: false, error: null, agent: 'claude_code', sessionId: 'br_check',
   }))
-  check('a long log renders the earlier-events control', bigHtml.includes('bc-thread-earlier'), bigHtml.slice(0, 300))
+  check('a long log renders the earlier-events control', bigHtml.includes('bc-pane-earlier'), bigHtml.slice(0, 300))
   check('it offers both show-earlier and show-all',
-    (bigHtml.match(/bc-thread-earlier-btn/g) || []).length === 2)
+    (bigHtml.match(/bc-pane-earlier-btn/g) || []).length === 2)
   check('the oldest turn is not in the markup', !bigHtml.includes('ask 0<') && !bigHtml.includes('reply 0<'))
   check('the newest turn is', bigHtml.includes('reply 499'), bigHtml.slice(-400))
   check('the windowed pane renders far fewer rows than the log holds',
@@ -1068,8 +1073,182 @@ console.log('\nThread window')
   const smallHtml = renderToStaticMarkup(h(Thread, {
     rows: smallRows, loading: false, error: null, agent: 'claude_code', sessionId: 'br_check',
   }))
-  check('a short log renders no earlier-events control', !smallHtml.includes('bc-thread-earlier'))
+  check('a short log renders no earlier-events control', !smallHtml.includes('bc-pane-earlier'))
   check('and renders all of its rows', smallHtml.includes('only question') && smallHtml.includes('only answer'))
+}
+
+// --- the Timeline window ----------------------------------------------------
+//
+// Once Thread was windowed, Timeline became the largest chat pane: measured
+// with `npm run pane-cost` on the same session, 11,510 elements and 2,386 KB
+// against Thread's windowed 3,773 and 196 KB. It windows the same way and the
+// same two things must hold — the window always contains the newest items,
+// and it never cuts a turn group in half.
+//
+// The item list is asserted separately from the markup because the pane's
+// header still counts the WHOLE session while the body renders a suffix of
+// it, and a check that only read the markup could not tell those apart.
+console.log('\nTimeline window')
+{
+  let seq = 0
+  const evt = (type, turnId, messageId, extra = {}) => ({
+    type,
+    data: { event_id: ++seq, turn_id: turnId, message_id: messageId, timestamp: '2026-08-01T14:00:00Z', ...extra },
+  })
+
+  // 60 turns of 4 timeline items each, with an error carrying no turn id
+  // between every pair. Enough to overrun a 100-item budget many times over,
+  // to put both block kinds on both sides of the window edge, and — the part
+  // that matters for the key checks — to END on a turn, so that adding an
+  // event to the newest turn GROWS a block rather than appending a new one.
+  const events = []
+  for (let t = 0; t < 60; t++) {
+    const turn = `t${t}`
+    events.push(evt('error', undefined, `err_${t}`, { error: { message: `detached error ${t}` } }))
+    events.push(evt('user_message', turn, `${turn}_ask`, { result: { text: `question ${t}` } }))
+    events.push(evt('stream', turn, `${turn}_text`, { stream: { delta: { index: 0, type: 'text_delta', text: `answer ${t}` } } }))
+    events.push(evt('tool_call', turn, `${turn}_tool`, { tool_call: { tool_id: `tool_${t}`, name: 'Read', input: {} } }))
+    events.push(evt('tool_result', turn, `${turn}_tool`, { tool_result: { tool_id: `tool_${t}`, content: 'ok' } }))
+    events.push(evt('result', turn, `${turn}_res`, { result: { text: `answer ${t}` } }))
+  }
+  const rows = events.reduce(applyEventToRows, [])
+  const items = rowsToTimeline(rows)
+  const blocks = groupTimelineByTurn(items)
+  const totalItems = blocks.reduce((n, b) => n + itemCountOfTimelineBlock(b), 0)
+
+  check('the synthetic session groups into turns and standalone items',
+    blocks.some(b => b.kind === 'turn') && blocks.some(b => b.kind === 'standalone'),
+    JSON.stringify(blocks.slice(0, 4).map(b => b.kind)))
+  check('every timeline item lands in exactly one block', totalItems === items.length,
+    `${totalItems} vs ${items.length}`)
+  check('and the last block is a turn, so growing it is what the key checks test',
+    blocks[blocks.length - 1].kind === 'turn')
+
+  const start = timelineWindowStart(blocks, 100)
+  check('a budget smaller than the session windows it', start > 0, `start=${start}`)
+  const windowed = blocks.slice(start)
+  const windowItems = windowed.reduce((n, b) => n + itemCountOfTimelineBlock(b), 0)
+
+  check('the window holds at least the budget', windowItems >= 100, `${windowItems} items`)
+  check('and overshoots by at most the block that crossed it',
+    windowItems - itemCountOfTimelineBlock(blocks[start]) < 100,
+    `${windowItems} items, first block ${itemCountOfTimelineBlock(blocks[start])}`)
+  check('no block is split — the window is a suffix of the block list',
+    windowed.every((b, i) => b === blocks[start + i]) && windowed.length === blocks.length - start)
+  check('the window ends at the newest block', windowed[windowed.length - 1] === blocks[blocks.length - 1])
+  check('itemsBeforeTimelineWindow and the window account for every item',
+    itemsBeforeTimelineWindow(blocks, start) + windowItems === totalItems,
+    `${itemsBeforeTimelineWindow(blocks, start)} + ${windowItems} vs ${totalItems}`)
+
+  check('an infinite budget renders the whole session', timelineWindowStart(blocks, Number.POSITIVE_INFINITY) === 0)
+  check('a budget larger than the session renders the whole session',
+    timelineWindowStart(blocks, totalItems + 1) === 0)
+  check('an empty session windows to nothing', timelineWindowStart([], 100) === 0)
+  check('itemsBeforeTimelineWindow of an unwindowed pane is zero',
+    itemsBeforeTimelineWindow(blocks, 0) === 0)
+
+  // The hold that keeps the window still while the user is scrolled up
+  // resolves this key back to an index, and it is also the React key of every
+  // turn group. A delta into the live turn must change neither, or the hold
+  // would lapse on every frame of streaming and React would remount the group.
+  const keysBefore = blocks.map(timelineBlockKey)
+  const keysAfterDelta = groupTimelineByTurn(rowsToTimeline(applyEventToRows(rows, evt('stream', 't59', 't59_text', {
+    stream: { delta: { index: 0, type: 'text_delta', text: ' more' } },
+  })))).map(timelineBlockKey)
+  check('a delta changes no block key', keysBefore.every((k, i) => k === keysAfterDelta[i]),
+    JSON.stringify(keysBefore.map((k, i) => [k, keysAfterDelta[i]]).filter(([a, b]) => a !== b).slice(0, 3)))
+
+  // And a turn GROWING AN ITEM must not change its key either — a live turn
+  // gains one every time a tool is called. A text delta alone does not reach
+  // this, because it merges into an item that already exists.
+  const grownBlocks = groupTimelineByTurn(rowsToTimeline(applyEventToRows(rows, evt('tool_call', 't59', 't59_late', {
+    tool_call: { tool_id: 'tool_late', name: 'Bash', input: {} },
+  }))))
+  check('the live turn gained an item',
+    grownBlocks[grownBlocks.length - 1].items.length > blocks[blocks.length - 1].items.length,
+    `${blocks[blocks.length - 1].items.length} -> ${grownBlocks[grownBlocks.length - 1].items.length}`)
+  check('and a new item in a turn changes no block key',
+    keysBefore.every((k, i) => k === grownBlocks.map(timelineBlockKey)[i]),
+    JSON.stringify(keysBefore.map((k, i) => [k, grownBlocks.map(timelineBlockKey)[i]]).filter(([a, b]) => a !== b).slice(0, 3)))
+  check('block keys are unique', new Set(keysBefore).size === keysBefore.length,
+    `${new Set(keysBefore).size} of ${keysBefore.length}`)
+
+  // `groupTimelineByTurn` groups CONSECUTIVE items, so one turn interrupted by
+  // an item carrying no turn id becomes two blocks with the same turn id.
+  // Keying on the turn id alone would make them indistinguishable — the hold
+  // would land on the wrong one and move the window under the user, and React
+  // would see one duplicated key.
+  const splitBlocks = groupTimelineByTurn(rowsToTimeline([
+    evt('user_message', 'sp', 'sp_ask', { result: { text: 'ask' } }),
+    evt('error', undefined, 'sp_err', { error: { message: 'interruption' } }),
+    evt('result', 'sp', 'sp_res', { result: { text: 'answer' } }),
+  ].reduce(applyEventToRows, [])))
+  check('one interrupted turn becomes two turn blocks',
+    splitBlocks.filter(b => b.kind === 'turn').length === 2,
+    JSON.stringify(splitBlocks.map(b => b.kind)))
+  check('and its two halves carry the same turn id',
+    splitBlocks.filter(b => b.kind === 'turn').every(b => b.turnId === 'sp'))
+  check('but not the same block key',
+    new Set(splitBlocks.map(timelineBlockKey)).size === splitBlocks.length,
+    JSON.stringify(splitBlocks.map(timelineBlockKey)))
+
+  // And the pane itself. TIMELINE_WINDOW_INITIAL_ITEMS is what it opens with,
+  // so assert against a session built to exceed it rather than against the
+  // constant.
+  const bigRows = (() => {
+    const evs = []
+    for (let t = 0; t < 500; t++) {
+      const turn = `b${t}`
+      evs.push(evt('user_message', turn, `${turn}_ask`, { result: { text: `ask ${t}` } }))
+      evs.push(evt('result', turn, `${turn}_res`, { result: { text: `reply ${t}` } }))
+    }
+    return evs.reduce(applyEventToRows, [])
+  })()
+  const bigItems = rowsToTimeline(bigRows)
+  check('the big session exceeds the pane default', bigItems.length > TIMELINE_WINDOW_INITIAL_ITEMS,
+    `${bigItems.length} vs ${TIMELINE_WINDOW_INITIAL_ITEMS}`)
+
+  const bigHtml = renderToStaticMarkup(h(Timeline, {
+    rows: bigRows, onToggleCollapse: () => {}, sessionId: 'br_check',
+  }))
+  check('a long session renders the earlier-events control', bigHtml.includes('bc-pane-earlier'),
+    bigHtml.slice(0, 300))
+  check('it offers both show-earlier and show-all',
+    (bigHtml.match(/bc-pane-earlier-btn/g) || []).length === 2)
+  check('the oldest turn is not in the markup', !bigHtml.includes('ask 0<') && !bigHtml.includes('reply 0<'))
+  check('the newest turn is', bigHtml.includes('ask 499'), bigHtml.slice(-400))
+  const renderedItems = (bigHtml.match(/bc-tl-item /g) || []).length
+  check('the windowed pane renders far fewer items than the session holds',
+    renderedItems < bigItems.length / 2,
+    `${renderedItems} items in markup, ${bigItems.length} in the session`)
+
+  // The header count is the whole session, not the window. It is the only
+  // place the user is told how big the session is, so it must not shrink to
+  // the part that happens to be rendered.
+  check('the header still counts the whole session',
+    bigHtml.includes(`bc-timeline-count">${bigItems.length}<`),
+    (bigHtml.match(/bc-timeline-count">[^<]*</) || [''])[0])
+
+  // A session that fits must look exactly like it did before any of this: no
+  // control, nothing withheld. Several blocks, so that "not windowed" is a
+  // real answer rather than the arithmetic one — a single-block session cannot
+  // be windowed at any budget, because a block is never split.
+  const smallEvents = [evt('user_message', 's1', 's1_ask', { result: { text: 'only question' } })]
+  for (let t = 0; t < 6; t++) {
+    smallEvents.push(evt('error', undefined, `smallerr_${t}`, { error: { message: `note ${t}` } }))
+  }
+  smallEvents.push(evt('result', 's1', 's1_res', { result: { text: 'only answer' } }))
+  const smallRows = smallEvents.reduce(applyEventToRows, [])
+  check('the short session is several blocks',
+    groupTimelineByTurn(rowsToTimeline(smallRows)).length > 2,
+    `${groupTimelineByTurn(rowsToTimeline(smallRows)).length} blocks`)
+  const smallHtml = renderToStaticMarkup(h(Timeline, {
+    rows: smallRows, onToggleCollapse: () => {}, sessionId: 'br_check',
+  }))
+  check('a short session renders no earlier-events control', !smallHtml.includes('bc-pane-earlier'))
+  check('and renders all of its items',
+    smallHtml.includes('only question') && smallHtml.includes('only answer')
+      && (smallHtml.match(/bc-tl-item /g) || []).length === rowsToTimeline(smallRows).length)
 }
 
 // Failing by default until the report is printed. The async checks await real

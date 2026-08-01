@@ -1,0 +1,1 @@
+{"version":3,"file":"PaneEarlierControl.d.ts","sourceRoot":"","sources":["../../../src/components/chat/PaneEarlierControl.tsx"],"names":[],"mappings":"AAAA;;;;;;;GAOG;AACH,wBAAgB,kBAAkB,CAAC,EAAE,WAAW,EAAE,QAAQ,EAAE,YAAY,EAAE,WAAW,EAAE,EAAE;IACvF,WAAW,EAAE,MAAM,CAAA;IACnB,QAAQ,EAAE,MAAM,CAAA;IAChB,YAAY,EAAE,MAAM,IAAI,CAAA;IACxB,WAAW,EAAE,MAAM,IAAI,CAAA;CACxB,2CAmBA"}

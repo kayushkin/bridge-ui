@@ -1,3 +1,4 @@
+import { unitsBeforeWindow, windowStartIndex } from './paneWindow';
 // How many log rows the Thread pane renders before it stops and leaves the
 // rest behind a button, and how many more each press reveals.
 //
@@ -16,35 +17,17 @@ export function rowCountOfBlock(block) {
     return block.kind === 'turn' ? block.rows.length : 1;
 }
 /**
- * The index of the first block the Thread pane renders, counting rows back
- * from the newest block until `rowBudget` is met.
- *
- * A block is never split. A turn header states how many events its turn
- * holds, so rendering half a turn would make that count a lie — and the rows
- * inside one turn are what the reader is comparing against each other. So the
- * pane renders at most `rowBudget` rows plus the whole of the block that
- * crossed it. On the session measured above the largest single turn is 438
- * rows, which is the worst that overshoot gets there.
- *
- * An infinite budget returns 0, which is the un-windowed pane.
+ * The index of the first block the Thread pane renders. See
+ * `windowStartIndex` for what the budget means; on the session measured above
+ * the largest single turn is 438 rows, which is the worst the overshoot gets
+ * there.
  */
 export function threadWindowStart(blocks, rowBudget) {
-    if (blocks.length === 0)
-        return 0;
-    let rows = 0;
-    for (let i = blocks.length - 1; i > 0; i--) {
-        rows += rowCountOfBlock(blocks[i]);
-        if (rows >= rowBudget)
-            return i;
-    }
-    return 0;
+    return windowStartIndex(blocks, rowBudget, rowCountOfBlock);
 }
 /** How many rows sit above the window — what the "show earlier" control counts. */
 export function rowsBeforeWindow(blocks, windowStart) {
-    let rows = 0;
-    for (let i = 0; i < windowStart && i < blocks.length; i++)
-        rows += rowCountOfBlock(blocks[i]);
-    return rows;
+    return unitsBeforeWindow(blocks, windowStart, rowCountOfBlock);
 }
 /**
  * A stable identity for a block, used to hold the top of the window still
