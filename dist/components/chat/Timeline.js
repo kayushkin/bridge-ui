@@ -1,8 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { formatTokens } from '../../utils';
-import { formatHMS, oneLine, toolFullText, toolSnippet } from './utils';
+import { formatHMS, oneLine, sameItemFields, toolFullText, toolSnippet } from './utils';
 function rowsToTimeline(rows) {
     const out = [];
     const seenTurn = new Set();
@@ -160,10 +160,15 @@ function rowsToTimeline(rows) {
     }
     return out;
 }
-function TimelineItemRow({ item }) {
+// Memoized on the item's fields rather than its identity: `rowsToTimeline`
+// rebuilds every item on every delta, so identity always differs, but an item
+// derived from a row no event touched has identical fields. Measured with
+// `npm run pane-cost`, the worst session on this host puts 11,510 elements in
+// this pane — all of them re-rendered per delta without this.
+const TimelineItemRow = memo(function TimelineItemRow({ item }) {
     const tip = item.fullText || item.detail || item.label;
     return (_jsxs("div", { className: `bc-tl-item bc-tl-${item.tone}`, title: tip, children: [_jsx("span", { className: "bc-tl-ts", children: formatHMS(item.ts) }), _jsx("span", { className: "bc-tl-icon", children: item.icon }), _jsx("span", { className: "bc-tl-label", children: item.label }), item.detail && _jsx("span", { className: "bc-tl-detail", children: item.detail })] }));
-}
+}, (prev, next) => sameItemFields(prev.item, next.item));
 function renderTurnChildren(items) {
     const out = [];
     let i = 0;

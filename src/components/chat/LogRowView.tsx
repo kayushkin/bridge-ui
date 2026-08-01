@@ -1,12 +1,25 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { LogRow, TokenUsage } from '../../types'
 import { ToolsSection } from '../tools'
 import { MessageStats } from './MessageStats'
 import { UsageLine } from './UsageLine'
-import { formatHMS, groupEventsByType, idTail, shouldExpandByDefault } from './utils'
+import { formatHMS, groupEventsByType, idTail, sameRowList, shouldExpandByDefault } from './utils'
 import type { TurnBlock } from './types'
 
-export function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
+// Memoized because `applyEventToRows` (useBridgeSession.ts) replaces only the
+// row an event touched and hands back every other row by the same reference:
+// its update path is `next = rows.slice(); next[idx] = updated`. So one SSE
+// delta changes exactly one row object out of N, and a memo boundary here
+// turns a per-delta render of this pane from O(rows) into O(1).
+//
+// Without it React rebuilds every row's element tree on every delta however
+// few rows changed, and Thread is by far the largest of the three panes:
+// measured with `npm run pane-cost`, the worst session on this host (11,968
+// rows) renders 80,606 elements here against 11,510 in Timeline and 7,216 in
+// Turns. `agent` is a string and `row` is the reducer's own object, so the
+// default shallow comparison is exactly the right test — do not hand this one
+// a custom comparator.
+export const LogRowView = memo(function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
   const actorLabel = row.actor === 'user' ? 'You' : row.actor === 'system' ? 'system' : agent
   const typeLabel = row.subtype ? `${row.kind}.${row.subtype}` : row.kind
   const hasStructuredBody = !!(row.text || row.thinking || (row.tools && row.tools.length > 0)
@@ -86,7 +99,7 @@ export function LogRowView({ row, agent }: { row: LogRow; agent: string }) {
       )}
     </div>
   )
-}
+})
 
 export function groupRowsByTurn(rows: LogRow[]): TurnBlock[] {
   const out: TurnBlock[] = []
@@ -123,7 +136,14 @@ function turnSummary(rows: LogRow[]): { userText?: string; toolCount: number; do
   return { userText, toolCount, done, errored, totalUsage }
 }
 
-export function TurnGroupView({ turnId, rows, agent }: { turnId: string; rows: LogRow[]; agent: string }) {
+// The same memo boundary one level up. `groupRowsByTurn` rebuilds its blocks
+// on every delta, so this component's `rows` prop is always a fresh array and
+// the default shallow comparison would never skip — but the rows *inside* it
+// are the reducer's own objects, so comparing element-by-element tells the
+// truth: a turn no event touched skips its header, its `turnSummary` walk and
+// its whole subtree. That is what makes the earlier turns of a long session
+// free while the last one streams.
+export const TurnGroupView = memo(function TurnGroupView({ turnId, rows, agent }: { turnId: string; rows: LogRow[]; agent: string }) {
   const [collapsed, setCollapsed] = useState(false)
   const summary = useMemo(() => turnSummary(rows), [rows])
   const snippet = summary.userText
@@ -150,4 +170,6 @@ export function TurnGroupView({ turnId, rows, agent }: { turnId: string; rows: L
       )}
     </div>
   )
-}
+}, (prev, next) => prev.turnId === next.turnId
+  && prev.agent === next.agent
+  && sameRowList(prev.rows, next.rows))

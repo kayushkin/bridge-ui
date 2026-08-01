@@ -14,4 +14,6 @@ export declare function typesInRow(row: LogRow): string[];
 export declare function formatTodoWrite(todos: unknown): string | undefined;
 export declare function toolSnippet(t: ToolEvent): string;
 export declare function toolFullText(t: ToolEvent): string | undefined;
+export declare function sameRowList(a: LogRow[], b: LogRow[]): boolean;
+export declare function sameItemFields<T extends object>(a: T, b: T): boolean;
 //# sourceMappingURL=utils.d.ts.map

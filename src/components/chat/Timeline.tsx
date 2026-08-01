@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { formatTokens } from '../../utils'
-import { formatHMS, oneLine, toolFullText, toolSnippet } from './utils'
+import { formatHMS, oneLine, sameItemFields, toolFullText, toolSnippet } from './utils'
 import type { TimelineItem } from './types'
 
 function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
@@ -168,7 +168,12 @@ function rowsToTimeline(rows: LogRow[]): TimelineItem[] {
   return out
 }
 
-function TimelineItemRow({ item }: { item: TimelineItem }) {
+// Memoized on the item's fields rather than its identity: `rowsToTimeline`
+// rebuilds every item on every delta, so identity always differs, but an item
+// derived from a row no event touched has identical fields. Measured with
+// `npm run pane-cost`, the worst session on this host puts 11,510 elements in
+// this pane — all of them re-rendered per delta without this.
+const TimelineItemRow = memo(function TimelineItemRow({ item }: { item: TimelineItem }) {
   const tip = item.fullText || item.detail || item.label
   return (
     <div className={`bc-tl-item bc-tl-${item.tone}`} title={tip}>
@@ -178,7 +183,7 @@ function TimelineItemRow({ item }: { item: TimelineItem }) {
       {item.detail && <span className="bc-tl-detail">{item.detail}</span>}
     </div>
   )
-}
+}, (prev, next) => sameItemFields(prev.item, next.item))
 
 function renderTurnChildren(items: TimelineItem[]): React.ReactNode[] {
   const out: React.ReactNode[] = []

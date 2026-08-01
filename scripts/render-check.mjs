@@ -25,7 +25,8 @@ import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
-import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
+import { groupRowsByTurn } from '../src/components/chat/LogRowView.tsx'
+import { harnessIsWorkingOnTurn, sameItemFields, sameRowList } from '../src/components/chat/utils.ts'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -808,6 +809,99 @@ async function sharedPollChecks() {
     check('a harness the server reports up is not badged',
       settings.split('bset-unavail-badge').length - 1 === 1, settings.slice(0, 300))
   }
+}
+
+// --- the row-memo boundaries -----------------------------------------------
+//
+// Every chat pane memoizes its row, and all three rest on one property of the
+// reducer: `applyEventToRows` replaces only the row an event touched and hands
+// back every other row by the same reference. If that ever stopped holding,
+// each memo would silently degrade to "always re-render" — no error, no
+// failing render, just the cost back. So assert the premise itself, then the
+// two comparators that read it. Item counts and element counts for real
+// sessions come from `npm run pane-cost`; this proves the mechanism.
+console.log('\nrow-memo boundaries')
+{
+  let seq = 0
+  const evt = (type, turnId, messageId, extra = {}) => ({
+    type,
+    data: { event_id: ++seq, turn_id: turnId, message_id: messageId, timestamp: '2026-07-31T20:00:00Z', ...extra },
+  })
+  const delta = (turnId, text) => evt('stream', turnId, `${turnId}_text`, {
+    stream: { delta: { index: 0, type: 'text_delta', text } },
+  })
+
+  // Two finished turns and a third that is still streaming — the shape of a
+  // long session with one live turn at the bottom, which is the case the memo
+  // exists for.
+  const before = [
+    evt('user_message', 'ta', 'ta_ask', { result: { text: 'first' } }),
+    delta('ta', 'answer a'),
+    evt('result', 'ta', 'ta_res', { result: { text: 'answer a' } }),
+    evt('user_message', 'tb', 'tb_ask', { result: { text: 'second' } }),
+    delta('tb', 'answer b'),
+    evt('result', 'tb', 'tb_res', { result: { text: 'answer b' } }),
+    evt('user_message', 'tc', 'tc_ask', { result: { text: 'third' } }),
+    delta('tc', 'answer '),
+  ].reduce(applyEventToRows, [])
+
+  // One more delta on the live turn: exactly what an SSE frame carries.
+  const after = applyEventToRows(before, delta('tc', 'c'))
+
+  check('a delta appends no row', after.length === before.length, `${before.length} → ${after.length}`)
+  const movedRows = before.filter((r, i) => r !== after[i])
+  check('a delta replaces exactly one row object', movedRows.length === 1,
+    JSON.stringify(movedRows.map(r => r.key)))
+  check('and it is the row the delta named', movedRows[0]?.turnId === 'tc',
+    JSON.stringify(movedRows.map(r => [r.key, r.turnId])))
+
+  // sameRowList — the Thread comparator. It reads identity, so it must call an
+  // untouched turn's rows equal and a touched turn's rows different.
+  const blocksBefore = groupRowsByTurn(before)
+  const blocksAfter = groupRowsByTurn(after)
+  const turnBlocks = blocksBefore.filter(b => b.kind === 'turn')
+  check('the log groups into three turns', turnBlocks.length === 3, JSON.stringify(blocksBefore.map(b => b.kind)))
+  const sameness = turnBlocks.map((b, i) => sameRowList(b.rows, blocksAfter.filter(x => x.kind === 'turn')[i].rows))
+  check('sameRowList skips the two untouched turns', sameness[0] === true && sameness[1] === true,
+    JSON.stringify(sameness))
+  check('sameRowList re-renders the turn the delta hit', sameness[2] === false, JSON.stringify(sameness))
+  check('sameRowList is false for a different length', !sameRowList(before, before.slice(1)))
+  check('sameRowList is true for the very same array', sameRowList(before, before))
+
+  // sameItemFields — the Turns and Timeline comparator. Those panes rebuild
+  // every item on every delta, so identity is always different and the fields
+  // are the whole test.
+  const turnsBefore = rowsToTurns(before)
+  const turnsAfter = rowsToTurns(after)
+  check('every turns item is a fresh object', turnsBefore.every((it, i) => it !== turnsAfter[i]))
+  check('same number of turns items', turnsBefore.length === turnsAfter.length,
+    `${turnsBefore.length} vs ${turnsAfter.length}`)
+  const changed = turnsBefore.map((it, i) => !sameItemFields(it, turnsAfter[i]))
+  check('sameItemFields skips every item but the one that grew',
+    changed.filter(Boolean).length === 1, JSON.stringify(turnsBefore.map((it, i) => [it.key, changed[i]])))
+  check('and the one it re-renders is the streaming turn',
+    turnsAfter[changed.indexOf(true)].turnId === 'tc',
+    JSON.stringify(turnsAfter[changed.indexOf(true)]))
+
+  // A field added to either item type must be compared from the moment it is
+  // added — the comparator walks the item's own keys rather than a list it
+  // would have to be reminded to extend.
+  const item = turnsBefore[0]
+  check('sameItemFields sees a field the other side does not have',
+    !sameItemFields(item, { ...item, aFieldNobodyListed: 1 }))
+  check('sameItemFields sees a changed value', !sameItemFields(item, { ...item, ts: 'moved' }))
+  check('sameItemFields is true for a structural copy', sameItemFields(item, { ...item }))
+
+  // The extraction of TurnRow out of TurnsView's map must not have changed
+  // what the pane renders. Assert on the markup rather than trusting the diff.
+  const html = renderToStaticMarkup(h(TurnsView, {
+    rows: after, agent: 'claude_code', harnessWorking: true, onToggleCollapse: () => {},
+  }))
+  check('the pane still renders one item per turns item',
+    (html.match(/bc-turns-item/g) || []).length === turnsAfter.length,
+    `${(html.match(/bc-turns-item/g) || []).length} vs ${turnsAfter.length}`)
+  check('the live turn still carries its badge', html.includes('bc-turns-streaming-tag'), html.slice(0, 400))
+  check('the finished turns still render their text', html.includes('answer a') && html.includes('answer b'))
 }
 
 // Failing by default until the report is printed. The async checks await real

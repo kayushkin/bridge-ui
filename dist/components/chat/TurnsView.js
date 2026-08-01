@@ -1,10 +1,10 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useStickyBottomScroll } from '../../useStickyBottomScroll';
 import { UsageLine } from './UsageLine';
-import { formatHMS } from './utils';
+import { formatHMS, sameItemFields } from './utils';
 import { remarkRefChips } from './refChips/remarkRefChips';
 import { RefChip } from './refChips/RefChip';
 // remark plugins and the components map are module constants so react-markdown
@@ -354,6 +354,43 @@ function TurnsAside({ variant, icon, label, text, live }) {
     }
     return (_jsxs("details", { className: cls, children: [_jsxs("summary", { children: [_jsx("span", { className: "bc-turns-aside-icon", "aria-hidden": true, children: icon }), _jsx("span", { children: label })] }), _jsx("div", { className: "bc-turns-aside-text", children: text })] }));
 }
+// One rendered row of the Turns pane — a compact marker or a full turn.
+//
+// It exists as its own component so it can carry a memo boundary, and it is
+// the boundary that pays most in this pane. Turns holds far fewer rows than
+// Thread or Timeline — `rowsToTurns` collapses a whole turn's events into one
+// item, so the worst session on this host is 105 items here against 11,968
+// Thread rows — but each row is the most expensive kind there is: an assistant
+// body is a full `ReactMarkdown` parse and render. Per element this pane costs
+// several times what the other two do (`npm run pane-cost` measures it), so
+// skipping an unchanged turn skips a markdown re-parse, not just a few spans.
+//
+// That gap is widest exactly where it hurts. One session on this host arrives
+// as 13,776 events that collapse to four turns, each holding megabytes of
+// text; rendering that pane once takes minutes. Before this boundary the pane
+// re-paid it on every delta.
+//
+// Compared on fields, not identity: `rowsToTurns` rebuilds every item on every
+// delta. `harnessWorking` is a prop rather than something folded into the item
+// because it is a fact about the session, not the log — see rowsToTurns.
+const TurnRow = memo(function TurnRow({ item, agent, markdown, harnessWorking }) {
+    if (item.isMarker) {
+        return (_jsxs("div", { className: `bc-turns-marker bc-turns-marker-${item.markerKind}`, role: "separator", children: [_jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true }), _jsx("span", { className: "bc-turns-marker-text", children: item.text }), _jsx("span", { className: "bc-turns-marker-ts", children: formatHMS(item.ts) }), _jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true })] }));
+    }
+    // A turn is live only if all three agree: it is the last one, no
+    // completion event closed it, and the harness is still working.
+    // Any one of them alone is the bug this replaced — turnDone is
+    // missing on about one turn in nine, and the last turn of a
+    // finished session is not running just because nothing closed it.
+    const turnIsLive = !!item.isFinalAssistantTurn && !item.turnDone && !!harnessWorking;
+    const hasAside = !!(item.thinking || item.narration);
+    const asideLive = hasAside && turnIsLive;
+    const streaming = turnIsLive && !!item.hasStreamedText;
+    return (_jsxs("div", { className: `bc-turns-item bc-turns-${item.actor}${item.isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: item.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(item.ts) }), item.usage && _jsx(UsageLine, { usage: item.usage }), asideLive && item.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && item.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), streaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), item.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: item.thinking, live: asideLive })), item.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: item.narration, live: asideLive })), item.text && _jsx(ResponseBody, { text: item.text, markdown: markdown && item.actor === 'assistant' })] }));
+}, (prev, next) => prev.agent === next.agent
+    && prev.markdown === next.markdown
+    && prev.harnessWorking === next.harnessWorking
+    && sameItemFields(prev.item, next.item));
 export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey }) {
     const { containerRef, endRef, isAtBottom, scrollToBottom } = useStickyBottomScroll();
     const items = useMemo(() => rowsToTurns(rows), [rows]);
@@ -374,20 +411,6 @@ export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCol
             return next;
         });
     }, []);
-    return (_jsxs("div", { className: "bc-turns-pane", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-turns-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide turns", "aria-label": "Hide turns", children: [_jsx("span", { className: "bc-turns-title", children: "Turns" }), _jsx("span", { className: "bc-turns-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("button", { type: "button", className: "bc-turns-md-toggle", onClick: e => { e.stopPropagation(); toggleMarkdown(); }, title: markdown ? 'Rendering markdown — click to show raw text' : 'Showing raw text — click to render markdown', "aria-label": "Toggle markdown rendering", "aria-pressed": markdown, children: markdown ? 'MD' : 'TXT' }), _jsx("span", { className: "bc-turns-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-turns-body", children: [items.length === 0 && _jsx("div", { className: "bc-turns-empty", children: "No messages yet" }), items.map(it => {
-                        if (it.isMarker) {
-                            return (_jsxs("div", { className: `bc-turns-marker bc-turns-marker-${it.markerKind}`, role: "separator", children: [_jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true }), _jsx("span", { className: "bc-turns-marker-text", children: it.text }), _jsx("span", { className: "bc-turns-marker-ts", children: formatHMS(it.ts) }), _jsx("span", { className: "bc-turns-marker-line", "aria-hidden": true })] }, it.key));
-                        }
-                        // A turn is live only if all three agree: it is the last one, no
-                        // completion event closed it, and the harness is still working.
-                        // Any one of them alone is the bug this replaced — turnDone is
-                        // missing on about one turn in nine, and the last turn of a
-                        // finished session is not running just because nothing closed it.
-                        const turnIsLive = !!it.isFinalAssistantTurn && !it.turnDone && !!harnessWorking;
-                        const hasAside = !!(it.thinking || it.narration);
-                        const asideLive = hasAside && turnIsLive;
-                        const streaming = turnIsLive && !!it.hasStreamedText;
-                        return (_jsxs("div", { className: `bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''}`, children: [_jsxs("div", { className: "bc-turns-meta", children: [_jsx("span", { className: "bc-turns-actor", children: it.actor === 'user' ? 'You' : agent || 'assistant' }), _jsx("span", { className: "bc-turns-ts", children: formatHMS(it.ts) }), it.usage && _jsx(UsageLine, { usage: it.usage }), asideLive && it.thinking && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-reasoning", children: "reasoning\u2026" }), asideLive && it.narration && _jsx("span", { className: "bc-turns-aside-tag bc-turns-aside-narration", children: "narration\u2026" }), streaming && !asideLive && _jsx("span", { className: "bc-turns-streaming-tag", children: "streaming\u2026" })] }), it.thinking && (_jsx(TurnsAside, { variant: "reasoning", icon: "\uD83D\uDCAD", label: "Reasoning", text: it.thinking, live: asideLive })), it.narration && (_jsx(TurnsAside, { variant: "narration", icon: "\uD83D\uDCAC", label: "Narration", text: it.narration, live: asideLive })), it.text && _jsx(ResponseBody, { text: it.text, markdown: markdown && it.actor === 'assistant' })] }, it.key));
-                    }), compacting && (_jsxs("div", { className: "bc-turns-compacting", role: "status", "aria-live": "polite", children: [_jsx("span", { className: "bc-turns-compacting-bar", "aria-hidden": true }), _jsx("span", { className: "bc-turns-compacting-text", children: "Compacting context\u2026" })] })), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }));
+    return (_jsxs("div", { className: "bc-turns-pane", style: style, "data-pane": paneKey, children: [_jsxs("div", { className: "bc-turns-header bc-header-clickable", onClick: onToggleCollapse, onKeyDown: onHeaderKey, role: "button", tabIndex: 0, title: "Hide turns", "aria-label": "Hide turns", children: [_jsx("span", { className: "bc-turns-title", children: "Turns" }), _jsx("span", { className: "bc-turns-count", children: items.length }), _jsx("span", { className: "bc-spacer" }), _jsx("button", { type: "button", className: "bc-turns-md-toggle", onClick: e => { e.stopPropagation(); toggleMarkdown(); }, title: markdown ? 'Rendering markdown — click to show raw text' : 'Showing raw text — click to render markdown', "aria-label": "Toggle markdown rendering", "aria-pressed": markdown, children: markdown ? 'MD' : 'TXT' }), _jsx("span", { className: "bc-turns-collapse-btn", "aria-hidden": "true", children: "\u00D7" })] }), _jsxs("div", { ref: containerRef, className: "bc-turns-body", children: [items.length === 0 && _jsx("div", { className: "bc-turns-empty", children: "No messages yet" }), items.map(it => (_jsx(TurnRow, { item: it, agent: agent, markdown: markdown, harnessWorking: harnessWorking }, it.key))), compacting && (_jsxs("div", { className: "bc-turns-compacting", role: "status", "aria-live": "polite", children: [_jsx("span", { className: "bc-turns-compacting-bar", "aria-hidden": true }), _jsx("span", { className: "bc-turns-compacting-text", children: "Compacting context\u2026" })] })), _jsx("div", { ref: endRef })] }), !isAtBottom && (_jsx("button", { type: "button", className: "bc-jump-latest", onClick: () => scrollToBottom(), title: "Jump to latest", "aria-label": "Jump to latest", children: "\u2193 New messages" }))] }));
 }
 //# sourceMappingURL=TurnsView.js.map

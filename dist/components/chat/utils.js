@@ -161,4 +161,57 @@ export function toolFullText(t) {
         return undefined;
     }
 }
+// --- Row-memo comparators ---
+//
+// The three chat panes each memoize their row component, and all three lean on
+// one property of the reducer: `applyEventToRows` replaces only the row an
+// event touched and returns every other row by the same reference. One SSE
+// delta therefore changes one object out of N, and these comparators are what
+// let a pane act on that — they answer "did this row's content change", not
+// "is this a new array".
+//
+// Two shapes, because the panes differ in what they hand a row. Thread passes
+// the reducer's own `LogRow` objects straight through, so identity is the
+// whole test. Turns and Timeline derive fresh item objects from the rows on
+// every render, so identity always differs and the fields are the test.
+// True when two row lists hold the same row objects in the same order.
+// Reference equality per element is the point: a row the reducer did not
+// touch is the very same object, so an untouched turn compares equal without
+// reading any of its content.
+export function sameRowList(a, b) {
+    if (a === b)
+        return true;
+    if (a.length !== b.length)
+        return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i])
+            return false;
+    }
+    return true;
+}
+// True when two derived pane items say the same thing.
+//
+// Both `TurnsItem` and `TimelineItem` are flat records of primitives plus an
+// optional `usage`, so a shallow own-key comparison is exact — there is no
+// nested value it could miss. It is deliberately written against the keys
+// actually present rather than a fixed list: a field added to either item type
+// is compared from the moment it is added, instead of being silently ignored
+// until somebody remembers to extend this. `usage` is the one object-valued
+// field, and it is compared by identity because `rowsToTurns` copies it
+// straight off the row it came from, so an unchanged row yields the very same
+// object; a changed one yields a different row and fails an earlier field
+// anyway.
+export function sameItemFields(a, b) {
+    if (a === b)
+        return true;
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length)
+        return false;
+    for (const k of aKeys) {
+        if (a[k] !== b[k])
+            return false;
+    }
+    return true;
+}
 //# sourceMappingURL=utils.js.map

@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import type { ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { LogRow } from '../../types'
 import { useStickyBottomScroll } from '../../useStickyBottomScroll'
 import { UsageLine } from './UsageLine'
-import { formatHMS } from './utils'
+import { formatHMS, sameItemFields } from './utils'
 import type { TurnsItem } from './types'
 import { remarkRefChips } from './refChips/remarkRefChips'
 import { RefChip } from './refChips/RefChip'
@@ -372,6 +372,88 @@ function TurnsAside({ variant, icon, label, text, live }: {
   )
 }
 
+// One rendered row of the Turns pane — a compact marker or a full turn.
+//
+// It exists as its own component so it can carry a memo boundary, and it is
+// the boundary that pays most in this pane. Turns holds far fewer rows than
+// Thread or Timeline — `rowsToTurns` collapses a whole turn's events into one
+// item, so the worst session on this host is 105 items here against 11,968
+// Thread rows — but each row is the most expensive kind there is: an assistant
+// body is a full `ReactMarkdown` parse and render. Per element this pane costs
+// several times what the other two do (`npm run pane-cost` measures it), so
+// skipping an unchanged turn skips a markdown re-parse, not just a few spans.
+//
+// That gap is widest exactly where it hurts. One session on this host arrives
+// as 13,776 events that collapse to four turns, each holding megabytes of
+// text; rendering that pane once takes minutes. Before this boundary the pane
+// re-paid it on every delta.
+//
+// Compared on fields, not identity: `rowsToTurns` rebuilds every item on every
+// delta. `harnessWorking` is a prop rather than something folded into the item
+// because it is a fact about the session, not the log — see rowsToTurns.
+const TurnRow = memo(function TurnRow({ item, agent, markdown, harnessWorking }: {
+  item: TurnsItem
+  agent: string
+  markdown: boolean
+  harnessWorking?: boolean
+}) {
+  if (item.isMarker) {
+    return (
+      <div className={`bc-turns-marker bc-turns-marker-${item.markerKind}`} role="separator">
+        <span className="bc-turns-marker-line" aria-hidden />
+        <span className="bc-turns-marker-text">{item.text}</span>
+        <span className="bc-turns-marker-ts">{formatHMS(item.ts)}</span>
+        <span className="bc-turns-marker-line" aria-hidden />
+      </div>
+    )
+  }
+  // A turn is live only if all three agree: it is the last one, no
+  // completion event closed it, and the harness is still working.
+  // Any one of them alone is the bug this replaced — turnDone is
+  // missing on about one turn in nine, and the last turn of a
+  // finished session is not running just because nothing closed it.
+  const turnIsLive = !!item.isFinalAssistantTurn && !item.turnDone && !!harnessWorking
+  const hasAside = !!(item.thinking || item.narration)
+  const asideLive = hasAside && turnIsLive
+  const streaming = turnIsLive && !!item.hasStreamedText
+  return (
+    <div
+      className={`bc-turns-item bc-turns-${item.actor}${item.isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''}`}
+    >
+      <div className="bc-turns-meta">
+        <span className="bc-turns-actor">{item.actor === 'user' ? 'You' : agent || 'assistant'}</span>
+        <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
+        {item.usage && <UsageLine usage={item.usage} />}
+        {asideLive && item.thinking && <span className="bc-turns-aside-tag bc-turns-aside-reasoning">reasoning…</span>}
+        {asideLive && item.narration && <span className="bc-turns-aside-tag bc-turns-aside-narration">narration…</span>}
+        {streaming && !asideLive && <span className="bc-turns-streaming-tag">streaming…</span>}
+      </div>
+      {item.thinking && (
+        <TurnsAside
+          variant="reasoning"
+          icon="💭"
+          label="Reasoning"
+          text={item.thinking}
+          live={asideLive}
+        />
+      )}
+      {item.narration && (
+        <TurnsAside
+          variant="narration"
+          icon="💬"
+          label="Narration"
+          text={item.narration}
+          live={asideLive}
+        />
+      )}
+      {item.text && <ResponseBody text={item.text} markdown={markdown && item.actor === 'assistant'} />}
+    </div>
+  )
+}, (prev, next) => prev.agent === next.agent
+  && prev.markdown === next.markdown
+  && prev.harnessWorking === next.harnessWorking
+  && sameItemFields(prev.item, next.item))
+
 export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCollapse, style, paneKey }: {
   rows: LogRow[]
   agent: string
@@ -427,61 +509,15 @@ export function TurnsView({ rows, agent, compacting, harnessWorking, onToggleCol
       </div>
       <div ref={containerRef} className="bc-turns-body">
         {items.length === 0 && <div className="bc-turns-empty">No messages yet</div>}
-        {items.map(it => {
-          if (it.isMarker) {
-            return (
-              <div key={it.key} className={`bc-turns-marker bc-turns-marker-${it.markerKind}`} role="separator">
-                <span className="bc-turns-marker-line" aria-hidden />
-                <span className="bc-turns-marker-text">{it.text}</span>
-                <span className="bc-turns-marker-ts">{formatHMS(it.ts)}</span>
-                <span className="bc-turns-marker-line" aria-hidden />
-              </div>
-            )
-          }
-          // A turn is live only if all three agree: it is the last one, no
-          // completion event closed it, and the harness is still working.
-          // Any one of them alone is the bug this replaced — turnDone is
-          // missing on about one turn in nine, and the last turn of a
-          // finished session is not running just because nothing closed it.
-          const turnIsLive = !!it.isFinalAssistantTurn && !it.turnDone && !!harnessWorking
-          const hasAside = !!(it.thinking || it.narration)
-          const asideLive = hasAside && turnIsLive
-          const streaming = turnIsLive && !!it.hasStreamedText
-          return (
-            <div
-              key={it.key}
-              className={`bc-turns-item bc-turns-${it.actor}${it.isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''}`}
-            >
-              <div className="bc-turns-meta">
-                <span className="bc-turns-actor">{it.actor === 'user' ? 'You' : agent || 'assistant'}</span>
-                <span className="bc-turns-ts">{formatHMS(it.ts)}</span>
-                {it.usage && <UsageLine usage={it.usage} />}
-                {asideLive && it.thinking && <span className="bc-turns-aside-tag bc-turns-aside-reasoning">reasoning…</span>}
-                {asideLive && it.narration && <span className="bc-turns-aside-tag bc-turns-aside-narration">narration…</span>}
-                {streaming && !asideLive && <span className="bc-turns-streaming-tag">streaming…</span>}
-              </div>
-              {it.thinking && (
-                <TurnsAside
-                  variant="reasoning"
-                  icon="💭"
-                  label="Reasoning"
-                  text={it.thinking}
-                  live={asideLive}
-                />
-              )}
-              {it.narration && (
-                <TurnsAside
-                  variant="narration"
-                  icon="💬"
-                  label="Narration"
-                  text={it.narration}
-                  live={asideLive}
-                />
-              )}
-              {it.text && <ResponseBody text={it.text} markdown={markdown && it.actor === 'assistant'} />}
-            </div>
-          )
-        })}
+        {items.map(it => (
+          <TurnRow
+            key={it.key}
+            item={it}
+            agent={agent}
+            markdown={markdown}
+            harnessWorking={harnessWorking}
+          />
+        ))}
         {compacting && (
           <div className="bc-turns-compacting" role="status" aria-live="polite">
             <span className="bc-turns-compacting-bar" aria-hidden />
