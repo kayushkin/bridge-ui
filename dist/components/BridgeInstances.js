@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBridgeConfig } from '../context';
+import { useBridgeHarnesses } from '../useBridgeHarnesses';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { useBridgeMachines } from '../useBridgeMachines';
 import { TRANSPORT_LABEL } from '../constants';
@@ -26,7 +27,7 @@ export function BridgeInstances() {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
     const inst = useBridgeInstances();
     const mach = useBridgeMachines();
-    const [harnesses, setHarnesses] = useState([]);
+    const { harnesses } = useBridgeHarnesses();
     const [credentials, setCredentials] = useState([]);
     const [statusCache, setStatusCache] = useState({});
     const [credCache, setCredCache] = useState({});
@@ -39,7 +40,6 @@ export function BridgeInstances() {
     const [editInstanceId, setEditInstanceId] = useState(null);
     const [instanceForm, setInstanceForm] = useState(emptyInstanceForm());
     useEffect(() => {
-        apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => { });
         apiFetch(`${basePath}/credentials`).then(r => r.ok ? r.json() : []).then(setCredentials).catch(() => { });
     }, [apiFetch, basePath]);
     useEffect(() => {

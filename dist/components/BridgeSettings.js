@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState, useCallback } from 'react';
 import { useBridgeConfig } from '../context';
 import { useBridgePrefs } from '../useBridgePrefs';
+import { useBridgeHarnesses, harnessNameKey, harnessNamesFromKey } from '../useBridgeHarnesses';
 import { PermissionModeAsk, PermissionModeAuto, PermissionModeBypass, } from '../types';
 import { SourceFoldersEditor } from './SourceFoldersEditor';
 const EFFORT_OPTIONS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -12,23 +13,28 @@ const COMMON_TOOLS = [
 export function BridgeSettings() {
     const { fetch: apiFetch, basePath, renderHarnessExtension } = useBridgeConfig();
     const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` });
-    const [harnesses, setHarnesses] = useState([]);
+    const { harnesses } = useBridgeHarnesses();
     const [models, setModels] = useState([]);
     const [expanded, setExpanded] = useState({});
     const [localDefaults, setLocalDefaults] = useState({});
     const [saving, setSaving] = useState(null);
     useEffect(() => {
-        apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => { });
         apiFetch(`${basePath}/models`).then(r => r.ok ? r.json() : []).then((data) => {
             setModels(data.filter(m => m.enabled));
         }).catch(() => { });
     }, [apiFetch, basePath]);
+    // The form is seeded from saved prefs for every harness on the list. Keyed on
+    // the harness *names* rather than the list itself: `/harnesses` is polled now,
+    // and a tick that only reports a harness going available or changing its label
+    // must not reseed the form and throw away edits the user has not saved yet.
+    // Only a harness appearing or disappearing needs a fresh seed.
+    const nameKey = harnessNameKey(harnesses);
     useEffect(() => {
         const defaults = {};
-        for (const h of harnesses)
-            defaults[h.name] = bridgePrefs.getDefaults(h.name);
+        for (const name of harnessNamesFromKey(nameKey))
+            defaults[name] = bridgePrefs.getDefaults(name);
         setLocalDefaults(defaults);
-    }, [harnesses, bridgePrefs.getDefaults]);
+    }, [nameKey, bridgePrefs.getDefaults]);
     const toggleExpand = (name) => setExpanded(prev => ({ ...prev, [name]: !prev[name] }));
     const updateLocal = (harness, field, value) => {
         setLocalDefaults(prev => ({ ...prev, [harness]: { ...prev[harness], [field]: value } }));

@@ -5,8 +5,8 @@ import { useBridgeSession } from '../useBridgeSession'
 import { useBridgePrefs } from '../useBridgePrefs'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeMachines } from '../useBridgeMachines'
+import { useBridgeHarnesses } from '../useBridgeHarnesses'
 import { useBridgeFolders } from '../useBridgeFolders'
-import type { HarnessInfo } from '../types'
 import { SessionList } from './chat/SessionList'
 import { Workspace } from './chat/Workspace'
 import { WorkspaceLayout } from './chat/WorkspaceLayout'
@@ -125,8 +125,8 @@ export function BridgeChat() {
   const bridgePrefs = useBridgePrefs({ fetch: apiFetch, endpoint: `${basePath}/bridge-prefs` })
   const instances = useBridgeInstances()
   const machines = useBridgeMachines()
+  const { harnesses } = useBridgeHarnesses()
   const folders = useBridgeFolders()
-  const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [storeModels, setStoreModels] = useState<StoreModel[]>([])
   const [collapseState, setCollapseState] = useState<CollapseState>(loadCollapseState)
   // Fresh tab/window: start empty so the bootstrap below opens a new chat
@@ -299,10 +299,6 @@ export function BridgeChat() {
     next.delete('session')
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams, handleSelectSession])
-
-  useEffect(() => {
-    apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => {})
-  }, [apiFetch, basePath])
 
   const getDisplayName = useCallback((session: { agent_id?: string; display_name: string; harness: string }): string => {
     return session.display_name || session.agent_id || ''

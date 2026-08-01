@@ -57,6 +57,7 @@ export type {
 } from './useBridgeAttach'
 export { useBridgeInstances } from './useBridgeInstances'
 export { useBridgeMachines } from './useBridgeMachines'
+export { useBridgeHarnesses } from './useBridgeHarnesses'
 export { useBridgePrefs } from './useBridgePrefs'
 export { useBridgeFolders } from './useBridgeFolders'
 export type { UseBridgeFoldersReturn } from './useBridgeFolders'

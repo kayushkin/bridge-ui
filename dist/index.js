@@ -10,6 +10,7 @@ export { useBridgeSession } from './useBridgeSession';
 export { useBridgeAttach } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
 export { useBridgeMachines } from './useBridgeMachines';
+export { useBridgeHarnesses } from './useBridgeHarnesses';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
 export { useBridgeTools } from './useBridgeTools';

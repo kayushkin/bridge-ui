@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
+import { useBridgeHarnesses } from '../useBridgeHarnesses'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeMachines } from '../useBridgeMachines'
 import { TRANSPORT_LABEL } from '../constants'
-import type { BridgeInstance, InstanceStatus, InstanceCredential, HarnessInfo, Machine, CreateMachineRequest } from '../types'
+import type { BridgeInstance, InstanceStatus, InstanceCredential, Machine, CreateMachineRequest } from '../types'
 import type { Credential, Transport } from '@kayushkin/llm-bridge-types'
 
 type MachineFormState = {
@@ -50,8 +51,8 @@ export function BridgeInstances() {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
   const inst = useBridgeInstances()
   const mach = useBridgeMachines()
+  const { harnesses } = useBridgeHarnesses()
 
-  const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [statusCache, setStatusCache] = useState<Record<string, InstanceStatus>>({})
   const [credCache, setCredCache] = useState<Record<string, InstanceCredential[]>>({})
@@ -67,7 +68,6 @@ export function BridgeInstances() {
   const [instanceForm, setInstanceForm] = useState<InstanceFormState>(emptyInstanceForm())
 
   useEffect(() => {
-    apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => {})
     apiFetch(`${basePath}/credentials`).then(r => r.ok ? r.json() : []).then(setCredentials).catch(() => {})
   }, [apiFetch, basePath])
 

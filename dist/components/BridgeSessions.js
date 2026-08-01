@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useBridgeInstances } from '../useBridgeInstances';
+import { useBridgeHarnesses } from '../useBridgeHarnesses';
 import { formatTokens, timeAgo } from '../utils';
 const STATE_COLORS = {
     running: '#22c55e', idle: '#60a5fa', completed: '#888',
@@ -11,7 +12,6 @@ const STATE_COLORS = {
 export function BridgeSessions() {
     const { fetch: apiFetch, basePath, routes } = useBridgeConfig();
     const [sessions, setSessions] = useState([]);
-    const [harnesses, setHarnesses] = useState([]);
     const [tokensMap, setTokensMap] = useState(new Map());
     const [loading, setLoading] = useState(true);
     const [filterHarness, setFilterHarness] = useState('');
@@ -22,6 +22,7 @@ export function BridgeSessions() {
     const [searchHits, setSearchHits] = useState(null);
     const [searching, setSearching] = useState(false);
     const inst = useBridgeInstances();
+    const { harnessMap } = useBridgeHarnesses();
     const navigate = useNavigate();
     const fetchSessions = useCallback(async () => {
         try {
@@ -39,9 +40,6 @@ export function BridgeSessions() {
         const interval = setInterval(fetchSessions, 15000);
         return () => clearInterval(interval);
     }, [fetchSessions]);
-    useEffect(() => {
-        apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => { });
-    }, [apiFetch, basePath]);
     useEffect(() => {
         const t = setTimeout(() => setSearchQuery(searchInput.trim()), 300);
         return () => clearTimeout(t);
@@ -69,7 +67,6 @@ export function BridgeSessions() {
             setSearching(false); });
         return () => { cancelled = true; };
     }, [searchQuery, apiFetch, basePath]);
-    const harnessMap = useMemo(() => new Map(harnesses.map(h => [h.name, h])), [harnesses]);
     const harnessesAvail = useMemo(() => [...new Set(sessions.map(s => s.harness))].sort(), [sessions]);
     const states = useMemo(() => [...new Set(sessions.map(s => s.state))].sort(), [sessions]);
     const filtered = useMemo(() => {

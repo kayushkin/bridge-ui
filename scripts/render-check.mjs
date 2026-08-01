@@ -18,6 +18,7 @@ import { applyEventToRows, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
+import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
 import { TurnsView, rowsToTurns } from '../src/components/chat/TurnsView.tsx'
 import { harnessIsWorkingOnTurn } from '../src/components/chat/utils.ts'
 
@@ -610,6 +611,57 @@ async function sharedPollChecks() {
 
     const threw = await loadJSONList(async () => { throw new TypeError('offline') }, '/u')
     check('a thrown fetch keeps its own wording', threw.ok === false && threw.error === 'TypeError: offline', JSON.stringify(threw))
+  }
+
+  console.log('useBridgeHarnesses — the harness list, shared')
+  {
+    // The store is keyed on the URL, so the harnesses poll must not read the
+    // answer the instances poll already put in the registry under the same fetch.
+    const owner = () => {}
+    const make = () => new SharedPoll(async () => ({ ok: true, value: [] }), [], 100000)
+    const store = harnessesPoll(owner, '/api/bridge')
+    check(
+      'every caller of the harnesses hook gets one store',
+      harnessesPoll(owner, '/api/bridge') === store,
+    )
+    check(
+      'the hook does not read the instances answer',
+      sharedPoll(owner, 'instances /api/bridge', make) !== store,
+    )
+    check(
+      'the hook does not read the machines answer',
+      sharedPoll(owner, 'machines /api/bridge', make) !== store,
+    )
+    check('a second basePath gets its own store', harnessesPoll(owner, '/api/other') !== store)
+    // Two dashboards behind different credentials must not share an answer.
+    check('a second provider gets its own store', harnessesPoll(() => {}, '/api/bridge') !== store)
+  }
+  {
+    const list = [
+      { name: 'claude_code', label: 'Claude Code', available: true },
+      { name: 'codex', label: 'Codex', available: false },
+    ]
+    const map = harnessMapOf(list)
+    check('the map is keyed on name', map.get('claude_code')?.label === 'Claude Code')
+    check('an unregistered harness has no entry', map.get('nope') === undefined)
+    check('an empty list yields an empty map', harnessMapOf([]).size === 0)
+  }
+  {
+    // The settings form seeds editable state per harness. Polling means an
+    // availability flip now arrives mid-edit; keyed on the name set, that tick
+    // must not reseed the form and discard what the user typed.
+    const before = [{ name: 'claude_code', available: false }, { name: 'codex', available: true }]
+    const flipped = [{ name: 'claude_code', available: true }, { name: 'codex', available: true }]
+    const added = [...flipped, { name: 'aider', available: true }]
+    check('a harness coming available does not change the key', harnessNameKey(before) === harnessNameKey(flipped))
+    check('a harness appearing does change the key', harnessNameKey(flipped) !== harnessNameKey(added))
+    check('an empty list round-trips to no names', harnessNamesFromKey(harnessNameKey([])).length === 0)
+    check('the key round-trips to the names it was built from',
+      harnessNamesFromKey(harnessNameKey(added)).join() === 'claude_code,codex,aider')
+    // A joined key would merge these two into one string and read the pair as
+    // the single harness, hiding exactly the membership change this catches.
+    check('two names cannot run together into one',
+      harnessNameKey([{ name: 'a' }, { name: 'b' }]) !== harnessNameKey([{ name: 'a\nb' }]))
   }
 }
 

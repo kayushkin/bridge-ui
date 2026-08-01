@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useBridgeConfig } from '../context';
+import { useBridgeHarnesses } from '../useBridgeHarnesses';
 // Feature groups mirror the categories in
 // ~/repos/llm-bridge-server/conformance/matrix.go's AllFeatures slice.
 // Each feature names the EventType(s) (or control-plane operation) it
@@ -83,7 +84,7 @@ function classifyHarness(h, hr) {
 }
 export function BridgeConformance() {
     const { fetch: apiFetch, basePath } = useBridgeConfig();
-    const [harnesses, setHarnesses] = useState([]);
+    const { harnesses } = useBridgeHarnesses();
     const [response, setResponse] = useState(null);
     const [polling, setPolling] = useState(false);
     const [manualExpanded, setManualExpanded] = useState({});
@@ -97,9 +98,8 @@ export function BridgeConformance() {
         return false;
     }, [apiFetch, basePath]);
     useEffect(() => {
-        apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => { });
         fetchMatrix();
-    }, [fetchMatrix, apiFetch, basePath]);
+    }, [fetchMatrix]);
     useEffect(() => {
         if (!polling)
             return;

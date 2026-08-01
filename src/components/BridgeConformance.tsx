@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useBridgeConfig } from '../context'
+import { useBridgeHarnesses } from '../useBridgeHarnesses'
 import type { HarnessInfo } from '../types'
 import type { ConformanceMatrix, ConformanceHarnessResult, ConformanceTestResult } from '@kayushkin/llm-bridge-types'
 
@@ -95,7 +96,7 @@ function classifyHarness(h: HarnessInfo, hr?: ConformanceHarnessResult): Harness
 
 export function BridgeConformance() {
   const { fetch: apiFetch, basePath } = useBridgeConfig()
-  const [harnesses, setHarnesses] = useState<HarnessInfo[]>([])
+  const { harnesses } = useBridgeHarnesses()
   const [response, setResponse] = useState<ConformanceResponse | null>(null)
   const [polling, setPolling] = useState(false)
   const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({})
@@ -111,9 +112,8 @@ export function BridgeConformance() {
   }, [apiFetch, basePath])
 
   useEffect(() => {
-    apiFetch(`${basePath}/harnesses`).then(r => r.ok ? r.json() : []).then(setHarnesses).catch(() => {})
     fetchMatrix()
-  }, [fetchMatrix, apiFetch, basePath])
+  }, [fetchMatrix])
 
   useEffect(() => {
     if (!polling) return
