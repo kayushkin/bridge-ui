@@ -43,6 +43,9 @@ export declare class SharedPoll<T> {
     private run;
     private emit;
 }
+/** One store per (auth'd fetch, URL). The table itself is `sharedInstance`,
+ *  which the prefs record shares — see that file for why it is keyed on the
+ *  fetch function rather than the URL alone. */
 export declare function sharedPoll<T>(owner: object, key: string, create: () => SharedPoll<T>): SharedPoll<T>;
 /** Subscribe to a shared poll for as long as the component is mounted. */
 export declare function useSharedPoll<T>(poll: SharedPoll<T>): PollSnapshot<T>;

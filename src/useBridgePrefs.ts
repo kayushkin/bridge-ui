@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { bridgePrefsStoreFor } from './bridgePrefsStore'
 import type { FetchFn, BridgePrefs, HarnessDefaults } from './types'
 
 interface BridgePrefsOptions {
@@ -10,69 +11,32 @@ interface BridgePrefsOptions {
   storagePrefix?: string
 }
 
+// The saved bridge preferences: last harness, last instance, last session per
+// harness, and the per-harness defaults record (model, effort, spend ceiling,
+// disabled tools).
+//
+// The record itself lives in `BridgePrefsStore`, one per endpoint and shared by
+// every caller — see that file for why. This hook is the React face of it: it
+// subscribes to the store's snapshot and binds the setters.
 export function useBridgePrefs(options: BridgePrefsOptions = {}) {
   const { fetch: fetchFn, endpoint, storagePrefix = 'bridge-prefs' } = options
-  const [prefs, setPrefs] = useState<BridgePrefs>({})
-  // Flips true once the initial load resolves (from server or localStorage).
-  // Consumers that key a first-render decision off a pref — e.g. the chat's
-  // pending-new-chat bootstrap, which needs last_instance_id — gate on this
-  // so they don't act on an empty prefs snapshot and pick the wrong default.
-  const [loaded, setLoaded] = useState(false)
-  const serverMode = !!(fetchFn && endpoint)
 
-  // Load prefs on mount
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (serverMode) {
-        try {
-          const res = await fetchFn!(endpoint!)
-          if (res.ok) {
-            const data: BridgePrefs = await res.json()
-            if (!cancelled) setPrefs(data)
-          }
-        } catch { /* ignore */ }
-      } else {
-        // localStorage-only mode
-        try {
-          const stored = localStorage.getItem(storagePrefix)
-          if (stored && !cancelled) setPrefs(JSON.parse(stored))
-        } catch { /* ignore */ }
-      }
-      if (!cancelled) setLoaded(true)
-    })()
-    return () => { cancelled = true }
-  }, [fetchFn, endpoint, serverMode, storagePrefix])
+  const store = useMemo(
+    () => bridgePrefsStoreFor({ fetch: fetchFn, endpoint, storagePrefix }),
+    [fetchFn, endpoint, storagePrefix],
+  )
+  // `loaded` flips true once the initial load resolves (from server or
+  // localStorage). Consumers that key a first-render decision off a pref — e.g.
+  // the chat's pending-new-chat bootstrap, which needs last_instance_id — gate
+  // on this so they don't act on an empty prefs snapshot and pick the wrong
+  // default. A consumer that mounts after the store has settled sees it true
+  // straight away and costs no second request.
+  const { prefs, loaded } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 
-  const updatePrefs = useCallback(async (partial: BridgePrefs) => {
-    setPrefs(prev => {
-      const next = { ...prev }
-      if (partial.last_harness) next.last_harness = partial.last_harness
-      if (partial.last_instance_id) next.last_instance_id = partial.last_instance_id
-      if (partial.last_session) {
-        next.last_session = { ...next.last_session, ...partial.last_session }
-      }
-      if (partial.last_instance) {
-        next.last_instance = { ...next.last_instance, ...partial.last_instance }
-      }
-      if (partial.defaults) {
-        next.defaults = { ...next.defaults, ...partial.defaults }
-      }
-
-      // Persist to localStorage in both modes
-      try { localStorage.setItem(storagePrefix, JSON.stringify(next)) } catch { /* ignore */ }
-
-      return next
-    })
-
-    if (serverMode) {
-      await fetchFn!(endpoint!, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial),
-      })
-    }
-  }, [fetchFn, endpoint, serverMode, storagePrefix])
+  const updatePrefs = useCallback(
+    (partial: BridgePrefs) => store.update(partial),
+    [store],
+  )
 
   const setLastHarness = useCallback((harness: string) => {
     updatePrefs({ last_harness: harness })
@@ -90,21 +54,34 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     updatePrefs({ defaults: { [harness]: defaults } })
   }, [updatePrefs])
 
-  const getDefaults = useCallback((harness: string): HarnessDefaults => {
-    return prefs.defaults?.[harness] ?? {}
-  }, [prefs.defaults])
-
   const setLastInstance = useCallback((harness: string, instanceId: string) => {
     updatePrefs({ last_instance: { [harness]: instanceId } })
   }, [updatePrefs])
 
-  const getLastInstance = useCallback((harness: string): string | null => {
-    return prefs.last_instance?.[harness] ?? null
-  }, [prefs.last_instance])
+  // The three getters read the store's live snapshot rather than this render's
+  // copy, so a caller that reads-modifies-writes — every writer of `defaults`
+  // does, because `PUT /bridge-prefs` replaces a harness's record whole — merges
+  // over the newest record even if a sibling wrote it after this render began.
+  //
+  // Their identity still changes whenever the slice they read changes, because
+  // callers hang effects and memos off it: the settings form reseeds itself from
+  // `getDefaults` and would otherwise keep rendering an empty form after the
+  // record arrives. Hence the deps below, which the bodies deliberately do not
+  // close over.
+  const prefsDefaults = prefs.defaults
+  const getDefaults = useCallback((harness: string): HarnessDefaults => {
+    return store.getSnapshot().prefs.defaults?.[harness] ?? {}
+  }, [store, prefsDefaults])
 
+  const prefsLastInstance = prefs.last_instance
+  const getLastInstance = useCallback((harness: string): string | null => {
+    return store.getSnapshot().prefs.last_instance?.[harness] ?? null
+  }, [store, prefsLastInstance])
+
+  const prefsLastSession = prefs.last_session
   const getLastSession = useCallback((harness: string): string | null => {
-    return prefs.last_session?.[harness] ?? null
-  }, [prefs.last_session])
+    return store.getSnapshot().prefs.last_session?.[harness] ?? null
+  }, [store, prefsLastSession])
 
   return useMemo(() => ({
     prefs,

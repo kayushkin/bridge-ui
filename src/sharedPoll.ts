@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { sharedInstance } from './sharedInstance'
 import type { FetchFn } from './types'
 
 // A poll of one URL, shared by every component that asks for it.
@@ -147,23 +148,11 @@ export class SharedPoll<T> {
   }
 }
 
-// One store per (auth'd fetch, URL). Keyed on the fetch function first because
-// two providers can serve the same basePath with different credentials, and
-// those must not read each other's answer. The outer map is weak, so a store
-// dies with the fetch function that owns it.
-const registry = new WeakMap<object, Map<string, SharedPoll<unknown>>>()
-
+/** One store per (auth'd fetch, URL). The table itself is `sharedInstance`,
+ *  which the prefs record shares — see that file for why it is keyed on the
+ *  fetch function rather than the URL alone. */
 export function sharedPoll<T>(owner: object, key: string, create: () => SharedPoll<T>): SharedPoll<T> {
-  let byKey = registry.get(owner)
-  if (!byKey) {
-    byKey = new Map()
-    registry.set(owner, byKey)
-  }
-  const existing = byKey.get(key)
-  if (existing) return existing as SharedPoll<T>
-  const made = create()
-  byKey.set(key, made as SharedPoll<unknown>)
-  return made
+  return sharedInstance(owner, key, create)
 }
 
 /** Subscribe to a shared poll for as long as the component is mounted. */

@@ -18,6 +18,7 @@ import { applyEventToRows, controlRefusal, deriveSessionUIState, projectServerSe
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
+import { bridgePrefsStoreFor, mergePrefs } from '../src/bridgePrefsStore.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
 import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
@@ -1318,6 +1319,169 @@ console.log('Composer turn controls')
 // controlRefusal is what makes interrupt/stop/compact loud. It is async because
 // it reads the server's own words out of the body, so its checks live here rather
 // than in the sync block above.
+// BridgePrefsStore — the bridge-prefs record, held once per endpoint. Driven
+// directly rather than through React for the same reason as SharedPoll: what
+// these pin is how many copies of the record exist and what a second consumer
+// sees when the first one writes, and neither is visible in rendered markup.
+async function bridgePrefsChecks() {
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+
+  // localStorage exists in a browser, not in node. The store's own writes are
+  // wrapped so its absence is survivable, but the checks that assert what gets
+  // persisted need somewhere for it to land.
+  const localStorageBacking = new Map()
+  globalThis.localStorage = {
+    getItem: key => (localStorageBacking.has(key) ? localStorageBacking.get(key) : null),
+    setItem: (key, value) => { localStorageBacking.set(key, String(value)) },
+    removeItem: key => { localStorageBacking.delete(key) },
+  }
+
+  console.log('\nmergePrefs — a partial folded onto the record')
+  {
+    const prev = {
+      last_instance_id: 'inst-1',
+      last_session: { cc: 's1', codex: 's2' },
+      defaults: { cc: { model: 'sonnet', max_budget: 5 }, codex: { model: 'gpt' } },
+    }
+    const next = mergePrefs(prev, { defaults: { cc: { model: 'opus' } } })
+    check('writing one harness keeps the others', next.defaults.codex?.model === 'gpt', JSON.stringify(next))
+    // Replace-to-clear: the settings editor deletes a field by writing the
+    // whole record without it. Merging inside the store would make that
+    // impossible, so the merge that belongs to a caller stays at the caller.
+    check('a harness record is replaced whole, not merged',
+      next.defaults.cc?.max_budget === undefined && next.defaults.cc?.model === 'opus', JSON.stringify(next.defaults.cc))
+    check('an untouched field survives', next.last_instance_id === 'inst-1')
+    check('last_session merges by key',
+      mergePrefs(prev, { last_session: { cc: 's9' } }).last_session?.codex === 's2')
+    check('the input is not mutated', prev.defaults.cc.model === 'sonnet')
+  }
+
+  console.log('BridgePrefsStore — one record, many consumers')
+  {
+    let gets = 0
+    let put = null
+    const fetchFn = async (url, init) => {
+      if (init?.method === 'PUT') { put = JSON.parse(init.body); return { ok: true, json: async () => ({}) } }
+      gets++
+      // `last_instance_id` is here so the merged record differs from any one
+      // partial. Without a second field the two are identical and every check
+      // that says "the partial, not the record" passes without asserting.
+      return { ok: true, json: async () => ({ last_instance_id: 'inst-1', defaults: { cc: { model: 'sonnet', max_budget: 5 } } }) }
+    }
+    const store = bridgePrefsStoreFor({ fetch: fetchFn, endpoint: '/api/bridge/bridge-prefs', storagePrefix: 'bridge-prefs' })
+    check('nobody subscribed means no request', gets === 0)
+
+    let notifiedA = 0
+    let notifiedB = 0
+    const offA = store.subscribe(() => { notifiedA++ })
+    const offB = store.subscribe(() => { notifiedB++ })
+    await settle()
+    // The defect this whole file exists to close: two consumers used to load
+    // the record separately and then disagree the moment either wrote.
+    check('two subscribers cost one GET', gets === 1, `gets=${gets}`)
+    check('both were told when it arrived', notifiedA === 1 && notifiedB === 1, `${notifiedA}/${notifiedB}`)
+    check('and both read the same object', store.getSnapshot().prefs.defaults.cc.model === 'sonnet')
+    check('loaded flips once the record is in', store.getSnapshot().loaded === true)
+
+    // A write by one consumer is the other consumer's new record. Before the
+    // store, this is exactly where a stale copy resurrected a cleared ceiling.
+    await store.update({ defaults: { cc: { model: 'opus' } } })
+    check('a write reaches every subscriber', notifiedA === 2 && notifiedB === 2, `${notifiedA}/${notifiedB}`)
+    check('the record is the merged one', store.getSnapshot().prefs.defaults?.cc?.model === 'opus')
+    check('and the fields the write did not name are still there',
+      store.getSnapshot().prefs.last_instance_id === 'inst-1')
+    check('the PUT body is the partial, not the whole record',
+      JSON.stringify(put) === JSON.stringify({ defaults: { cc: { model: 'opus' } } }), JSON.stringify(put))
+    check('localStorage gets the merged record',
+      JSON.parse(localStorageBacking.get('bridge-prefs')).defaults.cc.model === 'opus')
+
+    offA()
+    offB()
+    check('the record survives its last subscriber leaving',
+      store.getSnapshot().prefs.defaults.cc.model === 'opus' && store.getSnapshot().loaded === true)
+    const back = store.subscribe(() => {})
+    await settle()
+    check('and a consumer that comes back costs no second GET', gets === 1, `gets=${gets}`)
+    back()
+  }
+
+  console.log('BridgePrefsStore — a write that races the first load')
+  {
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    const fetchFn = async (_url, init) => {
+      if (init?.method === 'PUT') return { ok: true, json: async () => ({}) }
+      await held
+      return { ok: true, json: async () => ({ defaults: { cc: { model: 'sonnet', max_budget: 5 } } }) }
+    }
+    const store = bridgePrefsStoreFor({ fetch: fetchFn, endpoint: '/api/bridge/bridge-prefs', storagePrefix: 'bridge-prefs' })
+    const off = store.subscribe(() => {})
+    // The user clears the ceiling before the GET has come back. Publishing the
+    // server's record wholesale on arrival would put the ceiling straight back.
+    await store.update({ defaults: { cc: { model: 'sonnet' } } })
+    release()
+    await settle()
+    await settle()
+    check('the write survives the load that lands after it',
+      store.getSnapshot().prefs.defaults.cc.max_budget === undefined,
+      JSON.stringify(store.getSnapshot().prefs.defaults))
+    check('and the loaded record is still underneath it',
+      store.getSnapshot().prefs.defaults.cc.model === 'sonnet')
+    off()
+  }
+
+  console.log('BridgePrefsStore — a read that fails')
+  {
+    const store = bridgePrefsStoreFor({
+      fetch: async () => { throw new TypeError('offline') },
+      endpoint: '/api/bridge/bridge-prefs',
+      storagePrefix: 'bridge-prefs',
+    })
+    const off = store.subscribe(() => {})
+    await settle()
+    // A consumer gated on `loaded` — the chat's bootstrap is — must not wait
+    // forever because the record could not be read.
+    check('a failed read still settles', store.getSnapshot().loaded === true)
+    check('and reports an empty record, not a broken one',
+      JSON.stringify(store.getSnapshot().prefs) === '{}', JSON.stringify(store.getSnapshot().prefs))
+    off()
+  }
+
+  console.log('BridgePrefsStore — localStorage-only mode')
+  {
+    localStorageBacking.set('other-prefs', JSON.stringify({ last_harness: 'codex' }))
+    const store = bridgePrefsStoreFor({ storagePrefix: 'other-prefs' })
+    const off = store.subscribe(() => {})
+    await settle()
+    check('a store with no server reads localStorage', store.getSnapshot().prefs.last_harness === 'codex')
+    await store.update({ last_instance_id: 'inst-9' })
+    check('and writes the merged record back',
+      JSON.parse(localStorageBacking.get('other-prefs')).last_instance_id === 'inst-9')
+    check('without disturbing what was already there',
+      JSON.parse(localStorageBacking.get('other-prefs')).last_harness === 'codex')
+    off()
+  }
+
+  console.log('BridgePrefsStore — the registry')
+  {
+    const fetchA = async () => ({ ok: true, json: async () => ({}) })
+    const fetchB = async () => ({ ok: true, json: async () => ({}) })
+    const key = { fetch: fetchA, endpoint: '/api/bridge/bridge-prefs', storagePrefix: 'bridge-prefs' }
+    const first = bridgePrefsStoreFor(key)
+    check('the same fetch and endpoint get the same store', bridgePrefsStoreFor({ ...key }) === first)
+    check('a different endpoint gets its own',
+      bridgePrefsStoreFor({ ...key, endpoint: '/other/bridge-prefs' }) !== first)
+    // Two providers can serve one basePath with different credentials; sharing
+    // across them would hand one tenant's saved defaults to the other.
+    check('a different fetch gets its own', bridgePrefsStoreFor({ ...key, fetch: fetchB }) !== first)
+    // The prefs store and a poll can be asked for under the same fetch. They
+    // share one registry, so their keys must not collide.
+    const poll = sharedPoll(fetchA, 'instances /api/bridge', () =>
+      new SharedPoll(async () => ({ ok: true, value: [] }), [], 100000))
+    check('a poll under the same fetch is a different object', poll !== first)
+  }
+}
+
 async function controlRefusalChecks() {
   const res = (status, body, statusText = '') => ({
     ok: status >= 200 && status < 300,
@@ -1350,7 +1514,7 @@ async function controlRefusalChecks() {
 // loop and let node exit 0 with the report never reached — a silent pass for a
 // run that never finished.
 process.exitCode = 1
-sharedPollChecks().then(controlRefusalChecks).then(
+sharedPollChecks().then(bridgePrefsChecks).then(controlRefusalChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)
