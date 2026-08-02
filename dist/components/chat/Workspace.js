@@ -2,6 +2,7 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBridgeConfig } from '../../context';
+import { useInstanceReachable } from '../../useInstanceReachable';
 import { projectServerSessionState, useBridgeSession } from '../../useBridgeSession';
 import { formatTokens } from '../../utils';
 import { BudgetCeilingBanner } from './BudgetCeilingBanner';
@@ -161,37 +162,10 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         : null);
     const headerHarnessInfo = activeHarnessInfo ?? (isPending ? pendingHarnessInfo : undefined);
     const headerMachine = activeMachine ?? (isPending ? pendingMachine : undefined);
-    // Per-instance reachability for the header dot. Polled in line with
-    // the rest of the header — cheap, and the API already aggregates
-    // local/SSH/runner liveness behind a single bool.
-    const [activeReachable, setActiveReachable] = useState(null);
-    useEffect(() => {
-        if (!activeInstanceID) {
-            setActiveReachable(null);
-            return;
-        }
-        let cancelled = false;
-        const check = async () => {
-            try {
-                const res = await apiFetch(`${basePath}/instances/${activeInstanceID}/status`);
-                if (!res.ok) {
-                    if (!cancelled)
-                        setActiveReachable(null);
-                    return;
-                }
-                const data = await res.json();
-                if (!cancelled)
-                    setActiveReachable(Boolean(data?.reachable));
-            }
-            catch {
-                if (!cancelled)
-                    setActiveReachable(null);
-            }
-        };
-        check();
-        const t = setInterval(check, 15000);
-        return () => { cancelled = true; clearInterval(t); };
-    }, [apiFetch, basePath, activeInstanceID]);
+    // Per-instance reachability for the header dot. The poll is shared (see
+    // useInstanceReachable) so a second chat surface asking about the same
+    // instance attaches to this answer instead of starting its own timer.
+    const activeReachable = useInstanceReachable(activeInstanceID);
     const harnessDefaults = useMemo(() => activeHarness ? bridgePrefs.getDefaults(activeHarness) : {}, [bridgePrefs, activeHarness]);
     // Pre-populate model/effort with the harness's saved defaults so the user
     // sees what will actually be used instead of placeholder labels.

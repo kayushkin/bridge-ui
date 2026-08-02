@@ -1,4 +1,4 @@
-export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, BridgeInstance, BridgeSession, CreateSessionRequest, } from './types';
+export type { TokenUsage, Cost, Event, InstanceCredential, InstanceStatus, Machine, ManagedSession, HarnessInfo, HarnessDefaults, BridgePrefs, MaterializedMessage, MaterializedTool, ResultEvent, BridgeInstance, BridgeSession, CreateSessionRequest, } from './types';
 export type { FetchFn, ToolEvent, MessageMeta, Message, LogRow, LogRowActor, LogRowKind, SessionUIState, ActivityKind, BridgeEvent, EventData, UseBridgeSessionReturn, BudgetHalt, } from './types';
 export { TRANSPORT_LABEL } from './constants';
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context';
@@ -9,6 +9,7 @@ export { useBridgeSession } from './useBridgeSession';
 export { useBridgeAttach } from './useBridgeAttach';
 export type { AttachStatus, AttachRole, AttachExit, UseBridgeAttachReturn, UseBridgeAttachOptions, } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
+export { useInstanceReachable, REACHABILITY_INTERVAL_MS } from './useInstanceReachable';
 export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgeHarnesses } from './useBridgeHarnesses';
 export { useBridgePrefs } from './useBridgePrefs';

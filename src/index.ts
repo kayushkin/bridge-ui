@@ -5,6 +5,7 @@ export type {
   Event,
   InstanceCredential,
   InstanceStatus,
+  Machine,
   ManagedSession,
   HarnessInfo,
   HarnessDefaults,
@@ -56,6 +57,7 @@ export type {
   UseBridgeAttachOptions,
 } from './useBridgeAttach'
 export { useBridgeInstances } from './useBridgeInstances'
+export { useInstanceReachable, REACHABILITY_INTERVAL_MS } from './useInstanceReachable'
 export { useBridgeMachines } from './useBridgeMachines'
 export { useBridgeHarnesses } from './useBridgeHarnesses'
 export { useBridgePrefs } from './useBridgePrefs'

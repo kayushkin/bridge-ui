@@ -9,6 +9,7 @@ export { connectSSE } from './bridgeSSE';
 export { useBridgeSession } from './useBridgeSession';
 export { useBridgeAttach } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
+export { useInstanceReachable, REACHABILITY_INTERVAL_MS } from './useInstanceReachable';
 export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgeHarnesses } from './useBridgeHarnesses';
 export { useBridgePrefs } from './useBridgePrefs';
