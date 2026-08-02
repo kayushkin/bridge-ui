@@ -281,7 +281,15 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
                 }, sess.session_id);
             }
             if (override) {
-                bridgePrefs.setHarnessDefaults(harness, override);
+                // MERGED over the saved record, never written in place of it. A harness's
+                // defaults are stored and sent as ONE object — `PUT /bridge-prefs` does
+                // `Defaults[harness] = value`, a whole-record replace — so persisting this
+                // two-key override on its own permanently deleted that harness's saved
+                // `max_budget` and `disabled_tools`. Picking a model in the controls bar
+                // silently uncapped the harness's spend ceiling and re-enabled every tool
+                // the user had turned off. (Clearing a field is still possible, and still
+                // belongs where it always did: the Settings editor writes the full record.)
+                bridgePrefs.setHarnessDefaults(harness, { ...defaults, ...override });
                 pendingConfigRef.current = null;
             }
             // Bind the pane to the new session and drop its pending marker.
@@ -292,7 +300,12 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         if (pendingConfigRef.current) {
             bridge.sendConfig(pendingConfigRef.current);
             if (activeHarness) {
-                bridgePrefs.setHarnessDefaults(activeHarness, pendingConfigRef.current);
+                // Merged, for the same reason as the pending path above: this override
+                // carries model/effort only, and a bare write deletes the rest of the record.
+                bridgePrefs.setHarnessDefaults(activeHarness, {
+                    ...bridgePrefs.getDefaults(activeHarness),
+                    ...pendingConfigRef.current,
+                });
             }
             pendingConfigRef.current = null;
         }
