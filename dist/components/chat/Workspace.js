@@ -2,7 +2,7 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBridgeConfig } from '../../context';
-import { useBridgeSession } from '../../useBridgeSession';
+import { projectServerSessionState, useBridgeSession } from '../../useBridgeSession';
 import { formatTokens } from '../../utils';
 import { BudgetCeilingBanner } from './BudgetCeilingBanner';
 import { Composer } from './Composer';
@@ -54,6 +54,14 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     const [gitRefreshTick, setGitRefreshTick] = useState(0);
     const refreshGitRepos = useCallback(() => setGitRefreshTick(t => t + 1), []);
     const sessionId = bridge.activeSession?.session_id;
+    // Is the harness holding the turn right now? Read from the SERVER's state, not
+    // from `bridge.uiState` — uiState carries the client-side interrupted marker on
+    // top, and that marker says what the user pressed, not what the harness did.
+    // interrupt() records it whatever the request answered, so an interrupt the
+    // server refused leaves a running turn reading `paused`; gating Stop on that
+    // would take the button away from the one user who still needs it.
+    const turnRunning = !!bridge.activeSession
+        && harnessIsWorkingOnTurn(projectServerSessionState(bridge.activeSession));
     useEffect(() => {
         if (!sessionId) {
             setGitRepos([]);
@@ -320,10 +328,10 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         // test is never true (derivation projects the deprecated `running` to
         // `tool_running`), so the interrupt never fired and Send's own title, which
         // promises it, was a lie.
-        if (harnessIsWorkingOnTurn(bridge.uiState))
+        if (turnRunning)
             await bridge.interrupt();
         bridge.send(text);
-    }, [bridge, bridgePrefs, activeHarness, workspace.pending, onStartPending, onUpdate]);
+    }, [bridge, bridgePrefs, activeHarness, turnRunning, workspace.pending, onStartPending, onUpdate]);
     const handleRename = useCallback((name) => {
         if (activeChat?.sessionId)
             bridge.renameSession(activeChat.sessionId, name);
@@ -332,7 +340,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     // (no active session yet) as well as a running one. The remaining controls
     // act on a live session and stay gated on bridge.activeSession.
     const showConfigControls = !!bridge.activeSession || isPending;
-    const controlsBar = (_jsxs("div", { className: "bc-controls-bar", children: [bridge.activeSession && (_jsxs(_Fragment, { children: [_jsx(StatusChip, { uiState: bridge.uiState, activity: bridge.activity, compacting: bridge.compacting }), activeHarnessInfo?.pty && (_jsx(ModeToggle, { currentMode: bridge.activeSession.mode, busy: harnessIsWorkingOnTurn(bridge.uiState), onSwitch: mode => bridge.switchMode(bridge.activeSession.session_id, mode) }))] })), showConfigControls && capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), showConfigControls && capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('compact') && (_jsxs("button", { className: `bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`, onClick: handleCompact, title: contextInfo.tokens && contextInfo.limit
+    const controlsBar = (_jsxs("div", { className: "bc-controls-bar", children: [bridge.activeSession && (_jsxs(_Fragment, { children: [_jsx(StatusChip, { uiState: bridge.uiState, activity: bridge.activity, compacting: bridge.compacting }), activeHarnessInfo?.pty && (_jsx(ModeToggle, { currentMode: bridge.activeSession.mode, busy: turnRunning, onSwitch: mode => bridge.switchMode(bridge.activeSession.session_id, mode) }))] })), showConfigControls && capabilities.has('model') && harnessModels.length > 0 && (_jsxs("select", { className: "bc-ctrl-select", value: configModel, onChange: e => setConfigModel(e.target.value), title: "Model", children: [_jsx("option", { value: "", children: "Model" }), harnessModels.map(m => _jsx("option", { value: m.value, children: m.label }, m.value))] })), showConfigControls && capabilities.has('effort') && (_jsxs("select", { className: "bc-ctrl-select", value: configEffort, onChange: e => setConfigEffort(e.target.value), title: "Effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), bridge.activeSession && (_jsxs(_Fragment, { children: [capabilities.has('compact') && (_jsxs("button", { className: `bc-ctrl-btn bc-ctrl-btn-compact${contextTone ? ` bc-ctrl-btn-compact-${contextTone}` : ''}`, onClick: handleCompact, title: contextInfo.tokens && contextInfo.limit
                             ? `Compact context — ${formatTokens(contextInfo.tokens)} / ${formatTokens(contextInfo.limit)} (${contextInfo.pct}%)`
                             : 'Compact context', style: { ['--ctx-pct']: `${contextInfo.pct}%` }, children: [_jsx("span", { className: "bc-ctrl-btn-bar", "aria-hidden": true }), _jsxs("span", { className: "bc-ctrl-btn-text", children: ["Compact", contextInfo.pct > 0 ? ` ${contextInfo.pct}%` : ''] })] })), capabilities.has('fork') && (_jsx("button", { className: "bc-ctrl-btn", onClick: handleFork, title: "Fork session", children: "Fork" })), capabilities.has('system_prompt') && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => setShowSystemPrompt(true), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts', children: "System Prompt" })), capabilities.has('tools') && (_jsxs("button", { className: `bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`, onClick: () => setShowTools(s => !s), disabled: !bridge.activeSession.info, title: bridge.activeSession.info ? 'Toggle available tools' : 'Tools will be available after the session starts', children: ["Tools", bridge.activeSession.info?.tools?.length ? ` (${bridge.activeSession.info.tools.length})` : ''] })), _jsx(SessionPermissionMode, { session: bridge.activeSession, harnesses: harnesses })] }))] }));
     // In minimal mode, the focused workspace's controls go into the bottom
@@ -377,7 +385,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
                     refreshGitRepos,
                     pendingHooks: bridge.pendingHooks,
                     resolveHook: bridge.resolveHook,
-                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(BudgetCeilingBanner, { halt: bridge.budgetHalt?.sessionId === bridge.activeSession?.session_id ? bridge.budgetHalt : null, session: bridge.activeSession, onRaiseCeiling: bridge.raiseBudgetCeiling }), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? (isPending ? workspace.id : null), connected: (bridge.connected && !!bridge.activeSession) || isPending, turnRunning: harnessIsWorkingOnTurn(bridge.uiState), resumable: sessionCanBeResumed(bridge.uiState), onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
+                }, children: [_jsx(PendingPermissionsBanner, {}), _jsx(BudgetCeilingBanner, { halt: bridge.budgetHalt?.sessionId === bridge.activeSession?.session_id ? bridge.budgetHalt : null, session: bridge.activeSession, onRaiseCeiling: bridge.raiseBudgetCeiling }), _jsx(LayoutRenderer, { tree: minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout })] }), renderControls, showTools && bridge.activeSession?.info && _jsx(ToolsPanel, { info: bridge.activeSession.info }), _jsx(Composer, { sessionId: bridge.activeSession?.session_id ?? (isPending ? workspace.id : null), connected: (bridge.connected && !!bridge.activeSession) || isPending, turnRunning: turnRunning, resumable: sessionCanBeResumed(bridge.uiState), onSend: handleSend, onStop: bridge.interrupt, onResume: bridge.resume }), showSystemPrompt && bridge.activeSession?.info && (_jsx(SystemPromptModal, { info: bridge.activeSession.info, onClose: () => setShowSystemPrompt(false) }))] }));
 }
 // ModeToggle surfaces the events/pty mode switcher for harnesses that
 // support pty. Disabled while a turn is in flight — switching mid-

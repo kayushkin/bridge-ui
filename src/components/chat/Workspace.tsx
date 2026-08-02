@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import { useBridgeConfig } from '../../context'
-import { useBridgeSession } from '../../useBridgeSession'
+import { projectServerSessionState, useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
 import { BudgetCeilingBanner } from './BudgetCeilingBanner'
 import { Composer } from './Composer'
@@ -82,6 +82,16 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
   const refreshGitRepos = useCallback(() => setGitRefreshTick(t => t + 1), [])
 
   const sessionId = bridge.activeSession?.session_id
+
+  // Is the harness holding the turn right now? Read from the SERVER's state, not
+  // from `bridge.uiState` — uiState carries the client-side interrupted marker on
+  // top, and that marker says what the user pressed, not what the harness did.
+  // interrupt() records it whatever the request answered, so an interrupt the
+  // server refused leaves a running turn reading `paused`; gating Stop on that
+  // would take the button away from the one user who still needs it.
+  const turnRunning = !!bridge.activeSession
+    && harnessIsWorkingOnTurn(projectServerSessionState(bridge.activeSession))
+
   useEffect(() => {
     if (!sessionId) {
       setGitRepos([])
@@ -348,9 +358,9 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     // test is never true (derivation projects the deprecated `running` to
     // `tool_running`), so the interrupt never fired and Send's own title, which
     // promises it, was a lie.
-    if (harnessIsWorkingOnTurn(bridge.uiState)) await bridge.interrupt()
+    if (turnRunning) await bridge.interrupt()
     bridge.send(text)
-  }, [bridge, bridgePrefs, activeHarness, workspace.pending, onStartPending, onUpdate])
+  }, [bridge, bridgePrefs, activeHarness, turnRunning, workspace.pending, onStartPending, onUpdate])
 
   const handleRename = useCallback((name: string) => {
     if (activeChat?.sessionId) bridge.renameSession(activeChat.sessionId, name)
@@ -368,7 +378,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
           {activeHarnessInfo?.pty && (
             <ModeToggle
               currentMode={bridge.activeSession.mode}
-              busy={harnessIsWorkingOnTurn(bridge.uiState)}
+              busy={turnRunning}
               onSwitch={mode => bridge.switchMode(bridge.activeSession!.session_id, mode)}
             />
           )}
@@ -528,7 +538,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
       <Composer
         sessionId={bridge.activeSession?.session_id ?? (isPending ? workspace.id : null)}
         connected={(bridge.connected && !!bridge.activeSession) || isPending}
-        turnRunning={harnessIsWorkingOnTurn(bridge.uiState)}
+        turnRunning={turnRunning}
         resumable={sessionCanBeResumed(bridge.uiState)}
         onSend={handleSend}
         onStop={bridge.interrupt}

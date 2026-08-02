@@ -378,6 +378,22 @@ function saveInterruptedIds(s: Set<string>) {
   try { localStorage.setItem(INTERRUPTED_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
 }
 
+// The server's own answer, in the current vocabulary and nothing else: the two
+// deprecated values get their modern spelling and everything else passes
+// through verbatim.
+//
+// This is the state a CONTROL must be gated on. `deriveSessionUIState` below
+// layers the client-side interrupted marker on top, and that marker records
+// what the user pressed, not what the harness is doing — interrupt() marks the
+// session whatever the server answered, so a refused interrupt still reads as
+// paused while the turn runs on. Gate Stop on that and a user whose interrupt
+// did not take has no way to press it again.
+export function projectServerSessionState(session: ManagedSession): SessionUIState {
+  if (session.state === 'running') return 'tool_running'
+  if (session.state === 'waiting_on_approval') return 'awaiting_permission'
+  return session.state as SessionUIState
+}
+
 export function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>): SessionUIState {
   // Local interrupt override: until manager-side SessionPaused emission
   // lands, the only signal that the user hit the pause button is the
@@ -388,11 +404,7 @@ export function deriveSessionUIState(session: ManagedSession, interrupted: Set<s
       return 'paused'
     }
   }
-  // Map deprecated values written by sessions on the old vocabulary.
-  if (session.state === 'running') return 'tool_running'
-  if (session.state === 'waiting_on_approval') return 'awaiting_permission'
-  // Pass through every other value verbatim — server is authoritative.
-  return session.state as SessionUIState
+  return projectServerSessionState(session)
 }
 
 // shouldHoldSSE reports whether a session state warrants a live SSE

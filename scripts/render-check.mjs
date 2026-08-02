@@ -14,7 +14,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
 import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
-import { applyEventToRows, deriveSessionUIState, sameActivity } from '../src/useBridgeSession.ts'
+import { applyEventToRows, deriveSessionUIState, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
@@ -1295,6 +1295,21 @@ console.log('Composer turn controls')
   check('an interrupted live session derives paused, so the marker survives',
     ['idle', 'tool_running', 'model_generating', 'running'].every(s =>
       deriveSessionUIState({ session_id: 'br_check', state: s }, new Set(['br_check'])) === 'paused'))
+  // The marker is a record of what the user pressed; a control has to be gated on
+  // what the harness is doing, or an interrupt the server refused takes the Stop
+  // button away from the only user who still needs it.
+  check('an interrupted session whose turn is still running is still working',
+    harnessIsWorkingOnTurn(projectServerSessionState({ session_id: 'br_check', state: 'tool_running' }))
+      && deriveSessionUIState({ session_id: 'br_check', state: 'tool_running' }, new Set(['br_check'])) === 'paused')
+  check('the server projection carries no marker of its own',
+    ALL_STATES.every(s => {
+      const marked = new Set(['br_check'])
+      return projectServerSessionState({ session_id: 'br_check', state: s })
+        === deriveSessionUIState({ session_id: 'br_check', state: s }, new Set())
+        && projectServerSessionState({ session_id: 'br_check', state: s }) !== 'paused'
+        || s === 'paused'
+    }))
+
   check('and a running turn is still recognised as working',
     ['starting', 'model_generating', 'tool_running', 'compacting'].every(harnessIsWorkingOnTurn)
       && !harnessIsWorkingOnTurn('paused') && !harnessIsWorkingOnTurn('idle'))
