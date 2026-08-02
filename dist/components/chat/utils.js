@@ -15,6 +15,41 @@ const workingStates = new Set([
 export function harnessIsWorkingOnTurn(state) {
     return workingStates.has(state);
 }
+// The states in which POST /sessions/{id}/resume will actually be accepted —
+// the client-visible proxy for "the server holds no live process for this
+// session". handleResumeSession refuses with 409 whenever it still has one
+// (llm-bridge-server internal/server/sessions.go, pinned by
+// TestResumeSession_AlreadyRunning), so offering Resume anywhere else is
+// offering a button that cannot work.
+//
+// `paused` is deliberately NOT here, and that is the whole point of the set.
+// bridge-ui's `paused` is a client-side marker: interrupt() records the id in
+// localStorage and deriveSessionUIState reports the session paused while its
+// state is still idle/tool_running/model_generating. Interrupt does not end
+// the process — Manager.Stop sends SIGINT and llm-bridge-claudecode catches
+// it and keeps running — so a paused session is exactly the session /resume
+// refuses. Keyed on `paused`, Resume 409'd every single time it was pressed,
+// and the user read "Resume failed: Conflict" as a symptom of the interrupt.
+//
+// The quiet states stay out for their own reasons: `idle` cannot tell a live
+// process between turns from a dead one whose row never caught up,
+// `completed` is written by "mark done" without touching the process, and
+// `error`/`rate_limited` are mid-life. None of them need Resume anyway —
+// /send starts a process when the registry has none, so any dead session
+// revives by being sent to. Resume is the way back WITHOUT putting words in
+// the session's mouth.
+//
+// This mirrors RESUMABLE_STATES in chat-core (src/react/hooks.ts), which
+// dashv2 shipped first. When `e1732f61` (SessionPaused on interrupt) is
+// decided and the manager starts emitting a real paused state, `paused`
+// joins both sets and nothing else changes.
+const resumableStates = new Set([
+    'aborted',
+    'disconnected',
+]);
+export function sessionCanBeResumed(state) {
+    return resumableStates.has(state);
+}
 export function formatHMS(ts) {
     try {
         const d = new Date(ts);

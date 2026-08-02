@@ -378,7 +378,7 @@ function saveInterruptedIds(s: Set<string>) {
   try { localStorage.setItem(INTERRUPTED_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
 }
 
-function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>): SessionUIState {
+export function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>): SessionUIState {
   // Local interrupt override: until manager-side SessionPaused emission
   // lands, the only signal that the user hit the pause button is the
   // client-side interrupted Set. Honor it for any non-terminal state.

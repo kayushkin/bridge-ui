@@ -390,7 +390,7 @@ function saveInterruptedIds(s) {
     }
     catch { /* ignore */ }
 }
-function deriveSessionUIState(session, interrupted) {
+export function deriveSessionUIState(session, interrupted) {
     // Local interrupt override: until manager-side SessionPaused emission
     // lands, the only signal that the user hit the pause button is the
     // client-side interrupted Set. Honor it for any non-terminal state.

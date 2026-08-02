@@ -1,5 +1,6 @@
 import type { LogRow, SessionUIState, ToolEvent } from '../../types';
 export declare function harnessIsWorkingOnTurn(state: SessionUIState): boolean;
+export declare function sessionCanBeResumed(state: SessionUIState): boolean;
 export declare function formatHMS(ts: string): string;
 export declare function idTail(id: string, n?: number): string;
 export declare function oneLine(s: string, n?: number): string;

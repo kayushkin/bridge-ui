@@ -14,7 +14,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
 import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
-import { applyEventToRows, sameActivity } from '../src/useBridgeSession.ts'
+import { applyEventToRows, deriveSessionUIState, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
@@ -35,7 +35,8 @@ import {
   TIMELINE_WINDOW_INITIAL_ITEMS, itemCountOfTimelineBlock, itemsBeforeTimelineWindow,
   timelineBlockKey, timelineWindowStart,
 } from '../src/components/chat/timelineWindow.ts'
-import { harnessIsWorkingOnTurn, sameItemFields, sameRowList } from '../src/components/chat/utils.ts'
+import { harnessIsWorkingOnTurn, sameItemFields, sameRowList, sessionCanBeResumed } from '../src/components/chat/utils.ts'
+import { Composer } from '../src/components/chat/Composer.tsx'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -1249,6 +1250,54 @@ console.log('\nTimeline window')
   check('and renders all of its items',
     smallHtml.includes('only question') && smallHtml.includes('only answer')
       && (smallHtml.match(/bc-tl-item /g) || []).length === rowsToTimeline(smallRows).length)
+}
+
+console.log('Composer turn controls')
+{
+  // Every state the union admits, so a new one cannot be added without this
+  // deciding what the composer does with it.
+  const ALL_STATES = [
+    'empty', 'placeholder', 'starting', 'model_generating', 'tool_running', 'compacting',
+    'awaiting_permission', 'awaiting_user', 'rate_limited', 'paused', 'idle',
+    'completed', 'error', 'aborted', 'disconnected', 'running', 'waiting_on_approval',
+  ]
+  const render = (props) => renderToStaticMarkup(h(Composer, {
+    sessionId: 'br_check', connected: true, turnRunning: false, resumable: false,
+    onSend: () => {}, onStop: () => {}, onResume: () => {}, ...props,
+  }))
+
+  check('Send renders whatever the turn is doing',
+    ALL_STATES.every(s => render({
+      turnRunning: harnessIsWorkingOnTurn(s), resumable: sessionCanBeResumed(s),
+    }).includes('>Send</button>')))
+  check('a running turn renders Stop beside Send',
+    render({ turnRunning: true }).includes('bc-btn-stop') && render({ turnRunning: true }).includes('>Send</button>'))
+  check('a quiet turn renders no Stop', !render({ turnRunning: false }).includes('bc-btn-stop'))
+  check('a resumable session renders Resume beside Send',
+    render({ resumable: true }).includes('bc-btn-resume') && render({ resumable: true }).includes('>Send</button>'))
+  check('a live session renders no Resume', !render({ resumable: false }).includes('bc-btn-resume'))
+
+  // The defect this file exists to pin (todo 3622b523): Resume used to be keyed
+  // on `paused`, which is a client-side marker for "the user interrupted this",
+  // i.e. a session whose process is still alive — exactly the one /resume 409s.
+  check('paused offers no Resume', !render({ resumable: sessionCanBeResumed('paused') }).includes('bc-btn-resume'))
+  check('the only resumable states are aborted and disconnected',
+    ALL_STATES.filter(sessionCanBeResumed).join(',') === 'aborted,disconnected',
+    ALL_STATES.filter(sessionCanBeResumed).join(','))
+
+  // The other half (todo 3622b523's sibling defect): four controls were keyed on
+  // `uiState === 'running'`, and derivation projects `running` away before any
+  // consumer sees it, so none of them ever rendered.
+  check('derivation never yields `running`, whoever wrote the row',
+    ALL_STATES.every(s => deriveSessionUIState({ session_id: 'br_check', state: s }, new Set()) !== 'running'))
+  check('the deprecated `running` still projects to tool_running',
+    deriveSessionUIState({ session_id: 'br_check', state: 'running' }, new Set()) === 'tool_running')
+  check('an interrupted live session derives paused, so the marker survives',
+    ['idle', 'tool_running', 'model_generating', 'running'].every(s =>
+      deriveSessionUIState({ session_id: 'br_check', state: s }, new Set(['br_check'])) === 'paused'))
+  check('and a running turn is still recognised as working',
+    ['starting', 'model_generating', 'tool_running', 'compacting'].every(harnessIsWorkingOnTurn)
+      && !harnessIsWorkingOnTurn('paused') && !harnessIsWorkingOnTurn('idle'))
 }
 
 // Failing by default until the report is printed. The async checks await real

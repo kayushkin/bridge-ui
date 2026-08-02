@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { BridgeInstance, HarnessInfo, Machine, ManagedSession } from '../../types'
+import type { BridgeInstance, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import { useBridgeConfig } from '../../context'
 import { useBridgeSession } from '../../useBridgeSession'
 import { formatTokens } from '../../utils'
@@ -13,6 +13,7 @@ import { SessionHeader } from './SessionHeader'
 import { StatusDot } from './StatusDot'
 import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
+import { harnessIsWorkingOnTurn, sessionCanBeResumed } from './utils'
 import { WorkspaceProvider } from './WorkspaceContext'
 import { useMinimalChrome } from '../minimal/MinimalChromeContext'
 import type { GitRepo } from './WorkspaceContext'
@@ -341,7 +342,13 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
       }
       pendingConfigRef.current = null
     }
-    if (bridge.uiState === 'running') await bridge.interrupt()
+    // Interrupt first, then send: the two race otherwise and the new message can
+    // reach the harness while the old turn still owns it. `harnessIsWorkingOnTurn`
+    // is what says a turn is in flight — the `uiState === 'running'` this used to
+    // test is never true (derivation projects the deprecated `running` to
+    // `tool_running`), so the interrupt never fired and Send's own title, which
+    // promises it, was a lie.
+    if (harnessIsWorkingOnTurn(bridge.uiState)) await bridge.interrupt()
     bridge.send(text)
   }, [bridge, bridgePrefs, activeHarness, workspace.pending, onStartPending, onUpdate])
 
@@ -361,7 +368,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
           {activeHarnessInfo?.pty && (
             <ModeToggle
               currentMode={bridge.activeSession.mode}
-              busy={bridge.uiState === 'running'}
+              busy={harnessIsWorkingOnTurn(bridge.uiState)}
               onSwitch={mode => bridge.switchMode(bridge.activeSession!.session_id, mode)}
             />
           )}
@@ -521,8 +528,8 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
       <Composer
         sessionId={bridge.activeSession?.session_id ?? (isPending ? workspace.id : null)}
         connected={(bridge.connected && !!bridge.activeSession) || isPending}
-        streaming={bridge.uiState === 'running'}
-        paused={bridge.uiState === 'paused'}
+        turnRunning={harnessIsWorkingOnTurn(bridge.uiState)}
+        resumable={sessionCanBeResumed(bridge.uiState)}
         onSend={handleSend}
         onStop={bridge.interrupt}
         onResume={bridge.resume}
@@ -561,7 +568,7 @@ function ModeToggle({ currentMode, busy, onSwitch }: {
 }
 
 function StatusChip({ uiState, activity, compacting }: {
-  uiState: string
+  uiState: SessionUIState
   activity: { kind: string; name?: string }
   compacting: boolean
 }) {
@@ -575,7 +582,9 @@ function StatusChip({ uiState, activity, compacting }: {
   }
   if (!uiState || uiState === 'empty') return null
   const stateLabel = uiState.charAt(0).toUpperCase() + uiState.slice(1)
-  const activityText = activity.kind !== 'idle' && uiState === 'running'
+  // Same dead comparison as the composer's: `running` never reaches a consumer,
+  // so the chip's "· thinking" / "· tool" suffix had never rendered either.
+  const activityText = activity.kind !== 'idle' && harnessIsWorkingOnTurn(uiState)
     ? (activity.kind === 'tool' ? activity.name ?? 'tool' : activity.kind === 'thinking' ? 'thinking' : 'streaming')
     : ''
   return (

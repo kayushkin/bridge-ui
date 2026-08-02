@@ -2,7 +2,27 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clearDraft, loadDraft, saveDraft } from './persistence';
 const MAX_INPUT_PX = 220;
-export function Composer({ sessionId, connected, streaming, paused, onSend, onStop, onResume }) {
+/** The composer and the turn controls for the active session.
+ *
+ *  `turnRunning` is the server-reported "the harness holds the turn" state
+ *  (`harnessIsWorkingOnTurn`), never a bare `uiState === 'running'`: derivation
+ *  projects the deprecated `running` to `tool_running` before any consumer sees
+ *  it, so that comparison is false for every session on the box and the Stop
+ *  button behind it never rendered at all.
+ *
+ *  `resumable` says the server will actually accept POST /resume — see
+ *  `sessionCanBeResumed`. It is NOT `paused`: bridge-ui's paused marker means
+ *  "the user interrupted this session", whose process is still alive, which is
+ *  precisely the 409 case. The marker stays (the status chip and the sidebar dot
+ *  are the only record that a user stopped a session); what goes is the button
+ *  behind it.
+ *
+ *  Stop and Resume sit BESIDE Send rather than replacing it. They are not
+ *  alternatives to sending: a running turn is exactly when a user most often
+ *  wants to redirect the model, and an interrupted session is continued by
+ *  saying something to it. Replacing Send with Resume left a paused session with
+ *  one visible action, and it was the one that could not work. */
+export function Composer({ sessionId, connected, turnRunning, resumable, onSend, onStop, onResume }) {
     const [text, setText] = useState(() => loadDraft(sessionId ?? ''));
     const inputRef = useRef(null);
     const saveTimer = useRef(null);
@@ -76,6 +96,6 @@ export function Composer({ sessionId, connected, streaming, paused, onSend, onSt
         el.style.height = '0px';
         el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_PX)}px`;
     }, [text]);
-    return (_jsx("div", { className: "bc-composer-wrap", children: _jsxs("div", { className: "bc-composer", children: [_jsx("textarea", { ref: inputRef, className: "bc-composer-input", value: text, onChange: e => setText(e.target.value), onKeyDown: handleKeyDown, placeholder: connected ? 'Send a message...' : 'Select a session', disabled: !connected, rows: 1 }), _jsxs("div", { className: "bc-composer-actions", children: [paused ? (_jsx("button", { className: "bc-composer-btn bc-btn-resume", onClick: onResume, children: "Resume" })) : (_jsx("button", { className: "bc-composer-btn", onClick: handleSubmit, disabled: !text.trim() || !connected, title: streaming ? 'Send (interrupts current response)' : 'Send', children: "Send" })), streaming && (_jsx("button", { className: "bc-composer-btn bc-btn-stop", onClick: onStop, title: "Stop", children: "Stop" }))] })] }) }));
+    return (_jsx("div", { className: "bc-composer-wrap", children: _jsxs("div", { className: "bc-composer", children: [_jsx("textarea", { ref: inputRef, className: "bc-composer-input", value: text, onChange: e => setText(e.target.value), onKeyDown: handleKeyDown, placeholder: connected ? 'Send a message...' : 'Select a session', disabled: !connected, rows: 1 }), _jsxs("div", { className: "bc-composer-actions", children: [_jsx("button", { className: "bc-composer-btn", onClick: handleSubmit, disabled: !text.trim() || !connected, title: turnRunning ? 'Send (interrupts current response)' : 'Send', children: "Send" }), turnRunning && (_jsx("button", { className: "bc-composer-btn bc-btn-stop", onClick: onStop, title: "Stop", children: "Stop" })), resumable && (_jsx("button", { className: "bc-composer-btn bc-btn-resume", onClick: onResume, title: "Restart this session's harness process", children: "Resume" }))] })] }) }));
 }
 //# sourceMappingURL=Composer.js.map
