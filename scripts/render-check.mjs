@@ -14,7 +14,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
 import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
-import { applyEventToRows, deriveSessionUIState, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
+import { applyEventToRows, controlRefusal, deriveSessionUIState, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
@@ -1315,12 +1315,42 @@ console.log('Composer turn controls')
       && !harnessIsWorkingOnTurn('paused') && !harnessIsWorkingOnTurn('idle'))
 }
 
+// controlRefusal is what makes interrupt/stop/compact loud. It is async because
+// it reads the server's own words out of the body, so its checks live here rather
+// than in the sync block above.
+async function controlRefusalChecks() {
+  const res = (status, body, statusText = '') => ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    text: async () => body,
+  })
+
+  console.log('\ncontrolRefusal')
+  check('a 2xx is not a refusal', await controlRefusal(res(200, '{}')) === null)
+  check('a 204 is not a refusal', await controlRefusal(res(204, '')) === null)
+  // The status alone says "no"; the body says which tool holds the turn, which is
+  // the half the user can act on.
+  check('a 409 carries the status and the server\'s words',
+    await controlRefusal(res(409, 'session is busy running a tool')) === '409 session is busy running a tool')
+  check('a body of whitespace falls back to the status text',
+    await controlRefusal(res(500, '  \n ', 'Internal Server Error')) === '500 Internal Server Error')
+  check('an empty body and no status text still names the status',
+    await controlRefusal(res(502, '')) === '502 request refused')
+  // A refusal the UI cannot describe is still a refusal. Reading the body must
+  // never be the thing that turns a loud control quiet again.
+  check('a body that will not read still refuses', await controlRefusal({
+    ok: false, status: 503, statusText: 'Service Unavailable',
+    text: async () => { throw new Error('stream closed') },
+  }) === '503 Service Unavailable')
+}
+
 // Failing by default until the report is printed. The async checks await real
 // promises, so a bug that leaves one pending would otherwise drain the event
 // loop and let node exit 0 with the report never reached — a silent pass for a
 // run that never finished.
 process.exitCode = 1
-sharedPollChecks().then(
+sharedPollChecks().then(controlRefusalChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)

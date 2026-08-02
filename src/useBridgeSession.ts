@@ -378,6 +378,38 @@ function saveInterruptedIds(s: Set<string>) {
   try { localStorage.setItem(INTERRUPTED_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
 }
 
+// --- Control refusals ---
+//
+// A control (interrupt, stop, compact) asks the harness to do something and then
+// the UI records that it happened: mark the session paused, close the last
+// assistant row, drop the activity to idle, put the Compacting chip up. Every one
+// of those is a claim about the harness, and none of them is true if the server
+// refused the request.
+//
+// So skipping the status check does not make a control quiet, it makes it lie.
+// The refusal is invisible AND the optimistic updates run: the user presses Stop,
+// the session says paused, the turn is drawn as finished, and the harness keeps
+// streaming into a row the UI has closed. `handleInterrupt` 409s while a tool
+// still holds the turn, so this is an everyday answer, not an outage.
+//
+// chat-core settled the same question for dashv2 and wrote the contract down
+// (`src/react/hooks.ts`): `stop()` sets the error and rethrows "rather than
+// optimistically marking the session idle — a failed stop must be visible, never
+// swallowed into a fake-idle." This is that rule, in the shape this hook uses:
+// every caller reads the refusal, shows it, and returns before touching state.
+//
+// Exported for the render checks — `npm run check` pins the message shape.
+export async function controlRefusal(
+  res: { ok: boolean; status: number; statusText: string; text(): Promise<string> },
+): Promise<string | null> {
+  if (res.ok) return null
+  // The server's own words first. A 409 from `handleInterrupt` names which tool
+  // holds the turn, and that is the difference between an error the user can act
+  // on and one that only says "no".
+  const body = await res.text().catch(() => '')
+  return `${res.status} ${body.trim() || res.statusText || 'request refused'}`
+}
+
 // The server's own answer, in the current vocabulary and nothing else: the two
 // deprecated values get their modern spelling and everything else passes
 // through verbatim.
@@ -1193,7 +1225,15 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const interrupt = useCallback(async () => {
     if (!activeSessionId) return
     try {
-      await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' })
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/interrupt`, { method: 'POST' })
+      const refusal = await controlRefusal(res)
+      if (refusal) {
+        // Nothing below runs. The three lines that follow all assert the turn
+        // stopped, and it did not — `turnRunning` reads the server's state, so
+        // the Stop button stays where it is and the user can press it again.
+        setError(`Interrupt failed: ${refusal}`)
+        return
+      }
       markInterrupted(activeSessionId)
       markLastAssistantDone()
       setActivityIfChanged({ kind: 'idle' })
@@ -1227,7 +1267,15 @@ export function useBridgeSession(): UseBridgeSessionReturn {
   const stopSession = useCallback(async () => {
     if (!activeSessionId) return
     try {
-      await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' })
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/stop`, { method: 'POST' })
+      const refusal = await controlRefusal(res)
+      if (refusal) {
+        // `closeSSE()` is the one that hurts here: a refused stop that still tore
+        // the stream down would leave the UI blind to a session that is very much
+        // still running, and nothing would reopen it.
+        setError(`Stop failed: ${refusal}`)
+        return
+      }
       closeSSE()
       markLastAssistantDone()
       unmarkInterrupted(activeSessionId)
@@ -1252,11 +1300,19 @@ export function useBridgeSession(): UseBridgeSessionReturn {
     try {
       const body: Record<string, string> = {}
       if (summary) body.summary = summary
-      await fetchFn(`${basePath}/sessions/${activeSessionId}/compact`, {
+      const res = await fetchFn(`${basePath}/sessions/${activeSessionId}/compact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
+      const refusal = await controlRefusal(res)
+      if (refusal) {
+        // The indicator's only other exit is a `compact_boundary` event, which a
+        // compaction that never started will never send. Leaving it up parks
+        // "Compacting" on screen for the whole three-minute safety net.
+        setError(`Compact failed: ${refusal}`)
+        clearCompacting()
+      }
     } catch (err) {
       setError(`Compact failed: ${err}`)
       clearCompacting()
