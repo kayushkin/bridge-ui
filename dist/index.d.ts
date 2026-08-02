@@ -60,4 +60,6 @@ export { EditableName } from './components/chat/EditableName';
 export type { EditableNameProps } from './components/chat/EditableName';
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
+export { readSessionDeeplink, writeSessionParam, initialSessionDeeplinkState, } from './sessionDeeplink';
+export type { SessionDeeplinkState } from './sessionDeeplink';
 //# sourceMappingURL=index.d.ts.map

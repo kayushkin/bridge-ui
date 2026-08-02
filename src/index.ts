@@ -139,3 +139,16 @@ export type { EditableNameProps } from './components/chat/EditableName'
 // can use it to hide their own site chrome via plain CSS.
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext'
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext'
+
+// The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
+// no router — so any surface that owns its own routing can drive the same two-way
+// behaviour BridgeChat has at `/`. dashv2 uses it verbatim rather than growing a second
+// implementation that would have to be kept in step with this one. The `awaiting` latch
+// in there is the whole reason both directions can coexist; read its header before
+// wiring it.
+export {
+  readSessionDeeplink,
+  writeSessionParam,
+  initialSessionDeeplinkState,
+} from './sessionDeeplink'
+export type { SessionDeeplinkState } from './sessionDeeplink'
