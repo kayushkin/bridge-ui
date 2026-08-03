@@ -62,8 +62,12 @@ export { EditableName } from './components/chat/EditableName';
 export type { EditableNameProps } from './components/chat/EditableName';
 export { ProducerRow } from './components/chat/ProducerRow';
 export type { ProducerRowProps } from './components/chat/ProducerRow';
-export { useMinimalChrome, useRegisterMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
+export { useMinimalChrome, useRegisterMinimalChrome, MinimalChromeProvider, MOBILE_BREAKPOINT } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
+export { MinimalTopBar } from './components/minimal/MinimalTopBar';
+export type { MinimalTopBarProps } from './components/minimal/MinimalTopBar';
+export { SessionDrawer } from './components/minimal/SessionDrawer';
+export { ChromeSheet } from './components/minimal/ChromeSheet';
 export { readSessionDeeplink, writeSessionParam, initialSessionDeeplinkState, } from './sessionDeeplink';
 export type { SessionDeeplinkState } from './sessionDeeplink';
 //# sourceMappingURL=index.d.ts.map

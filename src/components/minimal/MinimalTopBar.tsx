@@ -1,6 +1,6 @@
 import { useMinimalChrome } from './MinimalChromeContext'
 
-interface MinimalTopBarProps {
+export interface MinimalTopBarProps {
   title: string
   subtitle?: string
 }

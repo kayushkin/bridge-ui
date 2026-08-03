@@ -76,7 +76,20 @@ export { ProducerRow } from './components/chat/ProducerRow';
 // of those pages draw no chrome at all; hiding the host's header for them takes
 // away the last navigation on the page. A host that ports its own minimal chrome
 // calls the hook itself — that is what makes the class true for it.
-export { useMinimalChrome, useRegisterMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
+export { useMinimalChrome, useRegisterMinimalChrome, MinimalChromeProvider, MOBILE_BREAKPOINT } from './components/minimal/MinimalChromeContext';
+// The three chrome pieces a host can mount unmodified. Each reads the context above
+// and takes no pane vocabulary, so a host with its own set of views still gets the
+// same top bar, the same drawer and the same controls sheet rather than a copy that
+// drifts from this one.
+//
+// `MinimalPaneSwitch` is deliberately NOT here. It hardcodes bridge-ui's own five
+// `PaneKey`s and the callback names behind them, so a host whose views are a different
+// set could not mount it as it stands — exporting it would only offer buttons for panes
+// that host cannot draw. A pane switch is ~25 lines over the `bc-mc-paneswitch` classes
+// this stylesheet already carries; hosts write their own against their own views.
+export { MinimalTopBar } from './components/minimal/MinimalTopBar';
+export { SessionDrawer } from './components/minimal/SessionDrawer';
+export { ChromeSheet } from './components/minimal/ChromeSheet';
 // The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
 // no router — so any surface that owns its own routing can drive the same two-way
 // behaviour BridgeChat has at `/`. dashv2 uses it verbatim rather than growing a second

@@ -1,6 +1,16 @@
 import type { ReactNode } from 'react';
 import type { PaneKey } from '../chat/types';
 export type ChromeOverride = 'minimal' | 'full' | null;
+/**
+ * The viewport width below which minimal mode engages on its own.
+ *
+ * Exported because it is a JS comparison and not a media query, so a host that draws
+ * its own minimal chrome cannot reach it from CSS. The one question that needs it is
+ * the re-engage pill's: `minimal` folds `override` in, so it reads false whether the
+ * viewport is wide or the user forced the full layout on a narrow one, and telling
+ * those apart is the whole condition for offering the way back.
+ */
+export declare const MOBILE_BREAKPOINT = 640;
 interface MinimalChromeValue {
     minimal: boolean;
     /**

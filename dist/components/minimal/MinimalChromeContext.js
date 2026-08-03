@@ -2,7 +2,16 @@ import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 const STORAGE_KEY = 'bridge-chrome-override';
 const PANE_KEY = 'bridge-mobile-pane';
-const MOBILE_BREAKPOINT = 640;
+/**
+ * The viewport width below which minimal mode engages on its own.
+ *
+ * Exported because it is a JS comparison and not a media query, so a host that draws
+ * its own minimal chrome cannot reach it from CSS. The one question that needs it is
+ * the re-engage pill's: `minimal` folds `override` in, so it reads false whether the
+ * viewport is wide or the user forced the full layout on a narrow one, and telling
+ * those apart is the whole condition for offering the way back.
+ */
+export const MOBILE_BREAKPOINT = 640;
 const VALID_PANES = ['turns', 'thread', 'timeline', 'git', 'kanban'];
 function loadMobilePane() {
     if (typeof window === 'undefined')
