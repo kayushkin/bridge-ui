@@ -37,7 +37,7 @@ import {
   timelineBlockKey, timelineWindowStart,
 } from '../src/components/chat/timelineWindow.ts'
 import { harnessIsWorkingOnTurn, sameItemFields, sameRowList, sessionCanBeResumed } from '../src/components/chat/utils.ts'
-import { Composer } from '../src/components/chat/Composer.tsx'
+import { Composer, composerAutoGrowHeightPx } from '../src/components/chat/Composer.tsx'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -1251,6 +1251,53 @@ console.log('\nTimeline window')
   check('and renders all of its items',
     smallHtml.includes('only question') && smallHtml.includes('only answer')
       && (smallHtml.match(/bc-tl-item /g) || []).length === rowsToTimeline(smallRows).length)
+}
+
+console.log('Composer auto-grow height')
+{
+  // The live measurement this pins, taken on https://dash.kayushkin.com/ with a
+  // four-line draft: boxSizing border-box, border 1px/1px, offsetHeight 109,
+  // clientHeight 107, scrollHeight 109. The old code assigned `scrollHeight`
+  // straight, so the box was sized to 109 while only 107 of it could show
+  // content — a scrollbar at every size, not just past the cap.
+  const live = { scrollHeight: 109, boxSizing: 'border-box', borderTopWidth: '1px', borderBottomWidth: '1px' }
+
+  check('under border-box the border is added back',
+    composerAutoGrowHeightPx(live) === 111, String(composerAutoGrowHeightPx(live)))
+  check('the assigned height leaves room for the content it was measured from',
+    composerAutoGrowHeightPx(live) - 2 >= live.scrollHeight,
+    `${composerAutoGrowHeightPx(live)} for scrollHeight ${live.scrollHeight}`)
+
+  // Under content-box an assigned height already excludes the border, so adding
+  // it overshoots by exactly as much as omitting it undershot.
+  check('under content-box the height is the bare scrollHeight',
+    composerAutoGrowHeightPx({ ...live, boxSizing: 'content-box' }) === 109,
+    String(composerAutoGrowHeightPx({ ...live, boxSizing: 'content-box' })))
+
+  // A borderless composer must not be padded by a phantom border, whichever
+  // shape the used value comes back in.
+  check('a zero border adds nothing',
+    composerAutoGrowHeightPx({ ...live, borderTopWidth: '0px', borderBottomWidth: '0px' }) === 109)
+  check('an unparseable border width adds nothing rather than NaN',
+    composerAutoGrowHeightPx({ ...live, borderTopWidth: 'medium', borderBottomWidth: '' }) === 109,
+    String(composerAutoGrowHeightPx({ ...live, borderTopWidth: 'medium', borderBottomWidth: '' })))
+
+  // Asymmetric and fractional borders: the sum of the two edges is what the box
+  // owes, not twice one of them, and a device-pixel-ratio border is not an integer.
+  check('an asymmetric border sums both edges',
+    composerAutoGrowHeightPx({ ...live, borderTopWidth: '3px', borderBottomWidth: '1px' }) === 113,
+    String(composerAutoGrowHeightPx({ ...live, borderTopWidth: '3px', borderBottomWidth: '1px' })))
+  check('a fractional border is not rounded away',
+    composerAutoGrowHeightPx({ ...live, borderTopWidth: '0.5px', borderBottomWidth: '0.5px' }) === 110,
+    String(composerAutoGrowHeightPx({ ...live, borderTopWidth: '0.5px', borderBottomWidth: '0.5px' })))
+
+  // The cap belongs to `.bc-composer-input { max-height: 220px }` in this
+  // package's stylesheet. A tall draft must come back TALLER than the cap, so the
+  // browser is the thing that clamps it; the moment this function starts
+  // returning 220 it has grown a second copy of that number to keep in step.
+  check('a draft past the cap is not clamped here — the stylesheet clamps it',
+    composerAutoGrowHeightPx({ ...live, scrollHeight: 600 }) === 602,
+    String(composerAutoGrowHeightPx({ ...live, scrollHeight: 600 })))
 }
 
 console.log('Composer turn controls')

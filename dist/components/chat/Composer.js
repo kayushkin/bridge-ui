@@ -1,7 +1,38 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clearDraft, loadDraft, saveDraft } from './persistence';
-const MAX_INPUT_PX = 220;
+/** The height the auto-growing composer must be given so its content fits.
+ *
+ *  `scrollHeight` is content plus padding and **excludes the border**. Both hosts
+ *  that mount this component reset `* { box-sizing: border-box }` (dash
+ *  `src/index.css:55`, llmux `src/index.css:13`), which makes an assigned height
+ *  the height of the *box* — border included. Assigning a bare `scrollHeight`
+ *  therefore lands a border-width short of the content it was measured from, so
+ *  the content never fits and `overflow-y: auto` gives the textarea a scrollbar at
+ *  **every** size rather than only past the cap. On this origin that was 2px, and
+ *  it was small enough to read as a rendering artefact for as long as it shipped.
+ *
+ *  The border is added back only under `border-box`. Under `content-box` the
+ *  assigned height already excludes the border, so adding it would overshoot by
+ *  the same amount in the other direction. Reading the used value rather than
+ *  assuming either one keeps this correct for a host that resets neither.
+ *
+ *  No cap is applied here. `.bc-composer-input` carries `max-height: 220px` in
+ *  this package's own `styles.css` (both the base rule and the themed one), so the
+ *  browser clamps whatever inline height we set and `overflow-y: auto` takes over
+ *  past it. This function used to compare against a duplicate `MAX_INPUT_PX = 220`
+ *  in this file, which had to be kept in step with the stylesheet by hand — and
+ *  which was wrong by the border anyway, since it was compared against a
+ *  `scrollHeight` that means something slightly different from the height it set.
+ *  Letting the stylesheet own the number leaves it in one place. */
+export function composerAutoGrowHeightPx(measurements) {
+    const { scrollHeight, boxSizing, borderTopWidth, borderBottomWidth } = measurements;
+    if (boxSizing !== 'border-box')
+        return scrollHeight;
+    const top = parseFloat(borderTopWidth) || 0;
+    const bottom = parseFloat(borderBottomWidth) || 0;
+    return scrollHeight + top + bottom;
+}
 /** The composer and the turn controls for the active session.
  *
  *  `turnRunning` is the server-reported "the harness holds the turn" state
@@ -88,13 +119,23 @@ export function Composer({ sessionId, connected, turnRunning, resumable, onSend,
             focusedForSession.current = sid;
         }
     }, [connected, sessionId]);
-    // Auto-grow: reset to 0 to shrink on delete, then size to scrollHeight up to cap.
+    // Auto-grow. The reset to `0px` first is load-bearing: `scrollHeight` never
+    // reports smaller than the box it measures, so without it the textarea only ever
+    // grows and never comes back down when the draft is deleted. The height itself
+    // comes from `composerAutoGrowHeightPx`, which explains the border correction and
+    // why the cap is the stylesheet's to apply, not this file's.
     useLayoutEffect(() => {
         const el = inputRef.current;
         if (!el)
             return;
+        const computed = window.getComputedStyle(el);
         el.style.height = '0px';
-        el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_PX)}px`;
+        el.style.height = `${composerAutoGrowHeightPx({
+            scrollHeight: el.scrollHeight,
+            boxSizing: computed.boxSizing,
+            borderTopWidth: computed.borderTopWidth,
+            borderBottomWidth: computed.borderBottomWidth,
+        })}px`;
     }, [text]);
     return (_jsx("div", { className: "bc-composer-wrap", children: _jsxs("div", { className: "bc-composer", children: [_jsx("textarea", { ref: inputRef, className: "bc-composer-input", value: text, onChange: e => setText(e.target.value), onKeyDown: handleKeyDown, placeholder: connected ? 'Send a message...' : 'Select a session', disabled: !connected, rows: 1 }), _jsxs("div", { className: "bc-composer-actions", children: [_jsx("button", { className: "bc-composer-btn", onClick: handleSubmit, disabled: !text.trim() || !connected, title: turnRunning ? 'Send (interrupts current response)' : 'Send', children: "Send" }), turnRunning && (_jsx("button", { className: "bc-composer-btn bc-btn-stop", onClick: onStop, title: "Stop", children: "Stop" })), resumable && (_jsx("button", { className: "bc-composer-btn bc-btn-resume", onClick: onResume, title: "Restart this session's harness process", children: "Resume" }))] })] }) }));
 }
