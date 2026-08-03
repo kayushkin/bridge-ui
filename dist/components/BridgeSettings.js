@@ -62,7 +62,7 @@ export function BridgeSettings() {
         setTimeout(() => setSaving(null), 500);
     }, [localDefaults, bridgePrefs]);
     const hasCapability = (harness, cap) => harness.capabilities?.includes(cap);
-    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx(PermissionsModeSelector, { apiFetch: apiFetch, basePath: basePath }), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
+    return (_jsxs("div", { className: "bset-container", children: [_jsx(SourceFoldersEditor, {}), _jsx(PermissionsModeSelector, { apiFetch: apiFetch, basePath: basePath, prefs: bridgePrefs.prefs, loaded: bridgePrefs.loaded, refreshPrefs: bridgePrefs.refreshPrefs }), _jsx("h2", { className: "bset-title", children: "Harness Defaults" }), _jsx("p", { className: "bset-subtitle", children: "Configure default settings for each harness type. These are applied when creating new sessions." }), _jsx("div", { className: "bset-grid", children: harnesses.map(h => {
                     const defaults = localDefaults[h.name] || {};
                     const isExpanded = expanded[h.name];
                     const label = h.label || h.name;
@@ -79,37 +79,27 @@ export function BridgeSettings() {
 // without a per-session mode. Saved as bridge-prefs.permission_mode;
 // bridge-server reads it on every prehook call so changes take effect
 // immediately for every active and future session.
-function PermissionsModeSelector({ apiFetch, basePath }) {
-    const [mode, setMode] = useState(null);
+function PermissionsModeSelector({ apiFetch, basePath, prefs, loaded, refreshPrefs }) {
+    // The mode the user just picked, held only while its POST is in flight. The
+    // saved value comes from the shared record; this is the optimistic overlay so
+    // the select does not snap back to the old mode for the length of a round
+    // trip. Cleared once the record has been re-read, at which point the record
+    // is the answer again.
+    const [pending, setPending] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    useEffect(() => {
-        let cancelled = false;
-        apiFetch(`${basePath}/bridge-prefs`)
-            .then(r => r.ok ? r.json() : null)
-            .then((prefs) => {
-            if (cancelled || !prefs)
-                return;
-            // Prefer the new field; fall back to legacy bool so older prefs
-            // files migrate visibly on first render.
-            if (prefs.permission_mode)
-                setMode(prefs.permission_mode);
-            else if (prefs.bypass_permissions)
-                setMode(PermissionModeBypass);
-            else
-                setMode(PermissionModeAsk);
-        })
-            .catch(() => { if (!cancelled)
-            setMode(PermissionModeAsk); });
-        return () => { cancelled = true; };
-    }, [apiFetch, basePath]);
+    // Prefer the new field; fall back to the legacy bool so older prefs files
+    // migrate visibly on first render.
+    const saved = prefs.permission_mode
+        ? prefs.permission_mode
+        : prefs.bypass_permissions ? PermissionModeBypass : PermissionModeAsk;
+    const mode = pending ?? saved;
     const handleChange = useCallback(async (next) => {
-        if (mode === null || next === mode)
+        if (next === mode)
             return;
         setBusy(true);
         setError(null);
-        const prev = mode;
-        setMode(next);
+        setPending(next);
         try {
             const res = await apiFetch(`${basePath}/bridge/permission-mode`, {
                 method: 'POST',
@@ -118,16 +108,23 @@ function PermissionsModeSelector({ apiFetch, basePath }) {
             });
             if (!res.ok)
                 throw new Error(`HTTP ${res.status}`);
+            // This endpoint writes the same record `useBridgePrefs` holds, so the
+            // shared copy is stale until it is read again. Re-read before dropping
+            // the overlay, or the select shows the old mode for a frame.
+            await refreshPrefs();
         }
         catch (err) {
-            setMode(prev);
             setError(err instanceof Error ? err.message : String(err));
         }
         finally {
+            // Either way the record is now the source of truth: on success it holds
+            // the new mode, and on failure it holds the mode the server still has,
+            // which is the revert.
+            setPending(null);
             setBusy(false);
         }
-    }, [mode, apiFetch, basePath]);
-    if (mode === null) {
+    }, [mode, apiFetch, basePath, refreshPrefs]);
+    if (!loaded) {
         return null;
     }
     return (_jsxs("div", { className: "bset-bypass-card", children: [_jsx("h2", { className: "bset-title", children: "Permissions" }), _jsx("div", { className: "bset-bypass-row", children: _jsxs("label", { className: "bset-mode-row", children: [_jsx("strong", { children: "Mode:" }), _jsxs("select", { className: "bset-mode-select", value: mode, disabled: busy, onChange: e => handleChange(e.target.value), children: [_jsx("option", { value: PermissionModeAsk, children: "Ask \u2014 gate every novel tool call" }), _jsx("option", { value: PermissionModeAuto, children: "Auto \u2014 allow reads, edits, planning; ask for shell/fetch/agent" }), _jsx("option", { value: PermissionModeBypass, children: "Bypass \u2014 allow every tool call" })] })] }) }), _jsxs("p", { className: "bset-subtitle", children: [mode === PermissionModeBypass && 'Bypass is ON. Every tool call auto-approves immediately; Codex sessions launch with sandbox=danger-full-access + approval=never. Permission rules in /permissions are ignored. AskUserQuestion still pauses for your answer.', mode === PermissionModeAuto && 'Auto-mode allows the bridge-defined safe-tool set (Read, Glob, Grep, LS, Edit, Write, MultiEdit, NotebookRead, NotebookEdit, TodoWrite, ExitPlanMode). Other tools still route through permission-store rules.', mode === PermissionModeAsk && 'Ask-mode routes every tool call through permission-store rules. Manage rules at /permissions; pending prompts surface inline in chat.'] }), _jsx("p", { className: "bset-subtitle", children: "This is the global default. Each new session snapshots it at creation and can be overridden per-session via the mode selector in the chat controls bar." }), error && _jsx("p", { className: "bset-error", children: error })] }));

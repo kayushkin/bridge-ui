@@ -6,6 +6,7 @@ import {
   PermissionModeAsk,
   PermissionModeAuto,
   PermissionModeBypass,
+  type BridgePrefs,
   type FetchFn,
   type HarnessDefaults,
   type HarnessInfo,
@@ -87,7 +88,13 @@ export function BridgeSettings() {
     <div className="bset-container">
       <SourceFoldersEditor />
 
-      <PermissionsModeSelector apiFetch={apiFetch} basePath={basePath} />
+      <PermissionsModeSelector
+        apiFetch={apiFetch}
+        basePath={basePath}
+        prefs={bridgePrefs.prefs}
+        loaded={bridgePrefs.loaded}
+        refreshPrefs={bridgePrefs.refreshPrefs}
+      />
 
       <h2 className="bset-title">Harness Defaults</h2>
       <p className="bset-subtitle">Configure default settings for each harness type. These are applied when creating new sessions.</p>
@@ -183,33 +190,34 @@ export function BridgeSettings() {
 // without a per-session mode. Saved as bridge-prefs.permission_mode;
 // bridge-server reads it on every prehook call so changes take effect
 // immediately for every active and future session.
-function PermissionsModeSelector({ apiFetch, basePath }: { apiFetch: FetchFn; basePath: string }) {
-  const [mode, setMode] = useState<string | null>(null)
+function PermissionsModeSelector({ apiFetch, basePath, prefs, loaded, refreshPrefs }: {
+  apiFetch: FetchFn
+  basePath: string
+  prefs: BridgePrefs
+  loaded: boolean
+  refreshPrefs: () => Promise<void>
+}) {
+  // The mode the user just picked, held only while its POST is in flight. The
+  // saved value comes from the shared record; this is the optimistic overlay so
+  // the select does not snap back to the old mode for the length of a round
+  // trip. Cleared once the record has been re-read, at which point the record
+  // is the answer again.
+  const [pending, setPending] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    apiFetch(`${basePath}/bridge-prefs`)
-      .then(r => r.ok ? r.json() : null)
-      .then((prefs: { permission_mode?: string; bypass_permissions?: boolean } | null) => {
-        if (cancelled || !prefs) return
-        // Prefer the new field; fall back to legacy bool so older prefs
-        // files migrate visibly on first render.
-        if (prefs.permission_mode) setMode(prefs.permission_mode)
-        else if (prefs.bypass_permissions) setMode(PermissionModeBypass)
-        else setMode(PermissionModeAsk)
-      })
-      .catch(() => { if (!cancelled) setMode(PermissionModeAsk) })
-    return () => { cancelled = true }
-  }, [apiFetch, basePath])
+  // Prefer the new field; fall back to the legacy bool so older prefs files
+  // migrate visibly on first render.
+  const saved = prefs.permission_mode
+    ? prefs.permission_mode
+    : prefs.bypass_permissions ? PermissionModeBypass : PermissionModeAsk
+  const mode = pending ?? saved
 
   const handleChange = useCallback(async (next: string) => {
-    if (mode === null || next === mode) return
+    if (next === mode) return
     setBusy(true)
     setError(null)
-    const prev = mode
-    setMode(next)
+    setPending(next)
     try {
       const res = await apiFetch(`${basePath}/bridge/permission-mode`, {
         method: 'POST',
@@ -217,15 +225,22 @@ function PermissionsModeSelector({ apiFetch, basePath }: { apiFetch: FetchFn; ba
         body: JSON.stringify({ mode: next }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // This endpoint writes the same record `useBridgePrefs` holds, so the
+      // shared copy is stale until it is read again. Re-read before dropping
+      // the overlay, or the select shows the old mode for a frame.
+      await refreshPrefs()
     } catch (err) {
-      setMode(prev)
       setError(err instanceof Error ? err.message : String(err))
     } finally {
+      // Either way the record is now the source of truth: on success it holds
+      // the new mode, and on failure it holds the mode the server still has,
+      // which is the revert.
+      setPending(null)
       setBusy(false)
     }
-  }, [mode, apiFetch, basePath])
+  }, [mode, apiFetch, basePath, refreshPrefs])
 
-  if (mode === null) {
+  if (!loaded) {
     return null
   }
 

@@ -18,7 +18,7 @@ import { applyEventToRows, controlRefusal, deriveSessionUIState, projectServerSe
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
-import { bridgePrefsStoreFor, mergePrefs } from '../src/bridgePrefsStore.ts'
+import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePrefsStore.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
 import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
@@ -1380,7 +1380,7 @@ async function bridgePrefsChecks() {
     // the record separately and then disagree the moment either wrote.
     check('two subscribers cost one GET', gets === 1, `gets=${gets}`)
     check('both were told when it arrived', notifiedA === 1 && notifiedB === 1, `${notifiedA}/${notifiedB}`)
-    check('and both read the same object', store.getSnapshot().prefs.defaults.cc.model === 'sonnet')
+    check('and both read the same object', store.getSnapshot().prefs.defaults?.cc?.model === 'sonnet')
     check('loaded flips once the record is in', store.getSnapshot().loaded === true)
 
     // A write by one consumer is the other consumer's new record. Before the
@@ -1398,7 +1398,7 @@ async function bridgePrefsChecks() {
     offA()
     offB()
     check('the record survives its last subscriber leaving',
-      store.getSnapshot().prefs.defaults.cc.model === 'opus' && store.getSnapshot().loaded === true)
+      store.getSnapshot().prefs.defaults?.cc?.model === 'opus' && store.getSnapshot().loaded === true)
     const back = store.subscribe(() => {})
     await settle()
     check('and a consumer that comes back costs no second GET', gets === 1, `gets=${gets}`)
@@ -1479,6 +1479,113 @@ async function bridgePrefsChecks() {
     const poll = sharedPoll(fetchA, 'instances /api/bridge', () =>
       new SharedPoll(async () => ({ ok: true, value: [] }), [], 100000))
     check('a poll under the same fetch is a different object', poll !== first)
+  }
+
+  // `permission_mode` is written through `POST /bridge/permission-mode`, not
+  // through `PUT /bridge-prefs`, so its writer has to tell the store to read
+  // again. What the checks below pin is that doing so cannot cost anything the
+  // page was already holding.
+  console.log('\nreconcilePrefs — a re-read that changed nothing changed nothing')
+  {
+    const prev = {
+      last_harness: 'cc',
+      last_session: { cc: 's1' },
+      defaults: { cc: { model: 'sonnet', max_budget: 5, disabled_tools: ['Bash'] } },
+    }
+    const same = JSON.parse(JSON.stringify(prev))
+    check('an equal record is the SAME object, not an equal one',
+      reconcilePrefs(prev, same) === prev)
+    // The one that matters. `useBridgePrefs` re-creates `getDefaults` whenever
+    // `prefs.defaults` changes identity, and the settings form seeds itself in
+    // an effect keyed on that — so a re-read that rebuilt `defaults` from JSON
+    // would wipe a half-typed spend ceiling every time the mode was changed.
+    const modeOnly = reconcilePrefs(prev, { ...same, permission_mode: 'bypass' })
+    check('a change elsewhere leaves defaults identical by reference',
+      modeOnly.defaults === prev.defaults, 'defaults was rebuilt')
+    check('and last_session too', modeOnly.last_session === prev.last_session)
+    check('while the changed field is the new one', modeOnly.permission_mode === 'bypass')
+    check('the record itself is new when something changed', modeOnly !== prev)
+    // Structural sharing must not become "never notice a change".
+    const changed = reconcilePrefs(prev, { ...same, defaults: { cc: { model: 'opus' } } })
+    check('a real change to defaults IS a new object', changed.defaults !== prev.defaults)
+    check('and carries the new value', changed.defaults?.cc?.model === 'opus')
+    check('a dropped field counts as a change',
+      reconcilePrefs(prev, { last_session: { cc: 's1' } }) !== prev)
+    check('an array that differs in order counts as a change',
+      reconcilePrefs({ defaults: { cc: { disabled_tools: ['Bash', 'Read'] } } },
+        { defaults: { cc: { disabled_tools: ['Read', 'Bash'] } } }).defaults?.cc?.disabled_tools?.[0] === 'Read')
+  }
+
+  console.log('BridgePrefsStore — refresh, for the writer that uses another endpoint')
+  {
+    let gets = 0
+    let served = { permission_mode: 'ask', defaults: { cc: { model: 'sonnet' } } }
+    const fetchFn = async (_url, init) => {
+      if (init?.method === 'PUT') return { ok: true, json: async () => ({}) }
+      gets++
+      return { ok: true, json: async () => JSON.parse(JSON.stringify(served)) }
+    }
+    const store = bridgePrefsStoreFor({
+      fetch: fetchFn, endpoint: '/api/bridge/refresh-prefs', storagePrefix: 'refresh-prefs',
+    })
+    let notified = 0
+    const off = store.subscribe(() => { notified++ })
+    await settle()
+    check('the record loaded once', gets === 1 && store.getSnapshot().prefs.permission_mode === 'ask')
+    const defaultsBefore = store.getSnapshot().prefs.defaults
+
+    // The selector POSTs its mode elsewhere and then asks for a re-read.
+    served = { permission_mode: 'bypass', defaults: { cc: { model: 'sonnet' } } }
+    await store.refresh()
+    check('a refresh re-reads the record', gets === 2, `gets=${gets}`)
+    check('and publishes the field the other endpoint wrote',
+      store.getSnapshot().prefs.permission_mode === 'bypass')
+    check('every subscriber hears about it', notified === 2, `notified=${notified}`)
+    check('but the unchanged half keeps its identity',
+      store.getSnapshot().prefs.defaults === defaultsBefore, 'defaults was rebuilt')
+
+    // A refresh is not free of consequence only when it finds something. When
+    // it does not, a subscriber must not be woken at all — waking the settings
+    // form is how unsaved edits get thrown away.
+    const quiet = notified
+    await store.refresh()
+    check('a refresh that finds nothing new notifies nobody',
+      notified === quiet, `notified went ${quiet} -> ${notified}`)
+    check('and it still cost a request, because only the server knows', gets === 3, `gets=${gets}`)
+    off()
+  }
+
+  console.log('BridgePrefsStore — a write that races a refresh')
+  {
+    let release
+    let held = null
+    const fetchFn = async (_url, init) => {
+      if (init?.method === 'PUT') return { ok: true, json: async () => ({}) }
+      if (held) await held
+      return { ok: true, json: async () => ({ defaults: { cc: { model: 'sonnet', max_budget: 5 } } }) }
+    }
+    const store = bridgePrefsStoreFor({
+      fetch: fetchFn, endpoint: '/api/bridge/race-prefs', storagePrefix: 'race-prefs',
+    })
+    const off = store.subscribe(() => {})
+    await settle()
+    check('the ceiling is there to start with',
+      store.getSnapshot().prefs.defaults?.cc?.max_budget === 5)
+
+    held = new Promise(resolve => { release = resolve })
+    const refreshing = store.refresh()
+    // The user clears the ceiling while the re-read is in flight. The server's
+    // answer predates the clear, so publishing it wholesale puts the ceiling
+    // back — the same defect the initial load already guards against, which is
+    // why both go through one code path.
+    await store.update({ defaults: { cc: { model: 'sonnet' } } })
+    release()
+    await refreshing
+    await settle()
+    check('a write made during a refresh survives it',
+      store.getSnapshot().prefs.defaults?.cc?.max_budget === undefined,
+      JSON.stringify(store.getSnapshot().prefs.defaults))
+    off()
   }
 }
 

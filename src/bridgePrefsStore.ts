@@ -53,6 +53,48 @@ export function mergePrefs(prev: BridgePrefs, partial: BridgePrefs): BridgePrefs
   return next
 }
 
+/** Deep-equal for the shapes `BridgePrefs` actually holds: strings, numbers,
+ *  booleans, string arrays, and one level of record-of-record. Enough for
+ *  `reconcilePrefs`, and deliberately not a general deep-equal. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, i) => sameValue(item, b[i]))
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const ka = Object.keys(a as object)
+    const kb = Object.keys(b as object)
+    if (ka.length !== kb.length) return false
+    return ka.every(k => sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+  }
+  return false
+}
+
+/** `next` published against `prev`, keeping `prev`'s object identity wherever
+ *  the value did not change — the whole record when nothing changed, and each
+ *  unchanged sub-record otherwise.
+ *
+ *  Not a micro-optimisation. `useBridgePrefs` deliberately re-creates
+ *  `getDefaults` whenever `prefs.defaults` changes identity, because the
+ *  settings form hangs a seeding effect off it — and that effect calls
+ *  `setLocalDefaults`, throwing away edits the user has not saved. A re-read
+ *  that rebuilt `defaults` from JSON every time would wipe a half-typed spend
+ *  ceiling every time anything else on the page refreshed the record. So a
+ *  refresh that changes nothing must be indistinguishable from no refresh. */
+export function reconcilePrefs(prev: BridgePrefs, next: BridgePrefs): BridgePrefs {
+  if (sameValue(prev, next)) return prev
+  const out: BridgePrefs = { ...next }
+  for (const key of ['last_session', 'last_instance', 'defaults'] as const) {
+    const before = prev[key]
+    const after = next[key]
+    if (before && after && sameValue(before, after)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (out as any)[key] = before
+    }
+  }
+  return out
+}
+
 export class BridgePrefsStore {
   private readonly backend: BridgePrefsBackend
   private readonly listeners = new Set<Listener>()
@@ -92,6 +134,39 @@ export class BridgePrefsStore {
   ensureLoaded = (): Promise<void> => {
     if (this.snapshot.loaded) return Promise.resolve()
     if (this.loading) return this.loading
+    return this.startLoad()
+  }
+
+  /** Re-read the record from the backend and publish it, even though the store
+   *  has already settled.
+   *
+   *  This exists because not every writer of this record goes through
+   *  `update`. `permission_mode` is written through `POST
+   *  /bridge/permission-mode` on purpose — the type's own doc-comment says so,
+   *  because a partial `PUT /bridge-prefs` must not be able to clobber the
+   *  mode. A reader hanging off this store would therefore go stale the moment
+   *  that other endpoint was written, so the writer calls this afterwards. The
+   *  alternative, letting that writer publish into the store directly, puts a
+   *  second writer of the record on a path that does not go through `update`,
+   *  which is the thing this store exists to stop.
+   *
+   *  A refresh that finds nothing changed notifies nobody: see
+   *  `reconcilePrefs`. Concurrent refreshes share one request. */
+  refresh = (): Promise<void> => {
+    if (this.loading) {
+      // A load already in flight was started before whatever prompted this
+      // refresh, so its answer may predate the change we are here to pick up.
+      // Wait for it, then read again.
+      const inFlight = this.loading
+      return inFlight.then(() => (this.loading ? this.loading : this.startLoad()))
+    }
+    return this.startLoad()
+  }
+
+  /** One read of the backend, publishing the result with any writes made while
+   *  it was in flight replayed on top. Shared by the initial load and by
+   *  `refresh`, so a write cannot be reverted by either. */
+  private startLoad(): Promise<void> {
     const writes: BridgePrefs[] = []
     this.writesDuringLoad = writes
     const attempt = (async () => {
@@ -104,8 +179,8 @@ export class BridgePrefsStore {
       }
       let prefs = loaded
       for (const write of writes) prefs = mergePrefs(prefs, write)
-      this.writesDuringLoad = null
-      this.emit({ prefs, loaded: true })
+      if (this.writesDuringLoad === writes) this.writesDuringLoad = null
+      this.emit({ prefs: reconcilePrefs(this.snapshot.prefs, prefs), loaded: true })
     })().finally(() => {
       if (this.loading === attempt) this.loading = null
     })

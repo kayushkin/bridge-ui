@@ -18,6 +18,11 @@ export function useBridgePrefs(options = {}) {
     // straight away and costs no second request.
     const { prefs, loaded } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const updatePrefs = useCallback((partial) => store.update(partial), [store]);
+    // For the one field that is written through a different endpoint on purpose:
+    // `permission_mode` goes out via `POST /bridge/permission-mode` so a partial
+    // `PUT /bridge-prefs` cannot clobber it, which leaves this record stale until
+    // it is re-read. A refresh that finds nothing changed notifies nobody.
+    const refreshPrefs = useCallback(() => store.refresh(), [store]);
     const setLastHarness = useCallback((harness) => {
         updatePrefs({ last_harness: harness });
     }, [updatePrefs]);
@@ -62,6 +67,7 @@ export function useBridgePrefs(options = {}) {
     return useMemo(() => ({
         prefs,
         loaded,
+        refreshPrefs,
         setLastHarness,
         setLastInstanceId,
         setLastSession,
@@ -73,6 +79,7 @@ export function useBridgePrefs(options = {}) {
     }), [
         prefs,
         loaded,
+        refreshPrefs,
         setLastHarness,
         setLastInstanceId,
         setLastSession,

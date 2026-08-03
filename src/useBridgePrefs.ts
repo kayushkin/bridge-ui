@@ -38,6 +38,12 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     [store],
   )
 
+  // For the one field that is written through a different endpoint on purpose:
+  // `permission_mode` goes out via `POST /bridge/permission-mode` so a partial
+  // `PUT /bridge-prefs` cannot clobber it, which leaves this record stale until
+  // it is re-read. A refresh that finds nothing changed notifies nobody.
+  const refreshPrefs = useCallback(() => store.refresh(), [store])
+
   const setLastHarness = useCallback((harness: string) => {
     updatePrefs({ last_harness: harness })
   }, [updatePrefs])
@@ -90,6 +96,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
   return useMemo(() => ({
     prefs,
     loaded,
+    refreshPrefs,
     setLastHarness,
     setLastInstanceId,
     setLastSession,
@@ -101,6 +108,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
   }), [
     prefs,
     loaded,
+    refreshPrefs,
     setLastHarness,
     setLastInstanceId,
     setLastSession,
