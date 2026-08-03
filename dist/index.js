@@ -37,6 +37,14 @@ export { BridgeKanban } from './components/BridgeKanban';
 export { BridgeAttach } from './components/BridgeAttach';
 // Tool renderers — register custom ones via registerToolRenderer
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
+// The auto-grow arithmetic, exported so a host that writes its own composer
+// sizes it the same way rather than re-deriving it. Three composers on this
+// fleet grow a textarea to its content (this package's, dash's dashv2 page, and
+// dash's legacy chat) and two of them shipped the same defect: `scrollHeight`
+// excludes the border, so under `box-sizing: border-box` a bare assignment lands
+// a border-width short and the box scrolls at every size. Sharing the function
+// is what stops the third copy from being written wrong again.
+export { composerAutoGrowHeightPx } from './components/chat/Composer';
 // Shared status dot — used by header, sidebar, and composer status chip
 export { StatusDot } from './components/chat/StatusDot';
 // Presentation / self-fetching chat sub-components — exported for standalone

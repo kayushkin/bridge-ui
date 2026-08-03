@@ -40,6 +40,7 @@ export { BridgeAttach } from './components/BridgeAttach';
 export type { BridgeAttachProps } from './components/BridgeAttach';
 export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools';
 export type { ToolRendererProps } from './components/tools';
+export { composerAutoGrowHeightPx } from './components/chat/Composer';
 export { StatusDot } from './components/chat/StatusDot';
 export type { StatusDotState } from './components/chat/StatusDot';
 export { ToolsPanel } from './components/chat/ToolsPanel';
