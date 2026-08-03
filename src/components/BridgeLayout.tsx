@@ -9,7 +9,14 @@ interface BridgeLayoutProps {
 
 export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
   const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath } = useBridgeConfig()
-  const { minimal } = useMinimalChrome()
+  // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
+  // are the only navigation on every page here except the chat, and the routed
+  // child that replaces them exists on the chat alone — so dropping them for a
+  // narrow window used to strand the user on Instances, Sessions, Auth, Usage,
+  // Settings, Agents, Files, Skills, Tools, Permissions, Kanban and Conformance,
+  // with the host's own header hidden by the same mistaken signal.
+  const { minimal, minimalChromeMounted } = useMinimalChrome()
+  const chromeTakenOver = minimal && minimalChromeMounted
   const tabs = [
     { to: routes.chat, label: 'Chat', end: true },
     { to: routes.instances, label: 'Instances', end: false },
@@ -27,8 +34,8 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
   ]
 
   return (
-    <div className={`bridge-layout ${minimal ? 'bridge-layout-minimal' : ''}`}>
-      {!minimal && <nav className="bridge-nav">
+    <div className={`bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`}>
+      {!chromeTakenOver && <nav className="bridge-nav">
         {tabs.map(t => (
           <NavLink
             key={t.to}

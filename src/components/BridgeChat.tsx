@@ -10,7 +10,7 @@ import { useBridgeFolders } from '../useBridgeFolders'
 import { SessionList } from './chat/SessionList'
 import { Workspace } from './chat/Workspace'
 import { WorkspaceLayout } from './chat/WorkspaceLayout'
-import { useMinimalChrome } from './minimal/MinimalChromeContext'
+import { useMinimalChrome, useRegisterMinimalChrome } from './minimal/MinimalChromeContext'
 import { MinimalTopBar } from './minimal/MinimalTopBar'
 import { MinimalPaneSwitch } from './minimal/MinimalPaneSwitch'
 import { SessionDrawer } from './minimal/SessionDrawer'
@@ -393,6 +393,11 @@ export function BridgeChat() {
   const defaultInstanceId = primaryInstanceId
 
   const { minimal, setDrawerOpen, override, setOverride } = useMinimalChrome()
+  // This component is the one that answers a narrow viewport, below: MinimalTopBar,
+  // MinimalPaneSwitch, SessionDrawer and ChromeSheet all render under `minimal`.
+  // Saying so is what lets the host hide its own header, and what lets BridgeLayout
+  // drop its tab row — neither is safe on a page that draws none of this.
+  useRegisterMinimalChrome(minimal)
   const [vw, setVw] = useState<number>(() => typeof window === 'undefined' ? 1024 : window.innerWidth)
   useEffect(() => {
     if (typeof window === 'undefined') return

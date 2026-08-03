@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PaneKey } from '../chat/types'
 
@@ -36,6 +36,26 @@ function saveOverride(value: ChromeOverride) {
 
 interface MinimalChromeValue {
   minimal: boolean
+  /**
+   * True only while some mounted surface is actually DRAWING the minimal chrome —
+   * the top bar and the session drawer that replace the navigation a narrow
+   * viewport hides.
+   *
+   * `minimal` alone says the viewport is narrow. It does NOT say anyone answered,
+   * and the two are not the same fact: `MinimalChromeProvider` is nested inside
+   * every `BridgeProvider`, so `minimal` goes true on every page a host mounts
+   * under one — the instance list, the settings page, a host's own rewrite of the
+   * chat — while only `BridgeChat` renders `MinimalTopBar` and `SessionDrawer`.
+   * Anything that HIDES navigation on the strength of a narrow viewport has to
+   * gate on this instead, or it takes the navigation away and puts nothing back.
+   */
+  minimalChromeMounted: boolean
+  /**
+   * Called by a surface that draws the minimal chrome, for as long as it draws it.
+   * Returns the unregister. Prefer the `useRegisterMinimalChrome` hook below;
+   * registrations are counted, so several surfaces may overlap during a route change.
+   */
+  registerMinimalChrome: () => () => void
   override: ChromeOverride
   setOverride: (v: ChromeOverride) => void
   drawerOpen: boolean
@@ -55,6 +75,8 @@ export function useMinimalChrome(): MinimalChromeValue {
   if (!ctx) {
     return {
       minimal: false,
+      minimalChromeMounted: false,
+      registerMinimalChrome: () => () => {},
       override: null,
       setOverride: () => {},
       drawerOpen: false,
@@ -97,6 +119,23 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
     saveOverride(next)
   }, [])
 
+  // Counted rather than a plain boolean: during a route change React mounts the
+  // incoming surface before it unmounts the outgoing one, so a boolean would be
+  // cleared by the departing chrome right after the arriving chrome set it.
+  const minimalChromeCountRef = useRef(0)
+  const [minimalChromeMounted, setMinimalChromeMounted] = useState(false)
+  const registerMinimalChrome = useCallback(() => {
+    minimalChromeCountRef.current += 1
+    setMinimalChromeMounted(true)
+    return () => {
+      minimalChromeCountRef.current -= 1
+      if (minimalChromeCountRef.current <= 0) {
+        minimalChromeCountRef.current = 0
+        setMinimalChromeMounted(false)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (!minimal) {
       setDrawerOpenState(false)
@@ -104,12 +143,18 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
     }
   }, [minimal])
 
+  // The body class is the signal a HOST reads to hide its own site header, so it
+  // has to mean "the minimal chrome has taken the navigation over", not merely
+  // "the window is narrow". Gate it on a surface having registered: a page that
+  // is under a `BridgeProvider` but draws no minimal chrome would otherwise hide
+  // the host's header and leave the user with no way out of the page.
+  const showMinimalChrome = minimal && minimalChromeMounted
   useEffect(() => {
     if (typeof document === 'undefined') return
-    if (minimal) document.body.classList.add('bridge-minimal-chrome')
+    if (showMinimalChrome) document.body.classList.add('bridge-minimal-chrome')
     else document.body.classList.remove('bridge-minimal-chrome')
     return () => { document.body.classList.remove('bridge-minimal-chrome') }
-  }, [minimal])
+  }, [showMinimalChrome])
 
   const registerControlsSlot = useCallback((el: HTMLElement | null) => {
     slotRef.current = el
@@ -125,6 +170,8 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<MinimalChromeValue>(() => ({
     minimal,
+    minimalChromeMounted,
+    registerMinimalChrome,
     override,
     setOverride,
     drawerOpen,
@@ -135,11 +182,32 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
     registerControlsSlot,
     mobilePane,
     setMobilePane,
-  }), [minimal, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot, mobilePane, setMobilePane])
+  }), [minimal, minimalChromeMounted, registerMinimalChrome, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot, mobilePane, setMobilePane])
 
   return (
     <MinimalChromeContext.Provider value={value}>
       {children}
     </MinimalChromeContext.Provider>
   )
+}
+
+/**
+ * Declare that this surface draws the minimal chrome while `active` is true.
+ *
+ * Call it from the component that renders `MinimalTopBar` / `SessionDrawer`, with
+ * the same condition it renders them under. Until something calls this, the
+ * library treats a narrow viewport as unanswered and leaves every navigation in
+ * place — which is the safe direction, because the alternative hides the host's
+ * chrome for a replacement that was never drawn.
+ *
+ * A layout effect, not a plain one: `BridgeLayout` renders the nav a frame before
+ * its routed child registers, so an ordinary effect would show the tab row and
+ * then snatch it away on the next paint.
+ */
+export function useRegisterMinimalChrome(active: boolean) {
+  const { registerMinimalChrome } = useMinimalChrome()
+  useLayoutEffect(() => {
+    if (!active) return
+    return registerMinimalChrome()
+  }, [active, registerMinimalChrome])
 }

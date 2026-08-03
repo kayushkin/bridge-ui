@@ -66,10 +66,17 @@ export { EditableName } from './components/chat/EditableName';
 export { ProducerRow } from './components/chat/ProducerRow';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
-// so consumers don't need to mount it manually. The body gets a
-// `bridge-minimal-chrome` class while minimal mode is active — host apps
-// can use it to hide their own site chrome via plain CSS.
-export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
+// so consumers don't need to mount it manually.
+//
+// The body gets a `bridge-minimal-chrome` class — host apps read it to hide
+// their own site chrome via plain CSS — but ONLY once a surface has called
+// `useRegisterMinimalChrome(true)` to say it is drawing the replacement top bar
+// and drawer. Because the provider rides along with `BridgeProvider`, a narrow
+// viewport engages `minimal` on every page the host mounts under one, and most
+// of those pages draw no chrome at all; hiding the host's header for them takes
+// away the last navigation on the page. A host that ports its own minimal chrome
+// calls the hook itself — that is what makes the class true for it.
+export { useMinimalChrome, useRegisterMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 // The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
 // no router — so any surface that owns its own routing can drive the same two-way
 // behaviour BridgeChat has at `/`. dashv2 uses it verbatim rather than growing a second

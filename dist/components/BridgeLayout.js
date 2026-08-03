@@ -4,7 +4,14 @@ import { useBridgeConfig } from '../context';
 import { useMinimalChrome } from './minimal/MinimalChromeContext';
 export function BridgeLayout({ showConformance = true }) {
     const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath } = useBridgeConfig();
-    const { minimal } = useMinimalChrome();
+    // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
+    // are the only navigation on every page here except the chat, and the routed
+    // child that replaces them exists on the chat alone — so dropping them for a
+    // narrow window used to strand the user on Instances, Sessions, Auth, Usage,
+    // Settings, Agents, Files, Skills, Tools, Permissions, Kanban and Conformance,
+    // with the host's own header hidden by the same mistaken signal.
+    const { minimal, minimalChromeMounted } = useMinimalChrome();
+    const chromeTakenOver = minimal && minimalChromeMounted;
     const tabs = [
         { to: routes.chat, label: 'Chat', end: true },
         { to: routes.instances, label: 'Instances', end: false },
@@ -20,6 +27,6 @@ export function BridgeLayout({ showConformance = true }) {
         ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
         ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
     ];
-    return (_jsxs("div", { className: `bridge-layout ${minimal ? 'bridge-layout-minimal' : ''}`, children: [!minimal && _jsx("nav", { className: "bridge-nav", children: tabs.map(t => (_jsx(NavLink, { to: t.to, end: t.end, className: ({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`, children: t.label }, t.to))) }), _jsx("div", { className: "bridge-content", children: _jsx(Outlet, {}) })] }));
+    return (_jsxs("div", { className: `bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`, children: [!chromeTakenOver && _jsx("nav", { className: "bridge-nav", children: tabs.map(t => (_jsx(NavLink, { to: t.to, end: t.end, className: ({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`, children: t.label }, t.to))) }), _jsx("div", { className: "bridge-content", children: _jsx(Outlet, {}) })] }));
 }
 //# sourceMappingURL=BridgeLayout.js.map

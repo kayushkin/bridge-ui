@@ -38,6 +38,9 @@ import {
 } from '../src/components/chat/timelineWindow.ts'
 import { harnessIsWorkingOnTurn, sameItemFields, sameRowList, sessionCanBeResumed } from '../src/components/chat/utils.ts'
 import { Composer, composerAutoGrowHeightPx } from '../src/components/chat/Composer.tsx'
+import { MemoryRouter } from 'react-router-dom'
+import { BridgeLayout } from '../src/components/BridgeLayout.tsx'
+import { MinimalChromeProvider } from '../src/components/minimal/MinimalChromeContext.tsx'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -1661,6 +1664,61 @@ async function controlRefusalChecks() {
     ok: false, status: 503, statusText: 'Service Unavailable',
     text: async () => { throw new Error('stream closed') },
   }) === '503 Service Unavailable')
+}
+
+console.log('BridgeLayout — a narrow viewport is not permission to hide the navigation')
+{
+  // Below 640px `minimal` goes true on EVERY page mounted under a `BridgeProvider`,
+  // because the provider rides along inside it. Only the chat answers that by
+  // drawing a replacement top bar and drawer. These checks pin the unanswered case:
+  // the tab row is the only navigation the other twelve pages have, and the host's
+  // header is hidden by the same signal, so dropping it strands the user.
+  //
+  // The answered case — the chat, where the nav SHOULD go — cannot be checked here:
+  // registration is a layout effect and `renderToStaticMarkup` runs no effects. It
+  // is covered in a browser by dash's `e2e/minimal-chrome-navigation.spec.ts`.
+  const realWindow = globalThis.window
+  globalThis.window = {
+    innerWidth: 600,
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }
+  let narrow
+  try {
+    narrow = renderToStaticMarkup(
+      h(MemoryRouter, { initialEntries: ['/instances'] },
+        h(BridgeContext.Provider, { value: { fetch: async () => ({ ok: true, status: 200, json: async () => [] }), basePath: '/api/bridge', routes: DEFAULT_BRIDGE_ROUTES } },
+          h(MinimalChromeProvider, null, h(BridgeLayout)))))
+  } finally {
+    if (realWindow === undefined) delete globalThis.window
+    else globalThis.window = realWindow
+  }
+
+  check('a 600px viewport with no minimal chrome drawn keeps the tab nav',
+    narrow.includes('bridge-nav'), narrow.slice(0, 300))
+  check('every tab is still reachable, not just the element',
+    ['Instances', 'Sessions', 'Auth', 'Usage', 'Settings', 'Agents', 'Files'].every(t => narrow.includes(t)),
+    narrow.slice(0, 300))
+  // The class strips the content padding and takes the full height for a chat
+  // that has taken the screen over. Applying it to a page that did not is the
+  // same mistake wearing different clothes.
+  check('bridge-layout-minimal is not applied when no chrome was drawn',
+    !narrow.includes('bridge-layout-minimal'), narrow.slice(0, 300))
+
+  // The no-provider fallback has to fail the same way — a host that mounts a
+  // component outside the provider must not be told a chrome exists.
+  check('the fallback context reports no minimal chrome mounted',
+    useMinimalChromeFallbackReportsNoChrome())
+}
+
+function useMinimalChromeFallbackReportsNoChrome() {
+  // Rendered with no provider above it, so `useMinimalChrome` returns its fallback.
+  const html = renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/instances'] },
+      h(BridgeContext.Provider, { value: { fetch: async () => ({ ok: true, status: 200, json: async () => [] }), basePath: '/api/bridge', routes: DEFAULT_BRIDGE_ROUTES } },
+        h(BridgeLayout))))
+  return html.includes('bridge-nav') && !html.includes('bridge-layout-minimal')
 }
 
 // Failing by default until the report is printed. The async checks await real
