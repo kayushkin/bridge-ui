@@ -64,10 +64,14 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
   // over the newest record even if a sibling wrote it after this render began.
   //
   // Their identity still changes whenever the slice they read changes, because
-  // callers hang effects and memos off it: the settings form reseeds itself from
-  // `getDefaults` and would otherwise keep rendering an empty form after the
-  // record arrives. Hence the deps below, which the bodies deliberately do not
-  // close over.
+  // callers hang effects off it. The settings form seeds itself in an effect
+  // keyed on (harness names, `getDefaults`); when the record arrives AFTER the
+  // harness list, that identity is the only thing left to re-run the effect,
+  // and without it the form seeds once from an empty record and stays empty.
+  // Measured, not assumed: freezing these deps reddens
+  // `dash/e2e/prefs-shared-record.spec.ts`, and that ordering happens on its own
+  // often enough that the check without the injected delay caught it too.
+  // Hence the deps below, which the bodies deliberately do not close over.
   const prefsDefaults = prefs.defaults
   const getDefaults = useCallback((harness: string): HarnessDefaults => {
     return store.getSnapshot().prefs.defaults?.[harness] ?? {}
