@@ -3,7 +3,7 @@ import { BridgeAttach } from '../BridgeAttach'
 import { GitPanel } from '../GitPanel'
 import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { OrchestratorPanel } from './OrchestratorPanel'
-import { SplitResizer } from './SplitResizer'
+import { SplitDragHandle } from './SplitDragHandle'
 import { Thread } from './Thread'
 import { Timeline } from './Timeline'
 import { TurnsView } from './TurnsView'
@@ -179,12 +179,26 @@ function SplitView({ node, hidden }: { node: Extract<InnerNode, { kind: 'split' 
       const rightKey = directLeafKey(child)
       if (leftKey && rightKey) {
         nodes.push(
-          <SplitResizer
+          <SplitDragHandle
             key={`resizer-${leftKey}-${rightKey}`}
-            leftKey={leftKey}
-            rightKey={rightKey}
-            containerRef={containerRef}
-            setSizes={ws.setPaneSizes}
+            axis="horizontal"
+            className="bc-split-resizer"
+            resolveDraggedPair={() => {
+              const container = containerRef.current
+              if (!container) return null
+              const elementBefore = container.querySelector(`[data-pane="${leftKey}"]`) as HTMLElement | null
+              const elementAfter = container.querySelector(`[data-pane="${rightKey}"]`) as HTMLElement | null
+              if (!elementBefore || !elementAfter) return null
+              return {
+                elementBefore,
+                elementAfter,
+                growUnitsBefore: ws.paneSizes[leftKey],
+                growUnitsAfter: ws.paneSizes[rightKey],
+              }
+            }}
+            commitGrowUnits={({ growUnitsBefore, growUnitsAfter }) => {
+              ws.setPaneSizes(prev => ({ ...prev, [leftKey]: growUnitsBefore, [rightKey]: growUnitsAfter }))
+            }}
           />
         )
       }

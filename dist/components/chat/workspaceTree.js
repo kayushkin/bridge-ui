@@ -86,13 +86,6 @@ export function removeLeaf(tree, targetId) {
         return { ...parent, children, sizes };
     });
 }
-export function setSplitSizes(tree, path, sizes) {
-    return mutateAtPath(tree, path, node => {
-        if (node.kind !== 'split')
-            return node;
-        return { ...node, sizes };
-    });
-}
 function mutateAtPath(node, path, fn) {
     if (path.length === 0)
         return fn(node);

@@ -41,6 +41,10 @@ import { Composer, composerAutoGrowHeightPx } from '../src/components/chat/Compo
 import { MemoryRouter } from 'react-router-dom'
 import { BridgeLayout } from '../src/components/BridgeLayout.tsx'
 import { MinimalChromeProvider } from '../src/components/minimal/MinimalChromeContext.tsx'
+import { SplitDragHandle } from '../src/components/chat/SplitDragHandle.tsx'
+import {
+  EVEN_SPLIT_GROW_UNITS, MINIMUM_PANE_PIXELS, measureSplitDragGeometry, splitGrowUnitsAfterDrag,
+} from '../src/components/chat/splitDragGeometry.ts'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -1664,6 +1668,92 @@ async function controlRefusalChecks() {
     ok: false, status: 503, statusText: 'Service Unavailable',
     text: async () => { throw new Error('stream closed') },
   }) === '503 Service Unavailable')
+}
+
+console.log('\nSplit drag geometry — one implementation for both splits')
+{
+  const near = (a, b) => Math.abs(a - b) < 1e-9
+  // A 1000px pair split evenly: one grow unit is worth 500px.
+  const even = measureSplitDragGeometry(1000, 1, 1)
+  check('an even 1000px pair measures 500px per grow unit',
+    near(even.pixelsPerGrowUnit, 500), JSON.stringify(even))
+  check('180px of minimum is 0.36 grow units at that scale',
+    near(even.minimumGrowUnits, MINIMUM_PANE_PIXELS / 500), JSON.stringify(even))
+
+  const still = splitGrowUnitsAfterDrag(even, 0)
+  check('a drag of zero pixels changes nothing',
+    near(still.growUnitsBefore, 1) && near(still.growUnitsAfter, 1), JSON.stringify(still))
+
+  const moved = splitGrowUnitsAfterDrag(even, 250)
+  check('dragging 250px moves half a grow unit across the boundary',
+    near(moved.growUnitsBefore, 1.5) && near(moved.growUnitsAfter, 0.5), JSON.stringify(moved))
+  check('the pair total is conserved by a drag',
+    near(moved.growUnitsBefore + moved.growUnitsAfter, even.totalGrowUnits), JSON.stringify(moved))
+
+  // Past the minimum the boundary stops rather than inverting, and the far side
+  // takes exactly the remainder — a clamp that moved only one side would leak grow.
+  const pinnedLeft = splitGrowUnitsAfterDrag(even, -5000)
+  check('dragging past the minimum pins the near pane at the minimum',
+    near(pinnedLeft.growUnitsBefore, even.minimumGrowUnits), JSON.stringify(pinnedLeft))
+  check('the pinned pair still sums to the total',
+    near(pinnedLeft.growUnitsBefore + pinnedLeft.growUnitsAfter, even.totalGrowUnits),
+    JSON.stringify(pinnedLeft))
+  const pinnedRight = splitGrowUnitsAfterDrag(even, 5000)
+  check('the clamp is symmetric',
+    near(pinnedRight.growUnitsAfter, even.minimumGrowUnits)
+    && near(pinnedRight.growUnitsBefore + pinnedRight.growUnitsAfter, even.totalGrowUnits),
+    JSON.stringify(pinnedRight))
+
+  // A pair too narrow to give both sides 180px must split evenly, not hand one
+  // side 180 and the other a negative.
+  const cramped = measureSplitDragGeometry(200, 1, 1)
+  check('a pair narrower than two minimums caps the minimum at half the pair',
+    near(cramped.minimumGrowUnits, cramped.totalGrowUnits / 2), JSON.stringify(cramped))
+  const crampedDrag = splitGrowUnitsAfterDrag(cramped, -5000)
+  check('a cramped pair clamps to an even split rather than a negative',
+    near(crampedDrag.growUnitsBefore, 1) && near(crampedDrag.growUnitsAfter, 1),
+    JSON.stringify(crampedDrag))
+
+  // An unmeasurable pair has no scale to convert pixels with. Returning null is
+  // what makes the handle a no-op instead of writing NaN into the layout.
+  check('a pair with no extent on screen cannot be measured',
+    measureSplitDragGeometry(0, 1, 1) === null)
+  check('a pair with no grow between them cannot be measured',
+    measureSplitDragGeometry(1000, 0, 0) === null)
+
+  // Grow units are a ratio, so an asymmetric pair scales the same way.
+  const lopsided = measureSplitDragGeometry(900, 2, 1)
+  check('an asymmetric pair measures per grow unit, not per pane',
+    near(lopsided.pixelsPerGrowUnit, 300), JSON.stringify(lopsided))
+  const lopsidedDrag = splitGrowUnitsAfterDrag(lopsided, -300)
+  check('an asymmetric pair moves one grow unit per 300px',
+    near(lopsidedDrag.growUnitsBefore, 1) && near(lopsidedDrag.growUnitsAfter, 2),
+    JSON.stringify(lopsidedDrag))
+
+  check('the double-click reset is an even split',
+    EVEN_SPLIT_GROW_UNITS.growUnitsBefore === 1 && EVEN_SPLIT_GROW_UNITS.growUnitsAfter === 1)
+
+  // The copy this replaced could only do a horizontal split, so the axis being a
+  // real parameter is the point of the merge, not a detail of it.
+  const noPair = () => null
+  const horizontal = renderToStaticMarkup(h(SplitDragHandle, {
+    axis: 'horizontal', className: 'bc-split-resizer',
+    resolveDraggedPair: noPair, commitGrowUnits: () => {},
+  }))
+  const vertical = renderToStaticMarkup(h(SplitDragHandle, {
+    axis: 'vertical', className: 'bc-workspace-resizer bc-workspace-resizer-v',
+    resolveDraggedPair: noPair, commitGrowUnits: () => {},
+  }))
+  check('a separator between side-by-side panes is a vertical line',
+    horizontal.includes('aria-orientation="vertical"'), horizontal)
+  check('a separator between stacked panes is a horizontal line',
+    vertical.includes('aria-orientation="horizontal"'), vertical)
+  check('the handle keeps each split\'s own class, so neither style moved',
+    horizontal.includes('class="bc-split-resizer"')
+    && vertical.includes('class="bc-workspace-resizer bc-workspace-resizer-v"'),
+    `${horizontal} ${vertical}`)
+  check('both axes announce themselves as a separator',
+    horizontal.includes('role="separator"') && vertical.includes('role="separator"'))
 }
 
 console.log('BridgeLayout — a narrow viewport is not permission to hide the navigation')

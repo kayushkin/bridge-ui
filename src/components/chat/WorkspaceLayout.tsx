@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useRef, useState } from 'react'
+import { Fragment, useRef } from 'react'
+import { SplitDragHandle } from './SplitDragHandle'
 import type { WorkspaceLayoutNode } from './types'
 
 interface WorkspaceLayoutProps {
@@ -30,6 +31,17 @@ function SplitNode({
 }: LayoutNodeProps & { node: Extract<WorkspaceLayoutNode, { kind: 'split' }> }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const className = `bc-workspace-split bc-workspace-split-${node.direction}`
+
+  // The children of this split, in DOM order. The container also holds the
+  // resizer elements, so a class filter is what separates panes from handles.
+  const paneElements = (): HTMLElement[] => {
+    const container = containerRef.current
+    if (!container) return []
+    return Array.from(container.children).filter(element =>
+      (element as HTMLElement).classList.contains('bc-workspace-split-child')
+    ) as HTMLElement[]
+  }
+
   return (
     <div ref={containerRef} className={className}>
       {node.children.map((child, i) => {
@@ -37,12 +49,27 @@ function SplitNode({
         return (
           <Fragment key={`${i}`}>
             {i > 0 && (
-              <SplitResizer
-                direction={node.direction}
-                containerRef={containerRef}
-                index={i}
-                sizes={node.sizes}
-                onCommit={(sizes) => onResize(path, sizes)}
+              <SplitDragHandle
+                axis={node.direction === 'h' ? 'horizontal' : 'vertical'}
+                className={`bc-workspace-resizer bc-workspace-resizer-${node.direction}`}
+                resolveDraggedPair={() => {
+                  const panes = paneElements()
+                  const elementBefore = panes[i - 1]
+                  const elementAfter = panes[i]
+                  if (!elementBefore || !elementAfter) return null
+                  return {
+                    elementBefore,
+                    elementAfter,
+                    growUnitsBefore: node.sizes[i - 1] ?? 1,
+                    growUnitsAfter: node.sizes[i] ?? 1,
+                  }
+                }}
+                commitGrowUnits={({ growUnitsBefore, growUnitsAfter }) => {
+                  const sizes = node.sizes.slice()
+                  sizes[i - 1] = growUnitsBefore
+                  sizes[i] = growUnitsAfter
+                  onResize(path, sizes)
+                }}
               />
             )}
             <div className="bc-workspace-split-child" style={{ flex: `${flex} 1 0` }}>
@@ -57,90 +84,5 @@ function SplitNode({
         )
       })}
     </div>
-  )
-}
-
-interface SplitResizerProps {
-  direction: 'h' | 'v'
-  containerRef: React.RefObject<HTMLDivElement | null>
-  index: number
-  sizes: number[]
-  onCommit: (sizes: number[]) => void
-}
-
-function SplitResizer({ direction, containerRef, index, sizes, onCommit }: SplitResizerProps) {
-  const [dragging, setDragging] = useState(false)
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const container = containerRef.current
-    if (!container) return
-    const children = Array.from(container.children).filter(el =>
-      (el as HTMLElement).classList.contains('bc-workspace-split-child')
-    ) as HTMLElement[]
-    const leftEl = children[index - 1]
-    const rightEl = children[index]
-    if (!leftEl || !rightEl) return
-
-    const isHorizontal = direction === 'h'
-    const startPos = isHorizontal ? e.clientX : e.clientY
-    const leftRect = leftEl.getBoundingClientRect()
-    const rightRect = rightEl.getBoundingClientRect()
-    const pairExtent = isHorizontal
-      ? leftRect.width + rightRect.width
-      : leftRect.height + rightRect.height
-    const startLeft = sizes[index - 1] ?? 1
-    const startRight = sizes[index] ?? 1
-    const totalGrow = startLeft + startRight
-    if (totalGrow <= 0 || pairExtent <= 0) return
-    const pixelsPerGrow = pairExtent / totalGrow
-    const MIN_PX = 180
-    const minGrow = Math.min(MIN_PX / pixelsPerGrow, totalGrow / 2)
-
-    setDragging(true)
-    document.body.style.cursor = isHorizontal ? 'col-resize' : 'row-resize'
-    document.body.style.userSelect = 'none'
-
-    const onMove = (ev: PointerEvent) => {
-      const delta = (isHorizontal ? ev.clientX : ev.clientY) - startPos
-      const growDelta = delta / pixelsPerGrow
-      let newLeft = startLeft + growDelta
-      let newRight = startRight - growDelta
-      if (newLeft < minGrow) { newLeft = minGrow; newRight = totalGrow - minGrow }
-      if (newRight < minGrow) { newRight = minGrow; newLeft = totalGrow - minGrow }
-      const next = sizes.slice()
-      next[index - 1] = newLeft
-      next[index] = newRight
-      onCommit(next)
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      setDragging(false)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
-  }, [containerRef, direction, index, sizes, onCommit])
-
-  const onDoubleClick = useCallback(() => {
-    const next = sizes.slice()
-    next[index - 1] = 1
-    next[index] = 1
-    onCommit(next)
-  }, [sizes, index, onCommit])
-
-  const isHorizontal = direction === 'h'
-  return (
-    <div
-      className={`bc-workspace-resizer bc-workspace-resizer-${direction}${dragging ? ' is-dragging' : ''}`}
-      onPointerDown={onPointerDown}
-      onDoubleClick={onDoubleClick}
-      role="separator"
-      aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
-      title="Drag to resize — double-click to reset"
-    />
   )
 }

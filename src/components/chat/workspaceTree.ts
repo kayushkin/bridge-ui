@@ -90,17 +90,6 @@ export function removeLeaf(
   })
 }
 
-export function setSplitSizes(
-  tree: WorkspaceLayoutNode,
-  path: number[],
-  sizes: number[],
-): WorkspaceLayoutNode {
-  return mutateAtPath(tree, path, node => {
-    if (node.kind !== 'split') return node
-    return { ...node, sizes }
-  })
-}
-
 function mutateAtPath(
   node: WorkspaceLayoutNode,
   path: number[],

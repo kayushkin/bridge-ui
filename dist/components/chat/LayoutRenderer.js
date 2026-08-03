@@ -4,7 +4,7 @@ import { BridgeAttach } from '../BridgeAttach';
 import { GitPanel } from '../GitPanel';
 import { LinkedKanbanPanel } from './LinkedKanbanPanel';
 import { OrchestratorPanel } from './OrchestratorPanel';
-import { SplitResizer } from './SplitResizer';
+import { SplitDragHandle } from './SplitDragHandle';
 import { Thread } from './Thread';
 import { Timeline } from './Timeline';
 import { TurnsView } from './TurnsView';
@@ -97,7 +97,23 @@ function SplitView({ node, hidden }) {
             const leftKey = directLeafKey(visibleChildren[i - 1]);
             const rightKey = directLeafKey(child);
             if (leftKey && rightKey) {
-                nodes.push(_jsx(SplitResizer, { leftKey: leftKey, rightKey: rightKey, containerRef: containerRef, setSizes: ws.setPaneSizes }, `resizer-${leftKey}-${rightKey}`));
+                nodes.push(_jsx(SplitDragHandle, { axis: "horizontal", className: "bc-split-resizer", resolveDraggedPair: () => {
+                        const container = containerRef.current;
+                        if (!container)
+                            return null;
+                        const elementBefore = container.querySelector(`[data-pane="${leftKey}"]`);
+                        const elementAfter = container.querySelector(`[data-pane="${rightKey}"]`);
+                        if (!elementBefore || !elementAfter)
+                            return null;
+                        return {
+                            elementBefore,
+                            elementAfter,
+                            growUnitsBefore: ws.paneSizes[leftKey],
+                            growUnitsAfter: ws.paneSizes[rightKey],
+                        };
+                    }, commitGrowUnits: ({ growUnitsBefore, growUnitsAfter }) => {
+                        ws.setPaneSizes(prev => ({ ...prev, [leftKey]: growUnitsBefore, [rightKey]: growUnitsAfter }));
+                    } }, `resizer-${leftKey}-${rightKey}`));
             }
         }
         if (child.kind === 'leaf') {
