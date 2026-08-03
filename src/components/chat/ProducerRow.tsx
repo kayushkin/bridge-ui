@@ -12,19 +12,24 @@ interface ProducerConfig {
   week_resets_at: string
 }
 
+export interface ProducerRowProps {
+  apiFetch: FetchFn
+  /** Where this host proxies the producer service, from `producerBasePath` on
+   *  BridgeProvider. A host that proxies none should not render the row at all
+   *  rather than pass an empty string — there is no path to guess. */
+  producerBasePath: string
+  /** Where this host mounts the producer's review page, from `routes.orchestrator`.
+   *  Empty means it mounts none, and the row stops offering to open it. */
+  orchestratorPath: string
+}
+
 // ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar.
 // It is deliberately self-contained: it fetches its own state from the producer
 // service (proxied at producerBasePath) using the same apiFetch the rest of the
 // sidebar uses, so it needs no new provider wiring. If the service is
 // unreachable the row still renders, showing an offline state rather than
 // breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: {
-  apiFetch: FetchFn
-  producerBasePath: string
-  // Where this host mounts the producer's review page, from `routes.orchestrator`.
-  // Empty means it mounts none, and the row stops offering to open it.
-  orchestratorPath: string
-}) {
+export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: ProducerRowProps) {
   const [cfg, setCfg] = useState<ProducerConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)

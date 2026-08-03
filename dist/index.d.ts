@@ -59,6 +59,8 @@ export { MessageStats } from './components/chat/MessageStats';
 export type { MessageStatsProps } from './components/chat/MessageStats';
 export { EditableName } from './components/chat/EditableName';
 export type { EditableNameProps } from './components/chat/EditableName';
+export { ProducerRow } from './components/chat/ProducerRow';
+export type { ProducerRowProps } from './components/chat/ProducerRow';
 export { useMinimalChrome, MinimalChromeProvider } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
 export { readSessionDeeplink, writeSessionParam, initialSessionDeeplinkState, } from './sessionDeeplink';

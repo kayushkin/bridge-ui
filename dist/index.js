@@ -52,6 +52,10 @@ export { BudgetCeilingBanner } from './components/chat/BudgetCeilingBanner';
 export { UsageLine } from './components/chat/UsageLine';
 export { MessageStats } from './components/chat/MessageStats';
 export { EditableName } from './components/chat/EditableName';
+// The pinned "Orchestrator" sidebar entry. Self-fetching against the host's
+// producer proxy, so a standalone sidebar mounts it with the two paths its own
+// BridgeProvider was given and nothing else.
+export { ProducerRow } from './components/chat/ProducerRow';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually. The body gets a
