@@ -364,32 +364,6 @@ function debounce(fn, ms) {
     } };
     return debounced;
 }
-// --- Interrupted-session persistence ---
-//
-// `paused` is a frontend-only refinement of the canonical `idle` state — it
-// means "the user interrupted this session's last turn." We persist the set
-// of interrupted bridge_ids in localStorage so the marker survives reloads
-// and tab switches, and so the sidebar can show a paused dot for any session
-// (not just the active one).
-const INTERRUPTED_KEY = 'bridge-ui-interrupted-sessions';
-function loadInterruptedIds() {
-    try {
-        const raw = localStorage.getItem(INTERRUPTED_KEY);
-        if (!raw)
-            return new Set();
-        const arr = JSON.parse(raw);
-        return new Set(Array.isArray(arr) ? arr.map(String) : []);
-    }
-    catch {
-        return new Set();
-    }
-}
-function saveInterruptedIds(s) {
-    try {
-        localStorage.setItem(INTERRUPTED_KEY, JSON.stringify([...s]));
-    }
-    catch { /* ignore */ }
-}
 // --- Control refusals ---
 //
 // A control (interrupt, stop, compact) asks the harness to do something and then
@@ -424,30 +398,18 @@ export async function controlRefusal(res) {
 // deprecated values get their modern spelling and everything else passes
 // through verbatim.
 //
-// This is the state a CONTROL must be gated on. `deriveSessionUIState` below
-// layers the client-side interrupted marker on top, and that marker records
-// what the user pressed, not what the harness is doing — interrupt() marks the
-// session whatever the server answered, so a refused interrupt still reads as
-// paused while the turn runs on. Gate Stop on that and a user whose interrupt
-// did not take has no way to press it again.
+// The server now answers `paused` itself, on the interrupt handler, so there is
+// no client-side layer left above this — it is both the state a CONTROL is
+// gated on and the state the UI renders. What used to sit on top was a
+// localStorage set of interrupted ids recording what the user PRESSED rather
+// than what the harness did, which meant a refused interrupt still read as
+// paused while the turn ran on.
 export function projectServerSessionState(session) {
     if (session.state === 'running')
         return 'tool_running';
     if (session.state === 'waiting_on_approval')
         return 'awaiting_permission';
     return session.state;
-}
-export function deriveSessionUIState(session, interrupted) {
-    // Local interrupt override: until manager-side SessionPaused emission
-    // lands, the only signal that the user hit the pause button is the
-    // client-side interrupted Set. Honor it for any non-terminal state.
-    if (interrupted.has(session.session_id)) {
-        const s = session.state;
-        if (s === 'idle' || s === 'tool_running' || s === 'model_generating' || s === 'running') {
-            return 'paused';
-        }
-    }
-    return projectServerSessionState(session);
 }
 // shouldHoldSSE reports whether a session state warrants a live SSE
 // connection. True for every non-terminal state where the server may push
@@ -492,7 +454,6 @@ export function useBridgeSession() {
     const setActivityIfChanged = useCallback((next) => {
         setActivity(prev => (sameActivity(prev, next) ? prev : next));
     }, []);
-    const [interruptedIds, setInterruptedIds] = useState(loadInterruptedIds);
     // pendingHooks is keyed by request_id so SSE updates can patch in O(1).
     // Sourced from /hooks/pending on session select; updated by EventHook
     // awaiting_resolution (insert) and completed (delete). Drives the
@@ -523,8 +484,6 @@ export function useBridgeSession() {
     sessionsRef.current = sessions;
     const activeSessionIdRef = useRef(null);
     activeSessionIdRef.current = activeSessionId;
-    const interruptedIdsRef = useRef(interruptedIds);
-    interruptedIdsRef.current = interruptedIds;
     const compactingTimer = useRef(null);
     const clearCompacting = useCallback(() => {
         if (compactingTimer.current) {
@@ -532,26 +491,6 @@ export function useBridgeSession() {
             compactingTimer.current = null;
         }
         setCompacting(false);
-    }, []);
-    const markInterrupted = useCallback((id) => {
-        setInterruptedIds(prev => {
-            if (prev.has(id))
-                return prev;
-            const next = new Set(prev);
-            next.add(id);
-            saveInterruptedIds(next);
-            return next;
-        });
-    }, []);
-    const unmarkInterrupted = useCallback((id) => {
-        setInterruptedIds(prev => {
-            if (!prev.has(id))
-                return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            saveInterruptedIds(next);
-            return next;
-        });
     }, []);
     // --- Session refresh (debounced) ---
     const refreshSessionsImpl = useCallback(async () => {
@@ -636,38 +575,9 @@ export function useBridgeSession() {
     const uiState = useMemo(() => {
         if (!activeSession)
             return 'empty';
-        return deriveSessionUIState(activeSession, interruptedIds);
-    }, [activeSession, interruptedIds]);
-    const getSessionUIState = useCallback((session) => deriveSessionUIState(session, interruptedIds), [interruptedIds]);
-    // Drop interrupted markers for sessions that are no longer in `idle` or no
-    // longer present in the sessions list. Anything that's now running, completed,
-    // errored, or deleted shouldn't carry a pause marker — when it next reaches
-    // idle, that's a fresh idle, not a paused-from-before.
-    useEffect(() => {
-        if (sessions.length === 0)
-            return;
-        setInterruptedIds(prev => {
-            if (prev.size === 0)
-                return prev;
-            const next = new Set();
-            for (const s of sessions) {
-                if (s.state === 'idle' && prev.has(s.session_id))
-                    next.add(s.session_id);
-            }
-            if (next.size === prev.size) {
-                let same = true;
-                for (const id of prev)
-                    if (!next.has(id)) {
-                        same = false;
-                        break;
-                    }
-                if (same)
-                    return prev;
-            }
-            saveInterruptedIds(next);
-            return next;
-        });
-    }, [sessions]);
+        return projectServerSessionState(activeSession);
+    }, [activeSession]);
+    const getSessionUIState = useCallback((session) => projectServerSessionState(session), []);
     // --- SSE connection ---
     const closeSSE = useCallback(() => {
         if (sseAbort.current) {
@@ -776,7 +686,6 @@ export function useBridgeSession() {
                     break;
                 case 'result':
                     setActivityIfChanged({ kind: 'idle' });
-                    unmarkInterrupted(sessId);
                     patchSessionState(sessId, 'completed');
                     refreshSessions();
                     break;
@@ -818,14 +727,12 @@ export function useBridgeSession() {
                     break;
                 }
                 case 'session_state': {
+                    // `paused` is a settled state like idle and completed: the turn is
+                    // over. Dropping the activity indicator on it is what stops the
+                    // spinner after an interrupt, which the client marker used to do.
                     const state = data.state?.state;
-                    if (state === 'idle' && !interruptedIdsRef.current.has(sessId))
+                    if (state === 'idle' || state === 'completed' || state === 'paused') {
                         setActivityIfChanged({ kind: 'idle' });
-                    else if (state === 'running')
-                        unmarkInterrupted(sessId);
-                    else if (state === 'completed') {
-                        setActivityIfChanged({ kind: 'idle' });
-                        unmarkInterrupted(sessId);
                     }
                     if (state)
                         patchSessionState(sessId, state);
@@ -858,7 +765,7 @@ export function useBridgeSession() {
                     break;
             }
         }
-    }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState, unmarkInterrupted, clearCompacting]);
+    }, [fetchFn, basePath, closeSSE, refreshSessions, refreshSessionsImpl, patchSessionState, clearCompacting]);
     // --- History loading ---
     //
     // Fetch raw events from /history (each event JSON has event_id injected by
@@ -1194,7 +1101,6 @@ export function useBridgeSession() {
         };
         setLogRows(prev => [...prev, optimistic]);
         setError(null);
-        unmarkInterrupted(targetSessionId);
         try {
             const res = await fetchFn(`${basePath}/sessions/${targetSessionId}/send`, {
                 method: 'POST',
@@ -1223,7 +1129,7 @@ export function useBridgeSession() {
         catch (err) {
             setError(`Send failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions, unmarkInterrupted]);
+    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions]);
     const markLastAssistantDone = useCallback(() => {
         setLogRows(prev => {
             for (let i = prev.length - 1; i >= 0; i--) {
@@ -1249,7 +1155,6 @@ export function useBridgeSession() {
                 setError(`Interrupt failed: ${refusal}`);
                 return;
             }
-            markInterrupted(activeSessionId);
             markLastAssistantDone();
             setActivityIfChanged({ kind: 'idle' });
             refreshSessions();
@@ -1257,7 +1162,7 @@ export function useBridgeSession() {
         catch (err) {
             setError(`Interrupt failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, refreshSessions, markLastAssistantDone, markInterrupted]);
+    }, [fetchFn, basePath, activeSessionId, refreshSessions, markLastAssistantDone]);
     const resume = useCallback(async () => {
         if (!activeSessionId)
             return;
@@ -1272,14 +1177,13 @@ export function useBridgeSession() {
                 setError(`Resume failed: ${res.statusText}`);
                 return;
             }
-            unmarkInterrupted(activeSessionId);
             startSSE(activeSessionId);
             refreshSessions();
         }
         catch (err) {
             setError(`Resume failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions, unmarkInterrupted]);
+    }, [fetchFn, basePath, activeSessionId, startSSE, refreshSessions]);
     const stopSession = useCallback(async () => {
         if (!activeSessionId)
             return;
@@ -1295,14 +1199,13 @@ export function useBridgeSession() {
             }
             closeSSE();
             markLastAssistantDone();
-            unmarkInterrupted(activeSessionId);
             setActivityIfChanged({ kind: 'idle' });
             refreshSessions();
         }
         catch (err) {
             setError(`Stop failed: ${err}`);
         }
-    }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions, markLastAssistantDone, unmarkInterrupted]);
+    }, [fetchFn, basePath, activeSessionId, closeSSE, refreshSessions, markLastAssistantDone]);
     const compact = useCallback(async (summary) => {
         if (!activeSessionId)
             return;

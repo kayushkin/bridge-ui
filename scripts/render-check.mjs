@@ -14,7 +14,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
 import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
-import { applyEventToRows, controlRefusal, deriveSessionUIState, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
+import { applyEventToRows, controlRefusal, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
@@ -1344,26 +1344,24 @@ console.log('Composer turn controls')
   // `uiState === 'running'`, and derivation projects `running` away before any
   // consumer sees it, so none of them ever rendered.
   check('derivation never yields `running`, whoever wrote the row',
-    ALL_STATES.every(s => deriveSessionUIState({ session_id: 'br_check', state: s }, new Set()) !== 'running'))
+    ALL_STATES.every(s => projectServerSessionState({ session_id: 'br_check', state: s }) !== 'running'))
   check('the deprecated `running` still projects to tool_running',
-    deriveSessionUIState({ session_id: 'br_check', state: 'running' }, new Set()) === 'tool_running')
-  check('an interrupted live session derives paused, so the marker survives',
-    ['idle', 'tool_running', 'model_generating', 'running'].every(s =>
-      deriveSessionUIState({ session_id: 'br_check', state: s }, new Set(['br_check'])) === 'paused'))
-  // The marker is a record of what the user pressed; a control has to be gated on
-  // what the harness is doing, or an interrupt the server refused takes the Stop
-  // button away from the only user who still needs it.
-  check('an interrupted session whose turn is still running is still working',
+    projectServerSessionState({ session_id: 'br_check', state: 'running' }) === 'tool_running')
+
+  // `paused` is the SERVER's answer now — the interrupt handler writes it and
+  // broadcasts it. There is no client-side marker layered on top, so the
+  // projection is the whole story and a state the server never sent can never
+  // read as paused.
+  check('paused comes from the server and from nowhere else',
+    ALL_STATES.every(s =>
+      (projectServerSessionState({ session_id: 'br_check', state: s }) === 'paused') === (s === 'paused')))
+  // A control is gated on what the harness is doing. The old marker recorded
+  // what the user PRESSED, so a refused interrupt read as paused while the turn
+  // ran on and took the Stop button away from the one user still needing it.
+  // The server only writes paused after Stop actually succeeded.
+  check('a session whose turn is still running is still working',
     harnessIsWorkingOnTurn(projectServerSessionState({ session_id: 'br_check', state: 'tool_running' }))
-      && deriveSessionUIState({ session_id: 'br_check', state: 'tool_running' }, new Set(['br_check'])) === 'paused')
-  check('the server projection carries no marker of its own',
-    ALL_STATES.every(s => {
-      const marked = new Set(['br_check'])
-      return projectServerSessionState({ session_id: 'br_check', state: s })
-        === deriveSessionUIState({ session_id: 'br_check', state: s }, new Set())
-        && projectServerSessionState({ session_id: 'br_check', state: s }) !== 'paused'
-        || s === 'paused'
-    }))
+      && !harnessIsWorkingOnTurn(projectServerSessionState({ session_id: 'br_check', state: 'paused' })))
 
   check('and a running turn is still recognised as working',
     ['starting', 'model_generating', 'tool_running', 'compacting'].every(harnessIsWorkingOnTurn)

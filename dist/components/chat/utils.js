@@ -23,13 +23,16 @@ export function harnessIsWorkingOnTurn(state) {
 // offering a button that cannot work.
 //
 // `paused` is deliberately NOT here, and that is the whole point of the set.
-// bridge-ui's `paused` is a client-side marker: interrupt() records the id in
-// localStorage and deriveSessionUIState reports the session paused while its
-// state is still idle/tool_running/model_generating. Interrupt does not end
-// the process — Manager.Stop sends SIGINT and llm-bridge-claudecode catches
-// it and keeps running — so a paused session is exactly the session /resume
-// refuses. Keyed on `paused`, Resume 409'd every single time it was pressed,
-// and the user read "Resume failed: Conflict" as a symptom of the interrupt.
+// It is now a real server state — the interrupt handler writes it — but that
+// changed only where it comes from, not what it means. Interrupt does not end
+// the process: Manager.Stop calls proc.Interrupt(), llm-bridge-claudecode
+// catches the signal and keeps running, and the process stays registered. So
+// a paused session is exactly the session /resume refuses. Keyed on `paused`,
+// Resume 409'd every single time it was pressed, and the user read
+// "Resume failed: Conflict" as a symptom of the interrupt.
+//
+// A paused session needs no Resume anyway — its harness is alive and sending
+// the next message continues it.
 //
 // The quiet states stay out for their own reasons: `idle` cannot tell a live
 // process between turns from a dead one whose row never caught up,

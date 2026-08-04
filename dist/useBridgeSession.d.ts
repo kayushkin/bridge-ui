@@ -8,6 +8,5 @@ export declare function controlRefusal(res: {
     text(): Promise<string>;
 }): Promise<string | null>;
 export declare function projectServerSessionState(session: ManagedSession): SessionUIState;
-export declare function deriveSessionUIState(session: ManagedSession, interrupted: Set<string>): SessionUIState;
 export declare function useBridgeSession(): UseBridgeSessionReturn;
 //# sourceMappingURL=useBridgeSession.d.ts.map
