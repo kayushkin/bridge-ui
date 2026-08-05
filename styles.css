@@ -1105,9 +1105,20 @@
 .bc-tl-tool-done .bc-tl-icon { color: #22c55e; }
 .bc-tl-tool-done .bc-tl-label { color: #eab308; }
 .bc-tl-tool-err .bc-tl-icon, .bc-tl-tool-err .bc-tl-label { color: #ef4444; }
+/* A tool call whose outcome can never be known: the source event carried no
+   tool_id, so no result can ever be joined to it. Muted rather than amber —
+   amber is "still running", and this one is not going to finish. */
+.bc-tl-tool-unknown .bc-tl-icon, .bc-tl-tool-unknown .bc-tl-label { color: var(--text-muted); }
 .bc-tl-task .bc-tl-icon, .bc-tl-task .bc-tl-label { color: #22d3ee; }
 .bc-tl-task-start .bc-tl-icon, .bc-tl-task-start .bc-tl-label { color: #22d3ee; }
 .bc-tl-task-start { font-weight: 600; }
+/* A subagent that finished. task-start stays cyan ("running"); these two are
+   the states it could previously never reach, so a task header looked the same
+   before and after its subagent was done. */
+.bc-tl-task-done .bc-tl-icon, .bc-tl-task-done .bc-tl-label { color: #22c55e; }
+.bc-tl-task-done { font-weight: 600; }
+.bc-tl-task-err .bc-tl-icon, .bc-tl-task-err .bc-tl-label { color: #ef4444; }
+.bc-tl-task-err { font-weight: 600; }
 .bc-tl-result { border-top: 1px dashed var(--border); padding-top: 4px; margin-top: 2px; }
 .bc-tl-result .bc-tl-icon, .bc-tl-result .bc-tl-label { color: #60a5fa; }
 .bc-tl-error .bc-tl-icon, .bc-tl-error .bc-tl-label { color: #ef4444; }
