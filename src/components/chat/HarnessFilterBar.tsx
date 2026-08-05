@@ -14,7 +14,10 @@ import type { HarnessInfo, Machine, ManagedSession, SessionUIState } from '../..
 // machine_id is not excluded.
 // Sessions also carry orthogonal classification dimensions, each with its own
 // labelled chip row below the machine/harness rows:
-//   type     — interactive | autonomous | system  (how it runs; stored field)
+//   type     — interactive | autonomous | system | herald | external
+//              (how it runs; stored field. `external` ran outside the bridge and
+//              was imported from the harness's on-disk history, so it is hidden
+//              by default — see DEFAULT_EXCLUDED_TYPES in persistence.ts)
 //   purpose  — chat, autoworker, healthcheck, …    (what it's for; stored field)
 //   mode     — events | pty                         (I/O transport; stored field)
 //   status   — active, needs you, idle, …           (live state; DERIVED, see
@@ -274,7 +277,7 @@ export function HarnessFilterBar({
       )}
       <ClassFilterRow
         label="Type"
-        hint="How the session runs: interactive (you're chatting), autonomous (fire-and-forget), or system (internal subsystems)"
+        hint="How the session runs: interactive (you're chatting), autonomous (fire-and-forget), system (internal subsystems), herald (an agent asking you something), or external (ran outside the bridge, imported from the harness's history)"
         values={classDims.type.values}
         counts={classDims.type.counts}
         excluded={excludedTypes}

@@ -129,14 +129,18 @@ export async function fetchSessionCost(fetchFn: FetchFn, basePath: string, sessi
 }
 
 // The chip label emoji categorizes a session the same way the filter bar does:
-// by stored `type` (interactive | autonomous | system) refined with `purpose`
-// (autoworker / herald) and the id prefix, since herald and autoworker are
-// purposes of an autonomous/herald session, not distinct types.
+// by stored `type` (interactive | autonomous | system | herald | external)
+// refined with `purpose` (autoworker / herald) and the id prefix, since herald
+// and autoworker are purposes of an autonomous/herald session, not distinct
+// types. `external` is a type only: the session ran outside the bridge and was
+// imported by scanning the harness's on-disk history, so nobody declared a
+// purpose for it and it must not read as a human chat.
 export function sessionEmoji(type: string, purpose: string, sessionId: string): string {
   if (type === 'herald' || purpose === 'herald' || sessionId.startsWith('herald-')) return '📣'
   if (purpose === 'autoworker' || sessionId.startsWith('autoworker-')) return '🤖'
   if (type === 'interactive') return '💬'
   if (type === 'system') return '⚙️'
   if (type === 'autonomous') return '🛠️'
+  if (type === 'external') return '📥'
   return '🔗'
 }

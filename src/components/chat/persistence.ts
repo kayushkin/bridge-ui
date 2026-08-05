@@ -182,27 +182,36 @@ export function saveExcludedMachines(s: Set<string>) {
 // Excluded session classification values for the sidebar filter — one set
 // per orthogonal dimension (type / purpose / mode / status). Each stored under
 // its own localStorage key so they reset independently. Default = empty (show
-// all). Status is a derived dimension (bucketed from each session's live UI
-// state — see sessionStatusGroup), not a stored session field like the others.
+// all), except the type dimension — see DEFAULT_EXCLUDED_TYPES. Status is a
+// derived dimension (bucketed from each session's live UI state — see
+// sessionStatusGroup), not a stored session field like the others.
 const TYPE_FILTER_KEY = 'bridge-ui-session-type-filter'
 const PURPOSE_FILTER_KEY = 'bridge-ui-session-purpose-filter'
 const MODE_FILTER_KEY = 'bridge-ui-session-mode-filter'
 const STATUS_FILTER_KEY = 'bridge-ui-session-status-filter'
 
-function loadExcludedSet(key: string): Set<string> {
+// Session types hidden in the chat list by default. An `external` session ran
+// outside the bridge entirely and was imported afterwards by scanning the
+// harness's on-disk history — nobody opened it in a UI, so listing it beside
+// real conversations reports a `claude -p` one-shot as a human chat. Same rule
+// as DEFAULT_HIDDEN_TYPES above: the default applies only while nothing is
+// stored, and the user's first save (even of an empty set) replaces it.
+const DEFAULT_EXCLUDED_TYPES: ReadonlyArray<string> = ['external']
+
+function loadExcludedSet(key: string, fallback: ReadonlyArray<string> = []): Set<string> {
   try {
     const raw = localStorage.getItem(key)
-    if (!raw) return new Set()
+    if (!raw) return new Set(fallback)
     const arr = JSON.parse(raw)
     return new Set(Array.isArray(arr) ? arr.map(String) : [])
-  } catch { return new Set() }
+  } catch { return new Set(fallback) }
 }
 
 function saveExcludedSet(key: string, s: Set<string>) {
   try { localStorage.setItem(key, JSON.stringify([...s])) } catch { /* ignore */ }
 }
 
-export const loadExcludedTypes = () => loadExcludedSet(TYPE_FILTER_KEY)
+export const loadExcludedTypes = () => loadExcludedSet(TYPE_FILTER_KEY, DEFAULT_EXCLUDED_TYPES)
 export const saveExcludedTypes = (s: Set<string>) => saveExcludedSet(TYPE_FILTER_KEY, s)
 export const loadExcludedPurposes = () => loadExcludedSet(PURPOSE_FILTER_KEY)
 export const saveExcludedPurposes = (s: Set<string>) => saveExcludedSet(PURPOSE_FILTER_KEY, s)
