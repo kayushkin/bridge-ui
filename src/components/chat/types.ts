@@ -115,7 +115,6 @@ export type WorkspaceLayoutNode =
   | { kind: 'leaf'; workspaceId: string }
   | { kind: 'split'; direction: 'h' | 'v'; children: WorkspaceLayoutNode[]; sizes: number[] }
 
-export type SplitDirection = 'left' | 'right' | 'up' | 'down'
 export type SplitMode =
   | 'replace'
   | 'split-auto'

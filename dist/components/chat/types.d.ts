@@ -105,7 +105,6 @@ export type WorkspaceLayoutNode = {
     children: WorkspaceLayoutNode[];
     sizes: number[];
 };
-export type SplitDirection = 'left' | 'right' | 'up' | 'down';
 export type SplitMode = 'replace' | 'split-auto' | 'split-left' | 'split-right' | 'split-up' | 'split-down';
 export declare function splitModeAxis(mode: SplitMode): {
     axis: 'h' | 'v';
