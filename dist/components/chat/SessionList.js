@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ARCHIVE_FOLDER } from '../../useBridgeFolders';
+import { useSessionContentSearch, sessionContentSearchReachOf } from '../../useSessionContentSearch';
 import { EditableName } from './EditableName';
 import { HarnessFilterBar, sessionMode, sessionStatusGroup } from './HarnessFilterBar';
 import { NewSessionMenu } from './NewSessionMenu';
@@ -106,34 +107,16 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     // ignoring the exclude-chips and folder grouping — so a hit can never hide
     // inside a collapsed or archived folder.
     const [searchText, setSearchText] = useState('');
-    const [contentHits, setContentHits] = useState(null);
-    const [searching, setSearching] = useState(false);
     const query = searchText.trim();
     const searchActive = query.length > 0;
-    useEffect(() => {
-        if (!query) {
-            setContentHits(null);
-            setSearching(false);
-            return;
-        }
-        let cancelled = false;
-        setSearching(true);
-        const t = setTimeout(() => {
-            apiFetch(`${basePath}/sessions/search?q=${encodeURIComponent(query)}`)
-                .then(async (r) => {
-                if (!r.ok)
-                    throw new Error(`search failed: ${r.status}`);
-                const hits = (await r.json()) ?? [];
-                if (!cancelled)
-                    setContentHits(new Set(hits.map(h => h.session_id)));
-            })
-                .catch(() => { if (!cancelled)
-                setContentHits(new Set()); })
-                .finally(() => { if (!cancelled)
-                setSearching(false); });
-        }, 300);
-        return () => { cancelled = true; clearTimeout(t); };
-    }, [query, apiFetch, basePath]);
+    // Null hits mean the transcript half of the answer is missing — either not
+    // asked for yet or failed. Either way the list below falls back to matching on
+    // name and id alone, and `searchError` is what tells the user which
+    // of those two it is. See useSessionContentSearch for why a failure must not
+    // collapse into an empty hit set.
+    const contentSearch = useSessionContentSearch(query, apiFetch, basePath);
+    const { hits: contentHits, error: searchError } = contentSearch;
+    const searchReach = sessionContentSearchReachOf(query, contentSearch);
     const searchResults = useMemo(() => {
         if (!searchActive)
             return [];
@@ -332,7 +315,13 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
                                                         ? _jsx("img", { className: "bc-new-session-target-img", src: `${basePath}${primaryHarness.image}`, alt: "" })
                                                         : primaryHarness?.emoji
                                                             ? _jsx("span", { className: "bc-new-session-target-emoji", "aria-hidden": true, children: primaryHarness.emoji })
-                                                            : null, primaryMachine?.emoji && (_jsxs(_Fragment, { children: [_jsx("span", { className: "bc-new-session-target-at", "aria-hidden": true, children: "@" }), _jsx("span", { className: "bc-new-session-target-emoji", "aria-hidden": true, children: primaryMachine.emoji })] }))] }))] }), _jsx("button", { className: "bc-new-session-caret-btn", onClick: () => setShowNewMenu(s => !s), disabled: !connected || enabledInstanceCount === 0, "aria-haspopup": "menu", "aria-expanded": showNewMenu, title: "Choose harness / environment", "aria-label": "Choose harness or environment", children: _jsx("span", { className: "bc-new-session-caret", "aria-hidden": true, children: "\u25BE" }) })] }), showNewMenu && (_jsx(NewSessionMenu, { instances: instances, harnesses: harnesses, defaultInstanceId: defaultInstanceId, basePath: basePath, instancesPath: instancesPath, onPick: handlePickInstance, onClose: () => setShowNewMenu(false) }))] }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), producerBasePath && _jsx(ProducerRow, { apiFetch: apiFetch, producerBasePath: producerBasePath, orchestratorPath: orchestratorPath }), _jsxs("div", { className: "bc-session-search", children: [_jsx("input", { type: "search", className: "bc-session-search-input", placeholder: "Search name, id, or message text\u2026", value: searchText, onChange: e => setSearchText(e.target.value) }), searchActive && (_jsx("span", { className: "bc-session-search-status", children: searching ? 'searching…' : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}` }))] }), _jsx(HarnessFilterBar, { machines: machines, harnesses: harnesses, sessions: sessions, instanceMachineByID: instanceMachineByID, excludedHarnesses: excludedHarnesses, excludedMachines: excludedMachines, excludedTypes: excludedTypes, excludedPurposes: excludedPurposes, excludedModes: excludedModes, excludedStatuses: excludedStatuses, statusOf: statusOf, onToggleHarness: toggleHarness, onToggleMachine: toggleMachine, onToggleClass: toggleClass, onClear: clearSessionFilter, basePath: basePath, collapsed: filterCollapsed, onToggleCollapsed: toggleFilterCollapsed }), _jsx(SignalsInbox, { onSelectSession: onSelect, getSessionName: sessionName, refreshKey: needsYouKey }), searchActive ? (searchResults.length === 0 ? (_jsx("div", { className: "bc-session-list-empty", children: searching ? 'Searching…' : 'No sessions match this search' })) : (renderCappedList('__search__', searchResults))) : (_jsxs(_Fragment, { children: [sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: !connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter') })), renderCappedList('__unfiled__', unfiled), grouped.map(({ name, sessions: entries }) => {
+                                                            : null, primaryMachine?.emoji && (_jsxs(_Fragment, { children: [_jsx("span", { className: "bc-new-session-target-at", "aria-hidden": true, children: "@" }), _jsx("span", { className: "bc-new-session-target-emoji", "aria-hidden": true, children: primaryMachine.emoji })] }))] }))] }), _jsx("button", { className: "bc-new-session-caret-btn", onClick: () => setShowNewMenu(s => !s), disabled: !connected || enabledInstanceCount === 0, "aria-haspopup": "menu", "aria-expanded": showNewMenu, title: "Choose harness / environment", "aria-label": "Choose harness or environment", children: _jsx("span", { className: "bc-new-session-caret", "aria-hidden": true, children: "\u25BE" }) })] }), showNewMenu && (_jsx(NewSessionMenu, { instances: instances, harnesses: harnesses, defaultInstanceId: defaultInstanceId, basePath: basePath, instancesPath: instancesPath, onPick: handlePickInstance, onClose: () => setShowNewMenu(false) }))] }), _jsx("button", { className: "bc-sidebar-collapse-btn", onClick: onToggleCollapse, title: "Collapse sessions", "aria-label": "Collapse sessions", children: "\u25C2" })] }), producerBasePath && _jsx(ProducerRow, { apiFetch: apiFetch, producerBasePath: producerBasePath, orchestratorPath: orchestratorPath }), _jsxs("div", { className: "bc-session-search", children: [_jsx("input", { type: "search", className: "bc-session-search-input", placeholder: "Search name, id, or message text\u2026", value: searchText, onChange: e => setSearchText(e.target.value) }), searchActive && (_jsx("span", { className: "bc-session-search-status", children: searchReach === 'searching'
+                            ? 'searching…'
+                            : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}${searchReach === 'transcripts-unavailable' ? ' (names only)' : ''}` }))] }), _jsx(HarnessFilterBar, { machines: machines, harnesses: harnesses, sessions: sessions, instanceMachineByID: instanceMachineByID, excludedHarnesses: excludedHarnesses, excludedMachines: excludedMachines, excludedTypes: excludedTypes, excludedPurposes: excludedPurposes, excludedModes: excludedModes, excludedStatuses: excludedStatuses, statusOf: statusOf, onToggleHarness: toggleHarness, onToggleMachine: toggleMachine, onToggleClass: toggleClass, onClear: clearSessionFilter, basePath: basePath, collapsed: filterCollapsed, onToggleCollapsed: toggleFilterCollapsed }), _jsx(SignalsInbox, { onSelectSession: onSelect, getSessionName: sessionName, refreshKey: needsYouKey }), searchActive ? (_jsxs(_Fragment, { children: [searchReach === 'transcripts-unavailable' && (_jsxs("div", { className: "bc-session-search-degraded", role: "status", children: ["Message-text search failed (", searchError, ") \u2014 showing name and id matches only."] })), searchResults.length === 0 ? (_jsx("div", { className: "bc-session-list-empty", children: searchReach === 'searching'
+                            ? 'Searching…'
+                            : searchReach === 'transcripts-unavailable'
+                                ? 'No name or id matches.'
+                                : 'No sessions match this search' })) : (renderCappedList('__search__', searchResults))] })) : (_jsxs(_Fragment, { children: [sorted.length === 0 && (_jsx("div", { className: "bc-session-list-empty", children: !connected ? 'Connecting...' : (sessions.length === 0 ? 'No sessions yet' : 'No sessions match the active filter') })), renderCappedList('__unfiled__', unfiled), grouped.map(({ name, sessions: entries }) => {
                         const isCollapsed = collapsed[name] ?? false;
                         const hasActive = entries.some(s => openSessionIds.has(s.session_id));
                         return (_jsxs("div", { children: [_jsxs("button", { className: `bc-folder-header ${hasActive ? 'bc-folder-header-active' : ''}`, onClick: () => toggleFolder(name), onContextMenu: e => openFolderMenu(e, name), children: [_jsx("span", { className: "bc-folder-chevron", children: isCollapsed ? '▸' : '▾' }), _jsx("span", { className: "bc-folder-icon", children: "\uD83D\uDCC1" }), _jsx("span", { className: "bc-folder-name", children: name }), _jsx("span", { className: "bc-folder-count", children: entries.length })] }), !isCollapsed && renderCappedList(name, entries)] }, name));

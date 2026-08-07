@@ -47,6 +47,10 @@ import { SplitDragHandle } from '../src/components/chat/SplitDragHandle.tsx'
 import {
   EVEN_SPLIT_GROW_UNITS, MINIMUM_PANE_PIXELS, measureSplitDragGeometry, splitGrowUnitsAfterDrag,
 } from '../src/components/chat/splitDragGeometry.ts'
+import {
+  sessionContentSearchAfterFailure, sessionContentSearchAfterResponse,
+  sessionContentSearchHitsFromPayload, sessionContentSearchReachOf,
+} from '../src/useSessionContentSearch.ts'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -1878,6 +1882,63 @@ function useMinimalChromeFallbackReportsNoChrome() {
       h(BridgeContext.Provider, { value: { fetch: async () => ({ ok: true, status: 200, json: async () => [] }), basePath: '/api/bridge', routes: DEFAULT_BRIDGE_ROUTES } },
         h(BridgeLayout))))
   return html.includes('bridge-nav') && !html.includes('bridge-layout-minimal')
+}
+
+console.log('session content search — a failure is not an empty result')
+{
+  const reach = (query, search) => sessionContentSearchReachOf(query, {
+    hits: null, searching: false, error: null, ...search,
+  })
+
+  // The bug this guards. Both surfaces used to answer a failed /sessions/search
+  // with an empty hit set, which is the wire-identical shape of "your words
+  // appear in no transcript". The sidebar then dropped every content-only match
+  // under "No sessions match this search", and the Sessions page — where these
+  // hits are the ONLY filter — emptied its list and reported "0 matches". A
+  // failure must stay distinguishable from a negative answer.
+  check('a failed search does not read as a completed one',
+    reach('needle', { error: 'search failed: 502' }) === 'transcripts-unavailable',
+    reach('needle', { error: 'search failed: 502' }))
+  check('a failed search reports failure even when stale hits are still around',
+    reach('needle', { hits: new Map([['s1', 3]]), error: 'search failed: 502' }) === 'transcripts-unavailable',
+    reach('needle', { hits: new Map([['s1', 3]]), error: 'search failed: 502' }))
+  check('an empty hit set is a real negative answer, not a failure',
+    reach('needle', { hits: new Map() }) === 'transcripts-included',
+    reach('needle', { hits: new Map() }))
+  check('an outstanding search outranks whatever the last one left',
+    reach('needle', { hits: new Map(), searching: true, error: 'stale' }) === 'searching',
+    reach('needle', { hits: new Map(), searching: true, error: 'stale' }))
+  check('no query means nothing is filtered by content',
+    reach('', { hits: new Map([['s1', 1]]) }) === 'idle',
+    reach('', { hits: new Map([['s1', 1]]) }))
+
+  // The settle path itself — this is the line the defect lived on. The old code
+  // was `.catch(() => setHits(new Map()))`, and an empty map means "searched,
+  // found nothing".
+  const failed = sessionContentSearchAfterFailure(new Error('search failed: 502'))
+  check('a failed request yields NO hit set, not an empty one',
+    failed.hits === null, JSON.stringify(failed))
+  check('and it keeps the reason so the surface can say what is missing',
+    failed.error === 'search failed: 502', failed.error)
+  check('a non-Error rejection still produces a readable reason',
+    sessionContentSearchAfterFailure('offline').error === 'offline')
+  const answered = sessionContentSearchAfterResponse([{ session_id: 's1', match_count: 2 }])
+  check('a successful response clears a previous failure',
+    answered.error === null && answered.hits.get('s1') === 2)
+  check('a genuinely empty result is a hit set, so it still reads as answered',
+    sessionContentSearchReachOf('needle', {
+      ...sessionContentSearchAfterResponse([]), searching: false,
+    }) === 'transcripts-included')
+
+  const hits = sessionContentSearchHitsFromPayload([
+    { session_id: 's1', match_count: 4 }, { session_id: 's2' },
+    { session_id: '' }, null, 'nonsense',
+  ])
+  check('payload parse keeps counts and drops unusable rows',
+    hits.size === 2 && hits.get('s1') === 4 && hits.get('s2') === 0,
+    JSON.stringify([...hits]))
+  check('a non-array payload parses to no hits rather than throwing',
+    sessionContentSearchHitsFromPayload(null).size === 0)
 }
 
 // Failing by default until the report is printed. The async checks await real

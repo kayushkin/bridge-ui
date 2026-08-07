@@ -165,6 +165,10 @@
 }
 .bc-session-search-input:focus { outline: none; border-color: var(--accent); }
 .bc-session-search-status { font-size: 0.75em; color: var(--text-dim); white-space: nowrap; }
+.bc-session-search-degraded {
+  margin: 4px 8px 6px; padding: 6px 8px; border-radius: 6px; font-size: 0.75em;
+  color: #f59e0b; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35);
+}
 .bc-session-item {
   display: flex;
   align-items: center;
@@ -2015,6 +2019,10 @@
 }
 .bs-search { flex: 1; min-width: 200px; }
 .bs-search-status { font-size: 0.8em; color: var(--text-dim); margin-left: 4px; }
+.bs-search-degraded {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 6px; font-size: 0.85em;
+  color: #f59e0b; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35);
+}
 .bs-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg-surface); }
 .bs-list > li + li { border-top: 1px solid var(--border); }
 .bs-row {

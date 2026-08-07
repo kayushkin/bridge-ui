@@ -15,6 +15,8 @@ export { useBridgeHarnesses } from './useBridgeHarnesses';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
 export type { UseBridgeFoldersReturn } from './useBridgeFolders';
+export { useSessionContentSearch, sessionContentSearchHitsFromPayload, SESSION_CONTENT_SEARCH_DEBOUNCE_MS, } from './useSessionContentSearch';
+export type { SessionContentSearch, SessionContentSearchHits } from './useSessionContentSearch';
 export { useBridgeTools } from './useBridgeTools';
 export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools';
 export { useKanban } from './useKanban';

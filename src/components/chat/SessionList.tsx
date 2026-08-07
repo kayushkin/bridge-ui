@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BridgeInstance, FetchFn, HarnessInfo, Machine, ManagedSession, SessionUIState } from '../../types'
 import { ARCHIVE_FOLDER, type UseBridgeFoldersReturn } from '../../useBridgeFolders'
+import { useSessionContentSearch, sessionContentSearchReachOf } from '../../useSessionContentSearch'
 import { EditableName } from './EditableName'
 import { HarnessFilterBar, sessionMode, sessionStatusGroup } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
@@ -157,27 +158,17 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
   // ignoring the exclude-chips and folder grouping — so a hit can never hide
   // inside a collapsed or archived folder.
   const [searchText, setSearchText] = useState('')
-  const [contentHits, setContentHits] = useState<Set<string> | null>(null)
-  const [searching, setSearching] = useState(false)
   const query = searchText.trim()
   const searchActive = query.length > 0
 
-  useEffect(() => {
-    if (!query) { setContentHits(null); setSearching(false); return }
-    let cancelled = false
-    setSearching(true)
-    const t = setTimeout(() => {
-      apiFetch(`${basePath}/sessions/search?q=${encodeURIComponent(query)}`)
-        .then(async r => {
-          if (!r.ok) throw new Error(`search failed: ${r.status}`)
-          const hits: { session_id: string }[] = (await r.json()) ?? []
-          if (!cancelled) setContentHits(new Set(hits.map(h => h.session_id)))
-        })
-        .catch(() => { if (!cancelled) setContentHits(new Set()) })
-        .finally(() => { if (!cancelled) setSearching(false) })
-    }, 300)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [query, apiFetch, basePath])
+  // Null hits mean the transcript half of the answer is missing — either not
+  // asked for yet or failed. Either way the list below falls back to matching on
+  // name and id alone, and `searchError` is what tells the user which
+  // of those two it is. See useSessionContentSearch for why a failure must not
+  // collapse into an empty hit set.
+  const contentSearch = useSessionContentSearch(query, apiFetch, basePath)
+  const { hits: contentHits, error: searchError } = contentSearch
+  const searchReach = sessionContentSearchReachOf(query, contentSearch)
 
   const searchResults = useMemo(() => {
     if (!searchActive) return []
@@ -496,7 +487,9 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         />
         {searchActive && (
           <span className="bc-session-search-status">
-            {searching ? 'searching…' : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}`}
+            {searchReach === 'searching'
+              ? 'searching…'
+              : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}${searchReach === 'transcripts-unavailable' ? ' (names only)' : ''}`}
           </span>
         )}
       </div>
@@ -529,13 +522,27 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
       />
 
       {searchActive ? (
-        searchResults.length === 0 ? (
-          <div className="bc-session-list-empty">
-            {searching ? 'Searching…' : 'No sessions match this search'}
-          </div>
-        ) : (
-          renderCappedList('__search__', searchResults)
-        )
+        <>
+          {/* A failed transcript search must never read as "nothing matched".
+              Say the content half is missing, above whichever list or empty
+              state the name matches alone produced. */}
+          {searchReach === 'transcripts-unavailable' && (
+            <div className="bc-session-search-degraded" role="status">
+              Message-text search failed ({searchError}) — showing name and id matches only.
+            </div>
+          )}
+          {searchResults.length === 0 ? (
+            <div className="bc-session-list-empty">
+              {searchReach === 'searching'
+                ? 'Searching…'
+                : searchReach === 'transcripts-unavailable'
+                  ? 'No name or id matches.'
+                  : 'No sessions match this search'}
+            </div>
+          ) : (
+            renderCappedList('__search__', searchResults)
+          )}
+        </>
       ) : (
         <>
           {sorted.length === 0 && (

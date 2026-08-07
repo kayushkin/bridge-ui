@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeHarnesses } from '../useBridgeHarnesses'
+import { useSessionContentSearch, sessionContentSearchReachOf } from '../useSessionContentSearch'
 import { formatTokens, timeAgo } from '../utils'
 import type { BridgeSession } from '../types'
 
@@ -12,8 +13,6 @@ const STATE_COLORS: Record<string, string> = {
   running: '#22c55e', idle: '#60a5fa', completed: '#888',
   error: '#ef4444', aborted: '#ef4444', waiting_on_approval: '#f59e0b',
 }
-
-interface SearchHit { session_id: string; match_count: number }
 
 interface SessionTokens { input: number; output: number }
 
@@ -73,9 +72,6 @@ export function BridgeSessions() {
   const [filterState, setFilterState] = useState<FilterState>('')
   const [filterInstance, setFilterInstance] = useState('')
   const [searchInput, setSearchInput] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchHits, setSearchHits] = useState<Map<string, number> | null>(null)
-  const [searching, setSearching] = useState(false)
   const inst = useBridgeInstances()
   const { harnessMap } = useBridgeHarnesses()
   const navigate = useNavigate()
@@ -94,30 +90,15 @@ export function BridgeSessions() {
     return () => clearInterval(interval)
   }, [fetchSessions])
 
-  useEffect(() => {
-    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 300)
-    return () => clearTimeout(t)
-  }, [searchInput])
-
-  useEffect(() => {
-    if (!searchQuery) {
-      setSearchHits(null)
-      setSearching(false)
-      return
-    }
-    let cancelled = false
-    setSearching(true)
-    apiFetch(`${basePath}/sessions/search?q=${encodeURIComponent(searchQuery)}`)
-      .then(async r => {
-        if (!r.ok) throw new Error(`search failed: ${r.status}`)
-        const hits: SearchHit[] = await r.json() ?? []
-        if (cancelled) return
-        setSearchHits(new Map(hits.map(h => [h.session_id, h.match_count])))
-      })
-      .catch(() => { if (!cancelled) setSearchHits(new Map()) })
-      .finally(() => { if (!cancelled) setSearching(false) })
-    return () => { cancelled = true }
-  }, [searchQuery, apiFetch, basePath])
+  // Transcript text is the ONLY thing this page's search matches on, so null
+  // hits mean it cannot narrow the list at all. It then shows the list
+  // unnarrowed and says so — see useSessionContentSearch. Emptying the list on a
+  // failure, which is what this used to do, reported a dead log-store as "no
+  // session contains your words".
+  const searchQuery = searchInput.trim()
+  const contentSearch = useSessionContentSearch(searchQuery, apiFetch, basePath)
+  const { hits: searchHits, error: searchError } = contentSearch
+  const searchReach = sessionContentSearchReachOf(searchQuery, contentSearch)
 
   const harnessesAvail = useMemo(() => [...new Set(sessions.map(s => s.harness))].sort(), [sessions])
   const states = useMemo(() => [...new Set(sessions.map(s => s.state))].sort(), [sessions])
@@ -201,11 +182,19 @@ export function BridgeSessions() {
           <option value="">All instances</option>
           {inst.instances.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
-        {searching && <span className="bs-search-status">Searching…</span>}
-        {!searching && searchHits && (
+        {searchReach === 'searching' && <span className="bs-search-status">Searching…</span>}
+        {searchReach === 'transcripts-included' && (
           <span className="bs-search-status">{filtered.length} match{filtered.length === 1 ? '' : 'es'}</span>
         )}
       </div>
+
+      {/* The count above deliberately does not render on a failure: there is no
+          match count to report, because the search never ran. */}
+      {searchReach === 'transcripts-unavailable' && (
+        <div className="bs-search-degraded" role="status">
+          Message-content search failed ({searchError}) — the list below is NOT filtered by your search.
+        </div>
+      )}
 
       {loading ? (
         <div className="bs-loading">Loading...</div>

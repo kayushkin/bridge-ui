@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { useBridgeHarnesses } from '../useBridgeHarnesses';
+import { useSessionContentSearch, sessionContentSearchReachOf } from '../useSessionContentSearch';
 import { formatTokens, timeAgo } from '../utils';
 const STATE_COLORS = {
     running: '#22c55e', idle: '#60a5fa', completed: '#888',
@@ -43,9 +44,6 @@ export function BridgeSessions() {
     const [filterState, setFilterState] = useState('');
     const [filterInstance, setFilterInstance] = useState('');
     const [searchInput, setSearchInput] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchHits, setSearchHits] = useState(null);
-    const [searching, setSearching] = useState(false);
     const inst = useBridgeInstances();
     const { harnessMap } = useBridgeHarnesses();
     const navigate = useNavigate();
@@ -65,33 +63,15 @@ export function BridgeSessions() {
         const interval = setInterval(fetchSessions, 15000);
         return () => clearInterval(interval);
     }, [fetchSessions]);
-    useEffect(() => {
-        const t = setTimeout(() => setSearchQuery(searchInput.trim()), 300);
-        return () => clearTimeout(t);
-    }, [searchInput]);
-    useEffect(() => {
-        if (!searchQuery) {
-            setSearchHits(null);
-            setSearching(false);
-            return;
-        }
-        let cancelled = false;
-        setSearching(true);
-        apiFetch(`${basePath}/sessions/search?q=${encodeURIComponent(searchQuery)}`)
-            .then(async (r) => {
-            if (!r.ok)
-                throw new Error(`search failed: ${r.status}`);
-            const hits = await r.json() ?? [];
-            if (cancelled)
-                return;
-            setSearchHits(new Map(hits.map(h => [h.session_id, h.match_count])));
-        })
-            .catch(() => { if (!cancelled)
-            setSearchHits(new Map()); })
-            .finally(() => { if (!cancelled)
-            setSearching(false); });
-        return () => { cancelled = true; };
-    }, [searchQuery, apiFetch, basePath]);
+    // Transcript text is the ONLY thing this page's search matches on, so null
+    // hits mean it cannot narrow the list at all. It then shows the list
+    // unnarrowed and says so — see useSessionContentSearch. Emptying the list on a
+    // failure, which is what this used to do, reported a dead log-store as "no
+    // session contains your words".
+    const searchQuery = searchInput.trim();
+    const contentSearch = useSessionContentSearch(searchQuery, apiFetch, basePath);
+    const { hits: searchHits, error: searchError } = contentSearch;
+    const searchReach = sessionContentSearchReachOf(searchQuery, contentSearch);
     const harnessesAvail = useMemo(() => [...new Set(sessions.map(s => s.harness))].sort(), [sessions]);
     const states = useMemo(() => [...new Set(sessions.map(s => s.state))].sort(), [sessions]);
     const filtered = useMemo(() => {
@@ -143,7 +123,7 @@ export function BridgeSessions() {
             c[s.state] = (c[s.state] || 0) + 1;
         return c;
     }, [sessions]);
-    return (_jsxs("div", { className: "bs-container", children: [_jsxs("div", { className: "bs-header", children: [_jsx("h2", { children: "All Sessions" }), _jsx("div", { className: "bs-counts", children: Object.entries(counts).map(([state, n]) => (_jsxs("span", { className: "bs-count-badge", style: { color: STATE_COLORS[state] || '#888' }, children: [n, " ", state] }, state))) })] }), _jsxs("div", { className: "bs-filters", children: [_jsx("input", { type: "search", placeholder: "Search message content\u2026", value: searchInput, onChange: e => setSearchInput(e.target.value), className: "bs-search" }), _jsxs("select", { value: filterHarness, onChange: e => setFilterHarness(e.target.value), children: [_jsx("option", { value: "", children: "All harnesses" }), harnessesAvail.map(h => _jsx("option", { value: h, children: h }, h))] }), _jsxs("select", { value: filterState, onChange: e => setFilterState(e.target.value), children: [_jsx("option", { value: "", children: "All states" }), states.map(s => _jsx("option", { value: s, children: s }, s))] }), _jsxs("select", { value: filterInstance, onChange: e => setFilterInstance(e.target.value), children: [_jsx("option", { value: "", children: "All instances" }), inst.instances.map(i => _jsx("option", { value: i.id, children: i.name }, i.id))] }), searching && _jsx("span", { className: "bs-search-status", children: "Searching\u2026" }), !searching && searchHits && (_jsxs("span", { className: "bs-search-status", children: [filtered.length, " match", filtered.length === 1 ? '' : 'es'] }))] }), loading ? (_jsx("div", { className: "bs-loading", children: "Loading..." })) : filtered.length === 0 ? (_jsx("div", { className: "bs-empty", children: "No sessions match filters" })) : (_jsx("ul", { className: "bs-list", children: filtered.map(s => {
+    return (_jsxs("div", { className: "bs-container", children: [_jsxs("div", { className: "bs-header", children: [_jsx("h2", { children: "All Sessions" }), _jsx("div", { className: "bs-counts", children: Object.entries(counts).map(([state, n]) => (_jsxs("span", { className: "bs-count-badge", style: { color: STATE_COLORS[state] || '#888' }, children: [n, " ", state] }, state))) })] }), _jsxs("div", { className: "bs-filters", children: [_jsx("input", { type: "search", placeholder: "Search message content\u2026", value: searchInput, onChange: e => setSearchInput(e.target.value), className: "bs-search" }), _jsxs("select", { value: filterHarness, onChange: e => setFilterHarness(e.target.value), children: [_jsx("option", { value: "", children: "All harnesses" }), harnessesAvail.map(h => _jsx("option", { value: h, children: h }, h))] }), _jsxs("select", { value: filterState, onChange: e => setFilterState(e.target.value), children: [_jsx("option", { value: "", children: "All states" }), states.map(s => _jsx("option", { value: s, children: s }, s))] }), _jsxs("select", { value: filterInstance, onChange: e => setFilterInstance(e.target.value), children: [_jsx("option", { value: "", children: "All instances" }), inst.instances.map(i => _jsx("option", { value: i.id, children: i.name }, i.id))] }), searchReach === 'searching' && _jsx("span", { className: "bs-search-status", children: "Searching\u2026" }), searchReach === 'transcripts-included' && (_jsxs("span", { className: "bs-search-status", children: [filtered.length, " match", filtered.length === 1 ? '' : 'es'] }))] }), searchReach === 'transcripts-unavailable' && (_jsxs("div", { className: "bs-search-degraded", role: "status", children: ["Message-content search failed (", searchError, ") \u2014 the list below is NOT filtered by your search."] })), loading ? (_jsx("div", { className: "bs-loading", children: "Loading..." })) : filtered.length === 0 ? (_jsx("div", { className: "bs-empty", children: "No sessions match filters" })) : (_jsx("ul", { className: "bs-list", children: filtered.map(s => {
                     const instance = s.instance_id ? inst.instanceMap.get(s.instance_id) : undefined;
                     const matchCount = searchHits?.get(s.session_id);
                     const hinfo = harnessMap.get(s.harness);

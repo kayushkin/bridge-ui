@@ -14,6 +14,7 @@ export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgeHarnesses } from './useBridgeHarnesses';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
+export { useSessionContentSearch, sessionContentSearchHitsFromPayload, SESSION_CONTENT_SEARCH_DEBOUNCE_MS, } from './useSessionContentSearch';
 export { useBridgeTools } from './useBridgeTools';
 export { useKanban } from './useKanban';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
