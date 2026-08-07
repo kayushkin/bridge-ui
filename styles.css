@@ -4743,6 +4743,37 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* A signal raised by a session working this todo. Louder than the ceiling
+   line and quieter than the hold banner: somebody has to act, but the work is
+   not parked. A question outranks a notification because it is blocking a
+   session right now.
+
+   The kind colours the LABEL and the left border, never the title. The title
+   is the signal's own words and has to stay readable, and tinting it muted
+   grey (or fading it with opacity) took it to 3.9:1 — below WCAG AA at this
+   size. Colour is what the label is for. */
+.bk-card-signal {
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 0.78em;
+  margin: 4px 0;
+  padding: 3px 6px;
+  border-left: 2px solid var(--text-muted);
+  border-radius: 2px;
+}
+/* A question is blocking a session that cannot proceed, so it takes the
+   warning colour rather than --accent: accent is what this board already
+   paints its own buttons and borders with, so an accent badge reads as page
+   chrome instead of as something asking for you. */
+.bk-card-signal-question { border-left-color: var(--warning); }
+.bk-card-signal-question .bk-card-signal-label { color: var(--warning); }
+.bk-card-signal-notification { border-left-color: var(--text-muted); }
+.bk-card-signal-notification .bk-card-signal-label { color: var(--text-muted); }
+.bk-card-signal-label { font-weight: 600; }
+.bk-card-signal-title {
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* Spend ceiling. Distinct from the held banner: this is the ceiling that has
    NOT yet been hit — informational, not a stop. */
 .bk-card-ceiling {
@@ -5055,3 +5086,84 @@
 /* CeilingPanelRows is the first group in every drill-down that has one, and
    a group separator above the first row is a line to nothing. */
 .bc-cost-panel > .bc-cost-panel-group:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+/* --- Session signals -------------------------------------------------- */
+/* One signal record — a question or a notification a session raised — is
+   rendered by SignalCard, and the same card mounts in three places: the
+   raising session's chat, the sidebar "Needs you" inbox, and the RefChip
+   session panel. The compact variant is the panel's; it drops descriptions
+   and the freeform box but stays answerable. */
+.bc-signals {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.bc-signals-inbox { border-bottom: 1px solid var(--border); }
+.bc-signals-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.72em; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-muted);
+}
+.bc-signals-count {
+  padding: 0 6px; border-radius: 999px; font-size: 0.95em;
+  background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent);
+}
+.bc-signals-session {
+  align-self: flex-start; padding: 2px 6px; margin-bottom: 4px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: none; color: var(--accent); cursor: pointer;
+  font-size: 0.78em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bc-signals-session:hover { border-color: var(--accent); }
+.bc-signals-session:disabled { color: var(--text-muted); cursor: default; }
+.bc-signal-request { display: flex; flex-direction: column; gap: 6px; }
+.bc-signal-card {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 6px; padding: 8px 10px;
+  background: var(--bg-elevated, var(--bg-surface));
+}
+.bc-signal-card-compact { padding: 6px 8px; font-size: 0.9em; }
+.bc-signal-card-header { display: flex; gap: 8px; align-items: baseline; }
+.bc-signal-kind {
+  font-size: 0.68em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 6px; border-radius: 3px;
+}
+.bc-signal-kind-question { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.bc-signal-kind-notification { background: color-mix(in srgb, var(--text-muted) 18%, transparent); color: var(--text-muted); }
+.bc-signal-severity { font-size: 0.7em; font-weight: 600; color: #e0a24a; text-transform: uppercase; }
+.bc-signal-title { margin: 6px 0 0; font-size: 0.92em; color: var(--text); }
+.bc-signal-body { margin: 4px 0 0; font-size: 0.82em; color: var(--text-muted); white-space: pre-wrap; }
+.bc-signal-options { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.bc-signal-option {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 5px 8px; border-radius: 4px;
+  border: 1px solid transparent; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.bc-signal-option:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.bc-signal-option-selected {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.bc-signal-option-body { display: flex; flex-direction: column; gap: 2px; }
+.bc-signal-option-label { font-size: 0.88em; color: var(--text); }
+.bc-signal-option-desc { font-size: 0.78em; color: var(--text-muted); }
+.bc-signal-freeform {
+  width: 100%; margin-top: 8px; padding: 6px 8px;
+  background: var(--bg-surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  font: inherit; font-size: 0.85em; resize: vertical;
+}
+.bc-signal-freeform:focus { outline: none; border-color: var(--accent); }
+.bc-signal-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.bc-signal-actions button {
+  padding: 4px 12px; border-radius: 5px; border: 1px solid var(--border);
+  background: none; color: var(--text); cursor: pointer; font-size: 0.82em;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.bc-signal-actions button:hover { border-color: var(--accent); }
+.bc-signal-actions button:disabled { opacity: 0.4; cursor: default; }
+.bc-signal-submit { color: #4caf50 !important; }
+.bc-signal-submit:hover { background: color-mix(in srgb, #4caf50 10%, transparent); border-color: #4caf50 !important; }
+.bc-signal-decline { color: #e57373 !important; }
+.bc-signal-decline:hover { background: color-mix(in srgb, #e57373 10%, transparent); border-color: #e57373 !important; }
+.bc-signal-error { color: #e57373; font-size: 0.8em; margin: 6px 0 0; }

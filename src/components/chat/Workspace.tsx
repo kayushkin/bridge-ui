@@ -11,6 +11,7 @@ import { LayoutRenderer } from './LayoutRenderer'
 import { PendingPermissionsBanner } from './PendingPermissionsBanner'
 import { SessionPermissionMode } from './SessionPermissionMode'
 import { SessionHeader } from './SessionHeader'
+import { SessionSignals } from './SessionSignals'
 import { StatusDot } from './StatusDot'
 import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
@@ -525,6 +526,12 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
           session={bridge.activeSession}
           onRaiseCeiling={bridge.raiseBudgetCeiling}
         />
+        {bridge.activeSession && (
+          <SessionSignals
+            sessionId={bridge.activeSession.session_id}
+            excludeRequestIds={bridge.pendingHooks.map(hook => hook.request_id || '')}
+          />
+        )}
         <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
       </WorkspaceProvider>
       {renderControls}

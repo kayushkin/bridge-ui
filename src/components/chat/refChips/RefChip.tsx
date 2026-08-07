@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../../../context'
 import { formatCost, timeAgo } from '../../../utils'
 import { idTail } from '../utils'
+import { SessionSignals } from '../SessionSignals'
 import type { RefKind } from './remarkRefChips'
 import {
   fetchSessionCore, fetchSessionCost, fetchTodoRef,
@@ -132,6 +133,11 @@ function SessionRefPanel({ core, error, refId }: { core: SessionCore | null; err
           {core.harness && <RefRow label="Harness" value={core.harness} />}
           {cost != null && cost > 0 && <RefRow label="Cost" value={formatCost(cost)} />}
           {core.updated_at && <RefRow label="Updated" value={timeAgo(core.updated_at)} />}
+          {/* The cross-session answer: open session A's chip while working in
+              session B and answer A's question here. The State row's
+              "question" badge says a signal is waiting; this is where it can
+              be dealt with. */}
+          <SessionSignals sessionId={core.session_id || refId} compact />
         </>
       )}
     </div>

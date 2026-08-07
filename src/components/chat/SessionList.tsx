@@ -5,6 +5,7 @@ import { EditableName } from './EditableName'
 import { HarnessFilterBar, sessionMode, sessionStatusGroup } from './HarnessFilterBar'
 import { NewSessionMenu } from './NewSessionMenu'
 import { ProducerRow } from './ProducerRow'
+import { SignalsInbox } from './SessionSignals'
 import { SplitButtons } from './SplitButtons'
 import { StatusDot } from './StatusDot'
 import {
@@ -108,6 +109,26 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
     (s: ManagedSession) => sessionStatusGroup(getSessionUIState(s)),
     [getSessionUIState]
   )
+
+  // The inbox reads its signals from bridge-server, which has no signal event
+  // on the SSE stream yet. The set of sessions in a "needs you" state is the
+  // closest thing the sidebar already tracks: a signal is minted as a session
+  // enters one and closed as it leaves. Refetching on that beats polling.
+  const needsYouKey = useMemo(
+    () => sessions.filter(s => statusOf(s) === 'needs you').map(s => s.session_id).sort().join(','),
+    [sessions, statusOf]
+  )
+
+  const sessionsByID = useMemo(() => {
+    const m = new Map<string, ManagedSession>()
+    for (const s of sessions) m.set(s.session_id, s)
+    return m
+  }, [sessions])
+
+  const sessionName = useCallback((sessionID: string) => {
+    const session = sessionsByID.get(sessionID)
+    return session ? getDisplayName(session) : sessionID
+  }, [sessionsByID, getDisplayName])
 
   const filtered = useMemo(() =>
     sessions.filter(s => {
@@ -499,6 +520,12 @@ export function SessionList({ sessions, instances, machines, harnesses, basePath
         basePath={basePath}
         collapsed={filterCollapsed}
         onToggleCollapsed={toggleFilterCollapsed}
+      />
+
+      <SignalsInbox
+        onSelectSession={onSelect}
+        getSessionName={sessionName}
+        refreshKey={needsYouKey}
       />
 
       {searchActive ? (

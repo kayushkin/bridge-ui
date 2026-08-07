@@ -167,6 +167,24 @@ export type { LinkedKanbanPanelProps } from './components/chat/LinkedKanbanPanel
 export { OrchestratorPanel } from './components/chat/OrchestratorPanel'
 export type { OrchestratorPanelProps } from './components/chat/OrchestratorPanel'
 
+// Session signals — one record for a question or a notification a session
+// raises, one card that renders it. SignalCard is the card itself;
+// SessionSignals and SignalsInbox are the self-fetching surfaces mounted in
+// chat, the sidebar inbox and the RefChip session panel.
+export { SignalCard, SignalRequestCard } from './components/chat/SignalCard'
+export type { SignalCardProps, SignalRequestCardProps } from './components/chat/SignalCard'
+export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals'
+export type { SessionSignalsProps, SignalsInboxProps } from './components/chat/SessionSignals'
+export {
+  fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions,
+  declineSignalQuestions, useOpenChatSignals,
+  // Todo propagation: which todos have an open signal against them. The board
+  // takes the whole map in one request; a view that already knows its one todo
+  // narrows server-side instead.
+  fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo,
+} from './components/chat/signalData'
+export type { SignalRequest, SignalsResult, UseOpenChatSignals } from './components/chat/signalData'
+
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually.

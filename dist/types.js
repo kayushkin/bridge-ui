@@ -6,5 +6,5 @@
 // DO NOT duplicate these types locally. If you need a new API type,
 // add the Go struct to llm-bridge/msg/server.go, run generate-ts.sh,
 // and import it here.
-export { ErrCodeBudgetExceeded, HookSourceHook, HookSourcePermission, HookSourceUserInput, PermissionModeAsk, PermissionModeAskAll, PermissionModeAuto, PermissionModeBlockAll, PermissionModeBypass, PermissionModeCustom, PermissionModePlan, PermissionModeRead, } from '@kayushkin/llm-bridge-types';
+export { HookSourceHook, HookSourcePermission, HookSourceUserInput, PermissionModeAsk, PermissionModeAskAll, PermissionModeAuto, PermissionModeBlockAll, PermissionModeBypass, PermissionModeCustom, PermissionModePlan, PermissionModeRead, SignalKindNotification, SignalKindQuestion, SignalSeverityInfo, SignalSeverityWarn, SignalSourceDerived, SignalSourceTool, SignalStateAcknowledged, SignalStateAnswered, SignalStateDismissed, SignalStateOpen, SignalSurfaceChat, SignalSurfaceKanban, } from '@kayushkin/llm-bridge-types';
 //# sourceMappingURL=types.js.map
