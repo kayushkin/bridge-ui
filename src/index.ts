@@ -177,6 +177,32 @@ export type { MinimalTopBarProps } from './components/minimal/MinimalTopBar'
 export { SessionDrawer } from './components/minimal/SessionDrawer'
 export { ChromeSheet } from './components/minimal/ChromeSheet'
 
+// The draggable boundary between two panes of a split, and the arithmetic under it.
+//
+// Exported rather than left internal because its prop list already says it is not
+// ours alone: `axis`, a class name, and two accessors. It names no `PaneKey`, reads
+// no workspace context and stores nothing — where the panes live and where their
+// sizes are kept is entirely the caller's. That parameterization was the point of
+// folding the outer and inner resizers into one implementation, and a host with its
+// own two-pane split is the third caller it was already shaped for.
+//
+// `MINIMUM_PANE_PIXELS` comes with it because a caller that clamps its own sizes
+// before committing them needs the same number this does; re-deriving it is how the
+// two copies that preceded this one drifted.
+//
+// The handle draws itself with the class the caller passes. `.bc-split-resizer` in
+// this package's stylesheet is the styled one; a host loading `styles.css` gets the
+// look for free and ships no CSS.
+export { SplitDragHandle } from './components/chat/SplitDragHandle'
+export type { SplitDragHandleProps, DraggedSplitPair } from './components/chat/SplitDragHandle'
+export {
+  MINIMUM_PANE_PIXELS,
+  EVEN_SPLIT_GROW_UNITS,
+  measureSplitDragGeometry,
+  splitGrowUnitsAfterDrag,
+} from './components/chat/splitDragGeometry'
+export type { SplitDragGeometry, SplitGrowUnits } from './components/chat/splitDragGeometry'
+
 // The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
 // no router — so any surface that owns its own routing can drive the same two-way
 // behaviour BridgeChat has at `/`. dashv2 uses it verbatim rather than growing a second

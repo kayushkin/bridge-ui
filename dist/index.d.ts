@@ -68,6 +68,10 @@ export { MinimalTopBar } from './components/minimal/MinimalTopBar';
 export type { MinimalTopBarProps } from './components/minimal/MinimalTopBar';
 export { SessionDrawer } from './components/minimal/SessionDrawer';
 export { ChromeSheet } from './components/minimal/ChromeSheet';
+export { SplitDragHandle } from './components/chat/SplitDragHandle';
+export type { SplitDragHandleProps, DraggedSplitPair } from './components/chat/SplitDragHandle';
+export { MINIMUM_PANE_PIXELS, EVEN_SPLIT_GROW_UNITS, measureSplitDragGeometry, splitGrowUnitsAfterDrag, } from './components/chat/splitDragGeometry';
+export type { SplitDragGeometry, SplitGrowUnits } from './components/chat/splitDragGeometry';
 export { readSessionDeeplink, writeSessionParam, initialSessionDeeplinkState, } from './sessionDeeplink';
 export type { SessionDeeplinkState } from './sessionDeeplink';
 //# sourceMappingURL=index.d.ts.map
