@@ -14,7 +14,7 @@ const DO_NOT_TRACK_TAGS = ['kanban-do-not-track', 'kanban:do-not-track'] as cons
 // (Workspace's reachability check, OrchestratorPanel, useKanban's board view).
 const LINKED_KANBAN_REFRESH_MS = 15000
 
-interface LinkedKanbanPanelProps {
+export interface LinkedKanbanPanelProps {
   sessionId: string
   onToggleCollapse: () => void
   style?: React.CSSProperties

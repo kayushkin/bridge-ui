@@ -64,6 +64,20 @@ export { EditableName } from './components/chat/EditableName';
 // producer proxy, so a standalone sidebar mounts it with the two paths its own
 // BridgeProvider was given and nothing else.
 export { ProducerRow } from './components/chat/ProducerRow';
+// The three side panes. Each is a self-contained pane with its own header and
+// collapse control, so a host that owns its own layout decides where the pane
+// goes and hands it `style` and `onToggleCollapse`; nothing here assumes the
+// recursive workspace tree `BridgeChat` puts them in.
+//
+// Kanban and Orchestrator fetch their own state from the paths their
+// BridgeProvider was given (`kanbanStoreBasePath`, `producerBasePath`), and
+// render an empty pane when the host left those unset — an unconfigured host is
+// a legible state, not an error. GitPanel is the one that takes state in: its
+// repo list and selection are shared with the chat's repo dropdown, so the
+// caller owns them. See `GitPanelProps`.
+export { GitPanel } from './components/GitPanel';
+export { LinkedKanbanPanel } from './components/chat/LinkedKanbanPanel';
+export { OrchestratorPanel } from './components/chat/OrchestratorPanel';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually.

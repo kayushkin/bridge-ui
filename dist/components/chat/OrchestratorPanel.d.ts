@@ -1,5 +1,6 @@
-export declare function OrchestratorPanel({ onToggleCollapse, style }: {
+export interface OrchestratorPanelProps {
     onToggleCollapse: () => void;
     style?: React.CSSProperties;
-}): import("react/jsx-runtime").JSX.Element;
+}
+export declare function OrchestratorPanel({ onToggleCollapse, style }: OrchestratorPanelProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=OrchestratorPanel.d.ts.map

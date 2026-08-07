@@ -13,7 +13,9 @@
 // a second mechanism.
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
-import { BudgetCeilingBanner, CostBreakdown } from '../src/index.ts'
+import {
+  BudgetCeilingBanner, CostBreakdown, GitPanel, LinkedKanbanPanel, OrchestratorPanel,
+} from '../src/index.ts'
 import { applyEventToRows, controlRefusal, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
@@ -1798,6 +1800,75 @@ console.log('BridgeLayout — a narrow viewport is not permission to hide the na
   // component outside the provider must not be told a chrome exists.
   check('the fallback context reports no minimal chrome mounted',
     useMinimalChromeFallbackReportsNoChrome())
+}
+
+// --- the side panels a host composes itself ---------------------------------
+//
+// These three render through `../src/index.ts` on purpose. Importing them from
+// their own modules would prove they render but not that they are *reachable*,
+// and reachability is the whole point: a host that builds its own layout out of
+// this library's parts (dashv2 does) can only mount what the index exports.
+//
+// They are also mounted with nothing above them but `BridgeProvider`'s context
+// and a router — no `WorkspaceProvider`. That is the real deployment shape, and
+// it is the condition `GitPanel` used to fail: it read the workspace context
+// directly, and `useWorkspace` throws rather than returning a default, so the
+// export alone would have handed a host a component that dies on first render.
+sidePanelChecks()
+function sidePanelChecks() {
+  console.log('\nSide panels mount outside a Workspace')
+  const config = {
+    fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
+    basePath: '/api/bridge',
+    kanbanStoreBasePath: '/api/kanban-store',
+    producerBasePath: '/api/producer',
+    routes: DEFAULT_BRIDGE_ROUTES,
+  }
+  const mount = element => renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/chat'] },
+      h(BridgeContext.Provider, { value: config }, element)))
+
+  const rendered = name => {
+    try {
+      return { html: mount(name.element) }
+    } catch (err) {
+      return { error: err && err.message ? err.message : String(err) }
+    }
+  }
+
+  const git = rendered({ element: h(GitPanel, {
+    sessionId: 's1',
+    uiState: 'idle',
+    gitRepos: [{ path: '/repos/dash', name: 'dash' }],
+    selectedRepo: '/repos/dash',
+    setSelectedRepo: () => {},
+    gitReposLoading: false,
+    gitReposError: null,
+    refreshGitRepos: () => {},
+    onToggleCollapse: () => {},
+    paneKey: 'git',
+  }) })
+  check('GitPanel mounts with no WorkspaceProvider above it', !git.error, git.error)
+  check('GitPanel draws its pane and its repo picker',
+    !!git.html && git.html.includes('bc-split-pane-git') && git.html.includes('bc-git-repo-select'),
+    (git.html || '').slice(0, 300))
+  // The repo list is the state that used to arrive through the context. A panel
+  // that renders its chrome but drops the repos is the failure this would miss.
+  check('GitPanel shows the repo it was handed',
+    !!git.html && git.html.includes('dash'), (git.html || '').slice(0, 300))
+
+  const kanban = rendered({ element: h(LinkedKanbanPanel, {
+    sessionId: 's1', onToggleCollapse: () => {}, paneKey: 'kanban',
+  }) })
+  check('LinkedKanbanPanel mounts with no WorkspaceProvider above it', !kanban.error, kanban.error)
+  check('LinkedKanbanPanel draws its pane',
+    !!kanban.html && kanban.html.includes('bc-split-pane-kanban'), (kanban.html || '').slice(0, 300))
+
+  const orchestrator = rendered({ element: h(OrchestratorPanel, { onToggleCollapse: () => {} }) })
+  check('OrchestratorPanel mounts with no WorkspaceProvider above it', !orchestrator.error, orchestrator.error)
+  check('OrchestratorPanel draws its pane',
+    !!orchestrator.html && orchestrator.html.includes('bc-split-pane-orchestrator'),
+    (orchestrator.html || '').slice(0, 300))
 }
 
 function useMinimalChromeFallbackReportsNoChrome() {

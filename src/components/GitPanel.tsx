@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import type { SessionUIState } from '../types'
-import { useWorkspace } from './chat/WorkspaceContext'
+import type { GitRepo } from './chat/WorkspaceContext'
 
 interface GitView {
   repo: string
@@ -21,26 +21,41 @@ const SECTION_LABELS: Record<Section, string> = {
   log: 'Log',
 }
 
-interface GitPanelProps {
+export interface GitPanelProps {
   sessionId: string
   uiState: SessionUIState
+  // The repo list and the selection are the caller's, not this pane's. Inside
+  // the chat they belong to Workspace, which shares them with SessionHeader's
+  // repo dropdown so both reflect the same selection — and a pane that fetched
+  // its own would fight that dropdown. Passing them in is also what lets a host
+  // building its own layout mount this pane at all: they used to be read from
+  // the workspace context directly, and `useWorkspace` throws outside its
+  // provider, so the pane could only ever live inside the whole chat.
+  gitRepos: GitRepo[]
+  selectedRepo: string
+  setSelectedRepo: (path: string) => void
+  gitReposLoading: boolean
+  gitReposError: string | null
+  refreshGitRepos: () => void
   onToggleCollapse: () => void
   style?: React.CSSProperties
   paneKey?: string
 }
 
-export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey }: GitPanelProps) {
+export function GitPanel({
+  sessionId,
+  uiState,
+  gitRepos: repos,
+  selectedRepo,
+  setSelectedRepo,
+  gitReposLoading: loadingRepos,
+  gitReposError: reposError,
+  refreshGitRepos,
+  onToggleCollapse,
+  style,
+  paneKey,
+}: GitPanelProps) {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
-  // Repos + selection are owned by the surrounding Workspace and shared with
-  // SessionHeader's repo dropdown so both reflect the same selection.
-  const {
-    gitRepos: repos,
-    selectedRepo,
-    setSelectedRepo,
-    gitReposLoading: loadingRepos,
-    gitReposError: reposError,
-    refreshGitRepos,
-  } = useWorkspace()
 
   const [view, setView] = useState<GitView | null>(null)
   const [viewError, setViewError] = useState<string | null>(null)

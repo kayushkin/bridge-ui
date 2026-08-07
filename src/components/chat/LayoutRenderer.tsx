@@ -74,6 +74,12 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
         <GitPanel
           sessionId={sessionId}
           uiState={ws.uiState}
+          gitRepos={ws.gitRepos}
+          selectedRepo={ws.selectedRepo}
+          setSelectedRepo={ws.setSelectedRepo}
+          gitReposLoading={ws.gitReposLoading}
+          gitReposError={ws.gitReposError}
+          refreshGitRepos={ws.refreshGitRepos}
           onToggleCollapse={() => ws.togglePane('git')}
           style={style}
           paneKey="git"

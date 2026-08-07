@@ -1,18 +1,14 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBridgeConfig } from '../context';
-import { useWorkspace } from './chat/WorkspaceContext';
 const SECTION_LABELS = {
     status: 'Status',
     diff_unstaged: 'Unstaged',
     diff_staged: 'Staged',
     log: 'Log',
 };
-export function GitPanel({ sessionId, uiState, onToggleCollapse, style, paneKey }) {
+export function GitPanel({ sessionId, uiState, gitRepos: repos, selectedRepo, setSelectedRepo, gitReposLoading: loadingRepos, gitReposError: reposError, refreshGitRepos, onToggleCollapse, style, paneKey, }) {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
-    // Repos + selection are owned by the surrounding Workspace and shared with
-    // SessionHeader's repo dropdown so both reflect the same selection.
-    const { gitRepos: repos, selectedRepo, setSelectedRepo, gitReposLoading: loadingRepos, gitReposError: reposError, refreshGitRepos, } = useWorkspace();
     const [view, setView] = useState(null);
     const [viewError, setViewError] = useState(null);
     const [loadingView, setLoadingView] = useState(false);

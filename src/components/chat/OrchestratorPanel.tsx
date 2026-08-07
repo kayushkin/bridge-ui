@@ -43,10 +43,12 @@ function Linkified({ text, routes }: { text: string; routes: BridgeRoutes }) {
   return <>{out}</>
 }
 
-export function OrchestratorPanel({ onToggleCollapse, style }: {
+export interface OrchestratorPanelProps {
   onToggleCollapse: () => void
   style?: React.CSSProperties
-}) {
+}
+
+export function OrchestratorPanel({ onToggleCollapse, style }: OrchestratorPanelProps) {
   const { fetch: apiFetch, producerBasePath, routes } = useBridgeConfig()
   const [parts, setParts] = useState<PartState[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +76,7 @@ export function OrchestratorPanel({ onToggleCollapse, style }: {
   const total = ordered.reduce((a, p) => a + (p.latest?.tokens ?? 0), 0)
 
   return (
-    <div className="bc-split-pane" style={style} data-pane="orchestrator">
+    <div className="bc-split-pane bc-split-pane-orchestrator" style={style} data-pane="orchestrator">
       <div
         className="bc-split-pane-header bc-header-clickable"
         onClick={onToggleCollapse}

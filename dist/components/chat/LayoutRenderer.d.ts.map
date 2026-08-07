@@ -1,1 +1,1 @@
-{"version":3,"file":"LayoutRenderer.d.ts","sourceRoot":"","sources":["../../../src/components/chat/LayoutRenderer.tsx"],"names":[],"mappings":"AAWA,OAAO,KAAK,EAAE,SAAS,EAAqB,MAAM,SAAS,CAAA;AA4M3D,wBAAgB,cAAc,CAAC,EAAE,IAAI,EAAE,EAAE;IAAE,IAAI,EAAE,SAAS,CAAA;CAAE,2CA+B3D"}
+{"version":3,"file":"LayoutRenderer.d.ts","sourceRoot":"","sources":["../../../src/components/chat/LayoutRenderer.tsx"],"names":[],"mappings":"AAWA,OAAO,KAAK,EAAE,SAAS,EAAqB,MAAM,SAAS,CAAA;AAkN3D,wBAAgB,cAAc,CAAC,EAAE,IAAI,EAAE,EAAE;IAAE,IAAI,EAAE,SAAS,CAAA;CAAE,2CA+B3D"}
