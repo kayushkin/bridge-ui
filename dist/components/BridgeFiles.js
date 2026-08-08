@@ -104,7 +104,26 @@ export function BridgeFiles() {
             // every pre-existing row, so this line read "154 updated" after every
             // scan whether or not a single byte moved. Show `unchanged` alongside it
             // so the number has a denominator and a zero is legible as a no-op.
-            setScanMsg(`Scanned ${r.scanned} · ${r.added} new · ${r.updated} updated · ${r.unchanged} unchanged · ${r.missing} missing`);
+            let msg = `Scanned ${r.scanned} · ${r.added} new · ${r.updated} updated · ${r.unchanged} unchanged · ${r.missing} missing`;
+            // `errors` names the files the scan could not account for. Until
+            // agent-store started reporting them, a file that failed to hash or to
+            // upsert was dropped from every counter above, so `Scanned 153` on a box
+            // with 154 tracked files rendered as a complete run. When any are
+            // present, `scanned` is an undercount and this line has to say so.
+            //
+            // Rendered only when the list is non-empty, and never as "0 failed": a
+            // server too old to report the field would otherwise have this line
+            // asserting a clean run on its behalf, which is the same lie in a new
+            // place. The paths are listed because the question an agent runs a scan
+            // to answer is whether one particular file landed, and a count cannot
+            // answer it.
+            if (Array.isArray(r.errors) && r.errors.length > 0) {
+                const named = r.errors
+                    .map((e) => `${e.path} (${e.stage}: ${e.error})`)
+                    .join(' · ');
+                msg += ` — ${r.errors.length} unaccounted for, so scanned is an undercount: ${named}`;
+            }
+            setScanMsg(msg);
             await fetchFiles();
         }
         catch (e) {
