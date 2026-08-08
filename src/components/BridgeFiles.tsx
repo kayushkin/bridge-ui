@@ -143,7 +143,13 @@ export function BridgeFiles() {
       const res = await apiFetch(`${basePath}/files/scan`, { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const r = await res.json()
-      setScanMsg(`Scanned ${r.scanned} · ${r.added} new · ${r.updated} updated · ${r.missing} missing`)
+      // `updated` counts files whose content hash changed. It used to count
+      // every pre-existing row, so this line read "154 updated" after every
+      // scan whether or not a single byte moved. Show `unchanged` alongside it
+      // so the number has a denominator and a zero is legible as a no-op.
+      setScanMsg(
+        `Scanned ${r.scanned} · ${r.added} new · ${r.updated} updated · ${r.unchanged} unchanged · ${r.missing} missing`,
+      )
       await fetchFiles()
     } catch (e) {
       setScanMsg(e instanceof Error ? e.message : 'Scan failed')
