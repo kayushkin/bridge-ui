@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
+import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem } from '../types-kanban'
 import type { Signal } from '../types'
@@ -1073,7 +1074,7 @@ function LinkedEmailRow({
               </div>
               {/* Plain text only — see the note on this component. */}
               <pre className="bk-email-text">
-                {message.body_text?.trim()
+                {cleanEmailBodyForPreview(message.body_text)
                   || message.meta?.snippet
                   || '(this message has only an HTML body — use “open ↗” to read it in Mail)'}
               </pre>
