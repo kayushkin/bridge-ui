@@ -4815,7 +4815,11 @@
 .bk-drawer-backdrop {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.35);
-  z-index: 50;
+  /* Above host chrome, not merely above the board. dash's header is z-index 100
+     and overlapped the drawer's top ~55px, so the close button's hit area landed
+     on the header's Logout link underneath — clicking close signed the user out.
+     A modal has to outrank the chrome it covers. */
+  z-index: 200;
   display: flex; justify-content: flex-end;
 }
 .bk-drawer {

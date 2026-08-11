@@ -333,6 +333,15 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
     const [status, setStatus] = useState(item?.status ?? 'open');
     const [dirty, setDirty] = useState(false);
     const [showAllEmails, setShowAllEmails] = useState(false);
+    // Escape closes the drawer. Until the stacking fix above it was the only way
+    // out that could not misfire, and it stays because a modal that traps you
+    // until you find the backdrop is a modal people stop opening.
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape')
+            onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
     // Re-seed when the underlying card changes (e.g. after a refresh)
     useEffect(() => {
         setTitle(item?.title ?? '');
