@@ -5228,3 +5228,28 @@
   margin: 8px 0;
 }
 .bk-axis-editor > div { display: flex; flex-direction: column; min-width: 120px; }
+
+/* ---- Linked email rows in the card drawer ---- */
+.bk-email-row { display: flex; flex-direction: column; gap: 4px; }
+.bk-email-head { display: flex; align-items: center; gap: 6px; }
+.bk-email-toggle {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-dim); padding: 0 2px; font-size: 0.9em; line-height: 1;
+}
+.bk-email-toggle:disabled { opacity: 0.4; cursor: default; }
+.bk-email-body {
+  margin: 2px 0 6px 18px;
+  padding: 8px;
+  border-left: 2px solid var(--border);
+  background: var(--bg);
+  border-radius: 4px;
+}
+.bk-email-meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; font-size: 0.8em; color: var(--text-dim); }
+.bk-email-meta strong { color: var(--text); font-size: 1.1em; }
+/* Plain text, wrapped, and height-capped: a newsletter body is long and this is
+   a preview, not a reader. The deep link goes to the real one. */
+.bk-email-text {
+  margin: 0; white-space: pre-wrap; word-break: break-word;
+  font: 0.78em/1.5 var(--mono, ui-monospace, monospace);
+  max-height: 260px; overflow-y: auto; color: var(--text);
+}

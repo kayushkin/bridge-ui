@@ -84,6 +84,16 @@ export interface BridgeConfig {
    * If empty, the spend/limits sections of the Usage tab are hidden and only
    * per-session aggregates from llm-bridge-server are shown. */
   usageStoreBasePath: string
+  /** Base path for the mailstack API, as the host proxies it. If omitted, the
+   * card drawer cannot read a linked email and hides those controls — llmux
+   * proxies no mail service, and offering a button that 404s is worse than
+   * offering none. */
+  mailBasePath: string
+  /** Path to the HOST's own mail page, which is not one of this library's
+   * exported pages — hence a plain path rather than an entry in BridgeRoutes,
+   * whose contract is that every route has a component here. Empty hides the
+   * "open in Mail" deep link while leaving the inline preview available. */
+  mailPagePath: string
   /** Optional render hook called per harness in the Settings tab. Hosts can
    * use this to inject harness-specific configuration UI keyed on harness
    * name. Return null for harnesses without an extension. */

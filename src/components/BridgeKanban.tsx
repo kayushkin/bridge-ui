@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
+import type { FetchFn } from '../types'
 import { useKanban } from '../useKanban'
-import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kanban'
+import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem } from '../types-kanban'
 import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
 import { useOpenSignalsByTodo } from './chat/signalData'
@@ -71,7 +72,7 @@ export function BridgeKanban() {
   const [axisFilter, setAxisFilter] = useState<AxisFilter>({})
   const [sortKey, setSortKey] = useState<SortKey>('default')
 
-  const { routes } = useBridgeConfig()
+  const { routes, mailBasePath, mailPagePath, fetch: fetchFn } = useBridgeConfig()
   const navigate = useNavigate()
   const openSessionLink = (link: SessionLinkRef) => {
     navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
@@ -119,6 +120,14 @@ export function BridgeKanban() {
     }
     setSelectedBoardID(k.boards[0].id)
   }, [k.boards, selectedBoardID])
+
+  // Deep link into the host's mail page. The account is carried alongside the
+  // message id because mailstack requires it on every read — a message id alone
+  // is not addressable there.
+  const openEmailInMail = (accountID: string, messageID: string) => {
+    if (!mailPagePath) return
+    navigate(`${mailPagePath}?account=${encodeURIComponent(accountID)}&message=${encodeURIComponent(messageID)}`)
+  }
 
   const drawerCard: CardView | null = useMemo(() => {
     if (!drawerCardID || !k.view) return null
@@ -310,6 +319,9 @@ export function BridgeKanban() {
           onAddLink={(et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label)}
           onDeleteLink={(linkID) => k.deleteCardLink(linkID)}
           onOpenChat={openSessionLink}
+          onOpenInMail={openEmailInMail}
+          mailBasePath={mailBasePath}
+          fetchFn={fetchFn}
         />
       )}
     </div>
@@ -797,6 +809,9 @@ function CardDrawer({
   onAddLink,
   onDeleteLink,
   onOpenChat,
+  onOpenInMail,
+  mailBasePath,
+  fetchFn,
 }: {
   card: CardView
   boardID: string
@@ -807,6 +822,9 @@ function CardDrawer({
   onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
   onDeleteLink: (linkID: string) => Promise<boolean>
   onOpenChat: OpenChatFn
+  onOpenInMail: (accountID: string, messageID: string) => void
+  mailBasePath: string
+  fetchFn: FetchFn
 }) {
   const item = card.item as NoteboardItem | null
   const [title, setTitle] = useState(item?.title ?? '')
@@ -912,23 +930,16 @@ function CardDrawer({
               <>
                 <h4>Linked emails ({emailLinks.length})</h4>
                 <ul className="bk-link-list">
-                  {shownEmailLinks.map(l => {
-                    const parsed = parseEmailLocator(l.entity_ref)
-                    return (
-                      <li key={l.id}>
-                        <span className="bk-link-label">{l.label || '(no label)'}</span>
-                        <span
-                          className="bk-link-ref"
-                          title={parsed
-                            ? `account ${parsed.accountID}, message ${parsed.messageID}`
-                            : l.entity_ref}
-                        >
-                          {parsed ? parsed.messageID : l.entity_ref}
-                        </span>
-                        <button className="bk-link-del" onClick={() => onDeleteLink(l.id)}>×</button>
-                      </li>
-                    )
-                  })}
+                  {shownEmailLinks.map(l => (
+                    <LinkedEmailRow
+                      key={l.id}
+                      link={l}
+                      mailBasePath={mailBasePath}
+                      fetchFn={fetchFn}
+                      onOpenInMail={onOpenInMail}
+                      onDeleteLink={onDeleteLink}
+                    />
+                  ))}
                   {emailLinks.length > shownEmailLinks.length && (
                     <li>
                       <button type="button" className="bi-add-btn" onClick={() => setShowAllEmails(true)}>
@@ -969,6 +980,108 @@ function CardDrawer({
         )}
       </aside>
     </div>
+  )
+}
+
+/**
+ * One linked email: its label, a deep link into the Mail page, and an expandable
+ * preview of the message itself.
+ *
+ * The preview renders `body_text` as PLAIN TEXT, never `body_html`. Mail bodies
+ * are attacker-controlled — anyone who can email this user can put markup in
+ * them — and dash's Mail page only renders them safely because it uses a
+ * sandboxed iframe with remote images stripped. Rebuilding that here would mean
+ * maintaining a second sandbox; the deep link hands the job to the one that
+ * already exists.
+ *
+ * The fetch is deliberate, not eager: mailstack caches nothing, so reading one
+ * message is a live provider round trip. A bucket card can carry hundreds of
+ * links, and expanding them all on open would be hundreds of Gmail calls.
+ */
+function LinkedEmailRow({
+  link,
+  mailBasePath,
+  fetchFn,
+  onOpenInMail,
+  onDeleteLink,
+}: {
+  link: CardLink
+  mailBasePath: string
+  fetchFn: FetchFn
+  onOpenInMail: (accountID: string, messageID: string) => void
+  onDeleteLink: (linkID: string) => Promise<boolean>
+}) {
+  const parsed = parseEmailLocator(link.entity_ref)
+  const [expanded, setExpanded] = useState(false)
+  const [message, setMessage] = useState<MailMessage | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const toggle = async () => {
+    if (expanded) { setExpanded(false); return }
+    setExpanded(true)
+    if (message || loading || !parsed || !mailBasePath) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetchFn(
+        `${mailBasePath}/messages/${encodeURIComponent(parsed.messageID)}?account=${encodeURIComponent(parsed.accountID)}`,
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (data.error) throw new Error(String(data.error))
+      setMessage(data as MailMessage)
+    } catch (e) {
+      // Reported in place rather than swallowed: a message can genuinely be
+      // gone (deleted upstream), and a silently empty preview reads as "this
+      // email had no content", which is a different and wrong claim.
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const canOpen = !!parsed && !!mailBasePath
+  return (
+    <li className="bk-email-row">
+      <div className="bk-email-head">
+        <button type="button" className="bk-email-toggle" onClick={toggle} disabled={!canOpen}
+          title={canOpen ? 'Show this email' : 'Mail service is not configured for this host'}>
+          {expanded ? '▾' : '▸'}
+        </button>
+        <span className="bk-link-label">{link.label || '(no label)'}</span>
+        {canOpen && (
+          <button
+            type="button"
+            className="bk-link-ref bk-link-ref-action"
+            title={`Open in Mail — account ${parsed!.accountID}`}
+            onClick={() => onOpenInMail(parsed!.accountID, parsed!.messageID)}
+          >open ↗</button>
+        )}
+        <button className="bk-link-del" onClick={() => onDeleteLink(link.id)} title="Unlink this email">×</button>
+      </div>
+      {expanded && (
+        <div className="bk-email-body">
+          {loading && <span className="bi-empty">Loading…</span>}
+          {error && <span className="bridge-error">{error}</span>}
+          {message && (
+            <>
+              <div className="bk-email-meta">
+                <strong>{message.meta?.subject || '(no subject)'}</strong>
+                <span>{message.meta?.from?.name || message.meta?.from?.email}</span>
+                <span>{message.meta?.date ? new Date(message.meta.date).toLocaleString() : ''}</span>
+              </div>
+              {/* Plain text only — see the note on this component. */}
+              <pre className="bk-email-text">
+                {message.body_text?.trim()
+                  || message.meta?.snippet
+                  || '(this message has only an HTML body — use “open ↗” to read it in Mail)'}
+              </pre>
+            </>
+          )}
+        </div>
+      )}
+    </li>
   )
 }
 

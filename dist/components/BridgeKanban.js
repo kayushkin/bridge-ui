@@ -58,7 +58,7 @@ export function BridgeKanban() {
     // two people can look at the same board through different lenses.
     const [axisFilter, setAxisFilter] = useState({});
     const [sortKey, setSortKey] = useState('default');
-    const { routes } = useBridgeConfig();
+    const { routes, mailBasePath, mailPagePath, fetch: fetchFn } = useBridgeConfig();
     const navigate = useNavigate();
     const openSessionLink = (link) => {
         navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
@@ -106,6 +106,14 @@ export function BridgeKanban() {
         }
         setSelectedBoardID(k.boards[0].id);
     }, [k.boards, selectedBoardID]);
+    // Deep link into the host's mail page. The account is carried alongside the
+    // message id because mailstack requires it on every read — a message id alone
+    // is not addressable there.
+    const openEmailInMail = (accountID, messageID) => {
+        if (!mailPagePath)
+            return;
+        navigate(`${mailPagePath}?account=${encodeURIComponent(accountID)}&message=${encodeURIComponent(messageID)}`);
+    };
     const drawerCard = useMemo(() => {
         if (!drawerCardID || !k.view)
             return null;
@@ -183,7 +191,7 @@ export function BridgeKanban() {
                     const ok = await k.deleteCard(drawerCard.placement.card_id, hard);
                     if (ok)
                         setDrawerCardID(null);
-                }, onAddLink: (et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label), onDeleteLink: (linkID) => k.deleteCardLink(linkID), onOpenChat: openSessionLink }))] }));
+                }, onAddLink: (et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label), onDeleteLink: (linkID) => k.deleteCardLink(linkID), onOpenChat: openSessionLink, onOpenInMail: openEmailInMail, mailBasePath: mailBasePath, fetchFn: fetchFn }))] }));
 }
 // ============================ Sub-components ============================
 /**
@@ -325,7 +333,7 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
                             held ? onPlay(card.placement.card_id) : onStop(card.placement.card_id);
                         }, children: held ? '▶' : '⏸' }), session && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
 }
-function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, }) {
+function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, }) {
     const item = card.item;
     const [title, setTitle] = useState(item?.title ?? '');
     const [body, setBody] = useState(item?.body ?? '');
@@ -370,15 +378,65 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
             setDirty(false);
     };
     return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
-                                        onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => {
-                                            const parsed = parseEmailLocator(l.entity_ref);
-                                            return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-label", children: l.label || '(no label)' }), _jsx("span", { className: "bk-link-ref", title: parsed
-                                                            ? `account ${parsed.accountID}, message ${parsed.messageID}`
-                                                            : l.entity_ref, children: parsed ? parsed.messageID : l.entity_ref }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
-                                        }), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => {
+                                        onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => {
                                     const isSessionLink = l.entity_type === 'session' && !!l.entity_ref;
                                     return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
                                 }), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }) }));
+}
+/**
+ * One linked email: its label, a deep link into the Mail page, and an expandable
+ * preview of the message itself.
+ *
+ * The preview renders `body_text` as PLAIN TEXT, never `body_html`. Mail bodies
+ * are attacker-controlled — anyone who can email this user can put markup in
+ * them — and dash's Mail page only renders them safely because it uses a
+ * sandboxed iframe with remote images stripped. Rebuilding that here would mean
+ * maintaining a second sandbox; the deep link hands the job to the one that
+ * already exists.
+ *
+ * The fetch is deliberate, not eager: mailstack caches nothing, so reading one
+ * message is a live provider round trip. A bucket card can carry hundreds of
+ * links, and expanding them all on open would be hundreds of Gmail calls.
+ */
+function LinkedEmailRow({ link, mailBasePath, fetchFn, onOpenInMail, onDeleteLink, }) {
+    const parsed = parseEmailLocator(link.entity_ref);
+    const [expanded, setExpanded] = useState(false);
+    const [message, setMessage] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const toggle = async () => {
+        if (expanded) {
+            setExpanded(false);
+            return;
+        }
+        setExpanded(true);
+        if (message || loading || !parsed || !mailBasePath)
+            return;
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetchFn(`${mailBasePath}/messages/${encodeURIComponent(parsed.messageID)}?account=${encodeURIComponent(parsed.accountID)}`);
+            if (!res.ok)
+                throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (data.error)
+                throw new Error(String(data.error));
+            setMessage(data);
+        }
+        catch (e) {
+            // Reported in place rather than swallowed: a message can genuinely be
+            // gone (deleted upstream), and a silently empty preview reads as "this
+            // email had no content", which is a different and wrong claim.
+            setError(String(e));
+        }
+        finally {
+            setLoading(false);
+        }
+    };
+    const canOpen = !!parsed && !!mailBasePath;
+    return (_jsxs("li", { className: "bk-email-row", children: [_jsxs("div", { className: "bk-email-head", children: [_jsx("button", { type: "button", className: "bk-email-toggle", onClick: toggle, disabled: !canOpen, title: canOpen ? 'Show this email' : 'Mail service is not configured for this host', children: expanded ? '▾' : '▸' }), _jsx("span", { className: "bk-link-label", children: link.label || '(no label)' }), canOpen && (_jsx("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open in Mail — account ${parsed.accountID}`, onClick: () => onOpenInMail(parsed.accountID, parsed.messageID), children: "open \u2197" })), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(link.id), title: "Unlink this email", children: "\u00D7" })] }), expanded && (_jsxs("div", { className: "bk-email-body", children: [loading && _jsx("span", { className: "bi-empty", children: "Loading\u2026" }), error && _jsx("span", { className: "bridge-error", children: error }), message && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "bk-email-meta", children: [_jsx("strong", { children: message.meta?.subject || '(no subject)' }), _jsx("span", { children: message.meta?.from?.name || message.meta?.from?.email }), _jsx("span", { children: message.meta?.date ? new Date(message.meta.date).toLocaleString() : '' })] }), _jsx("pre", { className: "bk-email-text", children: message.body_text?.trim()
+                                    || message.meta?.snippet
+                                    || '(this message has only an HTML body — use “open ↗” to read it in Mail)' })] }))] }))] }));
 }
 function AddLinkForm({ entityTypes, onAdd, }) {
     const [type, setType] = useState(entityTypes[0]?.type ?? 'session');

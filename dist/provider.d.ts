@@ -24,6 +24,11 @@ interface BridgeProviderProps {
      * Orchestrator row and the in-chat orchestrator-context pane say the
      * producer isn't configured. */
     producerBasePath?: string;
+    /** Base path for the mailstack API as the host proxies it (dash: "/api/mail").
+     * If omitted, the kanban card drawer hides its email preview and deep link. */
+    mailBasePath?: string;
+    /** Path to the host's own mail page (dash: "/mail"). Empty hides the deep link. */
+    mailPagePath?: string;
     /** Base path for usage-store API. If omitted, spend/limits sections of the
      * Usage tab are hidden and only per-session aggregates are shown. */
     usageStoreBasePath?: string;
@@ -36,6 +41,6 @@ interface BridgeProviderProps {
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, noteboardBasePath, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map
