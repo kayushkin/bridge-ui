@@ -6,6 +6,11 @@ import type { CardLink, CardView, ColumnView, NoteboardItem } from '../types-kan
 import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
 import { useOpenSignalsByTodo } from './chat/signalData'
+import {
+  CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter,
+  parseEmailLocator, sortCards, withAxisValue,
+  type AxisFilter, type SortKey,
+} from '../kanbanAxes'
 
 // Pulls the first session link off a card. Post session-consolidation
 // (2026-05-09) every card_link with entity_type='session' carries the
@@ -25,6 +30,11 @@ const LAYOUT_KEY = 'bk:layout'
 const LAST_BOARD_KEY = 'bk:lastBoardId'
 const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns'
 const DEFAULT_BOARD_NAME = 'Agent runs'
+
+// How many linked emails a card drawer shows before collapsing the rest behind a
+// button. Bucket cards on the Email board accumulate every message from a sender,
+// so this list grows without bound while the card itself stays one thing.
+const EMAIL_LINKS_SHOWN = 25
 
 type Layout = 'horizontal' | 'vertical'
 
@@ -56,6 +66,10 @@ export function BridgeKanban() {
     return localStorage.getItem(LAYOUT_KEY) === 'vertical' ? 'vertical' : 'horizontal'
   })
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(loadCollapsedColumns)
+  // Axis filter and sort are view state only: they never write to the board, so
+  // two people can look at the same board through different lenses.
+  const [axisFilter, setAxisFilter] = useState<AxisFilter>({})
+  const [sortKey, setSortKey] = useState<SortKey>('default')
 
   const { routes } = useBridgeConfig()
   const navigate = useNavigate()
@@ -115,6 +129,26 @@ export function BridgeKanban() {
     }
     return null
   }, [drawerCardID, k.view])
+
+  // Axis controls render only for boards whose cards actually carry these tags.
+  // Boards that predate the classifier report no axes and are left exactly as
+  // they were — this component is shared with llmux.
+  const axes = useMemo(() => (k.view ? axisUsage(allCardsOf(k.view.columns)) : []), [k.view])
+
+  // Filtering and sorting are applied to a copy. The board view itself stays
+  // untouched so the drawer, the delete-column count and the orphan list keep
+  // reporting what is really on the board rather than what survived the filter.
+  const visibleColumns: ColumnView[] = useMemo(() => {
+    if (!k.view) return []
+    return k.view.columns.map(cv => ({
+      ...cv,
+      cards: sortCards((cv.cards ?? []).filter(c => matchesFilter(c, axisFilter)), sortKey),
+    }))
+  }, [k.view, axisFilter, sortKey])
+
+  const hiddenCardCount = k.view
+    ? allCardsOf(k.view.columns).length - allCardsOf(visibleColumns).length
+    : 0
 
   return (
     <div className="bk-container">
@@ -192,8 +226,19 @@ export function BridgeKanban() {
               />
             )}
 
+            {axes.length > 0 && (
+              <CardAxisToolbar
+                axes={axes}
+                filter={axisFilter}
+                onFilterChange={setAxisFilter}
+                sortKey={sortKey}
+                onSortChange={setSortKey}
+                hiddenCardCount={hiddenCardCount}
+              />
+            )}
+
             <div className={`bk-columns bk-columns-${layout}`}>
-              {k.view.columns.map(cv => (
+              {visibleColumns.map(cv => (
                 <ColumnPane
                   key={cv.column.id}
                   cv={cv}
@@ -224,8 +269,13 @@ export function BridgeKanban() {
                   }}
                   onPlayCard={(cardID) => k.playCard(cardID)}
                   onDeleteColumn={async () => {
-                    if ((cv.cards?.length ?? 0) > 0) {
-                      if (!confirm(`Column "${cv.column.name}" has ${cv.cards!.length} cards. Delete column AND detach those cards?`)) return
+                    // Count from the real board, not the filtered copy: deleting
+                    // a column detaches every card in it, including the ones the
+                    // active filter is hiding, and a count that only reflects
+                    // what is on screen would understate what is about to happen.
+                    const actual = k.view!.columns.find(c => c.column.id === cv.column.id)?.cards?.length ?? 0
+                    if (actual > 0) {
+                      if (!confirm(`Column "${cv.column.name}" has ${actual} cards. Delete column AND detach those cards?`)) return
                     }
                     await k.deleteColumn(cv.column.id)
                   }}
@@ -267,6 +317,122 @@ export function BridgeKanban() {
 }
 
 // ============================ Sub-components ============================
+
+/**
+ * Filter and sort controls for the card axes a board actually uses.
+ *
+ * Both are view state — neither writes to the board — so this is safe to leave
+ * on while the classifier keeps filing in the background.
+ */
+function CardAxisToolbar({
+  axes,
+  filter,
+  onFilterChange,
+  sortKey,
+  onSortChange,
+  hiddenCardCount,
+}: {
+  axes: ReturnType<typeof axisUsage>
+  filter: AxisFilter
+  onFilterChange: (f: AxisFilter) => void
+  sortKey: SortKey
+  onSortChange: (k: SortKey) => void
+  hiddenCardCount: number
+}) {
+  const toggle = (prefix: string, value: string) => {
+    const current = filter[prefix] ?? []
+    const next = current.includes(value)
+      ? current.filter(v => v !== value)
+      : [...current, value]
+    onFilterChange({ ...filter, [prefix]: next })
+  }
+
+  return (
+    <div className="bk-axis-toolbar">
+      {axes.map(({ axis, values }) => (
+        <div key={axis.prefix} className="bk-axis-group">
+          <span className="bk-axis-label">{axis.label}</span>
+          {values.map(({ value, count }) => {
+            const on = (filter[axis.prefix] ?? []).includes(value)
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`bk-axis-chip${on ? ' bk-axis-chip-on' : ''}`}
+                onClick={() => toggle(axis.prefix, value)}
+                title={`${count} card${count === 1 ? '' : 's'}`}
+              >
+                {value} <span className="bk-axis-count">{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      ))}
+
+      <div className="bk-axis-group">
+        <span className="bk-axis-label">Sort</span>
+        <select value={sortKey} onChange={e => onSortChange(e.target.value as SortKey)}>
+          {/* 'Board order' is kept because every writer on this host passes
+              position 0, so the stored order is arbitrary — but it is still the
+              order the board itself reports, and hiding it would be a lie. */}
+          <option value="default">Board order</option>
+          <option value="urgency">Urgency</option>
+          <option value="newest">Recently updated</option>
+          <option value="title">Title</option>
+        </select>
+      </div>
+
+      {filterIsActive(filter) && (
+        <div className="bk-axis-group">
+          <button type="button" className="bi-add-btn" onClick={() => onFilterChange({})}>
+            Clear filter{hiddenCardCount > 0 ? ` (${hiddenCardCount} hidden)` : ''}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Structured editors for a card's axis tags.
+ *
+ * The drawer already has a free-text tag box, and it stays: it is the only way
+ * to touch tags that are not axes. These selects exist because reclassifying by
+ * retyping "cat:commerce, action:decide, urgency:high" invites typos that
+ * silently drop a card out of every filter.
+ */
+function CardAxisEditor({
+  tags,
+  onChange,
+}: {
+  tags: string[]
+  onChange: (tags: string[]) => void
+}) {
+  return (
+    <div className="bk-axis-editor">
+      {CARD_AXES.map(axis => {
+        const current = tags.find(t => t.startsWith(axis.prefix))?.slice(axis.prefix.length) ?? ''
+        // A value the classifier wrote outside the vocabulary is offered as an
+        // extra option rather than silently reset to blank by the select.
+        const options = current && !axis.values.includes(current)
+          ? [...axis.values, current]
+          : axis.values
+        return (
+          <div key={axis.prefix}>
+            <label className="bk-drawer-label">{axis.label}</label>
+            <select
+              value={current}
+              onChange={e => onChange(withAxisValue(tags, axis.prefix, e.target.value))}
+            >
+              <option value="">— unset —</option>
+              {options.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 function NewBoardForm({
   onCreate,
@@ -648,6 +814,7 @@ function CardDrawer({
   const [tags, setTags] = useState((item?.tags ?? []).join(', '))
   const [status, setStatus] = useState(item?.status ?? 'open')
   const [dirty, setDirty] = useState(false)
+  const [showAllEmails, setShowAllEmails] = useState(false)
 
   // Re-seed when the underlying card changes (e.g. after a refresh)
   useEffect(() => {
@@ -656,9 +823,16 @@ function CardDrawer({
     setTags((item?.tags ?? []).join(', '))
     setStatus(item?.status ?? 'open')
     setDirty(false)
+    setShowAllEmails(false)
   }, [item?.id, item?.updated_at])
 
   const links: CardLink[] = card.links ?? []
+  const tagList = tags.split(',').map(s => s.trim()).filter(Boolean)
+  // email_msgid and email_sender links are bookkeeping the classifier reads, not
+  // something to show a human, so only the addressable email links are listed.
+  const emailLinks = links.filter(l => l.entity_type === 'email')
+  const otherLinks = links.filter(l => l.entity_type !== 'email')
+  const shownEmailLinks = showAllEmails ? emailLinks : emailLinks.slice(0, EMAIL_LINKS_SHOWN)
 
   const save = async () => {
     const patch: Record<string, unknown> = {
@@ -704,6 +878,15 @@ function CardDrawer({
               </div>
             </div>
 
+            {/* Shown only for cards that already carry a classification, so
+                boards that never had these tags see no extra controls. */}
+            {tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (
+              <CardAxisEditor
+                tags={tagList}
+                onChange={next => { setTags(next.join(', ')); setDirty(true) }}
+              />
+            )}
+
             <div className="bk-form-actions">
               <button className="bi-save-btn" disabled={!dirty} onClick={save}>Save</button>
               <button onClick={() => onDelete(false)}>Archive</button>
@@ -712,9 +895,45 @@ function CardDrawer({
 
             <hr />
 
+            {/* Email links are split out and capped. A bucket card gathers every
+                message from a sender, so "Medium Daily Digest" reaches hundreds
+                of links within months — rendering them all would bury the
+                handful of links that describe the card itself. */}
+            {emailLinks.length > 0 && (
+              <>
+                <h4>Linked emails ({emailLinks.length})</h4>
+                <ul className="bk-link-list">
+                  {shownEmailLinks.map(l => {
+                    const parsed = parseEmailLocator(l.entity_ref)
+                    return (
+                      <li key={l.id}>
+                        <span className="bk-link-label">{l.label || '(no label)'}</span>
+                        <span
+                          className="bk-link-ref"
+                          title={parsed
+                            ? `account ${parsed.accountID}, message ${parsed.messageID}`
+                            : l.entity_ref}
+                        >
+                          {parsed ? parsed.messageID : l.entity_ref}
+                        </span>
+                        <button className="bk-link-del" onClick={() => onDeleteLink(l.id)}>×</button>
+                      </li>
+                    )
+                  })}
+                  {emailLinks.length > shownEmailLinks.length && (
+                    <li>
+                      <button type="button" className="bi-add-btn" onClick={() => setShowAllEmails(true)}>
+                        Show {emailLinks.length - shownEmailLinks.length} more
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </>
+            )}
+
             <h4>Entity links</h4>
             <ul className="bk-link-list">
-              {links.map(l => {
+              {otherLinks.map(l => {
                 const isSessionLink = l.entity_type === 'session' && !!l.entity_ref
                 return (
                   <li key={l.id}>
@@ -734,7 +953,7 @@ function CardDrawer({
                   </li>
                 )
               })}
-              {links.length === 0 && <li className="bi-empty">No links yet.</li>}
+              {otherLinks.length === 0 && <li className="bi-empty">No links yet.</li>}
             </ul>
             <AddLinkForm entityTypes={entityTypes} onAdd={onAddLink} />
           </>

@@ -5,6 +5,7 @@ import { useBridgeConfig } from '../context';
 import { useKanban } from '../useKanban';
 import { SignalKindQuestion } from '../types';
 import { useOpenSignalsByTodo } from './chat/signalData';
+import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
 function sessionLink(card) {
     for (const l of card.links ?? []) {
         if (!l.entity_ref)
@@ -18,6 +19,10 @@ const LAYOUT_KEY = 'bk:layout';
 const LAST_BOARD_KEY = 'bk:lastBoardId';
 const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns';
 const DEFAULT_BOARD_NAME = 'Agent runs';
+// How many linked emails a card drawer shows before collapsing the rest behind a
+// button. Bucket cards on the Email board accumulate every message from a sender,
+// so this list grows without bound while the card itself stays one thing.
+const EMAIL_LINKS_SHOWN = 25;
 function loadCollapsedColumns() {
     if (typeof localStorage === 'undefined')
         return new Set();
@@ -49,6 +54,10 @@ export function BridgeKanban() {
         return localStorage.getItem(LAYOUT_KEY) === 'vertical' ? 'vertical' : 'horizontal';
     });
     const [collapsedColumns, setCollapsedColumns] = useState(loadCollapsedColumns);
+    // Axis filter and sort are view state only: they never write to the board, so
+    // two people can look at the same board through different lenses.
+    const [axisFilter, setAxisFilter] = useState({});
+    const [sortKey, setSortKey] = useState('default');
     const { routes } = useBridgeConfig();
     const navigate = useNavigate();
     const openSessionLink = (link) => {
@@ -108,6 +117,24 @@ export function BridgeKanban() {
         }
         return null;
     }, [drawerCardID, k.view]);
+    // Axis controls render only for boards whose cards actually carry these tags.
+    // Boards that predate the classifier report no axes and are left exactly as
+    // they were — this component is shared with llmux.
+    const axes = useMemo(() => (k.view ? axisUsage(allCardsOf(k.view.columns)) : []), [k.view]);
+    // Filtering and sorting are applied to a copy. The board view itself stays
+    // untouched so the drawer, the delete-column count and the orphan list keep
+    // reporting what is really on the board rather than what survived the filter.
+    const visibleColumns = useMemo(() => {
+        if (!k.view)
+            return [];
+        return k.view.columns.map(cv => ({
+            ...cv,
+            cards: sortCards((cv.cards ?? []).filter(c => matchesFilter(c, axisFilter)), sortKey),
+        }));
+    }, [k.view, axisFilter, sortKey]);
+    const hiddenCardCount = k.view
+        ? allCardsOf(k.view.columns).length - allCardsOf(visibleColumns).length
+        : 0;
     return (_jsxs("div", { className: "bk-container", children: [_jsxs("main", { className: "bk-main", children: [k.error && _jsx("div", { className: "bridge-error", children: k.error }), _jsxs("div", { className: "bk-board-header", children: [_jsxs("div", { className: "bk-board-header-main", children: [_jsxs("select", { className: "bk-board-select", value: selectedBoardID ?? '', onChange: e => setSelectedBoardID(e.target.value || null), children: [!selectedBoardID && _jsx("option", { value: "", children: "\u2014 select board \u2014" }), k.boards.map(b => (_jsxs("option", { value: b.id, children: [b.name, b.archived ? ' (archived)' : ''] }, b.id)))] }), _jsx("button", { className: "bi-add-btn", onClick: () => setShowNewBoard(s => !s), children: "+ New Board" }), k.view?.board.description && (_jsx("p", { className: "bk-board-desc", children: k.view.board.description }))] }), _jsxs("div", { className: "bk-board-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: () => setLayout(l => l === 'horizontal' ? 'vertical' : 'horizontal'), title: layout === 'horizontal' ? 'Switch to vertical (stacked) columns' : 'Switch to horizontal (side-by-side) columns', children: layout === 'horizontal' ? 'Vertical layout' : 'Horizontal layout' }), selectedBoardID && k.view && (_jsxs(_Fragment, { children: [_jsx("button", { className: "bi-add-btn", onClick: () => setShowNewColumn(s => !s), children: "+ Column" }), _jsx("button", { className: "bi-add-btn", onClick: async () => {
                                                     if (!confirm(`Delete board "${k.view.board.name}"? Cards remain in noteboard.`))
                                                         return;
@@ -126,7 +153,7 @@ export function BridgeKanban() {
                                     const ok = await k.createColumn(args);
                                     if (ok)
                                         setShowNewColumn(false);
-                                }, onCancel: () => setShowNewColumn(false) })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: k.view.columns.map(cv => (_jsx(ColumnPane, { cv: cv, signalsByTodo: signalsByTodo, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
+                                }, onCancel: () => setShowNewColumn(false) })), axes.length > 0 && (_jsx(CardAxisToolbar, { axes: axes, filter: axisFilter, onFilterChange: setAxisFilter, sortKey: sortKey, onSortChange: setSortKey, hiddenCardCount: hiddenCardCount })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: visibleColumns.map(cv => (_jsx(ColumnPane, { cv: cv, signalsByTodo: signalsByTodo, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
                                         const ok = await k.createCard({ ...args, column_id: cv.column.id });
                                         if (ok)
                                             setComposeColumn(null);
@@ -142,8 +169,13 @@ export function BridgeKanban() {
                                         }
                                         return k.stopCard(cardID);
                                     }, onPlayCard: (cardID) => k.playCard(cardID), onDeleteColumn: async () => {
-                                        if ((cv.cards?.length ?? 0) > 0) {
-                                            if (!confirm(`Column "${cv.column.name}" has ${cv.cards.length} cards. Delete column AND detach those cards?`))
+                                        // Count from the real board, not the filtered copy: deleting
+                                        // a column detaches every card in it, including the ones the
+                                        // active filter is hiding, and a count that only reflects
+                                        // what is on screen would understate what is about to happen.
+                                        const actual = k.view.columns.find(c => c.column.id === cv.column.id)?.cards?.length ?? 0;
+                                        if (actual > 0) {
+                                            if (!confirm(`Column "${cv.column.name}" has ${actual} cards. Delete column AND detach those cards?`))
                                                 return;
                                         }
                                         await k.deleteColumn(cv.column.id);
@@ -154,6 +186,44 @@ export function BridgeKanban() {
                 }, onAddLink: (et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label), onDeleteLink: (linkID) => k.deleteCardLink(linkID), onOpenChat: openSessionLink }))] }));
 }
 // ============================ Sub-components ============================
+/**
+ * Filter and sort controls for the card axes a board actually uses.
+ *
+ * Both are view state — neither writes to the board — so this is safe to leave
+ * on while the classifier keeps filing in the background.
+ */
+function CardAxisToolbar({ axes, filter, onFilterChange, sortKey, onSortChange, hiddenCardCount, }) {
+    const toggle = (prefix, value) => {
+        const current = filter[prefix] ?? [];
+        const next = current.includes(value)
+            ? current.filter(v => v !== value)
+            : [...current, value];
+        onFilterChange({ ...filter, [prefix]: next });
+    };
+    return (_jsxs("div", { className: "bk-axis-toolbar", children: [axes.map(({ axis, values }) => (_jsxs("div", { className: "bk-axis-group", children: [_jsx("span", { className: "bk-axis-label", children: axis.label }), values.map(({ value, count }) => {
+                        const on = (filter[axis.prefix] ?? []).includes(value);
+                        return (_jsxs("button", { type: "button", className: `bk-axis-chip${on ? ' bk-axis-chip-on' : ''}`, onClick: () => toggle(axis.prefix, value), title: `${count} card${count === 1 ? '' : 's'}`, children: [value, " ", _jsx("span", { className: "bk-axis-count", children: count })] }, value));
+                    })] }, axis.prefix))), _jsxs("div", { className: "bk-axis-group", children: [_jsx("span", { className: "bk-axis-label", children: "Sort" }), _jsxs("select", { value: sortKey, onChange: e => onSortChange(e.target.value), children: [_jsx("option", { value: "default", children: "Board order" }), _jsx("option", { value: "urgency", children: "Urgency" }), _jsx("option", { value: "newest", children: "Recently updated" }), _jsx("option", { value: "title", children: "Title" })] })] }), filterIsActive(filter) && (_jsx("div", { className: "bk-axis-group", children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => onFilterChange({}), children: ["Clear filter", hiddenCardCount > 0 ? ` (${hiddenCardCount} hidden)` : ''] }) }))] }));
+}
+/**
+ * Structured editors for a card's axis tags.
+ *
+ * The drawer already has a free-text tag box, and it stays: it is the only way
+ * to touch tags that are not axes. These selects exist because reclassifying by
+ * retyping "cat:commerce, action:decide, urgency:high" invites typos that
+ * silently drop a card out of every filter.
+ */
+function CardAxisEditor({ tags, onChange, }) {
+    return (_jsx("div", { className: "bk-axis-editor", children: CARD_AXES.map(axis => {
+            const current = tags.find(t => t.startsWith(axis.prefix))?.slice(axis.prefix.length) ?? '';
+            // A value the classifier wrote outside the vocabulary is offered as an
+            // extra option rather than silently reset to blank by the select.
+            const options = current && !axis.values.includes(current)
+                ? [...axis.values, current]
+                : axis.values;
+            return (_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: axis.label }), _jsxs("select", { value: current, onChange: e => onChange(withAxisValue(tags, axis.prefix, e.target.value)), children: [_jsx("option", { value: "", children: "\u2014 unset \u2014" }), options.map(v => _jsx("option", { value: v, children: v }, v))] })] }, axis.prefix));
+        }) }));
+}
 function NewBoardForm({ onCreate, onCancel, }) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -262,6 +332,7 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
     const [tags, setTags] = useState((item?.tags ?? []).join(', '));
     const [status, setStatus] = useState(item?.status ?? 'open');
     const [dirty, setDirty] = useState(false);
+    const [showAllEmails, setShowAllEmails] = useState(false);
     // Re-seed when the underlying card changes (e.g. after a refresh)
     useEffect(() => {
         setTitle(item?.title ?? '');
@@ -269,8 +340,15 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
         setTags((item?.tags ?? []).join(', '));
         setStatus(item?.status ?? 'open');
         setDirty(false);
+        setShowAllEmails(false);
     }, [item?.id, item?.updated_at]);
     const links = card.links ?? [];
+    const tagList = tags.split(',').map(s => s.trim()).filter(Boolean);
+    // email_msgid and email_sender links are bookkeeping the classifier reads, not
+    // something to show a human, so only the addressable email links are listed.
+    const emailLinks = links.filter(l => l.entity_type === 'email');
+    const otherLinks = links.filter(l => l.entity_type !== 'email');
+    const shownEmailLinks = showAllEmails ? emailLinks : emailLinks.slice(0, EMAIL_LINKS_SHOWN);
     const save = async () => {
         const patch = {
             title,
@@ -282,11 +360,16 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
         if (ok)
             setDirty(false);
     };
-    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
-                                        onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [links.map(l => {
+    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
+                                        onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => {
+                                            const parsed = parseEmailLocator(l.entity_ref);
+                                            return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-label", children: l.label || '(no label)' }), _jsx("span", { className: "bk-link-ref", title: parsed
+                                                            ? `account ${parsed.accountID}, message ${parsed.messageID}`
+                                                            : l.entity_ref, children: parsed ? parsed.messageID : l.entity_ref }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
+                                        }), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => {
                                     const isSessionLink = l.entity_type === 'session' && !!l.entity_ref;
                                     return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
-                                }), links.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }) }));
+                                }), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }) }));
 }
 function AddLinkForm({ entityTypes, onAdd, }) {
     const [type, setType] = useState(entityTypes[0]?.type ?? 'session');
