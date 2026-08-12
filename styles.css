@@ -1123,6 +1123,22 @@
 .bc-tl-task-done { font-weight: 600; }
 .bc-tl-task-err .bc-tl-icon, .bc-tl-task-err .bc-tl-label { color: #ef4444; }
 .bc-tl-task-err { font-weight: 600; }
+/* A task that was taken away rather than finishing or failing — its host
+   process died with it in flight, or the harness reported it stopped. Amber,
+   not the red of task-err: nothing went wrong with the work, it was cut short. */
+.bc-tl-task-cancelled .bc-tl-icon, .bc-tl-task-cancelled .bc-tl-label { color: #f59e0b; }
+.bc-tl-task-cancelled { font-weight: 600; }
+/* The agent role a subagent was spawned as (Explore, general-purpose, …), shown
+   between the label and the description. Quieter than either: it says what KIND
+   of thing ran, which matters less than what it was asked to do. */
+.bc-tl-role {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--bc-radius-xs, 3px);
+  flex: none;
+}
 .bc-tl-result { border-top: 1px dashed var(--border); padding-top: 4px; margin-top: 2px; }
 .bc-tl-result .bc-tl-icon, .bc-tl-result .bc-tl-label { color: #60a5fa; }
 .bc-tl-error .bc-tl-icon, .bc-tl-error .bc-tl-label { color: #ef4444; }
