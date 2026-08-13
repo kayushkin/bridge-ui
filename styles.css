@@ -1087,19 +1087,28 @@
  * estimate swung the list's scrollHeight 78,860 → 92,388 → 84,919 → 55,713
  * during one measured scroll. Rows are near-uniform, so the correction is
  * pixels. bridge-ui's own timeline still nests and still uses the rules above.
+ *
+ * Every rule below is compounded onto `.bc-tl-item` deliberately. `.bc-tl-item`
+ * is declared FURTHER DOWN this file and sets `padding` as a shorthand, so a
+ * bare `.bc-tl-row-in-turn { padding-left }` ties it on specificity and loses on
+ * order — measured in the browser as a 0px indent while the rule sat in the
+ * bundle looking correct. Compounding wins on specificity instead of hoping for
+ * source order.
  */
-.bc-tl-row {
+.bc-tl-item.bc-tl-row {
   border-left: 3px solid color-mix(in srgb, #f472b6 65%, transparent);
   background: color-mix(in srgb, #f472b6 4%, transparent);
   border-radius: 0;
 }
-.bc-tl-row-in-turn { padding-left: 12px; }
-.bc-tl-row-turn-header {
-  padding: 3px 8px;
-  background: color-mix(in srgb, #f472b6 14%, transparent);
+.bc-tl-item.bc-tl-row-in-turn { padding: 2px 6px 2px 18px; }
+.bc-tl-item.bc-tl-row-turn-header {
+  padding: 4px 8px 3px;
+  background: color-mix(in srgb, #f472b6 16%, transparent);
   border-bottom: 1px solid color-mix(in srgb, #f472b6 30%, var(--border));
 }
-.bc-tl-row-turn-header:hover { background: color-mix(in srgb, #f472b6 22%, transparent); }
+.bc-tl-item.bc-tl-row-turn-header:hover {
+  background: color-mix(in srgb, #f472b6 26%, transparent);
+}
 
 .bc-tl-item {
   display: flex;
