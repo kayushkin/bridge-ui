@@ -19,6 +19,11 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
   const chromeTakenOver = minimal && minimalChromeMounted
   const tabs = [
     { to: routes.chat, label: 'Chat', end: true },
+    // Beside Chat and nowhere else: while one chat surface is replacing the
+    // other, the only comparison anyone wants is the two of them side by side.
+    // Gated on the route being named, which is how every optional tab here is
+    // gated — llmux mounts no second chat and gets no tab.
+    ...(routes.chatV2 ? [{ to: routes.chatV2, label: 'Chat v2', end: true }] : []),
     { to: routes.instances, label: 'Instances', end: false },
     { to: routes.sessions, label: 'Sessions', end: false },
     { to: routes.auth, label: 'Auth', end: false },

@@ -15,6 +15,7 @@ export const DEFAULT_BRIDGE_ROUTES = {
     kanban: '/bridge/kanban',
     notes: '',
     orchestrator: '',
+    chatV2: '',
 };
 export const BridgeContext = createContext(null);
 export function useBridgeConfig() {
