@@ -6,6 +6,7 @@ import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
 import { formatAgeCompact } from '../utils'
+import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt'
 import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
 import { useOpenSignalsByTodo } from './chat/signalData'
@@ -724,40 +725,68 @@ function SignalBadge({ signals }: { signals: Signal[] }) {
   )
 }
 
-// CardAgeBadge answers "how long has this been sitting here?" from data the
-// board view already carries, so it costs no extra request.
-//
-// It deliberately does NOT show time since the agent last did something. That
-// lives on the session, not the link, and reading it means asking
-// llm-bridge-server per session. The Agent runs board holds 6,466 cards across
-// 5,628 distinct sessions, so on a 15-second poll that is thousands of requests
-// a minute to render a caption. Showing dispatch time — which is free — and
-// leaving last-activity to the drawer keeps the board cheap.
-function CardAgeBadge({
-  placement,
-  session,
-}: {
-  placement: Placement
-  session: SessionLinkRef | null
-}) {
-  const boardAge = formatAgeCompact(placement.created_at)
-  if (!boardAge) return null
+// LinkedActivity is the last thing that actually happened to a card: mail
+// arriving on it, or an agent being handed it.
+type LinkedActivity = { at: string; kind: 'email' | 'session' }
 
-  const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null
+// latestLinkedActivity finds the most recent of those, from links the board
+// view already carries.
+//
+// Only 'email' and 'session' count. 'email_msgid' is the same arrival recorded
+// under its RFC identity and would double-count it, and 'email_sender' is a
+// learned affinity between a sender and a card rather than an event.
+function latestLinkedActivity(card: CardView): LinkedActivity | null {
+  let newest: (LinkedActivity & { rank: number }) | null = null
+  for (const l of card.links ?? []) {
+    if (l.entity_type !== 'email' && l.entity_type !== 'session') continue
+    const rank = new Date(l.created_at).getTime()
+    if (!Number.isFinite(rank)) continue
+    if (!newest || rank > newest.rank) {
+      newest = { at: l.created_at, kind: l.entity_type as 'email' | 'session', rank }
+    }
+  }
+  return newest ? { at: newest.at, kind: newest.kind } : null
+}
+
+// CardAgeBadge answers "when did anything last happen here?".
+//
+// It reports time since the last linked email or dispatch, not time since the
+// card was created. Creation age says how long ago a bucket was opened, which
+// stops being interesting immediately — a card opened in May that took mail an
+// hour ago is live, and one opened yesterday that has been silent since is not.
+// Creation time stays in the tooltip, where it is context rather than the
+// headline.
+//
+// It deliberately does NOT show time since the agent last did something inside
+// its session. That lives on the session, not the link, and reading it means
+// asking llm-bridge-server per session. The Agent runs board holds 6,466 cards
+// across 5,628 distinct sessions, so on a 15-second poll that is thousands of
+// requests a minute to render a caption. The drawer shows it for one card.
+function CardAgeBadge({
+  card,
+  placement,
+}: {
+  card: CardView
+  placement: Placement
+}) {
+  const activity = latestLinkedActivity(card)
+  // With no links at all there is no activity to report, so the card falls back
+  // to saying how long it has been sitting there — which is the honest answer.
+  const shown = activity
+    ? formatAgeCompact(activity.at)
+    : formatAgeCompact(placement.created_at)
+  if (!shown) return null
+
   const title = [
+    activity
+      ? `Last ${activity.kind === 'email' ? 'email attached' : 'handed to an agent'}: ${new Date(activity.at).toLocaleString()}`
+      : 'Nothing has happened on this card yet',
     `On this board since ${new Date(placement.created_at).toLocaleString()}`,
-    dispatchAge
-      ? `Handed to an agent ${dispatchAge} ago, ${new Date(session!.dispatchedAt).toLocaleString()}`
-      : 'Never handed to an agent',
   ].join('\n')
 
   return (
     <span className="bk-card-age" title={title}>
-      🕒 {boardAge}
-      {/* The dispatch age is the more urgent number when it exists: a card two
-          weeks old that an agent picked up an hour ago is an hour of work, not
-          two weeks of it. */}
-      {dispatchAge && <span className="bk-card-age-dispatch"> · ▶ {dispatchAge}</span>}
+      {activity ? (activity.kind === 'email' ? '✉' : '▶') : '🕒'} {shown}
     </span>
   )
 }
@@ -824,7 +853,7 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
-        <CardAgeBadge placement={card.placement} session={session} />
+        <CardAgeBadge card={card} placement={card.placement} />
         <button
           type="button"
           className={held ? 'bk-card-play' : 'bk-card-stop'}
@@ -866,14 +895,14 @@ function CardTile({
 // The same question asked from the board would be thousands of requests per
 // poll; asked here it is one, on open.
 function CardTiming({
-  placement,
-  session,
+  card,
   fetchFn,
 }: {
-  placement: Placement
-  session: SessionLinkRef | null
+  card: CardView
   fetchFn: FetchFn
 }) {
+  const placement = card.placement
+  const session = latestSessionLink(card)
   const { basePath } = useBridgeConfig()
   const [lastActivity, setLastActivity] = useState<string | null>(null)
   const [state, setState] = useState<string | null>(null)
@@ -905,8 +934,17 @@ function CardTiming({
   const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null
   const activityAge = lastActivity ? formatAgeCompact(lastActivity) : null
 
+  const activity = latestLinkedActivity(card)
+  const activityAgeFromLink = activity ? formatAgeCompact(activity.at) : null
+
   return (
     <dl className="bk-drawer-timing">
+      <div>
+        <dt>{activity?.kind === 'email' ? 'Last email' : activity ? 'Last dispatch' : 'Last activity'}</dt>
+        <dd title={activity ? new Date(activity.at).toLocaleString() : undefined}>
+          {activityAgeFromLink ?? 'never'}
+        </dd>
+      </div>
       <div>
         <dt>On this board</dt>
         <dd title={new Date(placement.created_at).toLocaleString()}>{boardAge ?? '—'}</dd>
@@ -930,6 +968,140 @@ function CardTiming({
         </>
       )}
     </dl>
+  )
+}
+
+// AgentPromptPanel is the card's "hand this to an agent" control: the prompt it
+// will be given, editable in place, and the button that starts it.
+//
+// The prompt shown when a card carries none is a suggestion, not a saved value —
+// it renders in the box but is not written to the card until the drawer is
+// saved. Writing it on open would put an agent prompt on every card anyone
+// merely looked at.
+function AgentPromptPanel({
+  cardID,
+  title,
+  body,
+  linkedEmailCount,
+  prompt,
+  onPromptChange,
+  existingSession,
+  onAddLink,
+  onOpenChat,
+  fetchFn,
+}: {
+  cardID: string
+  title: string
+  body: string
+  linkedEmailCount: number
+  prompt: string
+  onPromptChange: (next: string) => void
+  existingSession: SessionLinkRef | null
+  onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
+  onOpenChat: OpenChatFn
+  fetchFn: FetchFn
+}) {
+  const { basePath } = useBridgeConfig()
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const suggestion = useMemo(
+    () => suggestAgentPrompt({ cardID, title, body, linkedEmailCount }),
+    [cardID, title, body, linkedEmailCount],
+  )
+  // What the box shows, and — importantly — what a dispatch would actually send.
+  // These must be the same string, or the agent gets something the human never
+  // read.
+  const effective = prompt.trim() ? prompt : suggestion
+  const usingSuggestion = !prompt.trim()
+
+  const start = async () => {
+    setStarting(true)
+    setError(null)
+    try {
+      const created = await fetchFn(`${basePath}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          harness: 'claude_code',
+          display_name: `card: ${title}`.slice(0, 80),
+          // autonomous auto-allows tool permissions. An unattended session that
+          // parks on a permission prompt nobody is watching never finishes, and
+          // this is the same type autoworker and kanban-dispatcher already use.
+          type: 'autonomous',
+          purpose: 'dispatcher',
+          origin: 'kanban-card',
+        }),
+      })
+      if (!created.ok) throw new Error(`create session: HTTP ${created.status}`)
+      const session = await created.json()
+      const sessionID: string = session?.session_id
+      if (!sessionID) throw new Error('create session: response carried no session_id')
+
+      // Link before sending. If the send fails, a linked session is a visible
+      // loose end someone can open; an unlinked one is an orphan nobody can
+      // find from the board.
+      await onAddLink('session', sessionID, 'kanban-card')
+
+      const sent = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sessionID)}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: effective }),
+      })
+      if (!sent.ok) throw new Error(`send prompt: HTTP ${sent.status}`)
+
+      onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  return (
+    <section className="bk-agent-prompt">
+      <div className="bk-agent-prompt-head">
+        <label className="bk-drawer-label">Agent prompt</label>
+        {usingSuggestion && <span className="bk-agent-prompt-note">suggested — edit and save to keep</span>}
+      </div>
+      <textarea
+        className="bk-agent-prompt-text"
+        rows={10}
+        value={effective}
+        onChange={e => onPromptChange(e.target.value)}
+      />
+      <div className="bk-agent-prompt-actions">
+        <button
+          type="button"
+          className="bi-add-btn"
+          disabled={starting || !effective.trim()}
+          onClick={start}
+        >{starting ? 'Starting…' : '▶ Start an agent on this'}</button>
+        {prompt.trim() && (
+          <button
+            type="button"
+            className="bk-agent-prompt-reset"
+            disabled={starting}
+            onClick={() => onPromptChange('')}
+            title="Drop the saved prompt and go back to the suggested one. Takes effect on save."
+          >reset to suggested</button>
+        )}
+        {existingSession && (
+          <button
+            type="button"
+            className="bk-agent-prompt-reset"
+            onClick={() => onOpenChat(existingSession)}
+            title={`This card already has session ${existingSession.ref}. Starting another adds a second one.`}
+          >open current session ↗</button>
+        )}
+      </div>
+      {existingSession && (
+        <p className="bk-agent-prompt-warn">
+          An agent already has this card. Starting another gives it a second session.
+        </p>
+      )}
+      {error && <div className="bridge-error">{error}</div>}
+    </section>
   )
 }
 
@@ -962,7 +1134,12 @@ function CardDrawer({
 }) {
   const item = card.item as NoteboardItem | null
   const [title, setTitle] = useState(item?.title ?? '')
-  const [body, setBody] = useState(item?.body ?? '')
+  // The prompt block is split out of the body here and recombined on save, so
+  // the body box shows what the card says and the prompt box shows what the
+  // agent is told. Left merged, every card body would open with a wall of
+  // instructions aimed at an agent rather than at the reader.
+  const [body, setBody] = useState(stripAgentPrompt(item?.body))
+  const [agentPrompt, setAgentPrompt] = useState(readAgentPrompt(item?.body) ?? '')
   const [tags, setTags] = useState((item?.tags ?? []).join(', '))
   const [status, setStatus] = useState(item?.status ?? 'open')
   const [dirty, setDirty] = useState(false)
@@ -980,7 +1157,8 @@ function CardDrawer({
   // Re-seed when the underlying card changes (e.g. after a refresh)
   useEffect(() => {
     setTitle(item?.title ?? '')
-    setBody(item?.body ?? '')
+    setBody(stripAgentPrompt(item?.body))
+    setAgentPrompt(readAgentPrompt(item?.body) ?? '')
     setTags((item?.tags ?? []).join(', '))
     setStatus(item?.status ?? 'open')
     setDirty(false)
@@ -998,7 +1176,7 @@ function CardDrawer({
   const save = async () => {
     const patch: Record<string, unknown> = {
       title,
-      body,
+      body: writeAgentPrompt(body, agentPrompt),
       status,
       tags: tags.split(',').map(s => s.trim()).filter(Boolean),
     }
@@ -1014,7 +1192,22 @@ function CardDrawer({
           <button onClick={onClose} className="bi-add-btn">×</button>
         </header>
 
-        <CardTiming placement={card.placement} session={latestSessionLink(card)} fetchFn={fetchFn} />
+        <CardTiming card={card} fetchFn={fetchFn} />
+
+        {item && (
+          <AgentPromptPanel
+            cardID={card.placement.card_id}
+            title={title}
+            body={body}
+            linkedEmailCount={emailLinks.length}
+            prompt={agentPrompt}
+            onPromptChange={next => { setAgentPrompt(next); setDirty(true) }}
+            existingSession={latestSessionLink(card)}
+            onAddLink={onAddLink}
+            onOpenChat={onOpenChat}
+            fetchFn={fetchFn}
+          />
+        )}
 
         {!item ? (
           <div className="bridge-error">noteboard item is missing for placement {card.placement.card_id}</div>

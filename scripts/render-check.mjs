@@ -23,6 +23,7 @@ import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePrefsStore.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
 import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
+import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../src/agentPrompt.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
@@ -1946,6 +1947,68 @@ console.log('session content search — a failure is not an empty result')
 // loop and let node exit 0 with the report never reached — a silent pass for a
 // run that never finished.
 process.exitCode = 1
+console.log('\nagentPrompt — the block lives in the card body')
+{
+  const EVIDENCE = '<!-- email-classifier:evidence -->'
+  const body = 'What this card is about.\n\n' + EVIDENCE + '\n\n- an email\n'
+
+  const withPrompt = writeAgentPrompt(body, 'Go and do the thing.')
+  check('the prompt reads back exactly', readAgentPrompt(withPrompt) === 'Go and do the thing.')
+  check('the original body survives', withPrompt.includes('What this card is about.'))
+  check('the evidence section survives', withPrompt.includes('- an email'))
+
+  // email-classifier replaces everything below its evidence marker every 15
+  // minutes. A prompt stored below that line would be deleted by the next tick,
+  // so this pins the ordering rather than trusting it.
+  check('the prompt sits above the classifier evidence marker',
+    withPrompt.indexOf('<!-- agent-prompt -->') < withPrompt.indexOf(EVIDENCE),
+    withPrompt)
+
+  check('stripping restores the body', stripAgentPrompt(withPrompt).trim() === body.trim(),
+    JSON.stringify(stripAgentPrompt(withPrompt)))
+
+  const rewritten = writeAgentPrompt(withPrompt, 'A different instruction.')
+  check('rewriting replaces rather than stacks', readAgentPrompt(rewritten) === 'A different instruction.')
+  check('rewriting leaves exactly one block',
+    rewritten.split('<!-- agent-prompt -->').length - 1 === 1, rewritten)
+
+  check('clearing removes the block', !writeAgentPrompt(withPrompt, '   ').includes('<!-- agent-prompt -->'))
+  check('clearing keeps the body', writeAgentPrompt(withPrompt, '').includes('What this card is about.'))
+
+  check('a card with no block has no prompt', readAgentPrompt(body) === null)
+  check('an empty body is not a prompt', readAgentPrompt('') === null)
+  check('an empty block reads as absent, not as blank',
+    readAgentPrompt('<!-- agent-prompt -->\n\n<!-- /agent-prompt -->\nrest') === null)
+
+  // A hand-edited body that lost its closing marker must not swallow the card.
+  const unterminated = '<!-- agent-prompt -->\nhalf a prompt\n\nthe rest of the card'
+  check('an unterminated block reads as absent', readAgentPrompt(unterminated) === null)
+  check('an unterminated block is left alone', stripAgentPrompt(unterminated) === unterminated)
+
+  const onEmpty = writeAgentPrompt('', 'only a prompt')
+  check('a prompt on an empty body round-trips', readAgentPrompt(onEmpty) === 'only a prompt')
+}
+
+console.log('\nagentPrompt — the suggestion')
+{
+  const s = suggestAgentPrompt({ cardID: 'card-1', title: 'Cancel the subscription', body: 'It renews Friday.' })
+  check('names the card so the agent can close it', s.includes('card-1'))
+  check('carries the title', s.includes('Cancel the subscription'))
+  check('carries the body', s.includes('It renews Friday.'))
+  check('tells the agent how to finish', s.includes('/api/items/card-1'))
+  check('says nothing about email when none is linked', !s.toLowerCase().includes('email'))
+
+  const withMail = suggestAgentPrompt({ cardID: 'c2', title: 'T', body: '', linkedEmailCount: 3 })
+  check('mentions linked email when there is some', withMail.includes('3 emails'))
+  check('an empty body still yields a usable prompt', withMail.includes('no description'))
+
+  // The suggestion is derived from the card, so a stored prompt must not leak
+  // into the next suggestion via the body it was stripped from.
+  const bodyWithPrompt = writeAgentPrompt('Real body text.', 'STALE INSTRUCTION')
+  const clean = suggestAgentPrompt({ cardID: 'c3', title: 'T', body: stripAgentPrompt(bodyWithPrompt) })
+  check('a stored prompt does not leak into the suggestion', !clean.includes('STALE INSTRUCTION'), clean)
+}
+
 sharedPollChecks().then(bridgePrefsChecks).then(controlRefusalChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)

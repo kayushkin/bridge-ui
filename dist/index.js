@@ -20,6 +20,7 @@ export { useKanban } from './useKanban';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';
+export { readAgentPrompt, writeAgentPrompt, stripAgentPrompt, suggestAgentPrompt, AGENT_PROMPT_OPEN, AGENT_PROMPT_CLOSE, } from './agentPrompt';
 // Page components
 export { BridgeLayout } from './components/BridgeLayout';
 export { BridgeChat } from './components/BridgeChat';

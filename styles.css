@@ -4767,6 +4767,43 @@
 .bk-status-done { background: rgba(34, 197, 94, 0.18); color: #16a34a; }
 .bk-status-archived { opacity: 0.5; }
 
+/* The agent prompt panel. Boxed away from the card's own fields because it is
+   addressed to an agent, not to the reader, and mixing the two invites editing
+   one while meaning the other. */
+.bk-agent-prompt {
+  margin: 14px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.bk-agent-prompt-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+.bk-agent-prompt-note { font-size: 0.75em; opacity: 0.6; }
+.bk-agent-prompt-text {
+  width: 100%;
+  margin-top: 6px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.85em;
+  line-height: 1.45;
+  resize: vertical;
+}
+.bk-agent-prompt-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
+}
+.bk-agent-prompt-reset {
+  font-size: 0.8em; padding: 2px 6px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 3px; color: inherit; cursor: pointer;
+}
+.bk-agent-prompt-reset:hover { border-color: var(--accent); color: var(--accent); }
+/* A second agent on one card is legal and occasionally wanted, so this warns
+   rather than blocks. */
+.bk-agent-prompt-warn {
+  margin: 8px 0 0; font-size: 0.8em;
+  color: #d97706;
+}
+
 /* The drawer's timing summary. A row per question so the three ages line up and
    can be compared down the column rather than read as a sentence. */
 .bk-drawer-timing {

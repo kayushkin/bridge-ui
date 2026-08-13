@@ -24,6 +24,7 @@ export type { Board, Column, Placement, CardLink, EntityTag, CardView, ColumnVie
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll';
 export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';
+export { readAgentPrompt, writeAgentPrompt, stripAgentPrompt, suggestAgentPrompt, AGENT_PROMPT_OPEN, AGENT_PROMPT_CLOSE, } from './agentPrompt';
 export { BridgeLayout } from './components/BridgeLayout';
 export { BridgeChat } from './components/BridgeChat';
 export { BridgeSessions } from './components/BridgeSessions';

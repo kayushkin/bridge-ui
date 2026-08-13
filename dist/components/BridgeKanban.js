@@ -5,6 +5,7 @@ import { useBridgeConfig } from '../context';
 import { cleanEmailBodyForPreview } from '../emailText';
 import { useKanban } from '../useKanban';
 import { formatAgeCompact } from '../utils';
+import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt';
 import { SignalKindQuestion } from '../types';
 import { useOpenSignalsByTodo } from './chat/signalData';
 import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
@@ -329,27 +330,56 @@ function SignalBadge({ signals }) {
         : (signals.length > 1 ? `📣 ${signals.length} unread notifications` : '📣 unread notification');
     return (_jsxs("div", { className: `bk-card-signal bk-card-signal-${leading.kind}`, title: leading.title, children: [_jsx("span", { className: "bk-card-signal-label", children: label }), _jsx("span", { className: "bk-card-signal-title", children: leading.title })] }));
 }
-// CardAgeBadge answers "how long has this been sitting here?" from data the
-// board view already carries, so it costs no extra request.
+// latestLinkedActivity finds the most recent of those, from links the board
+// view already carries.
 //
-// It deliberately does NOT show time since the agent last did something. That
-// lives on the session, not the link, and reading it means asking
-// llm-bridge-server per session. The Agent runs board holds 6,466 cards across
-// 5,628 distinct sessions, so on a 15-second poll that is thousands of requests
-// a minute to render a caption. Showing dispatch time — which is free — and
-// leaving last-activity to the drawer keeps the board cheap.
-function CardAgeBadge({ placement, session, }) {
-    const boardAge = formatAgeCompact(placement.created_at);
-    if (!boardAge)
+// Only 'email' and 'session' count. 'email_msgid' is the same arrival recorded
+// under its RFC identity and would double-count it, and 'email_sender' is a
+// learned affinity between a sender and a card rather than an event.
+function latestLinkedActivity(card) {
+    let newest = null;
+    for (const l of card.links ?? []) {
+        if (l.entity_type !== 'email' && l.entity_type !== 'session')
+            continue;
+        const rank = new Date(l.created_at).getTime();
+        if (!Number.isFinite(rank))
+            continue;
+        if (!newest || rank > newest.rank) {
+            newest = { at: l.created_at, kind: l.entity_type, rank };
+        }
+    }
+    return newest ? { at: newest.at, kind: newest.kind } : null;
+}
+// CardAgeBadge answers "when did anything last happen here?".
+//
+// It reports time since the last linked email or dispatch, not time since the
+// card was created. Creation age says how long ago a bucket was opened, which
+// stops being interesting immediately — a card opened in May that took mail an
+// hour ago is live, and one opened yesterday that has been silent since is not.
+// Creation time stays in the tooltip, where it is context rather than the
+// headline.
+//
+// It deliberately does NOT show time since the agent last did something inside
+// its session. That lives on the session, not the link, and reading it means
+// asking llm-bridge-server per session. The Agent runs board holds 6,466 cards
+// across 5,628 distinct sessions, so on a 15-second poll that is thousands of
+// requests a minute to render a caption. The drawer shows it for one card.
+function CardAgeBadge({ card, placement, }) {
+    const activity = latestLinkedActivity(card);
+    // With no links at all there is no activity to report, so the card falls back
+    // to saying how long it has been sitting there — which is the honest answer.
+    const shown = activity
+        ? formatAgeCompact(activity.at)
+        : formatAgeCompact(placement.created_at);
+    if (!shown)
         return null;
-    const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null;
     const title = [
+        activity
+            ? `Last ${activity.kind === 'email' ? 'email attached' : 'handed to an agent'}: ${new Date(activity.at).toLocaleString()}`
+            : 'Nothing has happened on this card yet',
         `On this board since ${new Date(placement.created_at).toLocaleString()}`,
-        dispatchAge
-            ? `Handed to an agent ${dispatchAge} ago, ${new Date(session.dispatchedAt).toLocaleString()}`
-            : 'Never handed to an agent',
     ].join('\n');
-    return (_jsxs("span", { className: "bk-card-age", title: title, children: ["\uD83D\uDD52 ", boardAge, dispatchAge && _jsxs("span", { className: "bk-card-age-dispatch", children: [" \u00B7 \u25B6 ", dispatchAge] })] }));
+    return (_jsxs("span", { className: "bk-card-age", title: title, children: [activity ? (activity.kind === 'email' ? '✉' : '▶') : '🕒', " ", shown] }));
 }
 function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, }) {
     const item = card.item;
@@ -363,7 +393,7 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
     // button renders on every card in every column, not just in a gate column.
     const held = !!item.held_at;
     const ceiling = typeof item.auto_hold_at_usd === 'number' ? item.auto_hold_at_usd : null;
-    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx(CardAgeBadge, { placement: card.placement, session: session }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
+    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx(CardAgeBadge, { card: card, placement: card.placement }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
                             ? 'Play — clear the hold so agents may work this, and resume its session if it was paused'
                             : 'Stop — park this work so no agent picks it up, and pause any session already running it', onClick: e => {
                             e.stopPropagation();
@@ -376,7 +406,9 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
 // session's real last activity, because the drawer shows one card at a time.
 // The same question asked from the board would be thousands of requests per
 // poll; asked here it is one, on open.
-function CardTiming({ placement, session, fetchFn, }) {
+function CardTiming({ card, fetchFn, }) {
+    const placement = card.placement;
+    const session = latestSessionLink(card);
     const { basePath } = useBridgeConfig();
     const [lastActivity, setLastActivity] = useState(null);
     const [state, setState] = useState(null);
@@ -406,16 +438,86 @@ function CardTiming({ placement, session, fetchFn, }) {
     const boardAge = formatAgeCompact(placement.created_at);
     const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null;
     const activityAge = lastActivity ? formatAgeCompact(lastActivity) : null;
-    return (_jsxs("dl", { className: "bk-drawer-timing", children: [_jsxs("div", { children: [_jsx("dt", { children: "On this board" }), _jsx("dd", { title: new Date(placement.created_at).toLocaleString(), children: boardAge ?? '—' })] }), session && (_jsxs(_Fragment, { children: [_jsxs("div", { children: [_jsx("dt", { children: "Given to an agent" }), _jsx("dd", { title: new Date(session.dispatchedAt).toLocaleString(), children: dispatchAge ?? '—' })] }), _jsxs("div", { children: [_jsx("dt", { children: "Last agent activity" }), _jsx("dd", { title: lastActivity ? new Date(lastActivity).toLocaleString() : undefined, children: activityAge
+    const activity = latestLinkedActivity(card);
+    const activityAgeFromLink = activity ? formatAgeCompact(activity.at) : null;
+    return (_jsxs("dl", { className: "bk-drawer-timing", children: [_jsxs("div", { children: [_jsx("dt", { children: activity?.kind === 'email' ? 'Last email' : activity ? 'Last dispatch' : 'Last activity' }), _jsx("dd", { title: activity ? new Date(activity.at).toLocaleString() : undefined, children: activityAgeFromLink ?? 'never' })] }), _jsxs("div", { children: [_jsx("dt", { children: "On this board" }), _jsx("dd", { title: new Date(placement.created_at).toLocaleString(), children: boardAge ?? '—' })] }), session && (_jsxs(_Fragment, { children: [_jsxs("div", { children: [_jsx("dt", { children: "Given to an agent" }), _jsx("dd", { title: new Date(session.dispatchedAt).toLocaleString(), children: dispatchAge ?? '—' })] }), _jsxs("div", { children: [_jsx("dt", { children: "Last agent activity" }), _jsx("dd", { title: lastActivity ? new Date(lastActivity).toLocaleString() : undefined, children: activityAge
                                     ? `${activityAge}${state ? ` · ${state}` : ''}`
                                     : unavailable
                                         ? 'bridge did not answer'
                                         : '…' })] })] }))] }));
 }
+// AgentPromptPanel is the card's "hand this to an agent" control: the prompt it
+// will be given, editable in place, and the button that starts it.
+//
+// The prompt shown when a card carries none is a suggestion, not a saved value —
+// it renders in the box but is not written to the card until the drawer is
+// saved. Writing it on open would put an agent prompt on every card anyone
+// merely looked at.
+function AgentPromptPanel({ cardID, title, body, linkedEmailCount, prompt, onPromptChange, existingSession, onAddLink, onOpenChat, fetchFn, }) {
+    const { basePath } = useBridgeConfig();
+    const [starting, setStarting] = useState(false);
+    const [error, setError] = useState(null);
+    const suggestion = useMemo(() => suggestAgentPrompt({ cardID, title, body, linkedEmailCount }), [cardID, title, body, linkedEmailCount]);
+    // What the box shows, and — importantly — what a dispatch would actually send.
+    // These must be the same string, or the agent gets something the human never
+    // read.
+    const effective = prompt.trim() ? prompt : suggestion;
+    const usingSuggestion = !prompt.trim();
+    const start = async () => {
+        setStarting(true);
+        setError(null);
+        try {
+            const created = await fetchFn(`${basePath}/sessions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    harness: 'claude_code',
+                    display_name: `card: ${title}`.slice(0, 80),
+                    // autonomous auto-allows tool permissions. An unattended session that
+                    // parks on a permission prompt nobody is watching never finishes, and
+                    // this is the same type autoworker and kanban-dispatcher already use.
+                    type: 'autonomous',
+                    purpose: 'dispatcher',
+                    origin: 'kanban-card',
+                }),
+            });
+            if (!created.ok)
+                throw new Error(`create session: HTTP ${created.status}`);
+            const session = await created.json();
+            const sessionID = session?.session_id;
+            if (!sessionID)
+                throw new Error('create session: response carried no session_id');
+            // Link before sending. If the send fails, a linked session is a visible
+            // loose end someone can open; an unlinked one is an orphan nobody can
+            // find from the board.
+            await onAddLink('session', sessionID, 'kanban-card');
+            const sent = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sessionID)}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: effective }),
+            });
+            if (!sent.ok)
+                throw new Error(`send prompt: HTTP ${sent.status}`);
+            onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() });
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            setStarting(false);
+        }
+    };
+    return (_jsxs("section", { className: "bk-agent-prompt", children: [_jsxs("div", { className: "bk-agent-prompt-head", children: [_jsx("label", { className: "bk-drawer-label", children: "Agent prompt" }), usingSuggestion && _jsx("span", { className: "bk-agent-prompt-note", children: "suggested \u2014 edit and save to keep" })] }), _jsx("textarea", { className: "bk-agent-prompt-text", rows: 10, value: effective, onChange: e => onPromptChange(e.target.value) }), _jsxs("div", { className: "bk-agent-prompt-actions", children: [_jsx("button", { type: "button", className: "bi-add-btn", disabled: starting || !effective.trim(), onClick: start, children: starting ? 'Starting…' : '▶ Start an agent on this' }), prompt.trim() && (_jsx("button", { type: "button", className: "bk-agent-prompt-reset", disabled: starting, onClick: () => onPromptChange(''), title: "Drop the saved prompt and go back to the suggested one. Takes effect on save.", children: "reset to suggested" })), existingSession && (_jsx("button", { type: "button", className: "bk-agent-prompt-reset", onClick: () => onOpenChat(existingSession), title: `This card already has session ${existingSession.ref}. Starting another adds a second one.`, children: "open current session \u2197" }))] }), existingSession && (_jsx("p", { className: "bk-agent-prompt-warn", children: "An agent already has this card. Starting another gives it a second session." })), error && _jsx("div", { className: "bridge-error", children: error })] }));
+}
 function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, }) {
     const item = card.item;
     const [title, setTitle] = useState(item?.title ?? '');
-    const [body, setBody] = useState(item?.body ?? '');
+    // The prompt block is split out of the body here and recombined on save, so
+    // the body box shows what the card says and the prompt box shows what the
+    // agent is told. Left merged, every card body would open with a wall of
+    // instructions aimed at an agent rather than at the reader.
+    const [body, setBody] = useState(stripAgentPrompt(item?.body));
+    const [agentPrompt, setAgentPrompt] = useState(readAgentPrompt(item?.body) ?? '');
     const [tags, setTags] = useState((item?.tags ?? []).join(', '));
     const [status, setStatus] = useState(item?.status ?? 'open');
     const [dirty, setDirty] = useState(false);
@@ -432,7 +534,8 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
     // Re-seed when the underlying card changes (e.g. after a refresh)
     useEffect(() => {
         setTitle(item?.title ?? '');
-        setBody(item?.body ?? '');
+        setBody(stripAgentPrompt(item?.body));
+        setAgentPrompt(readAgentPrompt(item?.body) ?? '');
         setTags((item?.tags ?? []).join(', '));
         setStatus(item?.status ?? 'open');
         setDirty(false);
@@ -448,7 +551,7 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
     const save = async () => {
         const patch = {
             title,
-            body,
+            body: writeAgentPrompt(body, agentPrompt),
             status,
             tags: tags.split(',').map(s => s.trim()).filter(Boolean),
         };
@@ -456,7 +559,7 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
         if (ok)
             setDirty(false);
     };
-    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), _jsx(CardTiming, { placement: card.placement, session: latestSessionLink(card), fetchFn: fetchFn }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
+    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), _jsx(CardTiming, { card: card, fetchFn: fetchFn }), item && (_jsx(AgentPromptPanel, { cardID: card.placement.card_id, title: title, body: body, linkedEmailCount: emailLinks.length, prompt: agentPrompt, onPromptChange: next => { setAgentPrompt(next); setDirty(true); }, existingSession: latestSessionLink(card), onAddLink: onAddLink, onOpenChat: onOpenChat, fetchFn: fetchFn })), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
                                         onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => {
                                     const isSessionLink = l.entity_type === 'session' && !!l.entity_ref;
                                     return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref, dispatchedAt: l.created_at }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
