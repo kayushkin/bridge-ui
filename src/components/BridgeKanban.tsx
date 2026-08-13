@@ -4,7 +4,8 @@ import { useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
 import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban } from '../useKanban'
-import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem } from '../types-kanban'
+import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
+import { formatAgeCompact } from '../utils'
 import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
 import { useOpenSignalsByTodo } from './chat/signalData'
@@ -14,18 +15,37 @@ import {
   type AxisFilter, type SortKey,
 } from '../kanbanAxes'
 
-// Pulls the first session link off a card. Post session-consolidation
+// A card's link to the agent session working it. Post session-consolidation
 // (2026-05-09) every card_link with entity_type='session' carries the
 // canonical llm-bridge-server session_id, which is a direct deeplink target.
-type SessionLinkRef = { ref: string }
+type SessionLinkRef = {
+  ref: string
+  // When the card was handed to this agent. Read straight off the link row, so
+  // it costs nothing — the board view already carries every link.
+  dispatchedAt: string
+}
 type OpenChatFn = (link: SessionLinkRef) => void
 
-function sessionLink(card: CardView): SessionLinkRef | null {
+// latestSessionLink returns the most recently attached session, which is the one
+// that describes what is happening to the card now.
+//
+// Cards carry a single session link today, so newest and first are the same row
+// and the old "return the first match" behaviour was never visibly wrong. It was
+// only ever right by accident: nothing stops a second dispatch adding a second
+// link, and on the day that happens, first-match silently reports the oldest
+// agent as the current one.
+function latestSessionLink(card: CardView): SessionLinkRef | null {
+  let newest: { ref: string; dispatchedAt: string; at: number } | null = null
   for (const l of card.links ?? []) {
-    if (!l.entity_ref) continue
-    if (l.entity_type === 'session') return { ref: l.entity_ref }
+    if (l.entity_type !== 'session' || !l.entity_ref) continue
+    // An unparseable timestamp sorts oldest rather than winning by accident.
+    const at = new Date(l.created_at).getTime()
+    const rank = Number.isFinite(at) ? at : -Infinity
+    if (!newest || rank > newest.at) {
+      newest = { ref: l.entity_ref, dispatchedAt: l.created_at, at: rank }
+    }
   }
-  return null
+  return newest ? { ref: newest.ref, dispatchedAt: newest.dispatchedAt } : null
 }
 
 const LAYOUT_KEY = 'bk:layout'
@@ -272,7 +292,7 @@ export function BridgeKanban() {
                     // same act, and the card's own session link is what tells the
                     // two apart — so only that case asks.
                     const card = cv.cards?.find(c => c.placement.card_id === cardID)
-                    if (card && sessionLink(card)) {
+                    if (card && latestSessionLink(card)) {
                       if (!confirm('This card has a running session. Stop will pause the agent mid-turn (resumable) and park the work. Continue?')) return false
                     }
                     return k.stopCard(cardID)
@@ -704,6 +724,44 @@ function SignalBadge({ signals }: { signals: Signal[] }) {
   )
 }
 
+// CardAgeBadge answers "how long has this been sitting here?" from data the
+// board view already carries, so it costs no extra request.
+//
+// It deliberately does NOT show time since the agent last did something. That
+// lives on the session, not the link, and reading it means asking
+// llm-bridge-server per session. The Agent runs board holds 6,466 cards across
+// 5,628 distinct sessions, so on a 15-second poll that is thousands of requests
+// a minute to render a caption. Showing dispatch time — which is free — and
+// leaving last-activity to the drawer keeps the board cheap.
+function CardAgeBadge({
+  placement,
+  session,
+}: {
+  placement: Placement
+  session: SessionLinkRef | null
+}) {
+  const boardAge = formatAgeCompact(placement.created_at)
+  if (!boardAge) return null
+
+  const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null
+  const title = [
+    `On this board since ${new Date(placement.created_at).toLocaleString()}`,
+    dispatchAge
+      ? `Handed to an agent ${dispatchAge} ago, ${new Date(session!.dispatchedAt).toLocaleString()}`
+      : 'Never handed to an agent',
+  ].join('\n')
+
+  return (
+    <span className="bk-card-age" title={title}>
+      🕒 {boardAge}
+      {/* The dispatch age is the more urgent number when it exists: a card two
+          weeks old that an agent picked up an hour ago is an hour of work, not
+          two weeks of it. */}
+      {dispatchAge && <span className="bk-card-age-dispatch"> · ▶ {dispatchAge}</span>}
+    </span>
+  )
+}
+
 function CardTile({
   card,
   signals,
@@ -736,7 +794,7 @@ function CardTile({
   }
   const tags: string[] = Array.isArray(item.tags) ? item.tags : []
   const status = item.status as string
-  const session = sessionLink(card)
+  const session = latestSessionLink(card)
   // The gate is a property of the work, not of the column it sits in — so the
   // button renders on every card in every column, not just in a gate column.
   const held = !!item.held_at
@@ -766,6 +824,7 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
+        <CardAgeBadge placement={card.placement} session={session} />
         <button
           type="button"
           className={held ? 'bk-card-play' : 'bk-card-stop'}
@@ -797,6 +856,80 @@ function CardTile({
         </select>
       </div>
     </div>
+  )
+}
+
+// CardTiming is the drawer's answer to "how long has this been going?".
+//
+// Unlike the badge on the tile, this one may ask llm-bridge-server for the
+// session's real last activity, because the drawer shows one card at a time.
+// The same question asked from the board would be thousands of requests per
+// poll; asked here it is one, on open.
+function CardTiming({
+  placement,
+  session,
+  fetchFn,
+}: {
+  placement: Placement
+  session: SessionLinkRef | null
+  fetchFn: FetchFn
+}) {
+  const { basePath } = useBridgeConfig()
+  const [lastActivity, setLastActivity] = useState<string | null>(null)
+  const [state, setState] = useState<string | null>(null)
+  // Distinguishes "we have not asked yet" from "we asked and the bridge could
+  // not say". Without it a failed lookup renders identically to a pending one
+  // and the row just never fills in.
+  const [unavailable, setUnavailable] = useState(false)
+
+  useEffect(() => {
+    if (!session) return
+    let cancelled = false
+    setUnavailable(false)
+    setLastActivity(null)
+    setState(null)
+
+    fetchFn(`${basePath}/sessions/${encodeURIComponent(session.ref)}`)
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(s => {
+        if (cancelled) return
+        setLastActivity(typeof s?.updated_at === 'string' ? s.updated_at : null)
+        setState(typeof s?.state === 'string' ? s.state : null)
+      })
+      .catch(() => { if (!cancelled) setUnavailable(true) })
+
+    return () => { cancelled = true }
+  }, [session?.ref, basePath, fetchFn])
+
+  const boardAge = formatAgeCompact(placement.created_at)
+  const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null
+  const activityAge = lastActivity ? formatAgeCompact(lastActivity) : null
+
+  return (
+    <dl className="bk-drawer-timing">
+      <div>
+        <dt>On this board</dt>
+        <dd title={new Date(placement.created_at).toLocaleString()}>{boardAge ?? '—'}</dd>
+      </div>
+      {session && (
+        <>
+          <div>
+            <dt>Given to an agent</dt>
+            <dd title={new Date(session.dispatchedAt).toLocaleString()}>{dispatchAge ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Last agent activity</dt>
+            <dd title={lastActivity ? new Date(lastActivity).toLocaleString() : undefined}>
+              {activityAge
+                ? `${activityAge}${state ? ` · ${state}` : ''}`
+                : unavailable
+                  ? 'bridge did not answer'
+                  : '…'}
+            </dd>
+          </div>
+        </>
+      )}
+    </dl>
   )
 }
 
@@ -881,6 +1014,8 @@ function CardDrawer({
           <button onClick={onClose} className="bi-add-btn">×</button>
         </header>
 
+        <CardTiming placement={card.placement} session={latestSessionLink(card)} fetchFn={fetchFn} />
+
         {!item ? (
           <div className="bridge-error">noteboard item is missing for placement {card.placement.card_id}</div>
         ) : (
@@ -964,7 +1099,7 @@ function CardDrawer({
                         type="button"
                         className="bk-link-ref bk-link-ref-action"
                         title={`Open chat session ${l.entity_ref}`}
-                        onClick={() => onOpenChat({ ref: l.entity_ref })}
+                        onClick={() => onOpenChat({ ref: l.entity_ref, dispatchedAt: l.created_at })}
                       >{l.entity_ref} ↗</button>
                     ) : (
                       <span className="bk-link-ref">{l.entity_ref}</span>

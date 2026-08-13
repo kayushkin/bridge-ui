@@ -4,17 +4,31 @@ import { useNavigate } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { cleanEmailBodyForPreview } from '../emailText';
 import { useKanban } from '../useKanban';
+import { formatAgeCompact } from '../utils';
 import { SignalKindQuestion } from '../types';
 import { useOpenSignalsByTodo } from './chat/signalData';
 import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
-function sessionLink(card) {
+// latestSessionLink returns the most recently attached session, which is the one
+// that describes what is happening to the card now.
+//
+// Cards carry a single session link today, so newest and first are the same row
+// and the old "return the first match" behaviour was never visibly wrong. It was
+// only ever right by accident: nothing stops a second dispatch adding a second
+// link, and on the day that happens, first-match silently reports the oldest
+// agent as the current one.
+function latestSessionLink(card) {
+    let newest = null;
     for (const l of card.links ?? []) {
-        if (!l.entity_ref)
+        if (l.entity_type !== 'session' || !l.entity_ref)
             continue;
-        if (l.entity_type === 'session')
-            return { ref: l.entity_ref };
+        // An unparseable timestamp sorts oldest rather than winning by accident.
+        const at = new Date(l.created_at).getTime();
+        const rank = Number.isFinite(at) ? at : -Infinity;
+        if (!newest || rank > newest.at) {
+            newest = { ref: l.entity_ref, dispatchedAt: l.created_at, at: rank };
+        }
     }
-    return null;
+    return newest ? { ref: newest.ref, dispatchedAt: newest.dispatchedAt } : null;
 }
 const LAYOUT_KEY = 'bk:layout';
 const LAST_BOARD_KEY = 'bk:lastBoardId';
@@ -172,7 +186,7 @@ export function BridgeKanban() {
                                         // same act, and the card's own session link is what tells the
                                         // two apart — so only that case asks.
                                         const card = cv.cards?.find(c => c.placement.card_id === cardID);
-                                        if (card && sessionLink(card)) {
+                                        if (card && latestSessionLink(card)) {
                                             if (!confirm('This card has a running session. Stop will pause the agent mid-turn (resumable) and park the work. Continue?'))
                                                 return false;
                                         }
@@ -315,6 +329,28 @@ function SignalBadge({ signals }) {
         : (signals.length > 1 ? `📣 ${signals.length} unread notifications` : '📣 unread notification');
     return (_jsxs("div", { className: `bk-card-signal bk-card-signal-${leading.kind}`, title: leading.title, children: [_jsx("span", { className: "bk-card-signal-label", children: label }), _jsx("span", { className: "bk-card-signal-title", children: leading.title })] }));
 }
+// CardAgeBadge answers "how long has this been sitting here?" from data the
+// board view already carries, so it costs no extra request.
+//
+// It deliberately does NOT show time since the agent last did something. That
+// lives on the session, not the link, and reading it means asking
+// llm-bridge-server per session. The Agent runs board holds 6,466 cards across
+// 5,628 distinct sessions, so on a 15-second poll that is thousands of requests
+// a minute to render a caption. Showing dispatch time — which is free — and
+// leaving last-activity to the drawer keeps the board cheap.
+function CardAgeBadge({ placement, session, }) {
+    const boardAge = formatAgeCompact(placement.created_at);
+    if (!boardAge)
+        return null;
+    const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null;
+    const title = [
+        `On this board since ${new Date(placement.created_at).toLocaleString()}`,
+        dispatchAge
+            ? `Handed to an agent ${dispatchAge} ago, ${new Date(session.dispatchedAt).toLocaleString()}`
+            : 'Never handed to an agent',
+    ].join('\n');
+    return (_jsxs("span", { className: "bk-card-age", title: title, children: ["\uD83D\uDD52 ", boardAge, dispatchAge && _jsxs("span", { className: "bk-card-age-dispatch", children: [" \u00B7 \u25B6 ", dispatchAge] })] }));
+}
 function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, }) {
     const item = card.item;
     if (!item) {
@@ -322,17 +358,59 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
     }
     const tags = Array.isArray(item.tags) ? item.tags : [];
     const status = item.status;
-    const session = sessionLink(card);
+    const session = latestSessionLink(card);
     // The gate is a property of the work, not of the column it sits in — so the
     // button renders on every card in every column, not just in a gate column.
     const held = !!item.held_at;
     const ceiling = typeof item.auto_hold_at_usd === 'number' ? item.auto_hold_at_usd : null;
-    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
+    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), _jsx(CardAgeBadge, { placement: card.placement, session: session }), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
                             ? 'Play — clear the hold so agents may work this, and resume its session if it was paused'
                             : 'Stop — park this work so no agent picks it up, and pause any session already running it', onClick: e => {
                             e.stopPropagation();
                             held ? onPlay(card.placement.card_id) : onStop(card.placement.card_id);
                         }, children: held ? '▶' : '⏸' }), session && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
+}
+// CardTiming is the drawer's answer to "how long has this been going?".
+//
+// Unlike the badge on the tile, this one may ask llm-bridge-server for the
+// session's real last activity, because the drawer shows one card at a time.
+// The same question asked from the board would be thousands of requests per
+// poll; asked here it is one, on open.
+function CardTiming({ placement, session, fetchFn, }) {
+    const { basePath } = useBridgeConfig();
+    const [lastActivity, setLastActivity] = useState(null);
+    const [state, setState] = useState(null);
+    // Distinguishes "we have not asked yet" from "we asked and the bridge could
+    // not say". Without it a failed lookup renders identically to a pending one
+    // and the row just never fills in.
+    const [unavailable, setUnavailable] = useState(false);
+    useEffect(() => {
+        if (!session)
+            return;
+        let cancelled = false;
+        setUnavailable(false);
+        setLastActivity(null);
+        setState(null);
+        fetchFn(`${basePath}/sessions/${encodeURIComponent(session.ref)}`)
+            .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+            .then(s => {
+            if (cancelled)
+                return;
+            setLastActivity(typeof s?.updated_at === 'string' ? s.updated_at : null);
+            setState(typeof s?.state === 'string' ? s.state : null);
+        })
+            .catch(() => { if (!cancelled)
+            setUnavailable(true); });
+        return () => { cancelled = true; };
+    }, [session?.ref, basePath, fetchFn]);
+    const boardAge = formatAgeCompact(placement.created_at);
+    const dispatchAge = session ? formatAgeCompact(session.dispatchedAt) : null;
+    const activityAge = lastActivity ? formatAgeCompact(lastActivity) : null;
+    return (_jsxs("dl", { className: "bk-drawer-timing", children: [_jsxs("div", { children: [_jsx("dt", { children: "On this board" }), _jsx("dd", { title: new Date(placement.created_at).toLocaleString(), children: boardAge ?? '—' })] }), session && (_jsxs(_Fragment, { children: [_jsxs("div", { children: [_jsx("dt", { children: "Given to an agent" }), _jsx("dd", { title: new Date(session.dispatchedAt).toLocaleString(), children: dispatchAge ?? '—' })] }), _jsxs("div", { children: [_jsx("dt", { children: "Last agent activity" }), _jsx("dd", { title: lastActivity ? new Date(lastActivity).toLocaleString() : undefined, children: activityAge
+                                    ? `${activityAge}${state ? ` · ${state}` : ''}`
+                                    : unavailable
+                                        ? 'bridge did not answer'
+                                        : '…' })] })] }))] }));
 }
 function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, }) {
     const item = card.item;
@@ -378,10 +456,10 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
         if (ok)
             setDirty(false);
     };
-    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
+    return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), _jsx(CardTiming, { placement: card.placement, session: latestSessionLink(card), fetchFn: fetchFn }), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
                                         onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => {
                                     const isSessionLink = l.entity_type === 'session' && !!l.entity_ref;
-                                    return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
+                                    return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref, dispatchedAt: l.created_at }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
                                 }), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }) }));
 }
 /**

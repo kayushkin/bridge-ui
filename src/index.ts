@@ -88,7 +88,7 @@ export { useStickyBottomScroll } from './useStickyBottomScroll'
 export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll'
 
 // Utils
-export { formatTokens, formatCost, formatDuration, timeAgo } from './utils'
+export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils'
 
 // Page components
 export { BridgeLayout } from './components/BridgeLayout'

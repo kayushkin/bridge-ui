@@ -19,7 +19,7 @@ export { useBridgeTools } from './useBridgeTools';
 export { useKanban } from './useKanban';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 // Utils
-export { formatTokens, formatCost, formatDuration, timeAgo } from './utils';
+export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';
 // Page components
 export { BridgeLayout } from './components/BridgeLayout';
 export { BridgeChat } from './components/BridgeChat';
