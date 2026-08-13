@@ -6,6 +6,7 @@ import { cleanEmailBodyForPreview } from '../emailText';
 import { useKanban } from '../useKanban';
 import { formatAgeCompact } from '../utils';
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt';
+import { dispatchAgentOnCard } from '../agentDispatch';
 import { SignalKindQuestion } from '../types';
 import { useOpenSignalsByTodo } from './chat/signalData';
 import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
@@ -74,7 +75,7 @@ export function BridgeKanban() {
     // two people can look at the same board through different lenses.
     const [axisFilter, setAxisFilter] = useState({});
     const [sortKey, setSortKey] = useState('default');
-    const { routes, mailBasePath, mailPagePath, fetch: fetchFn } = useBridgeConfig();
+    const { routes, mailBasePath, mailPagePath, basePath: bridgeBasePath, fetch: fetchFn } = useBridgeConfig();
     const navigate = useNavigate();
     const openSessionLink = (link) => {
         navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
@@ -192,7 +193,55 @@ export function BridgeKanban() {
                                                 return false;
                                         }
                                         return k.stopCard(cardID);
-                                    }, onPlayCard: (cardID) => k.playCard(cardID), onDeleteColumn: async () => {
+                                    }, onPlayCard: (cardID) => k.playCard(cardID), onRunAgent: async (card) => {
+                                        const item = card.item;
+                                        const title = item?.title ?? card.placement.card_id;
+                                        // The tile sends exactly what the drawer would: the saved
+                                        // prompt, or the same suggestion the drawer would show. A
+                                        // shortcut that dispatched something different from what
+                                        // the card displays would be a trap.
+                                        const stored = readAgentPrompt(item?.body);
+                                        const prompt = stored ?? suggestAgentPrompt({
+                                            cardID: card.placement.card_id,
+                                            title,
+                                            body: stripAgentPrompt(item?.body),
+                                            linkedEmailCount: (card.links ?? []).filter(l => l.entity_type === 'email').length,
+                                        });
+                                        // An autonomous session auto-allows tool calls and spends
+                                        // money, and this button sits on a tile next to two others.
+                                        // One misclick should not silently start an agent, so the
+                                        // confirmation names the card, says whether the prompt was
+                                        // written or merely suggested, and warns about a second
+                                        // agent when one is already attached.
+                                        const existing = latestSessionLink(card);
+                                        const lines = [
+                                            `Start an agent on "${title}"?`,
+                                            '',
+                                            stored ? 'Using the prompt saved on this card.' : 'Using the suggested prompt (nothing saved on this card).',
+                                        ];
+                                        if (existing)
+                                            lines.push('', 'This card already has a session. This adds a second one.');
+                                        lines.push('', '--- prompt ---', prompt.length > 600 ? prompt.slice(0, 600) + '…' : prompt);
+                                        if (!window.confirm(lines.join('\n')))
+                                            return false;
+                                        try {
+                                            const sessionID = await dispatchAgentOnCard({
+                                                basePath: bridgeBasePath,
+                                                fetchFn: fetchFn,
+                                                title,
+                                                prompt,
+                                                addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
+                                            });
+                                            navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`);
+                                            return true;
+                                        }
+                                        catch (e) {
+                                            // No toast surface on this page, and a dispatch that
+                                            // failed must not look like one that worked.
+                                            window.alert(`Could not start an agent: ${e instanceof Error ? e.message : String(e)}`);
+                                            return false;
+                                        }
+                                    }, onDeleteColumn: async () => {
                                         // Count from the real board, not the filtered copy: deleting
                                         // a column detaches every card in it, including the ones the
                                         // active filter is hiding, and a count that only reflects
@@ -269,7 +318,7 @@ function NewColumnForm({ onCreate, onCancel, }) {
             });
         }, children: [_jsx("input", { autoFocus: true, placeholder: "Column name", value: name, onChange: e => setName(e.target.value) }), _jsx("input", { placeholder: "WIP limit (optional)", type: "number", min: 1, value: wip, onChange: e => setWip(e.target.value) }), _jsxs("select", { value: autoStatus, onChange: e => setAutoStatus(e.target.value), children: [_jsx("option", { value: "", children: "\u2014 no auto-status \u2014" }), _jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add column" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
 }
-function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollapse, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onDeleteColumn, }) {
+function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollapse, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onRunAgent, onDeleteColumn, }) {
     const cards = cv.cards ?? [];
     const wip = cv.column.wip_limit;
     const overWIP = wip != null && cards.length > wip;
@@ -278,7 +327,7 @@ function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollap
         overWIP ? 'bk-column-over-wip' : '',
         collapsed ? 'bk-column-collapsed' : '',
     ].filter(Boolean).join(' ');
-    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", children: [cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" }))] }))] }));
+    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", children: [cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard, onRunAgent: onRunAgent }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" }))] }))] }));
 }
 function NewCardForm({ onCreate, onCancel, }) {
     const [title, setTitle] = useState('');
@@ -381,7 +430,10 @@ function CardAgeBadge({ card, placement, }) {
     ].join('\n');
     return (_jsxs("span", { className: "bk-card-age", title: title, children: [activity ? (activity.kind === 'email' ? '✉' : '▶') : '🕒', " ", shown] }));
 }
-function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, }) {
+function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, onRunAgent, }) {
+    // Guards the button between click and session id, so an impatient second
+    // click cannot start a second agent on the same card.
+    const [running, setRunning] = useState(false);
     const item = card.item;
     if (!item) {
         return (_jsxs("div", { className: "bk-card bk-card-orphan", onClick: onOpen, children: [_jsx("em", { children: "missing noteboard item" }), _jsx("small", { children: card.placement.card_id })] }));
@@ -398,7 +450,20 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
                             : 'Stop — park this work so no agent picks it up, and pause any session already running it', onClick: e => {
                             e.stopPropagation();
                             held ? onPlay(card.placement.card_id) : onStop(card.placement.card_id);
-                        }, children: held ? '▶' : '⏸' }), session && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
+                        }, children: held ? '▶' : '⏸' }), _jsx("button", { type: "button", className: "bk-card-run", disabled: held || running, title: held
+                            ? 'Held — clear the hold before starting an agent'
+                            : session
+                                ? 'Start another agent on this card. It already has one.'
+                                : 'Start an agent on this card, using its prompt', onClick: async (e) => {
+                            e.stopPropagation();
+                            setRunning(true);
+                            try {
+                                await onRunAgent(card);
+                            }
+                            finally {
+                                setRunning(false);
+                            }
+                        }, children: running ? '…' : '🤖' }), session && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
 }
 // CardTiming is the drawer's answer to "how long has this been going?".
 //
@@ -467,37 +532,9 @@ function AgentPromptPanel({ cardID, title, body, linkedEmailCount, prompt, onPro
         setStarting(true);
         setError(null);
         try {
-            const created = await fetchFn(`${basePath}/sessions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    harness: 'claude_code',
-                    display_name: `card: ${title}`.slice(0, 80),
-                    // autonomous auto-allows tool permissions. An unattended session that
-                    // parks on a permission prompt nobody is watching never finishes, and
-                    // this is the same type autoworker and kanban-dispatcher already use.
-                    type: 'autonomous',
-                    purpose: 'dispatcher',
-                    origin: 'kanban-card',
-                }),
+            const sessionID = await dispatchAgentOnCard({
+                basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
             });
-            if (!created.ok)
-                throw new Error(`create session: HTTP ${created.status}`);
-            const session = await created.json();
-            const sessionID = session?.session_id;
-            if (!sessionID)
-                throw new Error('create session: response carried no session_id');
-            // Link before sending. If the send fails, a linked session is a visible
-            // loose end someone can open; an unlinked one is an orphan nobody can
-            // find from the board.
-            await onAddLink('session', sessionID, 'kanban-card');
-            const sent = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sessionID)}/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: effective }),
-            });
-            if (!sent.ok)
-                throw new Error(`send prompt: HTTP ${sent.status}`);
             onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() });
         }
         catch (e) {

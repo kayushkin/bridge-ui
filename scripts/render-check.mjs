@@ -24,6 +24,7 @@ import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePr
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
 import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../src/agentPrompt.ts'
+import { dispatchAgentOnCard } from '../src/agentDispatch.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
@@ -2009,7 +2010,107 @@ console.log('\nagentPrompt — the suggestion')
   check('a stored prompt does not leak into the suggestion', !clean.includes('STALE INSTRUCTION'), clean)
 }
 
-sharedPollChecks().then(bridgePrefsChecks).then(controlRefusalChecks).then(
+async function agentDispatchChecks() {
+  console.log('\nagentDispatch — handing a card to an agent')
+
+  const res = (status, body) => Promise.resolve({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  })
+
+  {
+    const calls = []
+    const sessionID = await dispatchAgentOnCard({
+      basePath: '/api/bridge',
+      fetchFn: (url, init) => {
+        calls.push({ url, body: init && init.body ? JSON.parse(init.body) : null })
+        if (url.endsWith('/sessions')) return res(201, { session_id: 'br_1' })
+        return res(200, {})
+      },
+      title: 'Cancel the subscription',
+      prompt: 'Do the thing.',
+      addLink: async (t, r, l) => { calls.push({ link: [t, r, l] }); return true },
+    })
+
+    check('returns the new session id', sessionID === 'br_1')
+    check('creates, then links, then sends — in that order',
+      calls.length === 3 &&
+      calls[0].url === '/api/bridge/sessions' &&
+      Array.isArray(calls[1].link) &&
+      calls[2].url === '/api/bridge/sessions/br_1/send',
+      JSON.stringify(calls.map(c => c.url || c.link)))
+    check('links the session to the card', calls[1].link[0] === 'session' && calls[1].link[1] === 'br_1')
+    check('sends exactly the prompt given', calls[2].body.message === 'Do the thing.')
+    check('starts an autonomous session', calls[0].body.type === 'autonomous')
+    check('names the session after the card', String(calls[0].body.display_name).includes('Cancel the subscription'))
+  }
+
+  // The link must be written before the prompt is sent. If it were not, a failed
+  // send would leave a running agent nothing on the board points at.
+  {
+    const order = []
+    let threw = null
+    try {
+      await dispatchAgentOnCard({
+        basePath: '/b',
+        fetchFn: (url) => {
+          if (url.endsWith('/sessions')) { order.push('create'); return res(201, { session_id: 'br_2' }) }
+          order.push('send'); return res(500, {})
+        },
+        title: 'T', prompt: 'p',
+        addLink: async () => { order.push('link'); return true },
+      })
+    } catch (e) { threw = e }
+    check('a failed send still throws', threw !== null)
+    check('and the card was linked before the send was attempted',
+      order.join(',') === 'create,link,send', order.join(','))
+  }
+
+  // addCardLink reports failure by returning false rather than throwing.
+  {
+    let sent = false
+    let threw = null
+    try {
+      await dispatchAgentOnCard({
+        basePath: '/b',
+        fetchFn: (url) => {
+          if (url.endsWith('/sessions')) return res(201, { session_id: 'br_3' })
+          sent = true; return res(200, {})
+        },
+        title: 'T', prompt: 'p',
+        addLink: async () => false,
+      })
+    } catch (e) { threw = e }
+    check('a link that fails aborts the dispatch', threw !== null)
+    check('and the prompt is never sent', sent === false)
+    check('and the error names the orphaned session', threw && threw.message.includes('br_3'), threw && threw.message)
+  }
+
+  {
+    let threw = null
+    try {
+      await dispatchAgentOnCard({
+        basePath: '/b', fetchFn: () => res(201, { session_id: 'x' }),
+        title: 'T', prompt: '   ', addLink: async () => true,
+      })
+    } catch (e) { threw = e }
+    check('refuses an empty prompt before spending anything', threw !== null)
+  }
+
+  {
+    let threw = null
+    try {
+      await dispatchAgentOnCard({
+        basePath: '/b', fetchFn: () => res(201, {}),
+        title: 'T', prompt: 'p', addLink: async () => true,
+      })
+    } catch (e) { threw = e }
+    check('a create with no session_id is an error, not a silent success', threw !== null)
+  }
+}
+
+agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(controlRefusalChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)

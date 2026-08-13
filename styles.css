@@ -4834,6 +4834,17 @@
   background: transparent; border: 1px solid var(--border);
   border-radius: 3px; color: inherit;
 }
+/* Run-an-agent, on the tile. Same footprint as its neighbours so it does not
+   advertise itself — it spends money, so it should not be the most inviting
+   thing on the card. */
+.bk-card-run {
+  font-size: 0.8em; padding: 1px 6px;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 3px; color: inherit; cursor: pointer;
+}
+.bk-card-run:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.bk-card-run:disabled { opacity: 0.35; cursor: not-allowed; }
+
 .bk-card-chat {
   font-size: 0.8em; padding: 1px 6px;
   background: transparent; border: 1px solid var(--border);

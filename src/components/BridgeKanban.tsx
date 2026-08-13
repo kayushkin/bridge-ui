@@ -7,6 +7,7 @@ import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
 import { formatAgeCompact } from '../utils'
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt'
+import { dispatchAgentOnCard } from '../agentDispatch'
 import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
 import { useOpenSignalsByTodo } from './chat/signalData'
@@ -94,7 +95,7 @@ export function BridgeKanban() {
   const [axisFilter, setAxisFilter] = useState<AxisFilter>({})
   const [sortKey, setSortKey] = useState<SortKey>('default')
 
-  const { routes, mailBasePath, mailPagePath, fetch: fetchFn } = useBridgeConfig()
+  const { routes, mailBasePath, mailPagePath, basePath: bridgeBasePath, fetch: fetchFn } = useBridgeConfig()
   const navigate = useNavigate()
   const openSessionLink = (link: SessionLinkRef) => {
     navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
@@ -299,6 +300,54 @@ export function BridgeKanban() {
                     return k.stopCard(cardID)
                   }}
                   onPlayCard={(cardID) => k.playCard(cardID)}
+                  onRunAgent={async (card) => {
+                    const item = card.item
+                    const title = (item?.title as string) ?? card.placement.card_id
+                    // The tile sends exactly what the drawer would: the saved
+                    // prompt, or the same suggestion the drawer would show. A
+                    // shortcut that dispatched something different from what
+                    // the card displays would be a trap.
+                    const stored = readAgentPrompt(item?.body as string | undefined)
+                    const prompt = stored ?? suggestAgentPrompt({
+                      cardID: card.placement.card_id,
+                      title,
+                      body: stripAgentPrompt(item?.body as string | undefined),
+                      linkedEmailCount: (card.links ?? []).filter(l => l.entity_type === 'email').length,
+                    })
+
+                    // An autonomous session auto-allows tool calls and spends
+                    // money, and this button sits on a tile next to two others.
+                    // One misclick should not silently start an agent, so the
+                    // confirmation names the card, says whether the prompt was
+                    // written or merely suggested, and warns about a second
+                    // agent when one is already attached.
+                    const existing = latestSessionLink(card)
+                    const lines = [
+                      `Start an agent on "${title}"?`,
+                      '',
+                      stored ? 'Using the prompt saved on this card.' : 'Using the suggested prompt (nothing saved on this card).',
+                    ]
+                    if (existing) lines.push('', 'This card already has a session. This adds a second one.')
+                    lines.push('', '--- prompt ---', prompt.length > 600 ? prompt.slice(0, 600) + '…' : prompt)
+                    if (!window.confirm(lines.join('\n'))) return false
+
+                    try {
+                      const sessionID = await dispatchAgentOnCard({
+                        basePath: bridgeBasePath,
+                        fetchFn: fetchFn,
+                        title,
+                        prompt,
+                        addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
+                      })
+                      navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
+                      return true
+                    } catch (e) {
+                      // No toast surface on this page, and a dispatch that
+                      // failed must not look like one that worked.
+                      window.alert(`Could not start an agent: ${e instanceof Error ? e.message : String(e)}`)
+                      return false
+                    }
+                  }}
                   onDeleteColumn={async () => {
                     // Count from the real board, not the filtered copy: deleting
                     // a column detaches every card in it, including the ones the
@@ -546,6 +595,7 @@ function ColumnPane({
   onOpenChat,
   onStopCard,
   onPlayCard,
+  onRunAgent,
   onDeleteColumn,
 }: {
   cv: ColumnView
@@ -562,6 +612,7 @@ function ColumnPane({
   onOpenChat: OpenChatFn
   onStopCard: (cardID: string) => Promise<boolean>
   onPlayCard: (cardID: string) => Promise<boolean>
+  onRunAgent: (card: CardView) => Promise<boolean>
   onDeleteColumn: () => void
 }) {
   const cards = cv.cards ?? []
@@ -618,6 +669,7 @@ function ColumnPane({
               onOpenChat={onOpenChat}
               onStop={onStopCard}
               onPlay={onPlayCard}
+              onRunAgent={onRunAgent}
             />
           ))}
           {cards.length === 0 && (
@@ -801,6 +853,7 @@ function CardTile({
   onOpenChat,
   onStop,
   onPlay,
+  onRunAgent,
 }: {
   card: CardView
   signals: Signal[]
@@ -811,7 +864,11 @@ function CardTile({
   onOpenChat: OpenChatFn
   onStop: (cardID: string) => Promise<boolean>
   onPlay: (cardID: string) => Promise<boolean>
+  onRunAgent: (card: CardView) => Promise<boolean>
 }) {
+  // Guards the button between click and session id, so an impatient second
+  // click cannot start a second agent on the same card.
+  const [running, setRunning] = useState(false)
   const item = card.item
   if (!item) {
     return (
@@ -865,6 +922,24 @@ function CardTile({
             held ? onPlay(card.placement.card_id) : onStop(card.placement.card_id)
           }}
         >{held ? '▶' : '⏸'}</button>
+        {/* Not ▶ — that glyph is already the unhold button two positions left,
+            and two play triangles meaning different things on one row is how a
+            misclick starts a paid agent. */}
+        <button
+          type="button"
+          className="bk-card-run"
+          disabled={held || running}
+          title={held
+            ? 'Held — clear the hold before starting an agent'
+            : session
+              ? 'Start another agent on this card. It already has one.'
+              : 'Start an agent on this card, using its prompt'}
+          onClick={async e => {
+            e.stopPropagation()
+            setRunning(true)
+            try { await onRunAgent(card) } finally { setRunning(false) }
+          }}
+        >{running ? '…' : '🤖'}</button>
         {session && (
           <button
             type="button"
@@ -1019,37 +1094,9 @@ function AgentPromptPanel({
     setStarting(true)
     setError(null)
     try {
-      const created = await fetchFn(`${basePath}/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          harness: 'claude_code',
-          display_name: `card: ${title}`.slice(0, 80),
-          // autonomous auto-allows tool permissions. An unattended session that
-          // parks on a permission prompt nobody is watching never finishes, and
-          // this is the same type autoworker and kanban-dispatcher already use.
-          type: 'autonomous',
-          purpose: 'dispatcher',
-          origin: 'kanban-card',
-        }),
+      const sessionID = await dispatchAgentOnCard({
+        basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
       })
-      if (!created.ok) throw new Error(`create session: HTTP ${created.status}`)
-      const session = await created.json()
-      const sessionID: string = session?.session_id
-      if (!sessionID) throw new Error('create session: response carried no session_id')
-
-      // Link before sending. If the send fails, a linked session is a visible
-      // loose end someone can open; an unlinked one is an orphan nobody can
-      // find from the board.
-      await onAddLink('session', sessionID, 'kanban-card')
-
-      const sent = await fetchFn(`${basePath}/sessions/${encodeURIComponent(sessionID)}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: effective }),
-      })
-      if (!sent.ok) throw new Error(`send prompt: HTTP ${sent.status}`)
-
       onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
