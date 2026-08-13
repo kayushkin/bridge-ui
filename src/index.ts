@@ -108,9 +108,18 @@ export { BridgeKanban } from './components/BridgeKanban'
 export { BridgeAttach } from './components/BridgeAttach'
 export type { BridgeAttachProps } from './components/BridgeAttach'
 
-// Tool renderers — register custom ones via registerToolRenderer
-export { ToolItem, DefaultRenderer, getToolRenderer, registerToolRenderer } from './components/tools'
+// Tool renderers — register custom ones via registerToolRenderer.
+// Importing this entrypoint self-registers the five built-ins (Bash, Grep, Web,
+// File, and Edit/Write/MultiEdit/NotebookEdit); see components/tools/index.ts.
+export { ToolItem, DefaultRenderer, ToolsSection, getToolRenderer, registerToolRenderer } from './components/tools'
 export type { ToolRendererProps } from './components/tools'
+
+// ToolContext carries the enclosing session id down to the renderers that fetch
+// per-tool resources. A host that renders tool cards MUST provide it: the
+// EditRenderer and BashRenderer diffs are gated on a non-empty sessionId, and
+// the context's default is the empty string — so an unwrapped tool card renders
+// its header and silently no diff, with nothing thrown and nothing logged.
+export { ToolContext, useToolContext } from './components/tools'
 
 // The auto-grow arithmetic, exported so a host that writes its own composer
 // sizes it the same way rather than re-deriving it. Three composers on this
