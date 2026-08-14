@@ -62,9 +62,9 @@ export declare function allCardsOf(columns: {
 export type AxisFilter = Record<string, string[]>;
 export declare function matchesFilter(card: CardView, filter: AxisFilter): boolean;
 export declare function filterIsActive(filter: AxisFilter): boolean;
-export type SortKey = 'default' | 'urgency' | 'title' | 'newest';
+export type SortKey = 'priority' | 'stored' | 'urgency' | 'title' | 'newest';
 /**
- * Sorts a column's cards. 'default' returns them untouched, preserving whatever
+ * Sorts a column's cards. 'stored' returns them untouched, preserving whatever
  * order the board view gave us — worth keeping as an option because every writer
  * on this host passes position 0, so the stored order is arbitrary and a user may
  * still want to see it as-is.

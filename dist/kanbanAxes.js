@@ -98,16 +98,43 @@ export function filterIsActive(filter) {
     return Object.values(filter).some(v => v.length > 0);
 }
 /**
- * Sorts a column's cards. 'default' returns them untouched, preserving whatever
+ * Compares two cards as a triage queue: what is worth the most first, then
+ * whichever of those is due soonest, then whichever moved most recently.
+ *
+ * Priority is descending because higher means more urgent. Due date is ascending
+ * because sooner means more pressing — and a card with no deadline sorts after
+ * every card that has one at the same priority, rather than ahead of them, which
+ * is what sorting an empty string would do.
+ */
+function compareForTriage(a, b) {
+    const byPriority = priorityOf(b) - priorityOf(a);
+    if (byPriority !== 0)
+        return byPriority;
+    const dueA = dueAtOf(a);
+    const dueB = dueAtOf(b);
+    if (dueA !== dueB) {
+        if (!dueA)
+            return 1;
+        if (!dueB)
+            return -1;
+        return dueA.localeCompare(dueB);
+    }
+    return updatedAtOf(b).localeCompare(updatedAtOf(a));
+}
+/**
+ * Sorts a column's cards. 'stored' returns them untouched, preserving whatever
  * order the board view gave us — worth keeping as an option because every writer
  * on this host passes position 0, so the stored order is arbitrary and a user may
  * still want to see it as-is.
  */
 export function sortCards(cards, key) {
-    if (key === 'default')
+    if (key === 'stored')
         return cards;
     const copy = [...cards];
     switch (key) {
+        case 'priority':
+            copy.sort(compareForTriage);
+            break;
         case 'urgency':
             copy.sort((a, b) => {
                 const ra = URGENCY_RANK[axisValue(a, 'urgency:')] ?? 99;
@@ -131,6 +158,17 @@ function titleOf(card) {
 }
 function updatedAtOf(card) {
     return card.item?.updated_at ?? '';
+}
+/**
+ * Higher is more urgent, and 0 means nothing is owed. Cards written before
+ * email-classifier scored anything also read as 0, so they sink rather than
+ * float — the safe direction for a card nobody has ranked yet.
+ */
+function priorityOf(card) {
+    return card.item?.priority ?? 0;
+}
+function dueAtOf(card) {
+    return card.item?.due_at ?? '';
 }
 /**
  * Groups a column's cards by an axis, for the "group by" control. Returns a

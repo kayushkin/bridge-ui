@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { cleanEmailBodyForPreview } from '../emailText';
 import { useKanban } from '../useKanban';
@@ -61,7 +61,36 @@ function loadCollapsedColumns() {
  */
 export function BridgeKanban() {
     const [selectedBoardID, setSelectedBoardID] = useState(null);
-    const [drawerCardID, setDrawerCardID] = useState(null);
+    // ⚠️ The open card lives in the URL and NOWHERE else — there is deliberately no
+    // `useState` mirroring it.
+    //
+    // A card is shareable ("look at this one"), so `?card=<id>` had to exist. The
+    // obvious shape is local state plus two effects syncing it to the query string,
+    // and that is the shape that loops: each effect observes the other's write and
+    // writes back. `sessionDeeplink.ts` carries a small state machine precisely to
+    // survive that, because the chat's `activeId` is genuine state owned by a store.
+    // The drawer's is not — nothing but this component ever decides which card is
+    // open — so making the query string the only copy removes the synchronisation
+    // problem rather than managing it.
+    //
+    // The id IS a noteboard item id (see the signals comment below), so the link is
+    // also a stable reference to the todo the card is made of.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const drawerCardID = searchParams.get('card');
+    const setDrawerCardID = useCallback((cardID) => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            if (cardID)
+                next.set('card', cardID);
+            else
+                next.delete('card');
+            return next;
+        }, 
+        // Replace rather than push: opening and closing a drawer half a dozen
+        // times while reading a board would otherwise bury the page the user
+        // arrived from under a stack of its own states.
+        { replace: true });
+    }, [setSearchParams]);
     const [showNewBoard, setShowNewBoard] = useState(false);
     const [showNewColumn, setShowNewColumn] = useState(false);
     const [composeColumn, setComposeColumn] = useState(null);
@@ -74,8 +103,14 @@ export function BridgeKanban() {
     // Axis filter and sort are view state only: they never write to the board, so
     // two people can look at the same board through different lenses.
     const [axisFilter, setAxisFilter] = useState({});
-    const [sortKey, setSortKey] = useState('default');
-    const { routes, mailBasePath, mailPagePath, basePath: bridgeBasePath, fetch: fetchFn } = useBridgeConfig();
+    // Priority-then-due-date is the default because the stored order is arbitrary:
+    // every writer on this host creates cards at position 0, so "board order" is
+    // really "reverse order of creation" and says nothing about what to do first.
+    const [sortKey, setSortKey] = useState('priority');
+    const { routes, mailBasePath, mailPagePath, basePath: bridgeBasePath, fetch: fetchFn, 
+    // Read directly as well as through useKanban: resolving a deeplinked card's
+    // board is a one-off request that hook has no verb for.
+    kanbanStoreBasePath, } = useBridgeConfig();
     const navigate = useNavigate();
     const openSessionLink = (link) => {
         navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
@@ -142,6 +177,48 @@ export function BridgeKanban() {
         }
         return null;
     }, [drawerCardID, k.view]);
+    // A deeplinked card is usually on some OTHER board than the one that opened.
+    //
+    // `drawerCard` above searches the loaded board's view, so without this a
+    // `?card=` link silently opened nothing whenever the recipient's last-opened
+    // board was not the card's — which is the common case, and indistinguishable
+    // from a dead link. kanban-store answers "which boards is this card on?"
+    // directly, so the fix is one request rather than loading every board.
+    //
+    // Guarded by a ref keyed on the card id, not a boolean: the effect re-runs when
+    // the view arrives, and an unguarded version would re-request on every render
+    // for a card that genuinely is on no board. One attempt per id, and a card that
+    // resolves to nothing leaves the board selection alone rather than clearing it.
+    const boardResolveAttempted = useRef(null);
+    useEffect(() => {
+        if (!drawerCardID || drawerCard || !kanbanStoreBasePath)
+            return;
+        // Wait for the view: mid-load it is null and the card may well be in it.
+        if (!k.view)
+            return;
+        if (boardResolveAttempted.current === drawerCardID)
+            return;
+        boardResolveAttempted.current = drawerCardID;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetchFn(`${kanbanStoreBasePath}/api/cards/${encodeURIComponent(drawerCardID)}/placements`);
+                if (!res.ok || cancelled)
+                    return;
+                const placements = await res.json();
+                const target = placements.find(p => p.board_id && p.board_id !== selectedBoardID);
+                if (target?.board_id && !cancelled)
+                    setSelectedBoardID(target.board_id);
+            }
+            catch {
+                // A link to a card that no longer exists is a dead link, not an error
+                // state for the whole board — the drawer simply stays shut.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [drawerCardID, drawerCard, k.view, kanbanStoreBasePath, fetchFn, selectedBoardID]);
     // Axis controls render only for boards whose cards actually carry these tags.
     // Boards that predate the classifier report no axes and are left exactly as
     // they were — this component is shared with llmux.
@@ -276,7 +353,7 @@ function CardAxisToolbar({ axes, filter, onFilterChange, sortKey, onSortChange, 
     return (_jsxs("div", { className: "bk-axis-toolbar", children: [axes.map(({ axis, values }) => (_jsxs("div", { className: "bk-axis-group", children: [_jsx("span", { className: "bk-axis-label", children: axis.label }), values.map(({ value, count }) => {
                         const on = (filter[axis.prefix] ?? []).includes(value);
                         return (_jsxs("button", { type: "button", className: `bk-axis-chip${on ? ' bk-axis-chip-on' : ''}`, onClick: () => toggle(axis.prefix, value), title: `${count} card${count === 1 ? '' : 's'}`, children: [value, " ", _jsx("span", { className: "bk-axis-count", children: count })] }, value));
-                    })] }, axis.prefix))), _jsxs("div", { className: "bk-axis-group", children: [_jsx("span", { className: "bk-axis-label", children: "Sort" }), _jsxs("select", { value: sortKey, onChange: e => onSortChange(e.target.value), children: [_jsx("option", { value: "default", children: "Board order" }), _jsx("option", { value: "urgency", children: "Urgency" }), _jsx("option", { value: "newest", children: "Recently updated" }), _jsx("option", { value: "title", children: "Title" })] })] }), filterIsActive(filter) && (_jsx("div", { className: "bk-axis-group", children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => onFilterChange({}), children: ["Clear filter", hiddenCardCount > 0 ? ` (${hiddenCardCount} hidden)` : ''] }) }))] }));
+                    })] }, axis.prefix))), _jsxs("div", { className: "bk-axis-group", children: [_jsx("span", { className: "bk-axis-label", children: "Sort" }), _jsxs("select", { value: sortKey, onChange: e => onSortChange(e.target.value), children: [_jsx("option", { value: "priority", children: "Priority, then due date" }), _jsx("option", { value: "urgency", children: "Urgency" }), _jsx("option", { value: "newest", children: "Recently updated" }), _jsx("option", { value: "title", children: "Title" }), _jsx("option", { value: "stored", children: "Board order" })] })] }), filterIsActive(filter) && (_jsx("div", { className: "bk-axis-group", children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => onFilterChange({}), children: ["Clear filter", hiddenCardCount > 0 ? ` (${hiddenCardCount} hidden)` : ''] }) }))] }));
 }
 /**
  * Structured editors for a card's axis tags.

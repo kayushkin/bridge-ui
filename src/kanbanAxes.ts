@@ -146,18 +146,44 @@ export function filterIsActive(filter: AxisFilter): boolean {
   return Object.values(filter).some(v => v.length > 0)
 }
 
-export type SortKey = 'default' | 'urgency' | 'title' | 'newest'
+export type SortKey = 'priority' | 'stored' | 'urgency' | 'title' | 'newest'
 
 /**
- * Sorts a column's cards. 'default' returns them untouched, preserving whatever
+ * Compares two cards as a triage queue: what is worth the most first, then
+ * whichever of those is due soonest, then whichever moved most recently.
+ *
+ * Priority is descending because higher means more urgent. Due date is ascending
+ * because sooner means more pressing — and a card with no deadline sorts after
+ * every card that has one at the same priority, rather than ahead of them, which
+ * is what sorting an empty string would do.
+ */
+function compareForTriage(a: CardView, b: CardView): number {
+  const byPriority = priorityOf(b) - priorityOf(a)
+  if (byPriority !== 0) return byPriority
+
+  const dueA = dueAtOf(a)
+  const dueB = dueAtOf(b)
+  if (dueA !== dueB) {
+    if (!dueA) return 1
+    if (!dueB) return -1
+    return dueA.localeCompare(dueB)
+  }
+  return updatedAtOf(b).localeCompare(updatedAtOf(a))
+}
+
+/**
+ * Sorts a column's cards. 'stored' returns them untouched, preserving whatever
  * order the board view gave us — worth keeping as an option because every writer
  * on this host passes position 0, so the stored order is arbitrary and a user may
  * still want to see it as-is.
  */
 export function sortCards(cards: CardView[], key: SortKey): CardView[] {
-  if (key === 'default') return cards
+  if (key === 'stored') return cards
   const copy = [...cards]
   switch (key) {
+    case 'priority':
+      copy.sort(compareForTriage)
+      break
     case 'urgency':
       copy.sort((a, b) => {
         const ra = URGENCY_RANK[axisValue(a, 'urgency:')] ?? 99
@@ -182,6 +208,19 @@ function titleOf(card: CardView): string {
 
 function updatedAtOf(card: CardView): string {
   return (card.item as NoteboardItem | null)?.updated_at ?? ''
+}
+
+/**
+ * Higher is more urgent, and 0 means nothing is owed. Cards written before
+ * email-classifier scored anything also read as 0, so they sink rather than
+ * float — the safe direction for a card nobody has ranked yet.
+ */
+function priorityOf(card: CardView): number {
+  return (card.item as NoteboardItem | null)?.priority ?? 0
+}
+
+function dueAtOf(card: CardView): string {
+  return (card.item as NoteboardItem | null)?.due_at ?? ''
 }
 
 /**
