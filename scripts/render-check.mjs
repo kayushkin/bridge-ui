@@ -13,6 +13,8 @@
 // a second mechanism.
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement as h } from 'react'
+import { readFileSync, existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
   BudgetCeilingBanner, CostBreakdown, GitPanel, LinkedKanbanPanel, OrchestratorPanel,
 } from '../src/index.ts'
@@ -42,6 +44,7 @@ import {
 } from '../src/components/chat/timelineWindow.ts'
 import { harnessIsWorkingOnTurn, sameItemFields, sameRowList, sessionCanBeResumed } from '../src/components/chat/utils.ts'
 import { Composer, composerAutoGrowHeightPx } from '../src/components/chat/Composer.tsx'
+import { StatusDot } from '../src/components/chat/StatusDot.tsx'
 import { MemoryRouter } from 'react-router-dom'
 import { BridgeLayout } from '../src/components/BridgeLayout.tsx'
 import { MinimalChromeProvider } from '../src/components/minimal/MinimalChromeContext.tsx'
@@ -2107,6 +2110,97 @@ async function agentDispatchChecks() {
       })
     } catch (e) { threw = e }
     check('a create with no session_id is an error, not a silent success', threw !== null)
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+console.log('\nStatusDot: every state it can render has a stylesheet rule')
+//
+// StatusDot turns its `state` prop straight into the class `bc-status-dot-${state}`.
+// The base `.bc-status-dot` sets `background: transparent`, so a state with NO
+// matching rule renders a real, laid-out, INVISIBLE dot. Nothing throws, nothing
+// warns, and `StatusDotState` is `SessionUIState | (string & {})` — deliberately
+// open — so the typechecker cannot see it either.
+//
+// That shipped: chat-core's terminal reconcile emitted 'failed', a spelling in
+// neither llm-bridge's msg.SessionState nor SessionUIState, and every failed
+// session showed nothing at all (fixed 2026-08-14 in chat-core, by correcting the
+// spelling to the canonical 'error' — NOT by adding a `-failed` rule here, which
+// would have entrenched a fourth vocabulary).
+//
+// This pins the invariant in both directions for the vocabulary this repo owns.
+// It cannot see a foreign string arriving through the `(string & {})` escape
+// hatch; only the producer can be held to the vocabulary for that.
+{
+  // Resolve the package root to read the shipped sources from.
+  //
+  // ⚠️ Do NOT anchor this on __dirname. The bundle runs from node_modules/.cache, and
+  // node_modules is frequently a SYMLINK to another checkout (every sibling worktree on
+  // this box links it rather than re-installing). __dirname is already realpath-resolved,
+  // so walking up from it lands in whatever repo owns the real node_modules — a DIFFERENT
+  // working tree, silently. Measured: this check read the main checkout while running from
+  // a worktree, and three mutations to the worktree's styles.css all scored a false pass.
+  //
+  // npm sets npm_config_local_prefix to the package root of the package whose script is
+  // running, and it is not fooled by the symlink. Fall back to walking up only when this
+  // is run outside npm, and either way VERIFY the identity of what we landed on, so a
+  // wrong answer is loud instead of vacuous.
+  let root = process.env.npm_config_local_prefix || null
+  if (!root) {
+    root = __dirname
+    while (!(existsSync(join(root, 'package.json')) && existsSync(join(root, 'styles.css')))) {
+      const up = dirname(root)
+      if (up === root) { root = null; break }
+      root = up
+    }
+  }
+  const rootName = root && existsSync(join(root, 'package.json'))
+    ? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name
+    : null
+  check('found THIS package to read the shipped sources from', rootName === '@kayushkin/bridge-ui',
+    `resolved ${root} (name ${rootName})`)
+  if (rootName !== '@kayushkin/bridge-ui') root = null
+
+  if (root) {
+    const types = readFileSync(join(root, 'src/types.ts'), 'utf8')
+    const css = readFileSync(join(root, 'styles.css'), 'utf8')
+
+    const decl = types.slice(types.indexOf('export type SessionUIState ='))
+    const union = decl.slice(0, decl.indexOf('\n\n'))
+    const states = [...new Set([...union.matchAll(/\|\s*'([a-z_]+)'/g)].map(m => m[1]))]
+    // The trailing boundary is load-bearing: without it `[a-z_]+` matches the PREFIX
+    // of a longer class, so renaming `.bc-status-dot-error` to `.bc-status-dot-errorX`
+    // would still read as "error is styled". Measured — the first mutation run against
+    // this check scored a false pass on exactly that.
+    const ruled = new Set([...css.matchAll(/\.bc-status-dot-([a-z_]+)(?![a-zA-Z0-9_-])/g)].map(m => m[1]))
+
+    // Prove the instrument can say "yes" before trusting it to say "no": a regex
+    // that quietly stops matching would otherwise report a vacuous all-clear.
+    check('parsed the SessionUIState union (instrument is live)', states.length >= 15,
+      `parsed ${states.length} states`)
+    check('parsed the stylesheet rules (instrument is live)', ruled.size >= 15,
+      `parsed ${ruled.size} rules`)
+    check('the two sources disagree about nothing by construction', states.includes('error') && ruled.has('error'))
+
+    const unstyled = states.filter(s => !ruled.has(s))
+    check('every SessionUIState member has a .bc-status-dot rule', unstyled.length === 0,
+      unstyled.length ? `unstyled: ${unstyled.join(', ')}` : '')
+
+    // The other direction: a rule for a spelling the enum does not have is either a
+    // dead rule or, worse, a fourth vocabulary someone taught the stylesheet.
+    const orphans = [...ruled].filter(r => r !== 'blip' && !states.includes(r))
+    check('no .bc-status-dot rule exists for a non-member spelling', orphans.length === 0,
+      orphans.length ? `orphan rules: ${orphans.join(', ')}` : '')
+
+    // The class derivation itself, from the rendered markup rather than from reading
+    // the component: this is what ties the two sets above to what a browser sees.
+    const markup = renderToStaticMarkup(h(StatusDot, { state: 'error' }))
+    check('renders the state into the class a stylesheet rule can match',
+      markup.includes('bc-status-dot-error'), markup)
+
+    // The regression, stated as the exact string that was invisible.
+    check("'failed' is not a spelling this stylesheet has a rule for", !ruled.has('failed'))
   }
 }
 
