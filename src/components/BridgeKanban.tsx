@@ -229,8 +229,24 @@ export function BridgeKanban() {
           `${kanbanStoreBasePath}/api/cards/${encodeURIComponent(drawerCardID)}/placements`,
         )
         if (!res.ok || cancelled) return
-        const placements: Placement[] = await res.json()
-        const target = placements.find(p => p.board_id && p.board_id !== selectedBoardID)
+        // ⚠️ kanban-store answers a card id it does not know with 200 and a JSON
+        // `null` body, NOT a 404 — measured against the live service. So `res.ok`
+        // is not evidence that a card exists, and annotating this `Placement[]`
+        // was a claim the wire does not honour.
+        //
+        // Without the check below, `.find` throws on that null and the catch
+        // underneath swallows it. The user-visible behaviour is identical, which
+        // is exactly why it is worth fixing: the ordinary "this link is dead"
+        // path would be reached by raising and discarding an exception, and the
+        // next person to widen that catch would silently change what a dead link
+        // does. (Contrast `panePersistence.ts`, where an `Array.isArray` guard
+        // was DELETED for being unable to change any answer. This one decides
+        // whether the normal path throws.)
+        const placements: unknown = await res.json()
+        if (!Array.isArray(placements) || cancelled) return
+        const target = (placements as Placement[]).find(
+          p => p.board_id && p.board_id !== selectedBoardID,
+        )
         if (target?.board_id && !cancelled) setSelectedBoardID(target.board_id)
       } catch {
         // A link to a card that no longer exists is a dead link, not an error
