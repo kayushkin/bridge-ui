@@ -53,6 +53,9 @@ import {
   sessionContentSearchAfterFailure, sessionContentSearchAfterResponse,
   sessionContentSearchHitsFromPayload, sessionContentSearchReachOf,
 } from '../src/useSessionContentSearch.ts'
+import { groupSignalsByRequest } from '../src/components/chat/signalData.ts'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -2109,6 +2112,101 @@ async function agentDispatchChecks() {
     check('a create with no session_id is an error, not a silent success', threw !== null)
   }
 }
+
+
+// --- signal grouping: the key's separator ---------------------------------
+//
+// `groupSignalsByRequest` builds a composite key from two free-form ids. The
+// separator is what stops one pair colliding with a different pair whose halves
+// split at another point, and nothing here said so until this block.
+function signalGroupingChecks() {
+  const sig = (id, session_id, request_id) => ({
+    id, session_id, request_id, state: 'open', kind: 'question',
+  })
+
+  {
+    // The discriminator. Concatenated with NO separator both of these read
+    // 'abc', so a key that drops the separator puts two different requests in
+    // one group and answers one question with the other's reply.
+    const groups = groupSignalsByRequest([sig('s1', 'ab', 'c'), sig('s2', 'a', 'bc')])
+    check('a session/request split at a different point is a DIFFERENT group',
+      groups.length === 2, `got ${groups.length} group(s)`)
+  }
+
+  {
+    // Same pair really does group, so the check above is not passing because
+    // grouping is broken outright.
+    const groups = groupSignalsByRequest([sig('s1', 'ab', 'c'), sig('s2', 'ab', 'c')])
+    check('the SAME session/request pair is one group',
+      groups.length === 1 && groups[0].signals.length === 2, `got ${groups.length}`)
+  }
+
+  {
+    // A signal with no request_id is keyed on its own id under a distinct
+    // prefix, so it can never land in a real session/request group.
+    const groups = groupSignalsByRequest([sig('signal', '', ''), sig('x', '', 'signal')])
+    check('a derived signal cannot collide with a real request pair',
+      groups.length === 2, `got ${groups.length}`)
+  }
+}
+
+// --- no raw NUL bytes in source -------------------------------------------
+//
+// A raw NUL makes the whole FILE binary: `file(1)` says `data`, and every
+// content search that skips binary files -- ripgrep, ugrep, git-grep without
+// `-a`, and the `grep` every agent on this box runs -- reports ZERO matches in
+// it with no error and no warning. git cannot diff it either.
+//
+// `src/components/chat/signalData.ts` was in that state from 2026-07-31 until
+// 2026-08-15: it wrote its key separator as a literal NUL instead of the
+// escape. The two are the same string at runtime, so nothing is given up.
+// Found because the identical defect was found in chat-core the same night.
+function nulByteChecks() {
+  // ⚠️ THE ROOT IS cwd, AND IT IS VERIFIED BEFORE IT IS WALKED. This file is
+  // bundled by esbuild into `node_modules/.cache/*.cjs` and run from there, so
+  // `import.meta.url` does not survive (it threw) and `__dirname` would point
+  // INSIDE node_modules -- and node_modules here holds a SYMLINK to a sibling
+  // repo, so a walk anchored on it would scan another project's tree and pass.
+  // `npm run check` sets cwd to the package root; the marker below is what
+  // turns a wrong cwd into a failure instead of a green run over nothing.
+  const repoRoot = process.cwd()
+  let marker = null
+  try { marker = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).name } catch {}
+  check('the NUL scan is anchored on bridge-ui itself', marker === '@kayushkin/bridge-ui',
+    `cwd=${repoRoot} package=${marker}`)
+  if (marker !== '@kayushkin/bridge-ui') return
+
+  const roots = ['src', 'scripts'].map(r => join(repoRoot, r))
+
+  const walk = (directory) => {
+    const found = []
+    for (const name of readdirSync(directory)) {
+      if (name === 'node_modules') continue
+      const full = join(directory, name)
+      if (statSync(full).isDirectory()) found.push(...walk(full))
+      else if (/\.(ts|tsx|js|jsx|mjs|css|json)$/.test(name)) found.push(full)
+    }
+    return found
+  }
+
+  const files = roots.flatMap(walk)
+  // Guard the guard: "0 files scanned" is exactly the shape of the failure
+  // being tested for, and it would otherwise pass silently.
+  check('the NUL scan actually walked the tree', files.length > 50, `${files.length} files`)
+
+  const offenders = files
+    .map(f => ({ f, n: readFileSync(f).filter(b => b === 0).length }))
+    .filter(r => r.n > 0)
+    .map(r => `${relative(repoRoot, r.f)} (${r.n})`)
+  check('no source file contains a raw NUL byte', offenders.length === 0, offenders.join(', '))
+
+  // Cry-wolf control: prove the predicate fires on a value known to hold one.
+  check('the NUL predicate can actually detect a NUL',
+    Buffer.from([0x61, 0x00, 0x62]).filter(b => b === 0).length === 1)
+}
+
+signalGroupingChecks()
+nulByteChecks()
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(controlRefusalChecks).then(
   () => {
