@@ -234,14 +234,22 @@ export function BridgeKanban() {
         // is not evidence that a card exists, and annotating this `Placement[]`
         // was a claim the wire does not honour.
         //
-        // Without the check below, `.find` throws on that null and the catch
-        // underneath swallows it. The user-visible behaviour is identical, which
-        // is exactly why it is worth fixing: the ordinary "this link is dead"
-        // path would be reached by raising and discarding an exception, and the
-        // next person to widen that catch would silently change what a dead link
-        // does. (Contrast `panePersistence.ts`, where an `Array.isArray` guard
-        // was DELETED for being unable to change any answer. This one decides
-        // whether the normal path throws.)
+        // ⚪ This check changes NO observable answer, and that was measured
+        // rather than assumed. Removing it and running the browser spec leaves
+        // all nine cases green: `.find` throws on the null, the catch below
+        // swallows it, and the outcome — no board change, no drawer, one
+        // request — is identical. A `pageerror` assertion cannot see it either,
+        // because the throw is handled by design.
+        //
+        // It is kept for the TYPE, not the control flow: the response was
+        // annotated `Placement[]`, which is a claim the wire does not honour, so
+        // `unknown` plus a checked narrowing is the honest shape. Anyone
+        // tempted to restore the annotation should know it was measured false.
+        //
+        // ⚠️ Do NOT cite this as precedent for keeping a defensive guard.
+        // `dash/src/pages/dashv2/panePersistence.ts` DELETED an `Array.isArray`
+        // guard for exactly this property and recorded the measurement in its
+        // place. The only thing earning this one its keep is the type.
         const placements: unknown = await res.json()
         if (!Array.isArray(placements) || cancelled) return
         const target = (placements as Placement[]).find(
