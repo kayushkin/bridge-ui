@@ -35,6 +35,11 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
     ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
     ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
+    // Gated on the route being named, like every optional tab above. dash names
+    // it and gets the tab on both chat surfaces, because dashv2 mounts inside
+    // this layout and so shares this row; llmux has no /api/producer proxy, so
+    // it names no route and gets no tab rather than a link to a 404.
+    ...(routes.orchestrator ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
     ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
   ]
 

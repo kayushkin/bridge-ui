@@ -30,6 +30,11 @@ export function BridgeLayout({ showConformance = true }) {
         ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
         ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
         ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
+        // Gated on the route being named, like every optional tab above. dash names
+        // it and gets the tab on both chat surfaces, because dashv2 mounts inside
+        // this layout and so shares this row; llmux has no /api/producer proxy, so
+        // it names no route and gets no tab rather than a link to a 404.
+        ...(routes.orchestrator ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
         ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
     ];
     return (_jsxs("div", { className: `bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`, children: [!chromeTakenOver && _jsx("nav", { className: "bridge-nav", children: tabs.map(t => (_jsx(NavLink, { to: t.to, end: t.end, className: ({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`, children: t.label }, t.to))) }), _jsx("div", { className: "bridge-content", children: _jsx(Outlet, {}) })] }));
