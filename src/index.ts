@@ -109,6 +109,11 @@ export { BridgePermissions } from './components/BridgePermissions'
 export { BridgeAgents } from './components/BridgeAgents'
 export { BridgeFiles } from './components/BridgeFiles'
 export { BridgeKanban } from './components/BridgeKanban'
+// The card view, minus the drawer chrome. A host that wants a card as a PAGE
+// mounts this inside its own `.bk-drawer` wrapper; the board's drawer mounts it
+// inside the backdrop. Only the chrome differs, so only the chrome is repeated.
+export { CardDetail } from './components/BridgeKanban'
+export type { CardDetailProps } from './components/BridgeKanban'
 // The producer's full review page — conversation + composer (one run per send),
 // runs log, cost windows and the injected-context inspector. Ported out of dash,
 // which now mounts this at its own `/orchestrator`.

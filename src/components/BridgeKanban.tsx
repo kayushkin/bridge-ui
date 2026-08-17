@@ -1297,7 +1297,33 @@ function CardSignals({ todoID }: { todoID: string }) {
   )
 }
 
-function CardDrawer({
+/** What a card view needs to render and mutate one card, wherever it is mounted.
+ *
+ *  Named and exported because there are two mounts now — the board's drawer and
+ *  the standalone card page — and an inline literal cannot be spread from one to
+ *  the other without being written twice.
+ *
+ *  ⚠️ `boardID` is required but deliberately unused by the body (`_boardID`). It
+ *  is the board a mutation applies to, and the drawer has always taken it; the
+ *  page passes the placement it resolved. Dropping it would be a wider change
+ *  than this split. */
+export interface CardDetailProps {
+  card: CardView
+  boardID: string
+  entityTypes: { type: string; service?: string; search?: string }[]
+  /** Dismiss. The drawer closes; the page navigates back. */
+  onClose: () => void
+  onPatch: (patch: Record<string, unknown>) => Promise<boolean>
+  onDelete: (hard: boolean) => void | Promise<void>
+  onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
+  onDeleteLink: (linkID: string) => Promise<boolean>
+  onOpenChat: OpenChatFn
+  onOpenInMail: (accountID: string, messageID: string) => void
+  mailBasePath: string
+  fetchFn: FetchFn
+}
+
+export function CardDetail({
   card,
   boardID: _boardID,
   entityTypes,
@@ -1310,20 +1336,7 @@ function CardDrawer({
   onOpenInMail,
   mailBasePath,
   fetchFn,
-}: {
-  card: CardView
-  boardID: string
-  entityTypes: { type: string; service?: string; search?: string }[]
-  onClose: () => void
-  onPatch: (patch: Record<string, unknown>) => Promise<boolean>
-  onDelete: (hard: boolean) => void | Promise<void>
-  onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
-  onDeleteLink: (linkID: string) => Promise<boolean>
-  onOpenChat: OpenChatFn
-  onOpenInMail: (accountID: string, messageID: string) => void
-  mailBasePath: string
-  fetchFn: FetchFn
-}) {
+}: CardDetailProps) {
   const item = card.item as NoteboardItem | null
   const [title, setTitle] = useState(item?.title ?? '')
   // The prompt block is split out of the body here and recombined on save, so
@@ -1377,8 +1390,7 @@ function CardDrawer({
   }
 
   return (
-    <div className="bk-drawer-backdrop" onClick={onClose}>
-      <aside className="bk-drawer" onClick={e => e.stopPropagation()}>
+    <>
         <header className="bk-drawer-head">
           <h3>Card</h3>
           <button onClick={onClose} className="bi-add-btn">×</button>
@@ -1489,8 +1501,7 @@ function CardDrawer({
             <AddLinkForm entityTypes={entityTypes} onAdd={onAddLink} />
           </>
         )}
-      </aside>
-    </div>
+    </>
   )
 }
 
@@ -1534,6 +1545,32 @@ function CardDrawer({
  * value rather than disappearing or reading as an error. The link is still a
  * true record that someone attached that id; only the title is unknown.
  */
+/**
+ * The card drawer: `CardDetail` plus the overlay chrome that makes it a drawer.
+ *
+ * The split exists because the same content is now reachable two ways — as this
+ * overlay on the board, and as a page of its own at the host's card route. Only
+ * the chrome differs, so only the chrome is duplicated: a page rendering this
+ * component would have drawn a modal floating over an empty document, and a
+ * `variant` prop toggling the backdrop would have put two layouts inside one
+ * component to avoid moving three lines.
+ *
+ * `CardDetail` keeps `.bk-drawer-head` and every other `bk-drawer-*` class, so
+ * the stylesheet's descendant rules apply in both mounts and neither surface
+ * ships CSS. The page supplies its own `.bk-drawer` wrapper for the same reason.
+ */
+function CardDrawer(props: CardDetailProps) {
+  return (
+    <div className="bk-drawer-backdrop" onClick={props.onClose}>
+      {/* Stops a click inside the panel from reaching the backdrop, which
+          closes. Without it, editing a field shuts the drawer. */}
+      <aside className="bk-drawer" onClick={e => e.stopPropagation()}>
+        <CardDetail {...props} />
+      </aside>
+    </div>
+  )
+}
+
 function EntityLinkRow({
   link,
   onOpenChat,

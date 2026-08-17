@@ -39,6 +39,8 @@ export { BridgePermissions } from './components/BridgePermissions';
 export { BridgeAgents } from './components/BridgeAgents';
 export { BridgeFiles } from './components/BridgeFiles';
 export { BridgeKanban } from './components/BridgeKanban';
+export { CardDetail } from './components/BridgeKanban';
+export type { CardDetailProps } from './components/BridgeKanban';
 export { BridgeOrchestrator } from './components/BridgeOrchestrator';
 export type { BridgeOrchestratorProps } from './components/BridgeOrchestrator';
 export { BridgeAttach } from './components/BridgeAttach';
