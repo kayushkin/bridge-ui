@@ -4436,7 +4436,14 @@
 /* In minimal mode the main flex collapses — sidebar is hidden, only
    workspaces remain. */
 .bc-minimal .bc-main { flex: 1; min-height: 0; flex-direction: column; }
-.bc-minimal .bc-session-list,
+/* Scoped to the copy in the row. In minimal mode the drawer holds the ONLY mounted
+   session list (`BridgeChat.tsx` renders `sessionListEl` under `!minimal` in the row
+   and again inside `SessionDrawer`), so an unscoped `.bc-minimal .bc-session-list`
+   hits the drawer's copy and nothing else — and the drawer rule below then had to
+   carry a `display: … !important` purely to undo this one. That round trip decided
+   the drawer list's `display` for every consumer, so a consumer whose list needs to
+   be a flex column could not say so without an !important war. */
+.bc-minimal .bc-main > .bc-session-list,
 .bc-minimal .bc-sidebar-strip { display: none !important; }
 .bc-minimal .bc-workspaces { flex: 1; min-height: 0; }
 
@@ -4498,9 +4505,11 @@
   flex-direction: column;
 }
 /* Sessions list inside the drawer takes the full body — overrides the
-   default 220px desktop width and 40vh mobile cap from existing rules. */
+   default 220px desktop width and 40vh mobile cap from existing rules.
+   It states no `display`: the element is a block already, and the hide rule it
+   used to fight no longer reaches in here, so whatever a consumer sets on its own
+   list class stands in the drawer as well as in the row. */
 .bc-mc-drawer-body .bc-session-list {
-  display: block !important;
   width: 100% !important;
   max-height: none !important;
   flex: 1;
