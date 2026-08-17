@@ -174,8 +174,14 @@ export async function resolveSignalQuestions(
   if (!pendingRes.ok) {
     throw new Error(`pending hooks lookup failed: HTTP ${pendingRes.status} ${await pendingRes.text()}`)
   }
-  const pending = await pendingRes.json() as HookEvent[]
-  const hook = pending.find(h => h.request_id === requestId)
+  // The route answers []msg.Event, and the hook is NESTED under `hook` — it is
+  // not a bare HookEvent. Reading request_id off the envelope finds undefined
+  // every time, so the lookup below missed unconditionally and every answer to
+  // a tool-sourced question died on "no longer waiting" instead of resolving.
+  // useBridgeSession.ts unwraps the same route correctly for the permission
+  // banner; this is the copy that got it wrong.
+  const pending = await pendingRes.json() as Array<{ hook?: HookEvent }>
+  const hook = pending.map(ev => ev.hook).find(h => h?.request_id === requestId)
   if (!hook) {
     throw new Error('this question is no longer waiting for an answer — its session moved on')
   }
