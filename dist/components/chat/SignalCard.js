@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useState } from 'react';
 import { useBridgeConfig } from '../../context';
 import { SignalKindNotification, SignalSeverityWarn } from '../../types';
-import { answerDerivedQuestion, declineSignalQuestions, resolveSignalQuestions, } from './signalData';
+import { acknowledgeSignal, answerDerivedQuestion, declineSignalQuestions, dismissSignal, resolveSignalQuestions, } from './signalData';
 /** SignalCard renders exactly one signal record, by kind. It takes everything
  * through props and reads no session context, so the same card renders in the
  * raising session's chat, in the cross-session inbox, and inside another
@@ -30,7 +30,7 @@ function answerText(answer) {
  * answering a single question in isolation would resolve the whole request
  * with the rest unanswered. Submit stays disabled until every question in the
  * request has an answer. */
-export function SignalRequestCard({ request, onResolved, header, compact }) {
+export function SignalRequestCard({ request, onResolved, header, compact, allowDismissWithoutAnswer, }) {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
     const [answers, setAnswers] = useState({});
     const [busy, setBusy] = useState(false);
@@ -67,6 +67,42 @@ export function SignalRequestCard({ request, onResolved, header, compact }) {
             setBusy(false);
         }
     }, [busy, allAnswered, questions, answers, fetchFn, basePath, request, onResolved]);
+    const acknowledge = useCallback(async (signalID) => {
+        if (busy)
+            return;
+        setBusy(true);
+        setError(null);
+        try {
+            await acknowledgeSignal(fetchFn, basePath, signalID);
+            onResolved?.();
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            setBusy(false);
+        }
+    }, [busy, fetchFn, basePath, onResolved]);
+    const dismiss = useCallback(async () => {
+        if (busy)
+            return;
+        setBusy(true);
+        setError(null);
+        try {
+            // A group of derived signals holds exactly one row today, but closing
+            // every question in the group is what "dismiss this" means either way —
+            // leaving a sibling open would be a half-closed request.
+            for (const signal of questions)
+                await dismissSignal(fetchFn, basePath, signal.id);
+            onResolved?.();
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            setBusy(false);
+        }
+    }, [busy, questions, fetchFn, basePath, onResolved]);
     const decline = useCallback(async () => {
         if (busy)
             return;
@@ -84,8 +120,9 @@ export function SignalRequestCard({ request, onResolved, header, compact }) {
         }
     }, [busy, fetchFn, basePath, request, onResolved]);
     return (_jsxs("div", { className: "bc-signal-request", children: [header, request.signals.map(signal => (_jsx(SignalCard, { signal: signal, answer: answers[signal.id], 
-                // Notifications are acknowledged, not answered, and the ack verb
-                // lands with P4 — so they compose nothing on either producer's path.
-                onChangeAnswer: signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a), busy: busy, compact: compact }, signal.id))), questions.length > 0 && (_jsxs("div", { className: "bc-signal-actions", children: [_jsx("button", { type: "button", className: "bc-signal-submit", disabled: busy || !allAnswered, onClick: submit, children: request.requestId ? 'Submit' : 'Send answer' }), request.requestId && (_jsx("button", { type: "button", className: "bc-signal-decline", disabled: busy, onClick: decline, children: "Decline" }))] })), error && _jsx("p", { className: "bc-signal-error", children: error })] }));
+                // Notifications are acknowledged, not answered — they compose
+                // nothing on either producer's path, and close one at a time
+                // through the signal-level verb rather than with the group.
+                onChangeAnswer: signal.kind === SignalKindNotification ? undefined : a => setAnswer(signal.id, a), onAcknowledge: signal.kind === SignalKindNotification ? () => acknowledge(signal.id) : undefined, busy: busy, compact: compact }, signal.id))), questions.length > 0 && (_jsxs("div", { className: "bc-signal-actions", children: [_jsx("button", { type: "button", className: "bc-signal-submit", disabled: busy || !allAnswered, onClick: submit, children: request.requestId ? 'Submit' : 'Send answer' }), request.requestId && (_jsx("button", { type: "button", className: "bc-signal-decline", disabled: busy, onClick: decline, children: "Decline" })), !request.requestId && allowDismissWithoutAnswer && (_jsx("button", { type: "button", className: "bc-signal-dismiss", disabled: busy, onClick: dismiss, children: "Dismiss" }))] })), error && _jsx("p", { className: "bc-signal-error", children: error })] }));
 }
 //# sourceMappingURL=SignalCard.js.map

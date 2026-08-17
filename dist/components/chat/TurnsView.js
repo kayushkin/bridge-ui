@@ -333,12 +333,15 @@ export function rowsToTurns(inputRows) {
     // Only the last assistant turn can still be running. Every earlier one is
     // finished by construction — another turn started after it — and that fact
     // holds whatever the harness emitted, which is what makes it worth
-    // computing. No completion event can carry this on its own: across this
-    // host's whole event log, 748 of the 6,897 Claude Code turns that produced
-    // assistant text emit no result, no turn_complete and no error, so a
-    // "finished" test that reads only turnDone is wrong for about one turn in
-    // nine. Whether the final turn is running is a question about the session,
-    // not the log; TurnsView answers it from the session's own state.
+    // computing. No completion event can carry this on its own: about a tenth of
+    // this host's Claude Code turns that produced assistant text emit no result,
+    // no turn_complete and no error, so a "finished" test that reads only
+    // turnDone is wrong for roughly one turn in ten. The share holds as the log
+    // grows — 10.8% on 2026-07-31, 9.8% on 2026-08-17 — and render-check.mjs
+    // states the query that re-takes it, so this file does not carry a second
+    // copy of the count to drift. Whether the final turn is running is a question
+    // about the session, not the log; TurnsView answers it from the session's own
+    // state.
     for (let i = out.length - 1; i >= 0; i--) {
         if (out[i].actor === 'assistant' && !out[i].isMarker) {
             out[i].isFinalAssistantTurn = true;

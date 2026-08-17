@@ -10,7 +10,8 @@ import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt
 import { dispatchAgentOnCard } from '../agentDispatch'
 import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
-import { useOpenSignalsByTodo } from './chat/signalData'
+import { groupSignalsByRequest, useOpenSignalsByTodo, useOpenSignalsForTodo } from './chat/signalData'
+import { SignalRequestCard } from './chat/SignalCard'
 import {
   CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter,
   parseEmailLocator, sortCards, withAxisValue,
@@ -1257,6 +1258,44 @@ function AgentPromptPanel({
   )
 }
 
+/** Every open signal raised against this card's todo, read and closed in the
+ * drawer.
+ *
+ * This is the fourth surface `SignalCard` mounts on, and the one the `kanban`
+ * surface was minted for: an autonomous worker's signal has carried
+ * `surface:"kanban"` since the record existed, and until now nothing rendered
+ * it anywhere it could be answered.
+ *
+ * A card id IS a noteboard item id, so the drawer knows its todo without a
+ * lookup. It reads its own rows rather than indexing the board-wide map behind
+ * `SignalBadge` — the badge and this are different things at different depths,
+ * and the badge stays exactly as it is.
+ *
+ * Renders nothing at all when there is nothing open, including against a
+ * bridge-server with no signals route: a drawer is a card editor first, and
+ * every board would otherwise open onto an error until the gateway carries the
+ * route. */
+function CardSignals({ todoID }: { todoID: string }) {
+  const signals = useOpenSignalsForTodo(todoID)
+  if (signals.length === 0) return null
+  return (
+    <section className="bk-drawer-signals">
+      <h4>Needs you</h4>
+      {groupSignalsByRequest(signals).map(request => (
+        <SignalRequestCard
+          key={request.requestId || request.signals[0].id}
+          request={request}
+          // A worker's blocker can be answered here, or closed unanswered —
+          // but never acknowledged. SignalCard offers Acknowledge for
+          // notifications only, and the server refuses it for a question, so
+          // an unanswered blocker can never read as handled.
+          allowDismissWithoutAnswer
+        />
+      ))}
+    </section>
+  )
+}
+
 function CardDrawer({
   card,
   boardID: _boardID,
@@ -1365,6 +1404,8 @@ function CardDrawer({
           <div className="bridge-error">noteboard item is missing for placement {card.placement.card_id}</div>
         ) : (
           <>
+            <CardSignals todoID={card.placement.card_id} />
+
             <label className="bk-drawer-label">Title</label>
             <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true) }} />
 

@@ -95,10 +95,14 @@ export { OrchestratorPanel } from './components/chat/OrchestratorPanel';
 export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
 export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals';
 export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, 
+// The signal-level close verb: the two resolutions that deliver nothing to
+// the raising session. Everything that carries an answer closes through its
+// producer's own path instead.
+acknowledgeSignal, dismissSignal, 
 // Todo propagation: which todos have an open signal against them. The board
 // takes the whole map in one request; a view that already knows its one todo
 // narrows server-side instead.
-fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo, } from './components/chat/signalData';
+fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo, useOpenSignalsForTodo, } from './components/chat/signalData';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually.

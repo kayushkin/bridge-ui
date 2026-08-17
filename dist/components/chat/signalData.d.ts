@@ -69,6 +69,22 @@ export declare function answerDerivedQuestion(fetchFn: FetchFn, basePath: string
  * the decision (and closes the signal rows) even for a request whose park is
  * already gone. */
 export declare function declineSignalQuestions(fetchFn: FetchFn, basePath: string, sessionId: string, requestId: string): Promise<void>;
+/** Acknowledge a notification: close it without answering anything.
+ *
+ * Notifications are the one signal kind with no answer to deliver, so they
+ * have no producer-specific resolve path — a tool notification and a derived
+ * one both close here, through the signal-level verb
+ * (POST /signals/{id}/resolve).
+ *
+ * The server refuses this for a question on purpose: a question nobody
+ * answered has not been handled, and grading it "seen" would read as handled
+ * on the surface that matters most, a worker's kanban card. Dismiss it
+ * instead. */
+export declare function acknowledgeSignal(fetchFn: FetchFn, basePath: string, signalId: string): Promise<void>;
+/** Close a signal without an answer. Says out loud that no answer is coming,
+ * which is the honest close for a question the user will not take — and, for
+ * a derived question, what walks its session back off awaiting_user. */
+export declare function dismissSignal(fetchFn: FetchFn, basePath: string, signalId: string): Promise<void>;
 export interface UseOpenChatSignals {
     signals: Signal[];
     /** False once the server has answered 404 — this bridge-server has no
@@ -97,4 +113,19 @@ export declare function useOpenChatSignals(sessionId?: string, refreshKey?: stri
  * refetched an identical list every time the selection changed. Resolves still
  * refresh it, through the same in-process announce every signal surface uses. */
 export declare function useOpenSignalsByTodo(): Map<string, Signal[]>;
+/** Open signals against exactly one todo, for a view that is already looking
+ * at that todo alone — the kanban card drawer.
+ *
+ * Deliberately not a lookup into useOpenSignalsByTodo's map. That map is the
+ * board's read and answers "which of these many cards needs me?"; a drawer
+ * knows its own todo id and asks the server for its own rows, so it is right
+ * whether or not a board-wide read ever ran.
+ *
+ * Surface is not filtered here either, for the reason fetchOpenSignalsByTodo
+ * gives: a todo is worked by chat sessions and by autonomous workers alike,
+ * and both raise signals the person opening the card has to answer.
+ *
+ * Empty against a bridge-server with no signals route, and empty when the read
+ * fails: a drawer is a card editor first, and it must open either way. */
+export declare function useOpenSignalsForTodo(todoID: string): Signal[];
 //# sourceMappingURL=signalData.d.ts.map

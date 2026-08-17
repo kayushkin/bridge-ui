@@ -231,6 +231,56 @@ export async function declineSignalQuestions(
   announceSignalsChanged()
 }
 
+/** Acknowledge a notification: close it without answering anything.
+ *
+ * Notifications are the one signal kind with no answer to deliver, so they
+ * have no producer-specific resolve path — a tool notification and a derived
+ * one both close here, through the signal-level verb
+ * (POST /signals/{id}/resolve).
+ *
+ * The server refuses this for a question on purpose: a question nobody
+ * answered has not been handled, and grading it "seen" would read as handled
+ * on the surface that matters most, a worker's kanban card. Dismiss it
+ * instead. */
+export async function acknowledgeSignal(
+  fetchFn: FetchFn,
+  basePath: string,
+  signalId: string,
+): Promise<void> {
+  await postSignalResolve(fetchFn, basePath, signalId, 'acknowledged')
+  announceSignalsChanged()
+}
+
+/** Close a signal without an answer. Says out loud that no answer is coming,
+ * which is the honest close for a question the user will not take — and, for
+ * a derived question, what walks its session back off awaiting_user. */
+export async function dismissSignal(
+  fetchFn: FetchFn,
+  basePath: string,
+  signalId: string,
+): Promise<void> {
+  await postSignalResolve(fetchFn, basePath, signalId, 'dismissed')
+  announceSignalsChanged()
+}
+
+async function postSignalResolve(
+  fetchFn: FetchFn,
+  basePath: string,
+  signalId: string,
+  state: 'acknowledged' | 'dismissed',
+): Promise<void> {
+  if (!signalId) throw new Error('a signal cannot be resolved without its id')
+  const res = await fetchFn(`${basePath}/signals/${encodeURIComponent(signalId)}/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state }),
+  })
+  // 404 is the deployed gateway having no signals route yet, and it reaches
+  // here only from a click — so unlike the reads, it is reported rather than
+  // swallowed. A button that silently does nothing is worse than an error.
+  if (!res.ok) throw new Error(`${state} failed: HTTP ${res.status} ${await res.text()}`)
+}
+
 async function postResolve(
   fetchFn: FetchFn,
   basePath: string,
@@ -341,4 +391,53 @@ export function useOpenSignalsByTodo(): Map<string, Signal[]> {
   }, [fetchFn, basePath, reloadToken])
 
   return byTodo
+}
+
+/** Open signals against exactly one todo, for a view that is already looking
+ * at that todo alone — the kanban card drawer.
+ *
+ * Deliberately not a lookup into useOpenSignalsByTodo's map. That map is the
+ * board's read and answers "which of these many cards needs me?"; a drawer
+ * knows its own todo id and asks the server for its own rows, so it is right
+ * whether or not a board-wide read ever ran.
+ *
+ * Surface is not filtered here either, for the reason fetchOpenSignalsByTodo
+ * gives: a todo is worked by chat sessions and by autonomous workers alike,
+ * and both raise signals the person opening the card has to answer.
+ *
+ * Empty against a bridge-server with no signals route, and empty when the read
+ * fails: a drawer is a card editor first, and it must open either way. */
+export function useOpenSignalsForTodo(todoID: string): Signal[] {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const [signals, setSignals] = useState<Signal[]>([])
+  const [reloadToken, setReloadToken] = useState(0)
+
+  const reload = useCallback(() => setReloadToken(t => t + 1), [])
+
+  useEffect(() => {
+    signalChangeListeners.add(reload)
+    return () => { signalChangeListeners.delete(reload) }
+  }, [reload])
+
+  useEffect(() => {
+    // An empty todo id is a 400 from the server, not "every signal" — so it is
+    // never asked. A drawer on a placement whose noteboard item is gone has no
+    // todo to ask about.
+    if (!todoID) {
+      setSignals([])
+      return
+    }
+    let live = true
+    fetchOpenSignalsForTodo(fetchFn, basePath, todoID)
+      .then(result => {
+        if (!live) return
+        setSignals(result ?? [])
+      })
+      .catch(() => {
+        if (live) setSignals([])
+      })
+    return () => { live = false }
+  }, [fetchFn, basePath, todoID, reloadToken])
+
+  return signals
 }
