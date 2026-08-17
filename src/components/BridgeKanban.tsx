@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
 import { cleanEmailBodyForPreview } from '../emailText'
@@ -12,6 +12,7 @@ import type { Signal } from '../types'
 import { SignalKindQuestion } from '../types'
 import { groupSignalsByRequest, useOpenSignalsByTodo, useOpenSignalsForTodo } from './chat/signalData'
 import { SignalRequestCard } from './chat/SignalCard'
+import { fetchTodoRef } from './chat/refChips/refData'
 import {
   CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter,
   parseEmailLocator, sortCards, withAxisValue,
@@ -1475,26 +1476,14 @@ function CardDrawer({
 
             <h4>Entity links</h4>
             <ul className="bk-link-list">
-              {otherLinks.map(l => {
-                const isSessionLink = l.entity_type === 'session' && !!l.entity_ref
-                return (
-                  <li key={l.id}>
-                    <span className="bk-link-type">{l.entity_type}</span>
-                    {isSessionLink ? (
-                      <button
-                        type="button"
-                        className="bk-link-ref bk-link-ref-action"
-                        title={`Open chat session ${l.entity_ref}`}
-                        onClick={() => onOpenChat({ ref: l.entity_ref, dispatchedAt: l.created_at })}
-                      >{l.entity_ref} ↗</button>
-                    ) : (
-                      <span className="bk-link-ref">{l.entity_ref}</span>
-                    )}
-                    {l.label && <span className="bk-link-label">{l.label}</span>}
-                    <button className="bk-link-del" onClick={() => onDeleteLink(l.id)}>×</button>
-                  </li>
-                )
-              })}
+              {otherLinks.map(l => (
+                <EntityLinkRow
+                  key={l.id}
+                  link={l}
+                  onOpenChat={onOpenChat}
+                  onDeleteLink={onDeleteLink}
+                />
+              ))}
               {otherLinks.length === 0 && <li className="bi-empty">No links yet.</li>}
             </ul>
             <AddLinkForm entityTypes={entityTypes} onAdd={onAddLink} />
@@ -1520,6 +1509,90 @@ function CardDrawer({
  * message is a live provider round trip. A bucket card can carry hundreds of
  * links, and expanding them all on open would be hundreds of Gmail calls.
  */
+/**
+ * One row in a card's "Entity links" list.
+ *
+ * Every link used to render as `<type> <raw uuid>`, with a click-through on
+ * `session` alone. A card is linked to the sessions, subagent runs and todos
+ * that did its work — all three ARE linkable today, via `session` and via
+ * `note`, which resolves noteboard's `/api/items` and therefore covers todos —
+ * but a todo showed as 36 characters of hex naming nothing. Measured on this
+ * host: zero `note` links existed, which is what an unusable affordance looks
+ * like from the data side.
+ *
+ * A `note` ref now resolves to its title and links to the host's notes page.
+ * The resolution is `fetchTodoRef`, the same call the chat's reference chips
+ * make — reused rather than re-derived, so a todo reads identically wherever it
+ * is referenced.
+ *
+ * ⚠️ Resolution is per row and only for `note`. That is affordable HERE and
+ * would not be in a virtualized list: a drawer shows one card with a handful of
+ * links, where a transcript pane would issue one request per rendered row on
+ * every scroll. Do not lift this into a list without changing how it fetches.
+ *
+ * A ref that will not resolve — a deleted todo, a hand-typed id — keeps its raw
+ * value rather than disappearing or reading as an error. The link is still a
+ * true record that someone attached that id; only the title is unknown.
+ */
+function EntityLinkRow({
+  link,
+  onOpenChat,
+  onDeleteLink,
+}: {
+  link: CardLink
+  onOpenChat: OpenChatFn
+  onDeleteLink: (linkID: string) => void
+}) {
+  const { routes, noteboardBasePath, fetch: fetchFn } = useBridgeConfig()
+  const [title, setTitle] = useState<string | null>(null)
+
+  const isSessionLink = link.entity_type === 'session' && !!link.entity_ref
+  // `note` is noteboard's whole item space, todos included — the registry entry
+  // points at `/api/items`, not at a notes-only route.
+  const isNoteLink = link.entity_type === 'note' && !!link.entity_ref
+
+  useEffect(() => {
+    if (!isNoteLink || !noteboardBasePath) return
+    let cancelled = false
+    fetchTodoRef(fetchFn, noteboardBasePath, link.entity_ref)
+      .then(ref => {
+        if (!cancelled && ref?.title) setTitle(ref.title)
+      })
+      .catch(() => {
+        // Unresolvable is a legible outcome — the raw ref stays on screen.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isNoteLink, noteboardBasePath, fetchFn, link.entity_ref])
+
+  return (
+    <li>
+      <span className="bk-link-type">{link.entity_type}</span>
+      {isSessionLink ? (
+        <button
+          type="button"
+          className="bk-link-ref bk-link-ref-action"
+          title={`Open chat session ${link.entity_ref}`}
+          onClick={() => onOpenChat({ ref: link.entity_ref, dispatchedAt: link.created_at })}
+        >{link.entity_ref} ↗</button>
+      ) : isNoteLink && routes.notes ? (
+        <Link
+          className="bk-link-ref bk-link-ref-action"
+          to={`${routes.notes}?item=${encodeURIComponent(link.entity_ref)}`}
+          // The id stays reachable on hover: the title is the readable name, the
+          // uuid is what the row actually records.
+          title={`Open ${link.entity_ref} in notes`}
+        >{title ?? link.entity_ref} ↗</Link>
+      ) : (
+        <span className="bk-link-ref">{title ?? link.entity_ref}</span>
+      )}
+      {link.label && <span className="bk-link-label">{link.label}</span>}
+      <button className="bk-link-del" onClick={() => onDeleteLink(link.id)}>×</button>
+    </li>
+  )
+}
+
 function LinkedEmailRow({
   link,
   mailBasePath,

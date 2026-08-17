@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { cleanEmailBodyForPreview } from '../emailText';
 import { useKanban } from '../useKanban';
@@ -10,6 +10,7 @@ import { dispatchAgentOnCard } from '../agentDispatch';
 import { SignalKindQuestion } from '../types';
 import { groupSignalsByRequest, useOpenSignalsByTodo, useOpenSignalsForTodo } from './chat/signalData';
 import { SignalRequestCard } from './chat/SignalCard';
+import { fetchTodoRef } from './chat/refChips/refData';
 import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
 // latestSessionLink returns the most recently attached session, which is the one
 // that describes what is happening to the card now.
@@ -726,10 +727,7 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
             setDirty(false);
     };
     return (_jsx("div", { className: "bk-drawer-backdrop", onClick: onClose, children: _jsxs("aside", { className: "bk-drawer", onClick: e => e.stopPropagation(), children: [_jsxs("header", { className: "bk-drawer-head", children: [_jsx("h3", { children: "Card" }), _jsx("button", { onClick: onClose, className: "bi-add-btn", children: "\u00D7" })] }), _jsx(CardTiming, { card: card, fetchFn: fetchFn }), item && (_jsx(AgentPromptPanel, { cardID: card.placement.card_id, title: title, body: body, linkedEmailCount: emailLinks.length, prompt: agentPrompt, onPromptChange: next => { setAgentPrompt(next); setDirty(true); }, existingSession: latestSessionLink(card), onAddLink: onAddLink, onOpenChat: onOpenChat, fetchFn: fetchFn })), !item ? (_jsxs("div", { className: "bridge-error", children: ["noteboard item is missing for placement ", card.placement.card_id] })) : (_jsxs(_Fragment, { children: [_jsx(CardSignals, { todoID: card.placement.card_id }), _jsx("label", { className: "bk-drawer-label", children: "Title" }), _jsx("input", { value: title, onChange: e => { setTitle(e.target.value); setDirty(true); } }), _jsx("label", { className: "bk-drawer-label", children: "Body (markdown)" }), _jsx("textarea", { rows: 8, value: body, onChange: e => { setBody(e.target.value); setDirty(true); } }), _jsxs("div", { className: "bk-drawer-row", children: [_jsxs("div", { children: [_jsx("label", { className: "bk-drawer-label", children: "Status" }), _jsxs("select", { value: status, onChange: e => { setStatus(e.target.value); setDirty(true); }, children: [_jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] })] }), _jsxs("div", { className: "bk-drawer-grow", children: [_jsx("label", { className: "bk-drawer-label", children: "Tags" }), _jsx("input", { value: tags, onChange: e => { setTags(e.target.value); setDirty(true); }, placeholder: "comma-separated" })] })] }), tagList.some(t => CARD_AXES.some(a => t.startsWith(a.prefix))) && (_jsx(CardAxisEditor, { tags: tagList, onChange: next => { setTags(next.join(', ')); setDirty(true); } })), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { className: "bi-save-btn", disabled: !dirty, onClick: save, children: "Save" }), _jsx("button", { onClick: () => onDelete(false), children: "Archive" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
-                                        onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => {
-                                    const isSessionLink = l.entity_type === 'session' && !!l.entity_ref;
-                                    return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: l.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${l.entity_ref}`, onClick: () => onOpenChat({ ref: l.entity_ref, dispatchedAt: l.created_at }), children: [l.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: l.entity_ref })), l.label && _jsx("span", { className: "bk-link-label", children: l.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(l.id), children: "\u00D7" })] }, l.id));
-                                }), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }) }));
+                                        onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => (_jsx(EntityLinkRow, { link: l, onOpenChat: onOpenChat, onDeleteLink: onDeleteLink }, l.id))), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }) }));
 }
 /**
  * One linked email: its label, a deep link into the Mail page, and an expandable
@@ -746,6 +744,59 @@ function CardDrawer({ card, boardID: _boardID, entityTypes, onClose, onPatch, on
  * message is a live provider round trip. A bucket card can carry hundreds of
  * links, and expanding them all on open would be hundreds of Gmail calls.
  */
+/**
+ * One row in a card's "Entity links" list.
+ *
+ * Every link used to render as `<type> <raw uuid>`, with a click-through on
+ * `session` alone. A card is linked to the sessions, subagent runs and todos
+ * that did its work — all three ARE linkable today, via `session` and via
+ * `note`, which resolves noteboard's `/api/items` and therefore covers todos —
+ * but a todo showed as 36 characters of hex naming nothing. Measured on this
+ * host: zero `note` links existed, which is what an unusable affordance looks
+ * like from the data side.
+ *
+ * A `note` ref now resolves to its title and links to the host's notes page.
+ * The resolution is `fetchTodoRef`, the same call the chat's reference chips
+ * make — reused rather than re-derived, so a todo reads identically wherever it
+ * is referenced.
+ *
+ * ⚠️ Resolution is per row and only for `note`. That is affordable HERE and
+ * would not be in a virtualized list: a drawer shows one card with a handful of
+ * links, where a transcript pane would issue one request per rendered row on
+ * every scroll. Do not lift this into a list without changing how it fetches.
+ *
+ * A ref that will not resolve — a deleted todo, a hand-typed id — keeps its raw
+ * value rather than disappearing or reading as an error. The link is still a
+ * true record that someone attached that id; only the title is unknown.
+ */
+function EntityLinkRow({ link, onOpenChat, onDeleteLink, }) {
+    const { routes, noteboardBasePath, fetch: fetchFn } = useBridgeConfig();
+    const [title, setTitle] = useState(null);
+    const isSessionLink = link.entity_type === 'session' && !!link.entity_ref;
+    // `note` is noteboard's whole item space, todos included — the registry entry
+    // points at `/api/items`, not at a notes-only route.
+    const isNoteLink = link.entity_type === 'note' && !!link.entity_ref;
+    useEffect(() => {
+        if (!isNoteLink || !noteboardBasePath)
+            return;
+        let cancelled = false;
+        fetchTodoRef(fetchFn, noteboardBasePath, link.entity_ref)
+            .then(ref => {
+            if (!cancelled && ref?.title)
+                setTitle(ref.title);
+        })
+            .catch(() => {
+            // Unresolvable is a legible outcome — the raw ref stays on screen.
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [isNoteLink, noteboardBasePath, fetchFn, link.entity_ref]);
+    return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: link.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${link.entity_ref}`, onClick: () => onOpenChat({ ref: link.entity_ref, dispatchedAt: link.created_at }), children: [link.entity_ref, " \u2197"] })) : isNoteLink && routes.notes ? (_jsxs(Link, { className: "bk-link-ref bk-link-ref-action", to: `${routes.notes}?item=${encodeURIComponent(link.entity_ref)}`, 
+                // The id stays reachable on hover: the title is the readable name, the
+                // uuid is what the row actually records.
+                title: `Open ${link.entity_ref} in notes`, children: [title ?? link.entity_ref, " \u2197"] })) : (_jsx("span", { className: "bk-link-ref", children: title ?? link.entity_ref })), link.label && _jsx("span", { className: "bk-link-label", children: link.label }), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(link.id), children: "\u00D7" })] }));
+}
 function LinkedEmailRow({ link, mailBasePath, fetchFn, onOpenInMail, onDeleteLink, }) {
     const parsed = parseEmailLocator(link.entity_ref);
     const [expanded, setExpanded] = useState(false);
