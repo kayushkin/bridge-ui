@@ -21,6 +21,13 @@
 
 /* ===== Bridge Layout ===== */
 .bridge-layout { display: flex; flex-direction: column; height: 100%; }
+/* The row scrolls itself at ANY width it does not fit, which used to be a phone
+   rule (`@media (max-width: 768px)` below) on the assumption that a tab row only
+   outgrows a phone. It is 15 tabs now and wants 1224px, so between 768px and that
+   the overflow escaped the nav and widened the whole shell instead: the host's
+   layout element — dash's `<main>` — got a horizontal scrollbar and the chat below
+   was 200px wider than the window. A tab strip is the thing that should scroll when
+   the tabs do not fit, so it says so here rather than at one breakpoint. */
 .bridge-nav {
   display: flex;
   gap: 2px;
@@ -28,12 +35,17 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-surface);
   flex-shrink: 0;
+  overflow-x: auto;
 }
 .bridge-tab {
   padding: 10px 16px;
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.85em;
+  /* Pairs with the nav's scroll: a tab shrinks to its min-content width, and
+     without this that width is its longest WORD, so labels wrapped to two lines
+     and the row grew taller instead of scrolling. */
+  white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: color 0.2s, border-color 0.2s;
 }
@@ -3034,8 +3046,10 @@
 
 /* ===== Mobile responsive ===== */
 @media (max-width: 768px) {
-  .bridge-nav { padding: 0 8px; overflow-x: auto; }
-  .bridge-tab { padding: 10px 10px; white-space: nowrap; }
+  /* `overflow-x` and `white-space` moved to the base rules — they were never
+     phone-specific. What is left here is the tighter spacing. */
+  .bridge-nav { padding: 0 8px; }
+  .bridge-tab { padding: 10px 10px; }
   .bridge-content { padding: 12px; }
 
   .bc-main { flex-direction: column; }
