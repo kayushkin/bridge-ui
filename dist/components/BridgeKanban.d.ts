@@ -39,7 +39,11 @@ export interface CardDetailProps {
     onOpenInMail: (accountID: string, messageID: string) => void;
     mailBasePath: string;
     fetchFn: FetchFn;
+    /** Rendered in the header beside the close button. The drawer puts a link to
+     *  the standalone card page here; the page itself passes nothing, because a
+     *  link to where you already are is noise. */
+    headerAction?: React.ReactNode;
 }
-export declare function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, }: CardDetailProps): import("react/jsx-runtime").JSX.Element;
+export declare function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }: CardDetailProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=BridgeKanban.d.ts.map

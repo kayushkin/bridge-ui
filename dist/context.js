@@ -16,6 +16,7 @@ export const DEFAULT_BRIDGE_ROUTES = {
     notes: '',
     orchestrator: '',
     chatV2: '',
+    card: '',
 };
 export const BridgeContext = createContext(null);
 export function useBridgeConfig() {

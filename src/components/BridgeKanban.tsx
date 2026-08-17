@@ -1321,6 +1321,10 @@ export interface CardDetailProps {
   onOpenInMail: (accountID: string, messageID: string) => void
   mailBasePath: string
   fetchFn: FetchFn
+  /** Rendered in the header beside the close button. The drawer puts a link to
+   *  the standalone card page here; the page itself passes nothing, because a
+   *  link to where you already are is noise. */
+  headerAction?: React.ReactNode
 }
 
 export function CardDetail({
@@ -1336,6 +1340,7 @@ export function CardDetail({
   onOpenInMail,
   mailBasePath,
   fetchFn,
+  headerAction,
 }: CardDetailProps) {
   const item = card.item as NoteboardItem | null
   const [title, setTitle] = useState(item?.title ?? '')
@@ -1393,6 +1398,7 @@ export function CardDetail({
     <>
         <header className="bk-drawer-head">
           <h3>Card</h3>
+          {headerAction}
           <button onClick={onClose} className="bi-add-btn">×</button>
         </header>
 
@@ -1565,9 +1571,22 @@ function CardDrawer(props: CardDetailProps) {
       {/* Stops a click inside the panel from reaching the backdrop, which
           closes. Without it, editing a field shuts the drawer. */}
       <aside className="bk-drawer" onClick={e => e.stopPropagation()}>
-        <CardDetail {...props} />
+        <CardDetail {...props} headerAction={<OpenCardPageLink cardID={props.card.placement.card_id} />} />
       </aside>
     </div>
+  )
+}
+
+/** Link out to the host's standalone card page, when it mounts one. Absent
+ *  rather than disabled on a host that does not (llmux) — an empty route is how
+ *  a host says it has no such page. */
+function OpenCardPageLink({ cardID }: { cardID: string }) {
+  const { routes } = useBridgeConfig()
+  if (!routes.card) return null
+  return (
+    <Link className="bk-link-ref-action" to={`${routes.card}/${encodeURIComponent(cardID)}`} title="Open this card as a page">
+      open ↗
+    </Link>
   )
 }
 

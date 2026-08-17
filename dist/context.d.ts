@@ -28,6 +28,10 @@ export interface BridgeRoutes {
      *  host can put its own next to Chat rather than in its outer site nav, which
      *  is where the two belong while one is replacing the other. */
     chatV2: string;
+    /** The host's single-card page, e.g. `/card`. The card id is appended as a
+     *  path segment. Empty means the host mounts no such page, and the drawer then
+     *  offers no link to one. */
+    card: string;
 }
 export declare const DEFAULT_BRIDGE_ROUTES: BridgeRoutes;
 export interface BridgeConfig {
