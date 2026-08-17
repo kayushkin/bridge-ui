@@ -74,9 +74,10 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
 }
 
 const STATUS_DESCRIPTIONS: Record<string, string> = {
-  pass: 'The expected JSON-RPC event arrived within the 10-second timeout and matched the predicate for this feature.',
+  pass: 'The expected JSON-RPC event arrived within the timeout (60s by default, set by CONFORMANCE_EVENT_TIMEOUT) and matched the predicate for this feature.',
   fail: 'The test ran but the harness responded with an error, the wrong event type, or nothing within the timeout.',
-  skip: 'The feature is not applicable to this harness, or the harness explicitly reported it as unsupported.',
+  unsupported: 'The test ran and the harness answered, but it does not implement this feature. A verdict about the harness, unlike Skip.',
+  skip: 'No verdict was reached: a precondition failed, or this runner cannot exercise the feature at all. Says nothing about the harness.',
   untested: 'No test run has covered this harness yet. Click "Run Tests" to populate the matrix.',
 }
 
@@ -247,7 +248,11 @@ export function BridgeConformance() {
           <InfoTip text={STATUS_DESCRIPTIONS.fail} />
         </span>
         <span className="cf-legend-item">
-          <span className="cf-badge cf-skip">Skip</span> Not applicable / skipped
+          <span className="cf-badge cf-unsup">No</span> Harness does not implement it
+          <InfoTip text={STATUS_DESCRIPTIONS.unsupported} />
+        </span>
+        <span className="cf-legend-item">
+          <span className="cf-badge cf-skip">Skip</span> No verdict reached
           <InfoTip text={STATUS_DESCRIPTIONS.skip} />
         </span>
         <span className="cf-legend-item">
@@ -363,7 +368,7 @@ function HarnessRow({
 function collapsedMessage(state: HarnessState, result?: ConformanceHarnessResult): string {
   if (state === 'unavailable') return 'Binary not installed'
   if (state === 'broken' && result) {
-    const total = result.summary.passed + result.summary.failed + result.summary.skipped
+    const total = result.summary.passed + result.summary.failed + result.summary.skipped + result.summary.unsupported
     return `0 / ${total} passing — click to expand`
   }
   if (state === 'untested') return 'Not yet tested — click to expand'
@@ -385,6 +390,7 @@ function SummaryCell({ result }: { result?: ConformanceHarnessResult }) {
     <span className="cf-summary-text">
       <span className="cf-sum-pass">{result.summary.passed}</span>
       {result.summary.failed > 0 && <> / <span className="cf-sum-fail">{result.summary.failed}</span></>}
+      {result.summary.unsupported > 0 && <> / <span className="cf-sum-unsup">{result.summary.unsupported}</span></>}
       {result.summary.skipped > 0 && <> / <span className="cf-sum-skip">{result.summary.skipped}</span></>}
     </span>
   )
@@ -429,7 +435,10 @@ function InfoTip({ text }: { text: string }) {
 function CellBadge({ result, tested }: { result?: ConformanceTestResult; tested: boolean }) {
   if (!tested) return <span className="cf-untested">-</span>
   if (!result) return <span className="cf-untested">-</span>
+  // Order matches the Go grading in conformance/matrix.go: a skipped test
+  // reached no verdict, so it cannot also report the harness lacks the feature.
   if (result.skipped) return <span className="cf-badge cf-skip" title={result.error}>Skip</span>
+  if (result.unsupported) return <span className="cf-badge cf-unsup" title={result.error}>No</span>
   if (result.passed) return <span className="cf-badge cf-pass" title={result.duration}>Pass</span>
   return <span className="cf-badge cf-fail" title={result.error}>Fail</span>
 }
