@@ -168,7 +168,32 @@ export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey 
                   return (
                     <article key={card.card_id} className="bc-linked-kanban-card">
                       <div className="bc-linked-kanban-card-head">
-                        <div className="bc-linked-kanban-card-title">{item?.title || '(deleted card item)'}</div>
+                        {/* The card's own link. The pane header has always offered
+                            "Open Kanban", which lands on whatever board was last
+                            open and leaves the reader to find the card again; this
+                            names the card, so a session's linked work is one click
+                            from the thing it is linked to.
+
+                            `?card=` is read by the board (BridgeKanban resolves the
+                            card's board from its placements), so this works from a
+                            chat pane that knows nothing about which board the card
+                            sits on — which is the whole reason that deeplink
+                            resolves cross-board.
+
+                            Gated on `routes.kanban`, the convention for every link
+                            in this library: an empty route is how a host says it
+                            mounts no such page, and the title then stays plain text
+                            rather than becoming a link to nowhere. */}
+                        <div className="bc-linked-kanban-card-title">
+                          {routes.kanban ? (
+                            <Link
+                              to={`${routes.kanban}?card=${encodeURIComponent(card.card_id)}`}
+                              title="Open this card on the board"
+                            >{item?.title || '(deleted card item)'}</Link>
+                          ) : (
+                            item?.title || '(deleted card item)'
+                          )}
+                        </div>
                         {item?.status && <span className="bc-linked-kanban-chip">{item.status}</span>}
                       </div>
                       {cardSummary && <div className="bc-linked-kanban-card-summary">{cardSummary}</div>}
