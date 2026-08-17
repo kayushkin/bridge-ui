@@ -109,6 +109,15 @@ export { BridgePermissions } from './components/BridgePermissions'
 export { BridgeAgents } from './components/BridgeAgents'
 export { BridgeFiles } from './components/BridgeFiles'
 export { BridgeKanban } from './components/BridgeKanban'
+// The producer's full review page — conversation + composer (one run per send),
+// runs log, cost windows and the injected-context inspector. Ported out of dash,
+// which now mounts this at its own `/orchestrator`.
+//
+// ⚠️ Two providers, not one: `BridgeProvider` for `producerBasePath` and
+// `routes`, and chat-core's `<ChatProvider>` for the reference chips, whose
+// hooks throw without it. Every other page here needs only the first.
+export { BridgeOrchestrator } from './components/BridgeOrchestrator'
+export type { BridgeOrchestratorProps } from './components/BridgeOrchestrator'
 export { BridgeAttach } from './components/BridgeAttach'
 export type { BridgeAttachProps } from './components/BridgeAttach'
 

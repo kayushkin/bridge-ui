@@ -26,6 +26,7 @@
     "pane-cost": "esbuild scripts/pane-cost.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-pane-cost.cjs --log-level=error && node --max-old-space-size=8192 node_modules/.cache/bridge-ui-pane-cost.cjs"
   },
   "dependencies": {
+    "@kayushkin/chat-core": "file:../chat-core",
     "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
