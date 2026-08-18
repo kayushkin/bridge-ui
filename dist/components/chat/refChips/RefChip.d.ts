@@ -4,5 +4,8 @@ interface RefChipNodeProps {
     };
 }
 export declare function RefChip(props: RefChipNodeProps): import("react/jsx-runtime").JSX.Element;
+export declare function TodoChip({ refId }: {
+    refId: string;
+}): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=RefChip.d.ts.map

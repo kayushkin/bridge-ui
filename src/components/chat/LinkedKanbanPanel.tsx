@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../../context'
+import { TodoChip } from './refChips/RefChip'
 import { preserveUnchangedKanbanPayload, useKanban } from '../../useKanban'
 import type { EntityCardView, EntityTag } from '../../types-kanban'
 
@@ -168,31 +169,24 @@ export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey 
                   return (
                     <article key={card.card_id} className="bc-linked-kanban-card">
                       <div className="bc-linked-kanban-card-head">
-                        {/* The card's own link. The pane header has always offered
-                            "Open Kanban", which lands on whatever board was last
-                            open and leaves the reader to find the card again; this
-                            names the card, so a session's linked work is one click
-                            from the thing it is linked to.
+                        {/* The chat's own reference chip, not a bare anchor.
+                            A card id IS a noteboard todo id, so a linked card is
+                            the same thing a `[todo:…]` reference in the transcript
+                            points at, and it should read and behave the same way
+                            in both places — glyph, title, and a panel carrying
+                            status, priority, tags and due date, with "Open on the
+                            board" as its destination.
 
-                            `?card=` is read by the board (BridgeKanban resolves the
-                            card's board from its placements), so this works from a
-                            chat pane that knows nothing about which board the card
-                            sits on — which is the whole reason that deeplink
-                            resolves cross-board.
-
-                            Gated on `routes.kanban`, the convention for every link
-                            in this library: an empty route is how a host says it
-                            mounts no such page, and the title then stays plain text
-                            rather than becoming a link to nowhere. */}
+                            ⚠️ The chip resolves its own title from noteboard, and
+                            this pane already holds the item, so a card costs one
+                            request it did not before. Accepted here and worth
+                            knowing: the pane shows a handful of cards, keys are
+                            stable across its 15s poll so nothing remounts or
+                            refetches, and the alternative was a second rendering
+                            of a reference this fleet already has one of. It would
+                            NOT be acceptable per row in a virtualized list. */}
                         <div className="bc-linked-kanban-card-title">
-                          {routes.kanban ? (
-                            <Link
-                              to={`${routes.kanban}?card=${encodeURIComponent(card.card_id)}`}
-                              title="Open this card on the board"
-                            >{item?.title || '(deleted card item)'}</Link>
-                          ) : (
-                            item?.title || '(deleted card item)'
-                          )}
+                          <TodoChip refId={card.card_id} />
                         </div>
                         {item?.status && <span className="bc-linked-kanban-chip">{item.status}</span>}
                       </div>

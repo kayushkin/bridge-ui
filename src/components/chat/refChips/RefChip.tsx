@@ -144,7 +144,7 @@ function SessionRefPanel({ core, error, refId }: { core: SessionCore | null; err
   )
 }
 
-function TodoChip({ refId }: { refId: string }) {
+export function TodoChip({ refId }: { refId: string }) {
   const cfg = useBridgeConfig()
   const { open, setOpen, wrapRef } = useDropdown()
   const configured = !!cfg.noteboardBasePath
@@ -181,6 +181,24 @@ function TodoChip({ refId }: { refId: string }) {
               {todo.tags.length > 0 && <RefRow label="Tags" value={todo.tags.join(', ')} />}
               {todo.due_at && <RefRow label="Due" value={timeAgo(todo.due_at)} />}
               {todo.updated_at && <RefRow label="Updated" value={timeAgo(todo.updated_at)} />}
+              {/* Somewhere to GO. A session reference has always been a link —
+                  SessionChip is a `<Link>` to the chat — while a todo reference
+                  could only be inspected, because there was nowhere to send it.
+                  There is now: a todo id IS a kanban card id, and the board
+                  resolves `?card=` across boards, so a todo can be opened on the
+                  board that holds it from anywhere it is mentioned.
+
+                  In the PANEL rather than on the chip itself, which is the one
+                  thing this could not copy from SessionChip. That chip is a link
+                  and has no panel; this one's click already opens these details,
+                  and making the chip navigate would take them away to add a
+                  destination. */}
+              {cfg.routes.kanban && (
+                <Link
+                  className="bc-ref-panel-link"
+                  to={`${cfg.routes.kanban}?card=${encodeURIComponent(refId)}`}
+                >Open on the board ↗</Link>
+              )}
             </>
           )}
         </div>
