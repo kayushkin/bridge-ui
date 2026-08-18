@@ -264,6 +264,40 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     return true
   }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
 
+  /**
+   * detachCard — take a card off this board without touching the work.
+   *
+   * The placement is kanban-store's; the card's content is a noteboard item that
+   * other things may point at. Detaching removes only the placement, so the todo
+   * survives and can be attached to another board later.
+   *
+   * This is the operation to reach for when a card should stop appearing here.
+   * deleteCard below is a different thing entirely: it deletes the noteboard
+   * item, and on a reversible delete it LEAVES the placement behind, so the card
+   * turns into a null-item orphan on this board rather than departing it.
+   */
+  const detachCard = useCallback(async (boardID: string, cardID: string): Promise<boolean> => {
+    if (!enabled) return false
+    const url = `${kanbanStoreBasePath}/api/boards/${encodeURIComponent(boardID)}/cards/${encodeURIComponent(cardID)}`
+    const res = await fetchFn(url, { method: 'DELETE' })
+    if (!res.ok) { setError(`detachCard HTTP ${res.status}`); return false }
+    await fetchView()
+    return true
+  }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
+
+  /**
+   * archiveCard — mark the work archived, leaving it a live, restorable item.
+   *
+   * noteboard keeps archiving and deletion deliberately apart: archiving is a
+   * state chosen for an item that still exists, deletion is the item being taken
+   * away. The drawer's "Archive" button used to call deleteCard, which set
+   * deleted_at and never touched status — so the two were the same button under
+   * different names, and a restore could not tell which had happened.
+   */
+  const archiveCard = useCallback(async (cardID: string): Promise<boolean> => {
+    return patchCard(cardID, { status: 'archived' })
+  }, [patchCard])
+
   const listCardLinks = useCallback(async (cardID: string): Promise<CardLink[]> => {
     if (!enabled) return []
     const res = await fetchFn(`${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}/links`)
@@ -414,6 +448,8 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     moveCard,
     patchCard,
     deleteCard,
+    detachCard,
+    archiveCard,
     holdCard,
     unholdCard,
     stopCard,
@@ -429,7 +465,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     boards, view, entityTypes, loading, error,
     fetchBoards, fetchView,
     createBoard, deleteBoard, createColumn, deleteColumn,
-    createCard, moveCard, patchCard, deleteCard,
+    createCard, moveCard, patchCard, deleteCard, detachCard, archiveCard,
     holdCard, unholdCard, stopCard, playCard,
     listCardLinks, addCardLink, deleteCardLink,
     listCardsForEntity, listEntityTags, addEntityTag, deleteEntityTag,

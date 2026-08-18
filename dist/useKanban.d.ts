@@ -53,6 +53,8 @@ export declare function useKanban(boardID: string | null, options?: UseKanbanOpt
     moveCard: (cardID: string, columnID: string, position?: number) => Promise<boolean>;
     patchCard: (cardID: string, patch: Record<string, unknown>) => Promise<boolean>;
     deleteCard: (cardID: string, hard?: boolean) => Promise<boolean>;
+    detachCard: (boardID: string, cardID: string) => Promise<boolean>;
+    archiveCard: (cardID: string) => Promise<boolean>;
     holdCard: (cardID: string, reason?: string) => Promise<boolean>;
     unholdCard: (cardID: string) => Promise<boolean>;
     stopCard: (cardID: string, reason?: string) => Promise<boolean>;

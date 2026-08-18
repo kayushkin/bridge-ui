@@ -32,6 +32,10 @@ export interface CardDetailProps {
     /** Dismiss. The drawer closes; the page navigates back. */
     onClose: () => void;
     onPatch: (patch: Record<string, unknown>) => Promise<boolean>;
+    /** Take the card off this board, leaving the noteboard item alone. */
+    onDetach: () => void | Promise<void>;
+    /** Mark the work archived. The item stays live and restorable. */
+    onArchive: () => void | Promise<void>;
     onDelete: (hard: boolean) => void | Promise<void>;
     onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>;
     onDeleteLink: (linkID: string) => Promise<boolean>;
@@ -44,6 +48,6 @@ export interface CardDetailProps {
      *  link to where you already are is noise. */
     headerAction?: React.ReactNode;
 }
-export declare function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }: CardDetailProps): import("react/jsx-runtime").JSX.Element;
+export declare function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDetach, onArchive, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }: CardDetailProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=BridgeKanban.d.ts.map

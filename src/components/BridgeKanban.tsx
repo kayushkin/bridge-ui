@@ -473,9 +473,21 @@ export function BridgeKanban() {
               <div className="bk-orphans">
                 <h3>Orphaned placements ({k.view.orphans.length})</h3>
                 <p className="bk-orphan-note">
-                  These cards have placements in this board but their noteboard items
-                  were deleted. Detach them in /api/cards/:id?hard=true.
+                  These placements are still on the board but their noteboard items were
+                  deleted, so there is nothing left to show. A reversible delete leaves
+                  the placement behind on purpose — restoring the item has to be able to
+                  put it back here — which is why they accumulate.
                 </p>
+                {k.view.orphans.map(o => (
+                  <div key={o.placement.card_id} className="bk-orphan-row">
+                    <code>{o.placement.card_id}</code>
+                    <button
+                      className="bi-add-btn"
+                      title="Remove this empty placement from the board"
+                      onClick={() => k.detachCard(k.view!.board.id, o.placement.card_id)}
+                    >Detach</button>
+                  </div>
+                ))}
               </div>
             )}
           </>
@@ -489,6 +501,14 @@ export function BridgeKanban() {
           entityTypes={k.entityTypes}
           onClose={() => setDrawerCardID(null)}
           onPatch={(patch) => k.patchCard(drawerCard.placement.card_id, patch)}
+          onDetach={async () => {
+            const ok = await k.detachCard(k.view!.board.id, drawerCard.placement.card_id)
+            if (ok) setDrawerCardID(null)
+          }}
+          onArchive={async () => {
+            const ok = await k.archiveCard(drawerCard.placement.card_id)
+            if (ok) setDrawerCardID(null)
+          }}
           onDelete={async (hard) => {
             const ok = await k.deleteCard(drawerCard.placement.card_id, hard)
             if (ok) setDrawerCardID(null)
@@ -1314,6 +1334,10 @@ export interface CardDetailProps {
   /** Dismiss. The drawer closes; the page navigates back. */
   onClose: () => void
   onPatch: (patch: Record<string, unknown>) => Promise<boolean>
+  /** Take the card off this board, leaving the noteboard item alone. */
+  onDetach: () => void | Promise<void>
+  /** Mark the work archived. The item stays live and restorable. */
+  onArchive: () => void | Promise<void>
   onDelete: (hard: boolean) => void | Promise<void>
   onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
   onDeleteLink: (linkID: string) => Promise<boolean>
@@ -1333,6 +1357,8 @@ export function CardDetail({
   entityTypes,
   onClose,
   onPatch,
+  onDetach,
+  onArchive,
   onDelete,
   onAddLink,
   onDeleteLink,
@@ -1455,9 +1481,31 @@ export function CardDetail({
               />
             )}
 
+            {/* Four actions that used to be two, because the two lied. The old
+                "Archive" called delete and never touched status, and neither
+                button could take a card off a board without destroying the work
+                behind it — which is the thing people actually want most often. */}
             <div className="bk-form-actions">
               <button className="bi-save-btn" disabled={!dirty} onClick={save}>Save</button>
-              <button onClick={() => onDelete(false)}>Archive</button>
+              {/* A card can be viewed while sitting on no board at all — the
+                  standalone card page synthesizes a placement with an empty
+                  board_id for exactly that case. There is nothing to remove it
+                  from, so the verb is not offered. */}
+              {card.placement.board_id && (
+                <button onClick={onDetach} title="Take this card off the board. The todo stays in noteboard.">
+                  Remove from board
+                </button>
+              )}
+              <button onClick={onArchive} title="Mark the work archived. It stays in noteboard and can be restored.">
+                Archive
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('Delete the todo from noteboard?\n\nThe work itself goes away, not just this card. It can be restored from noteboard, and until then the card stays on this board as an orphan.\n\nTo take the card off the board without deleting the todo, use "Remove from board".')) {
+                    onDelete(false)
+                  }
+                }}
+              >Delete todo</button>
               <button onClick={() => { if (confirm('Hard delete card from noteboard? Cannot be undone.')) onDelete(true) }}>Hard delete</button>
             </div>
 
