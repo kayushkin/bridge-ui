@@ -2602,6 +2602,10 @@
 .cf-pass { background: #16432a; color: #4ade80; }
 .cf-fail { background: #3f1515; color: #f87171; }
 .cf-skip { background: #1e2a3a; color: #60a5fa; }
+/* Unsupported is a verdict about the harness, so it reads as a real result
+   rather than the blue of a skip — amber, distinct from the red of a failure
+   because not implementing a feature is not the same as breaking on it. */
+.cf-unsup { background: #3a2f14; color: #fbbf24; }
 
 .cf-untested { color: var(--text-dim); }
 
@@ -2614,6 +2618,7 @@
 .cf-sum-pass { color: #4ade80; }
 .cf-sum-fail { color: #f87171; }
 .cf-sum-skip { color: #60a5fa; }
+.cf-sum-unsup { color: #fbbf24; }
 
 .cf-legend {
   display: flex;
