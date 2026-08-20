@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import type { GitRepo } from './chat/WorkspaceContext'
+import { UnifiedDiffView } from './tools/DiffView'
 
 interface GitView {
   repo: string
@@ -12,6 +13,14 @@ interface GitView {
 }
 
 type Section = 'status' | 'diff_unstaged' | 'diff_staged' | 'log'
+
+/** Which sections hold a unified diff. A named predicate rather than an inline
+ *  `startsWith('diff')`: `diff_unstaged` and `diff_staged` are the only two, and a
+ *  section added later that merely happens to begin with those letters should not
+ *  silently start being colourised. */
+function isDiffSection(section: Section): boolean {
+  return section === 'diff_unstaged' || section === 'diff_staged'
+}
 
 const SECTION_LABELS: Record<Section, string> = {
   status: 'Status',
@@ -187,9 +196,30 @@ export function GitPanel({
                     )}
                   </button>
                   {open && (
-                    <pre className="bc-git-section-body">
-                      {content || <span className="bc-git-section-empty">(empty)</span>}
-                    </pre>
+                    // The two DIFF sections are rendered as diffs; `status` and `log`
+                    // are not diffs and must not be coloured as though they were. A
+                    // `git status` line beginning `-` is a deleted file in a porcelain
+                    // listing, not a removed line, and `git log` prose starting with a
+                    // `+` is just prose — painting either red or green states something
+                    // the output does not say.
+                    //
+                    // ⚠️ `UnifiedDiffView`, NOT `DiffView`. `DiffView` takes a file's
+                    // before/after CONTENTS and computes the patch itself; the git
+                    // endpoint returns `git diff` output, already unified and often
+                    // spanning several files, so there are no two versions to hand it.
+                    isDiffSection(s) ? (
+                      content ? (
+                        <UnifiedDiffView diff={content} />
+                      ) : (
+                        <pre className="bc-git-section-body">
+                          <span className="bc-git-section-empty">(empty)</span>
+                        </pre>
+                      )
+                    ) : (
+                      <pre className="bc-git-section-body">
+                        {content || <span className="bc-git-section-empty">(empty)</span>}
+                      </pre>
+                    )
                   )}
                 </div>
               )

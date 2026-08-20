@@ -46,6 +46,7 @@ export type { BridgeOrchestratorProps } from './components/BridgeOrchestrator';
 export { BridgeAttach } from './components/BridgeAttach';
 export type { BridgeAttachProps } from './components/BridgeAttach';
 export { ToolItem, DefaultRenderer, ToolsSection, getToolRenderer, registerToolRenderer } from './components/tools';
+export { DiffView, UnifiedDiffView } from './components/tools';
 export type { ToolRendererProps } from './components/tools';
 export { ToolContext, useToolContext } from './components/tools';
 export { composerAutoGrowHeightPx } from './components/chat/Composer';

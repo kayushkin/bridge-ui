@@ -130,6 +130,10 @@ export type { BridgeAttachProps } from './components/BridgeAttach'
 // Importing this entrypoint self-registers the five built-ins (Bash, Grep, Web,
 // File, and Edit/Write/MultiEdit/NotebookEdit); see components/tools/index.ts.
 export { ToolItem, DefaultRenderer, ToolsSection, getToolRenderer, registerToolRenderer } from './components/tools'
+// `DiffView` computes a patch from a file's before/after CONTENTS; `UnifiedDiffView`
+// colours a diff that already exists (git's own output). They are not interchangeable —
+// see the note on `UnifiedDiffView`.
+export { DiffView, UnifiedDiffView } from './components/tools'
 export type { ToolRendererProps } from './components/tools'
 
 // ToolContext carries the enclosing session id down to the renderers that fetch

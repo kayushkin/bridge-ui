@@ -3116,6 +3116,16 @@
 .bc-diff-add { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
 .bc-diff-del { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
 .bc-diff-ctx { color: var(--text-muted); }
+/* The `diff --git` / `index` / `+++` / `---` lines that separate one file from the next
+   in a multi-file unified diff. Distinct from a hunk header, which is the `@@` line
+   INSIDE a file: this is louder and not dimmed, because it is the thing a reader scans
+   for when a `git diff` covers six files. Only `UnifiedDiffView` emits it —
+   `structuredPatch` never produces these lines. */
+.bc-diff-file-header {
+  color: var(--text);
+  font-weight: 600;
+  user-select: none;
+}
 
 /* Per-file diff stack inside a Bash tool item */
 .bc-bash-diffs { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }

@@ -35,3 +35,63 @@ function HunkView({ hunk }: { hunk: Hunk }) {
     </div>
   )
 }
+
+/**
+ * A unified diff that ALREADY EXISTS, coloured.
+ *
+ * `DiffView` above cannot do this job and the difference is the whole reason this
+ * exists. It takes a file's `before` and `after` CONTENTS and computes the patch
+ * itself with `structuredPatch`. The git endpoint
+ * (`GET /sessions/{id}/git?repo=…`) does not return two versions of a file — it
+ * returns `diff_unstaged` and `diff_staged`, which are the output of `git diff`,
+ * already unified and possibly spanning many files. There is nothing to diff.
+ *
+ * So this renders what it is given, line by line, using the same `bc-diff-*`
+ * classes and therefore the same colours as the tool cards. What it adds over the
+ * `<pre>` the Git pane used to draw is only that: `+` green, `-` red, `@@` and the
+ * `diff --git` / `index` / `+++` / `---` file headers set apart from the body.
+ *
+ * ⚠️ Order matters in the classifier below. A unified diff's `+++ b/path` and
+ * `--- a/path` headers start with `+` and `-`, so testing for additions first
+ * paints every file header as an added line — which is exactly wrong at the one
+ * place a reader is trying to see where one file ends and the next begins.
+ */
+export function UnifiedDiffView({ diff }: { diff: string }) {
+  if (!diff.trim()) {
+    return <div className="bc-tool-output-code" style={{ opacity: 0.6 }}>No changes</div>
+  }
+  // `\n` split keeps a trailing empty line rather than dropping it; git's output ends
+  // with a newline and swallowing it would silently shorten every diff by a row.
+  const lines = diff.split('\n')
+  return (
+    <pre className="bc-diff">
+      <div className="bc-diff-hunk">
+        {lines.map((line, i) => (
+          <div key={i} className={unifiedDiffLineClass(line)}>{line || ' '}</div>
+        ))}
+      </div>
+    </pre>
+  )
+}
+
+/** Which class a single line of a unified diff gets. Exported for the test that
+ *  pins the header-before-sign ordering. */
+export function unifiedDiffLineClass(line: string): string {
+  // Headers FIRST — see the warning above.
+  if (
+    line.startsWith('diff --git') ||
+    line.startsWith('index ') ||
+    line.startsWith('+++ ') ||
+    line.startsWith('--- ') ||
+    line.startsWith('new file') ||
+    line.startsWith('deleted file') ||
+    line.startsWith('similarity index') ||
+    line.startsWith('rename ')
+  ) {
+    return 'bc-diff-file-header'
+  }
+  if (line.startsWith('@@')) return 'bc-diff-hunk-header'
+  if (line.startsWith('+')) return 'bc-diff-add'
+  if (line.startsWith('-')) return 'bc-diff-del'
+  return 'bc-diff-ctx'
+}
