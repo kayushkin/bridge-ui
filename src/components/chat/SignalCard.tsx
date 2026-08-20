@@ -117,17 +117,25 @@ export interface SignalRequestCardProps {
    * raising session, the in-session surfaces pass nothing. */
   header?: ReactNode
   compact?: boolean
-  /** Offer to close a question nobody is going to answer.
+  /** Offer to close a question nobody is going to answer, whatever raised it.
    *
-   * Only meaningful for a derived question: a parked tool question already has
-   * Decline, which denies the call the question came from, and that is the
-   * honest close there. A derived question parked nothing, so without this it
-   * stays open until the session's next turn happens to supersede it — which,
-   * on a card raised by a worker that has since stopped, is never.
+   * This used to be honoured for DERIVED questions only — the button was
+   * gated on `!request.requestId` — on the reasoning that a parked tool
+   * question already had Decline. That reasoning has a hole: a `requestId`
+   * says a park EXISTED, not that it is still live. When the asking process
+   * has gone, Decline denies a hook nobody is holding and fails, and the
+   * gate meant Dismiss was never offered instead. So a worker's tool-raised
+   * blocker had NO working close at all — exactly the case the kanban drawer
+   * is for, and exactly the case its own comment claimed to handle.
    *
-   * Off by default so the three chat surfaces keep answering as their only
-   * close. The kanban drawer passes it because a card is where work is
-   * abandoned as well as where it is answered. */
+   * Dismiss is safe for both now because the SERVER decides what it means:
+   * `POST /signals/{id}/resolve {state:"dismissed"}` denies the parked call
+   * when the park is still live, and closes the row when it is not.
+   *
+   * Off by default, so the chat surfaces keep answering as their only close.
+   * A surface that passes this gets Dismiss INSTEAD of Decline, never both —
+   * two buttons for one act is what sent the caller looking for evidence it
+   * does not have. */
   allowDismissWithoutAnswer?: boolean
 }
 
@@ -247,21 +255,25 @@ export function SignalRequestCard({
           <button type="button" className="bc-signal-submit" disabled={busy || !allAnswered} onClick={submit}>
             {request.requestId ? 'Submit' : 'Send answer'}
           </button>
-          {/* Declining means denying a parked tool call. A derived question
-              parked nothing, so there is nothing to deny — it simply stays
-              open until the session's next turn supersedes it. */}
-          {request.requestId && (
-            <button type="button" className="bc-signal-decline" disabled={busy} onClick={decline}>
-              Decline
-            </button>
-          )}
-          {/* Dismiss is the derived half of the same act: it says out loud
-              that no answer is coming, which is the only thing that closes a
-              derived question short of answering it. */}
-          {!request.requestId && allowDismissWithoutAnswer && (
+          {/* One "no answer is coming" button, never two.
+
+              Dismiss where the surface asked for it, and it works whatever
+              raised the question: the server denies a live parked call and
+              closes a dead one, which is a judgement only it can make.
+
+              Decline everywhere else, unchanged — it denies the parked hook
+              directly. It stays because removing it would leave the chat
+              surfaces, which do not pass the flag, with no close at all. */}
+          {allowDismissWithoutAnswer ? (
             <button type="button" className="bc-signal-dismiss" disabled={busy} onClick={dismiss}>
               Dismiss
             </button>
+          ) : (
+            request.requestId && (
+              <button type="button" className="bc-signal-decline" disabled={busy} onClick={decline}>
+                Decline
+              </button>
+            )
           )}
         </div>
       )}

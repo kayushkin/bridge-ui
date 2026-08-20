@@ -1310,6 +1310,13 @@ function CardSignals({ todoID }: { todoID: string }) {
           // but never acknowledged. SignalCard offers Acknowledge for
           // notifications only, and the server refuses it for a question, so
           // an unanswered blocker can never read as handled.
+          //
+          // "Closed unanswered" was false until this flag started reaching
+          // TOOL-raised blockers too. The button was gated on the signal
+          // having no request id, so a worker that asked through
+          // AskUserQuestion and then stopped left a card whose only control
+          // was Decline — a deny addressed to a hook nobody was holding any
+          // more. Nothing on the board could close it.
           allowDismissWithoutAnswer
         />
       ))}

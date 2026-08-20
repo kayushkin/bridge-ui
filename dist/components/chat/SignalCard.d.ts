@@ -34,17 +34,25 @@ export interface SignalRequestCardProps {
      * raising session, the in-session surfaces pass nothing. */
     header?: ReactNode;
     compact?: boolean;
-    /** Offer to close a question nobody is going to answer.
+    /** Offer to close a question nobody is going to answer, whatever raised it.
      *
-     * Only meaningful for a derived question: a parked tool question already has
-     * Decline, which denies the call the question came from, and that is the
-     * honest close there. A derived question parked nothing, so without this it
-     * stays open until the session's next turn happens to supersede it — which,
-     * on a card raised by a worker that has since stopped, is never.
+     * This used to be honoured for DERIVED questions only — the button was
+     * gated on `!request.requestId` — on the reasoning that a parked tool
+     * question already had Decline. That reasoning has a hole: a `requestId`
+     * says a park EXISTED, not that it is still live. When the asking process
+     * has gone, Decline denies a hook nobody is holding and fails, and the
+     * gate meant Dismiss was never offered instead. So a worker's tool-raised
+     * blocker had NO working close at all — exactly the case the kanban drawer
+     * is for, and exactly the case its own comment claimed to handle.
      *
-     * Off by default so the three chat surfaces keep answering as their only
-     * close. The kanban drawer passes it because a card is where work is
-     * abandoned as well as where it is answered. */
+     * Dismiss is safe for both now because the SERVER decides what it means:
+     * `POST /signals/{id}/resolve {state:"dismissed"}` denies the parked call
+     * when the park is still live, and closes the row when it is not.
+     *
+     * Off by default, so the chat surfaces keep answering as their only close.
+     * A surface that passes this gets Dismiss INSTEAD of Decline, never both —
+     * two buttons for one act is what sent the caller looking for evidence it
+     * does not have. */
     allowDismissWithoutAnswer?: boolean;
 }
 /** SignalRequestCard renders every signal minted by one parked request and
