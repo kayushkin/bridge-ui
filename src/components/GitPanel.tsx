@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
-import type { SessionUIState } from '../types'
 import type { GitRepo } from './chat/WorkspaceContext'
 
 interface GitView {
@@ -23,7 +22,15 @@ const SECTION_LABELS: Record<Section, string> = {
 
 export interface GitPanelProps {
   sessionId: string
-  uiState: SessionUIState
+  /** Any value that changes when the working tree might have. The panel
+   *  re-reads the repo on every new value and never inspects it.
+   *
+   *  It was typed `SessionUIState` and named `uiState`, which claimed the panel
+   *  cared what the session was doing. It does not — the value appears once, in
+   *  a dependency array. The narrow type was also the only thing stopping a host
+   *  that tracks session state as a plain string (dashv2, on chat-core) from
+   *  mounting this pane at all, for a distinction the panel cannot act on. */
+  refetchSignal: string
   // The repo list and the selection are the caller's, not this pane's. Inside
   // the chat they belong to Workspace, which shares them with SessionHeader's
   // repo dropdown so both reflect the same selection — and a pane that fetched
@@ -44,7 +51,7 @@ export interface GitPanelProps {
 
 export function GitPanel({
   sessionId,
-  uiState,
+  refetchSignal,
   gitRepos: repos,
   selectedRepo,
   setSelectedRepo,
@@ -99,7 +106,7 @@ export function GitPanel({
       })
       .finally(() => { if (!cancelled) setLoadingView(false) })
     return () => { cancelled = true }
-  }, [sessionId, selectedRepo, uiState, refreshTick, fetchFn, basePath])
+  }, [sessionId, selectedRepo, refetchSignal, refreshTick, fetchFn, basePath])
 
   const error = reposError || viewError
 

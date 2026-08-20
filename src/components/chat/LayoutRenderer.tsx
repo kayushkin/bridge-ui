@@ -73,7 +73,7 @@ function ViewLeaf({ viewType, style }: { viewType: ViewType; style?: React.CSSPr
       return (
         <GitPanel
           sessionId={sessionId}
-          uiState={ws.uiState}
+          refetchSignal={ws.uiState}
           gitRepos={ws.gitRepos}
           selectedRepo={ws.selectedRepo}
           setSelectedRepo={ws.setSelectedRepo}

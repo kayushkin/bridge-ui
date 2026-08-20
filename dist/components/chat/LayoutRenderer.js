@@ -30,7 +30,7 @@ function ViewLeaf({ viewType, style }) {
         case 'timeline':
             return (_jsx(Timeline, { rows: ws.rows, onToggleCollapse: () => ws.togglePane('timeline'), style: style, paneKey: "timeline", sessionId: sessionId }));
         case 'git':
-            return (_jsx(GitPanel, { sessionId: sessionId, uiState: ws.uiState, gitRepos: ws.gitRepos, selectedRepo: ws.selectedRepo, setSelectedRepo: ws.setSelectedRepo, gitReposLoading: ws.gitReposLoading, gitReposError: ws.gitReposError, refreshGitRepos: ws.refreshGitRepos, onToggleCollapse: () => ws.togglePane('git'), style: style, paneKey: "git" }));
+            return (_jsx(GitPanel, { sessionId: sessionId, refetchSignal: ws.uiState, gitRepos: ws.gitRepos, selectedRepo: ws.selectedRepo, setSelectedRepo: ws.setSelectedRepo, gitReposLoading: ws.gitReposLoading, gitReposError: ws.gitReposError, refreshGitRepos: ws.refreshGitRepos, onToggleCollapse: () => ws.togglePane('git'), style: style, paneKey: "git" }));
         case 'kanban':
             return (_jsx(LinkedKanbanPanel, { sessionId: sessionId, onToggleCollapse: () => ws.togglePane('kanban'), style: style, paneKey: "kanban" }));
         case 'orchestrator':

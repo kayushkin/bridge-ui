@@ -7,7 +7,7 @@ const SECTION_LABELS = {
     diff_staged: 'Staged',
     log: 'Log',
 };
-export function GitPanel({ sessionId, uiState, gitRepos: repos, selectedRepo, setSelectedRepo, gitReposLoading: loadingRepos, gitReposError: reposError, refreshGitRepos, onToggleCollapse, style, paneKey, }) {
+export function GitPanel({ sessionId, refetchSignal, gitRepos: repos, selectedRepo, setSelectedRepo, gitReposLoading: loadingRepos, gitReposError: reposError, refreshGitRepos, onToggleCollapse, style, paneKey, }) {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
     const [view, setView] = useState(null);
     const [viewError, setViewError] = useState(null);
@@ -53,7 +53,7 @@ export function GitPanel({ sessionId, uiState, gitRepos: repos, selectedRepo, se
             .finally(() => { if (!cancelled)
             setLoadingView(false); });
         return () => { cancelled = true; };
-    }, [sessionId, selectedRepo, uiState, refreshTick, fetchFn, basePath]);
+    }, [sessionId, selectedRepo, refetchSignal, refreshTick, fetchFn, basePath]);
     const error = reposError || viewError;
     const toggleSection = useCallback((s) => {
         setOpenSections(prev => ({ ...prev, [s]: !prev[s] }));
