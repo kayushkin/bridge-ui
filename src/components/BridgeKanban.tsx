@@ -6,6 +6,7 @@ import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
 import { formatAgeCompact } from '../utils'
+import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime'
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt'
 import { dispatchAgentOnCard } from '../agentDispatch'
 import type { Signal } from '../types'
@@ -1037,7 +1038,13 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
-        <CardAgeBadge card={card} placement={card.placement} />
+        {/* The clock when the card has one, and the activity badge when it does
+            not. They answer different questions — how much of the limit is spent
+            against when anything last happened — and a card whose history
+            predates the event log can only answer the second. */}
+        {hasClockData(card.time)
+          ? <CardBudgetBadge time={card.time} />
+          : <CardAgeBadge card={card} placement={card.placement} />}
         <button
           type="button"
           className={held ? 'bk-card-play' : 'bk-card-stop'}
@@ -1515,6 +1522,17 @@ export function CardDetail({
               >Delete todo</button>
               <button onClick={() => { if (confirm('Hard delete card from noteboard? Cannot be undone.')) onDelete(true) }}>Hard delete</button>
             </div>
+
+            <hr />
+
+            {/* The card's history, and the totals computed from it. Both mounts
+                of CardDetail get it: the drawer on the board and the standalone
+                card page. */}
+            <h4>History</h4>
+            <CardTimelinePanel
+              cardID={card.placement.card_id}
+              boardID={card.placement.board_id || undefined}
+            />
 
             <hr />
 

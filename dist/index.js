@@ -17,6 +17,7 @@ export { useBridgeFolders } from './useBridgeFolders';
 export { useSessionContentSearch, sessionContentSearchHitsFromPayload, SESSION_CONTENT_SEARCH_DEBOUNCE_MS, } from './useSessionContentSearch';
 export { useBridgeTools } from './useBridgeTools';
 export { useKanban } from './useKanban';
+export { CardBudgetBadge, CardTimelinePanel, describeCardTime, hasClockData } from './components/CardTime';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 // Utils
 export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';

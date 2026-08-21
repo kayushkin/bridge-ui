@@ -20,7 +20,8 @@ export type { SessionContentSearch, SessionContentSearchHits } from './useSessio
 export { useBridgeTools } from './useBridgeTools';
 export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools';
 export { useKanban } from './useKanban';
-export type { Board, Column, Placement, CardLink, EntityTag, CardView, ColumnView, BoardView, NoteboardItem, EntityTypeInfo, TagCount, } from './types-kanban';
+export type { Board, Column, Placement, CardLink, EntityTag, CardView, ColumnView, BoardView, NoteboardItem, EntityTypeInfo, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline, } from './types-kanban';
+export { CardBudgetBadge, CardTimelinePanel, describeCardTime, hasClockData } from './components/CardTime';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll';
 export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';

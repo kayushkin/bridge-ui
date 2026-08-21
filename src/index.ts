@@ -83,7 +83,17 @@ export type {
   NoteboardItem,
   EntityTypeInfo,
   TagCount,
+  ClockState,
+  BusinessHours,
+  BoardPriorityLevel,
+  PriorityLadder,
+  CardEvent,
+  CardNote,
+  CardTimeSummary,
+  TimelineEntry,
+  CardTimeline,
 } from './types-kanban'
+export { CardBudgetBadge, CardTimelinePanel, describeCardTime, hasClockData } from './components/CardTime'
 export { useStickyBottomScroll } from './useStickyBottomScroll'
 export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll'
 
