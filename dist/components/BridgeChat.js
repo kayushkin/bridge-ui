@@ -291,7 +291,10 @@ export function BridgeChat() {
     //
     // The param used to be deleted once read, which left the address bar with no
     // link back to the open session — nothing to bookmark, share or reload into,
-    // even though hrefFor() emits links in exactly that shape. The reconciler in
+    // even though this library emits links in exactly that shape — BridgeKanban,
+    // BridgeOrchestrator and RefChip's chatHref, all built from `routes`. The
+    // sentence used to name `hrefFor()`; fea0521 deleted it along with its three
+    // hardcoded paths when the Orchestrator page moved here. The reconciler in
     // sessionDeeplink.ts holds the small amount of state that keeps the two
     // effects below from pushing a stale id at each other; see its header.
     const [searchParams, setSearchParams] = useSearchParams();

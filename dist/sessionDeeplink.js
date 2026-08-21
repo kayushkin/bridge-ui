@@ -4,7 +4,9 @@
 // The URL used to be read once and then wiped, so the address bar never held
 // a link that reopens the session: you could not bookmark one, share one, or
 // reload into one — while the library itself emits `/?session=<id>` links
-// (see hrefFor in the orchestrator surfaces). Now the param names whatever
+// (BridgeKanban, BridgeOrchestrator and RefChip's chatHref, every target taken
+// from `routes` — the `hrefFor` this line used to name went with fea0521's
+// three hardcoded paths). Now the param names whatever
 // session the focused pane holds, and an inbound param opens that session.
 //
 // Both directions go through this module because the two effects that drive
