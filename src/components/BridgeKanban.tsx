@@ -58,6 +58,9 @@ const LAST_BOARD_KEY = 'bk:lastBoardId'
 const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns'
 const DEFAULT_BOARD_NAME = 'Agent runs'
 
+/** How many cards a column loads at a time, and how many each "show more" adds. */
+const CARDS_PER_COLUMN = 25
+
 // How many linked emails a card drawer shows before collapsing the rest behind a
 // button. Bucket cards on the Email board accumulate every message from a sender,
 // so this list grows without bound while the card itself stays one thing.
@@ -144,7 +147,9 @@ export function BridgeKanban() {
     navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
   }
 
-  const k = useKanban(selectedBoardID)
+  // A screenful a column. The largest board here holds 6,466 cards and answered
+  // 12 MB per read before this cap; the rest arrive when asked for.
+  const k = useKanban(selectedBoardID, { columnPageSize: CARDS_PER_COLUMN })
   // A card id IS a noteboard todo id here, so the signals a session raised
   // against its todo land on the card that todo already has. The map covers
   // every todo, so switching boards needs no refetch.
@@ -381,6 +386,7 @@ export function BridgeKanban() {
                 <ColumnPane
                   key={cv.column.id}
                   cv={cv}
+                  onLoadMore={() => k.loadMoreCards(cv.column.id, CARDS_PER_COLUMN)}
                   signalsByTodo={signalsByTodo}
                   boardColumns={k.view!.columns.map(c => c.column)}
                   collapsed={collapsedColumns.has(cv.column.id)}
@@ -714,6 +720,7 @@ function ColumnPane({
   boardColumns,
   collapsed,
   onToggleCollapse,
+  onLoadMore,
   onCompose,
   composeOpen,
   onCancelCompose,
@@ -727,6 +734,7 @@ function ColumnPane({
   onDeleteColumn,
 }: {
   cv: ColumnView
+  onLoadMore: () => void
   signalsByTodo: Map<string, Signal[]>
   boardColumns: { id: string; name: string }[]
   collapsed: boolean
@@ -745,7 +753,11 @@ function ColumnPane({
 }) {
   const cards = cv.cards ?? []
   const wip = cv.column.wip_limit
-  const overWIP = wip != null && cards.length > wip
+  // Against the column's real size, not the page's: a column of 200 with 25
+  // loaded is over a WIP limit of 50, and saying otherwise would be the page
+  // reporting on itself.
+  const overWIP = wip != null && cv.total > wip
+  const hidden = Math.max(0, cv.total - cards.length)
   const className = [
     'bk-column',
     overWIP ? 'bk-column-over-wip' : '',
@@ -764,8 +776,8 @@ function ColumnPane({
             {collapsed ? '▸' : '▾'}
           </button>
           <strong>{cv.column.name}</strong>
-          <span className="bk-column-count">
-            {cards.length}{wip != null ? ` / ${wip}` : ''}
+          <span className="bk-column-count" title={hidden > 0 ? `${hidden} more not loaded` : undefined}>
+            {hidden > 0 ? `${cards.length} of ${cv.total}` : cards.length}{wip != null ? ` / ${wip}` : ''}
           </span>
         </div>
         {!collapsed && (
@@ -802,6 +814,18 @@ function ColumnPane({
           ))}
           {cards.length === 0 && (
             <div className="bk-card-empty">no cards</div>
+          )}
+          {hidden > 0 && (
+            <div className="bk-column-more">
+              <button type="button" className="bi-add-btn" onClick={onLoadMore}>
+                Show {Math.min(hidden, 25)} more
+              </button>
+              {/* The sort control orders what is loaded, and cannot order what is
+                  not: the fields it sorts by live in noteboard, so kanban-store
+                  pages in stored order. Saying so is the difference between a
+                  page and a wrong answer. */}
+              <span className="bk-column-more-note">{hidden} more — sorting applies to the {cards.length} loaded</span>
+            </div>
           )}
         </div>
       )}

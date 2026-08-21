@@ -182,6 +182,10 @@ export interface EntityCardView {
 export interface ColumnView {
   column: Column
   cards: CardView[] | null
+  /** How many cards the column holds, which is not `cards.length` once a board
+   * view has been capped. Both are needed to say "showing 25 of 6,466" rather
+   * than presenting a page as the whole column. */
+  total: number
 }
 
 export interface BoardView {

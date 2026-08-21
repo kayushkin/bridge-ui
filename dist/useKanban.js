@@ -30,13 +30,19 @@ export function useKanban(boardID, options = {}) {
     // to interrupt the session that is actually running the card's work.
     const { fetch: fetchFn, kanbanStoreBasePath, basePath } = useBridgeConfig();
     const enabled = !!kanbanStoreBasePath;
-    const { loadBoards = true, loadEntityTypes = true } = options;
+    const { loadBoards = true, loadEntityTypes = true, columnPageSize = 0 } = options;
     const [boards, setBoards] = useState([]);
     const [view, setView] = useState(null);
     const [entityTypes, setEntityTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const lastViewJSON = useRef('');
+    // How many cards the user has asked to see in each column. A column the user
+    // expanded stays expanded across the 15-second poll, and its extra cards are
+    // refetched with everything else rather than frozen at whatever they said when
+    // "show more" was clicked — a stale card that has since moved columns would
+    // otherwise sit there indefinitely.
+    const [columnLimits, setColumnLimits] = useState({});
     const fetchBoards = useCallback(async () => {
         if (!enabled || !loadBoards) {
             setLoading(false);
@@ -60,10 +66,25 @@ export function useKanban(boardID, options = {}) {
             return;
         }
         try {
-            const res = await fetchFn(`${kanbanStoreBasePath}/api/boards/${encodeURIComponent(boardID)}/cards`);
+            const query = columnPageSize > 0 ? `?limit=${columnPageSize}` : '';
+            const res = await fetchFn(`${kanbanStoreBasePath}/api/boards/${encodeURIComponent(boardID)}/cards${query}`);
             if (!res.ok)
                 throw new Error(`/api/boards/:id/cards HTTP ${res.status}`);
             const data = await res.json();
+            // Columns the user expanded are re-read at the size they asked for, so an
+            // expanded column is as fresh as a collapsed one.
+            const expanded = data.columns.filter(cv => (columnLimits[cv.column.id] ?? 0) > columnPageSize);
+            if (expanded.length > 0) {
+                const pages = await Promise.all(expanded.map(async (cv) => {
+                    const limit = columnLimits[cv.column.id];
+                    const r = await fetchFn(`${kanbanStoreBasePath}/api/columns/${encodeURIComponent(cv.column.id)}/cards?limit=${limit}`);
+                    if (!r.ok)
+                        throw new Error(`/api/columns/:id/cards HTTP ${r.status}`);
+                    return (await r.json());
+                }));
+                const byColumn = new Map(pages.map(p => [p.column.id, p]));
+                data.columns = data.columns.map(cv => byColumn.get(cv.column.id) ?? cv);
+            }
             const json = JSON.stringify(data);
             if (json !== lastViewJSON.current) {
                 lastViewJSON.current = json;
@@ -74,7 +95,7 @@ export function useKanban(boardID, options = {}) {
         catch (err) {
             setError(`${err}`);
         }
-    }, [fetchFn, kanbanStoreBasePath, enabled, boardID]);
+    }, [fetchFn, kanbanStoreBasePath, enabled, boardID, columnPageSize, columnLimits]);
     const fetchEntityTypes = useCallback(async () => {
         if (!enabled || !loadEntityTypes)
             return;
@@ -446,6 +467,14 @@ export function useKanban(boardID, options = {}) {
     return useMemo(() => ({
         boards,
         view,
+        /** Show more of one column. The next read — this one and every poll after
+         *  it — carries the larger page. */
+        loadMoreCards: (columnID, by = columnPageSize || 25) => {
+            setColumnLimits(prev => ({
+                ...prev,
+                [columnID]: (prev[columnID] || columnPageSize || 0) + by,
+            }));
+        },
         entityTypes,
         loading,
         error,
@@ -473,6 +502,7 @@ export function useKanban(boardID, options = {}) {
         deleteEntityTag,
     }), [
         boards, view, entityTypes, loading, error,
+        columnPageSize,
         fetchBoards, fetchView,
         createBoard, deleteBoard, createColumn, deleteColumn,
         createCard, moveCard, patchCard, deleteCard, detachCard, archiveCard,

@@ -4,6 +4,7 @@ import type {
   Board,
   BoardView,
   CardLink,
+  ColumnView,
   EntityCardView,
   EntityTypeInfo,
   EntityTag,
@@ -34,6 +35,11 @@ export interface CreateBoardArgs { name: string; description?: string }
 export interface UseKanbanOptions {
   loadBoards?: boolean
   loadEntityTypes?: boolean
+  /** How many cards to load per column. 0 (the default) loads every card, which
+   * is what every caller did before paging existed — and what costs 12 MB and
+   * 1.6 seconds on this host's largest board, every fifteen seconds. A board
+   * surface should set it; a panel showing one card's neighbours need not. */
+  columnPageSize?: number
 }
 export interface CreateColumnArgs {
   name: string
@@ -70,7 +76,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
   // to interrupt the session that is actually running the card's work.
   const { fetch: fetchFn, kanbanStoreBasePath, basePath } = useBridgeConfig()
   const enabled = !!kanbanStoreBasePath
-  const { loadBoards = true, loadEntityTypes = true } = options
+  const { loadBoards = true, loadEntityTypes = true, columnPageSize = 0 } = options
 
   const [boards, setBoards] = useState<Board[]>([])
   const [view, setView] = useState<BoardView | null>(null)
@@ -78,6 +84,12 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const lastViewJSON = useRef('')
+  // How many cards the user has asked to see in each column. A column the user
+  // expanded stays expanded across the 15-second poll, and its extra cards are
+  // refetched with everything else rather than frozen at whatever they said when
+  // "show more" was clicked — a stale card that has since moved columns would
+  // otherwise sit there indefinitely.
+  const [columnLimits, setColumnLimits] = useState<Record<string, number>>({})
 
   const fetchBoards = useCallback(async () => {
     if (!enabled || !loadBoards) { setLoading(false); return }
@@ -95,9 +107,25 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
   const fetchView = useCallback(async () => {
     if (!enabled || !boardID) { setView(null); return }
     try {
-      const res = await fetchFn(`${kanbanStoreBasePath}/api/boards/${encodeURIComponent(boardID)}/cards`)
+      const query = columnPageSize > 0 ? `?limit=${columnPageSize}` : ''
+      const res = await fetchFn(`${kanbanStoreBasePath}/api/boards/${encodeURIComponent(boardID)}/cards${query}`)
       if (!res.ok) throw new Error(`/api/boards/:id/cards HTTP ${res.status}`)
       const data: BoardView = await res.json()
+
+      // Columns the user expanded are re-read at the size they asked for, so an
+      // expanded column is as fresh as a collapsed one.
+      const expanded = data.columns.filter(cv => (columnLimits[cv.column.id] ?? 0) > columnPageSize)
+      if (expanded.length > 0) {
+        const pages = await Promise.all(expanded.map(async cv => {
+          const limit = columnLimits[cv.column.id]
+          const r = await fetchFn(`${kanbanStoreBasePath}/api/columns/${encodeURIComponent(cv.column.id)}/cards?limit=${limit}`)
+          if (!r.ok) throw new Error(`/api/columns/:id/cards HTTP ${r.status}`)
+          return (await r.json()) as ColumnView
+        }))
+        const byColumn = new Map(pages.map(p => [p.column.id, p]))
+        data.columns = data.columns.map(cv => byColumn.get(cv.column.id) ?? cv)
+      }
+
       const json = JSON.stringify(data)
       if (json !== lastViewJSON.current) {
         lastViewJSON.current = json
@@ -107,7 +135,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     } catch (err) {
       setError(`${err}`)
     }
-  }, [fetchFn, kanbanStoreBasePath, enabled, boardID])
+  }, [fetchFn, kanbanStoreBasePath, enabled, boardID, columnPageSize, columnLimits])
 
   const fetchEntityTypes = useCallback(async () => {
     if (!enabled || !loadEntityTypes) return
@@ -436,6 +464,14 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
   return useMemo(() => ({
     boards,
     view,
+    /** Show more of one column. The next read — this one and every poll after
+     *  it — carries the larger page. */
+    loadMoreCards: (columnID: string, by: number = columnPageSize || 25) => {
+      setColumnLimits(prev => ({
+        ...prev,
+        [columnID]: (prev[columnID] || columnPageSize || 0) + by,
+      }))
+    },
     entityTypes,
     loading,
     error,
@@ -463,6 +499,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     deleteEntityTag,
   }), [
     boards, view, entityTypes, loading, error,
+    columnPageSize,
     fetchBoards, fetchView,
     createBoard, deleteBoard, createColumn, deleteColumn,
     createCard, moveCard, patchCard, deleteCard, detachCard, archiveCard,

@@ -39,6 +39,8 @@ const LAYOUT_KEY = 'bk:layout';
 const LAST_BOARD_KEY = 'bk:lastBoardId';
 const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns';
 const DEFAULT_BOARD_NAME = 'Agent runs';
+/** How many cards a column loads at a time, and how many each "show more" adds. */
+const CARDS_PER_COLUMN = 25;
 // How many linked emails a card drawer shows before collapsing the rest behind a
 // button. Bucket cards on the Email board accumulate every message from a sender,
 // so this list grows without bound while the card itself stays one thing.
@@ -118,7 +120,9 @@ export function BridgeKanban() {
     const openSessionLink = (link) => {
         navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
     };
-    const k = useKanban(selectedBoardID);
+    // A screenful a column. The largest board here holds 6,466 cards and answered
+    // 12 MB per read before this cap; the rest arrive when asked for.
+    const k = useKanban(selectedBoardID, { columnPageSize: CARDS_PER_COLUMN });
     // A card id IS a noteboard todo id here, so the signals a session raised
     // against its todo land on the card that todo already has. The map covers
     // every todo, so switching boards needs no refetch.
@@ -281,7 +285,7 @@ export function BridgeKanban() {
                                     const ok = await k.createColumn(args);
                                     if (ok)
                                         setShowNewColumn(false);
-                                }, onCancel: () => setShowNewColumn(false) })), axes.length > 0 && (_jsx(CardAxisToolbar, { axes: axes, filter: axisFilter, onFilterChange: setAxisFilter, sortKey: sortKey, onSortChange: setSortKey, hiddenCardCount: hiddenCardCount })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: visibleColumns.map(cv => (_jsx(ColumnPane, { cv: cv, signalsByTodo: signalsByTodo, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
+                                }, onCancel: () => setShowNewColumn(false) })), axes.length > 0 && (_jsx(CardAxisToolbar, { axes: axes, filter: axisFilter, onFilterChange: setAxisFilter, sortKey: sortKey, onSortChange: setSortKey, hiddenCardCount: hiddenCardCount })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: visibleColumns.map(cv => (_jsx(ColumnPane, { cv: cv, onLoadMore: () => k.loadMoreCards(cv.column.id, CARDS_PER_COLUMN), signalsByTodo: signalsByTodo, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
                                         const ok = await k.createCard({ ...args, column_id: cv.column.id });
                                         if (ok)
                                             setComposeColumn(null);
@@ -429,16 +433,20 @@ function NewColumnForm({ onCreate, onCancel, }) {
             });
         }, children: [_jsx("input", { autoFocus: true, placeholder: "Column name", value: name, onChange: e => setName(e.target.value) }), _jsx("input", { placeholder: "WIP limit (optional)", type: "number", min: 1, value: wip, onChange: e => setWip(e.target.value) }), _jsxs("select", { value: autoStatus, onChange: e => setAutoStatus(e.target.value), children: [_jsx("option", { value: "", children: "\u2014 no auto-status \u2014" }), _jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add column" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
 }
-function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollapse, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onRunAgent, onDeleteColumn, }) {
+function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollapse, onLoadMore, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onRunAgent, onDeleteColumn, }) {
     const cards = cv.cards ?? [];
     const wip = cv.column.wip_limit;
-    const overWIP = wip != null && cards.length > wip;
+    // Against the column's real size, not the page's: a column of 200 with 25
+    // loaded is over a WIP limit of 50, and saying otherwise would be the page
+    // reporting on itself.
+    const overWIP = wip != null && cv.total > wip;
+    const hidden = Math.max(0, cv.total - cards.length);
     const className = [
         'bk-column',
         overWIP ? 'bk-column-over-wip' : '',
         collapsed ? 'bk-column-collapsed' : '',
     ].filter(Boolean).join(' ');
-    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", children: [cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard, onRunAgent: onRunAgent }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" }))] }))] }));
+    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", title: hidden > 0 ? `${hidden} more not loaded` : undefined, children: [hidden > 0 ? `${cards.length} of ${cv.total}` : cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard, onRunAgent: onRunAgent }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" })), hidden > 0 && (_jsxs("div", { className: "bk-column-more", children: [_jsxs("button", { type: "button", className: "bi-add-btn", onClick: onLoadMore, children: ["Show ", Math.min(hidden, 25), " more"] }), _jsxs("span", { className: "bk-column-more-note", children: [hidden, " more \u2014 sorting applies to the ", cards.length, " loaded"] })] }))] }))] }));
 }
 function NewCardForm({ onCreate, onCancel, }) {
     const [title, setTitle] = useState('');

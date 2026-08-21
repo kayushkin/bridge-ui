@@ -8,6 +8,11 @@ export interface CreateBoardArgs {
 export interface UseKanbanOptions {
     loadBoards?: boolean;
     loadEntityTypes?: boolean;
+    /** How many cards to load per column. 0 (the default) loads every card, which
+     * is what every caller did before paging existed — and what costs 12 MB and
+     * 1.6 seconds on this host's largest board, every fifteen seconds. A board
+     * surface should set it; a panel showing one card's neighbours need not. */
+    columnPageSize?: number;
 }
 export interface CreateColumnArgs {
     name: string;
@@ -41,6 +46,9 @@ export interface CreateCardArgs {
 export declare function useKanban(boardID: string | null, options?: UseKanbanOptions): {
     boards: Board[];
     view: BoardView | null;
+    /** Show more of one column. The next read — this one and every poll after
+     *  it — carries the larger page. */
+    loadMoreCards: (columnID: string, by?: number) => void;
     entityTypes: EntityTypeInfo[];
     loading: boolean;
     error: string | null;

@@ -5516,3 +5516,11 @@
 /* A limit with no measurement behind it: the rung is real, the spend is unknown.
    Stated quietly so it cannot be mistaken for a card that has spent nothing. */
 .bk-card-budget-unmeasured .bk-card-budget-clock { opacity: 0.45; }
+
+/* "Show more" at the foot of a capped column. The count beside it is the whole
+   truth about the column, so a page can never read as the entire thing. */
+.bk-column-more {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 2px;
+}
+.bk-column-more-note { font-size: 0.72em; opacity: 0.5; }
