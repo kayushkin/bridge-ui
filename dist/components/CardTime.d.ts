@@ -10,9 +10,14 @@ import type { CardTimeSummary } from '../types-kanban';
  * keeps elapsed in the tooltip.
  *
  * A card with no limit still gets the badge, showing what it has spent with
- * nothing to spend it against. A card nothing has happened to yet gets none at
- * all: the caller falls back to the activity badge, which is the honest answer
- * for a card whose history predates the event log.
+ * nothing to spend it against.
+ *
+ * A card with a limit but no recorded actions is the live majority: every card
+ * that existed before the event log did. Its limit is real and worth showing,
+ * and its spend is not zero but unknown — so the badge states the rung and the
+ * limit and puts a dash where the figure would go. Printing 0s there would be a
+ * measurement the data never supported, and on a card that has sat for months it
+ * would be the most reassuring number on the board.
  */
 export declare function CardBudgetBadge({ time }: {
     time: CardTimeSummary | undefined;

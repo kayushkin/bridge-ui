@@ -1038,13 +1038,15 @@ function CardTile({
       )}
       <div className="bk-card-foot">
         <span className={`bk-status bk-status-${status}`}>{status}</span>
-        {/* The clock when the card has one, and the activity badge when it does
-            not. They answer different questions — how much of the limit is spent
-            against when anything last happened — and a card whose history
-            predates the event log can only answer the second. */}
-        {hasClockData(card.time)
-          ? <CardBudgetBadge time={card.time} />
-          : <CardAgeBadge card={card} placement={card.placement} />}
+        {/* Both, when both have something to say. The clock badge carries the
+            rung and the limit; the activity badge carries when anything last
+            happened. A card with recorded actions needs only the first, and a
+            card without them — every card older than the event log — is best
+            served by its limit next to the last thing that touched it. */}
+        {hasClockData(card.time) && <CardBudgetBadge time={card.time} />}
+        {(card.time?.event_count ?? 0) === 0 && (
+          <CardAgeBadge card={card} placement={card.placement} />
+        )}
         <button
           type="button"
           className={held ? 'bk-card-play' : 'bk-card-stop'}

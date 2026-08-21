@@ -13,21 +13,29 @@ import { formatDurationCompact, formatDurationProse } from '../utils';
  * keeps elapsed in the tooltip.
  *
  * A card with no limit still gets the badge, showing what it has spent with
- * nothing to spend it against. A card nothing has happened to yet gets none at
- * all: the caller falls back to the activity badge, which is the honest answer
- * for a card whose history predates the event log.
+ * nothing to spend it against.
+ *
+ * A card with a limit but no recorded actions is the live majority: every card
+ * that existed before the event log did. Its limit is real and worth showing,
+ * and its spend is not zero but unknown — so the badge states the rung and the
+ * limit and puts a dash where the figure would go. Printing 0s there would be a
+ * measurement the data never supported, and on a card that has sat for months it
+ * would be the most reassuring number on the board.
  */
 export function CardBudgetBadge({ time }) {
     if (!hasClockData(time))
         return null;
-    const spent = formatDurationCompact(time.budget_clock_seconds);
     const limit = formatDurationCompact(time.budget_seconds);
-    if (!spent)
+    const measured = time.event_count > 0;
+    const spent = measured ? formatDurationCompact(time.budget_clock_seconds) : null;
+    if (!measured && !limit)
         return null;
     const over = time.over_budget === true;
     const nearly = !over && time.budget_seconds !== undefined
         && time.budget_clock_seconds >= time.budget_seconds * 0.75;
     const classes = ['bk-card-budget'];
+    if (!measured)
+        classes.push('bk-card-budget-unmeasured');
     if (over)
         classes.push('bk-card-budget-over');
     else if (nearly)
@@ -36,7 +44,7 @@ export function CardBudgetBadge({ time }) {
         classes.push('bk-card-budget-paused');
     if (time.clock_state === 'stopped')
         classes.push('bk-card-budget-stopped');
-    return (_jsxs("span", { className: classes.join(' '), title: describeCardTime(time), children: [time.priority_label && _jsx("b", { className: "bk-card-budget-rung", children: time.priority_label }), _jsxs("span", { className: "bk-card-budget-clock", children: [clockStateMark(time.clock_state), " ", spent] }), limit && _jsxs("span", { className: "bk-card-budget-limit", children: ["/ ", limit] })] }));
+    return (_jsxs("span", { className: classes.join(' '), title: describeCardTime(time), children: [time.priority_label && _jsx("b", { className: "bk-card-budget-rung", children: time.priority_label }), _jsx("span", { className: "bk-card-budget-clock", children: measured ? `${clockStateMark(time.clock_state)} ${spent}` : '—' }), limit && _jsxs("span", { className: "bk-card-budget-limit", children: ["/ ", limit] })] }));
 }
 /** Whether a card has anything to say about its clock. Cards whose whole history
  * predates the event log have no events and no rung, and asking them for a
@@ -60,6 +68,13 @@ function clockStateMark(state) {
  * working-week ones when the board declares hours. */
 export function describeCardTime(time) {
     const lines = [];
+    if (time.event_count === 0) {
+        if (time.priority_label && time.budget_seconds !== undefined) {
+            lines.push(`${time.priority_label}: ${formatDurationProse(time.budget_seconds)} allowed`);
+        }
+        lines.push('Nothing has been recorded for this card, so how much of its limit is spent is unknown — not zero. Cards carry a clock from the first action taken on them.');
+        return lines.join('\n');
+    }
     if (time.priority_label && time.budget_seconds !== undefined) {
         lines.push(`${time.priority_label}: ${formatDurationProse(time.budget_seconds)} allowed`);
     }

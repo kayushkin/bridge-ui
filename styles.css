@@ -5513,3 +5513,6 @@
   white-space: pre-wrap;
 }
 .bk-timeline-segment { font-size: 0.8em; opacity: 0.5; margin-top: 2px; }
+/* A limit with no measurement behind it: the rung is real, the spend is unknown.
+   Stated quietly so it cannot be mistaken for a card that has spent nothing. */
+.bk-card-budget-unmeasured .bk-card-budget-clock { opacity: 0.45; }
