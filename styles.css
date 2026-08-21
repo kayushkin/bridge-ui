@@ -5426,3 +5426,101 @@
   font: 0.78em/1.5 var(--mono, ui-monospace, monospace);
   max-height: 260px; overflow-y: auto; color: var(--text);
 }
+
+/* ============================ A card's clock ============================
+   The badge in a tile's footer reports the budget clock — the part of a card's
+   life the work was actually available to be done — against the limit its
+   priority sets. It sits where the age badge used to, and a card whose whole
+   history predates the event log still shows that one instead. */
+.bk-card-budget {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  font-size: 0.85em;
+  white-space: nowrap;
+  cursor: help;
+}
+.bk-card-budget-rung {
+  font-size: 0.9em;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--border);
+  opacity: 0.9;
+}
+.bk-card-budget-clock { opacity: 0.85; }
+.bk-card-budget-limit { opacity: 0.5; }
+/* Three quarters spent is the point where a limit stops being background
+   information, and over it is the point where the card is the problem. */
+.bk-card-budget-close .bk-card-budget-clock { color: var(--warn, #d08770); opacity: 1; }
+.bk-card-budget-over .bk-card-budget-clock,
+.bk-card-budget-over .bk-card-budget-limit { color: var(--danger, #bf616a); opacity: 1; }
+.bk-card-budget-over .bk-card-budget-rung { background: rgba(191, 97, 106, 0.22); }
+/* A paused card is not accruing, so its number is stated more quietly than a
+   running one: it is a fact about the past rather than a figure still moving. */
+.bk-card-budget-paused { opacity: 0.65; }
+.bk-card-budget-stopped .bk-card-budget-clock { opacity: 0.6; }
+
+/* ============================ The history panel ============================ */
+.bk-timeline { display: flex; flex-direction: column; gap: 10px; }
+
+.bk-timeline-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 8px;
+}
+.bk-timeline-figure {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: help;
+}
+.bk-timeline-figure-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.6; }
+.bk-timeline-figure-value { font-size: 1.05em; }
+/* The working-week reading sits under the wall-clock one, never in place of it:
+   it is a second way of reading the same stretch of time. */
+.bk-timeline-figure-business { font-size: 0.7em; opacity: 0.55; }
+.bk-timeline-figure-over { border-color: var(--danger, #bf616a); }
+.bk-timeline-figure-over .bk-timeline-figure-value { color: var(--danger, #bf616a); }
+
+.bk-timeline-compose { display: flex; flex-direction: column; gap: 4px; }
+.bk-timeline-compose-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 0.8em;
+}
+.bk-timeline-compose-actions label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.bk-timeline-compose-actions input[type="checkbox"] { width: auto; }
+
+.bk-timeline-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.bk-timeline-entry {
+  border-left: 2px solid var(--border);
+  padding: 4px 0 8px 10px;
+  font-size: 0.85em;
+}
+/* The stripe says which clock was running while the card sat in this state, so
+   a day of waiting reads differently from a day of work at a glance. */
+.bk-timeline-running { border-left-color: var(--accent, #5e81ac); }
+.bk-timeline-paused { border-left-color: var(--warn, #d08770); }
+.bk-timeline-stopped { border-left-color: var(--ok, #a3be8c); }
+.bk-timeline-gap { font-size: 0.85em; opacity: 0.5; margin-bottom: 2px; }
+.bk-timeline-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.bk-timeline-kind { font-weight: 600; }
+.bk-timeline-when { font-size: 0.85em; opacity: 0.55; }
+.bk-timeline-actor { font-size: 0.85em; opacity: 0.7; }
+.bk-timeline-summary { opacity: 0.85; }
+.bk-timeline-note {
+  margin-top: 3px; padding: 4px 6px;
+  background: var(--border);
+  border-radius: 3px;
+  white-space: pre-wrap;
+}
+.bk-timeline-segment { font-size: 0.8em; opacity: 0.5; margin-top: 2px; }
+/* A limit with no measurement behind it: the rung is real, the spend is unknown.
+   Stated quietly so it cannot be mistaken for a card that has spent nothing. */
+.bk-card-budget-unmeasured .bk-card-budget-clock { opacity: 0.45; }
+
+/* "Show more" at the foot of a capped column. The count beside it is the whole
+   truth about the column, so a page can never read as the entire thing. */
+.bk-column-more {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 2px;
+}
+.bk-column-more-note { font-size: 0.72em; opacity: 0.5; }

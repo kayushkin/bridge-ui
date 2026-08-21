@@ -58,3 +58,38 @@ export function timeAgo(iso: string): string {
   const d = Math.floor(h / 24)
   return `${d}d ago`
 }
+
+// formatDurationCompact renders a length of time short enough for a badge:
+// "45s", "12m", "1.5h", "3d". Hours carry one decimal below ten because the
+// difference between one hour and ninety minutes is the difference between
+// inside a two-hour limit and nearly out of it, and "1h" hides that.
+//
+// Returns null for a duration that cannot be read, so the caller renders nothing
+// rather than a badge reading NaN.
+export function formatDurationCompact(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return null
+  const s = Math.max(0, seconds)
+  if (s < 60) return `${Math.round(s)}s`
+  const m = s / 60
+  if (m < 60) return `${Math.round(m)}m`
+  const h = m / 60
+  if (h < 10) return `${(Math.round(h * 10) / 10).toString().replace(/\.0$/, '')}h`
+  if (h < 24) return `${Math.round(h)}h`
+  const d = h / 24
+  if (d < 10) return `${(Math.round(d * 10) / 10).toString().replace(/\.0$/, '')}d`
+  return `${Math.round(d)}d`
+}
+
+// formatDurationProse says the same thing in words, for a tooltip or a sentence
+// where a badge's shorthand would read as jargon.
+export function formatDurationProse(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return null
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s} second${s === 1 ? '' : 's'}`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'}`
+  const h = Math.round((s / 3600) * 10) / 10
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`
+  const d = Math.round((s / 86400) * 10) / 10
+  return `${d} day${d === 1 ? '' : 's'}`
+}
