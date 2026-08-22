@@ -64,14 +64,38 @@ export async function* connectSSE(fetchFn, basePath, sessionId, lastEventId, sig
     }
 }
 /**
+ * Reads the hub's `resume` word off a hello payload.
+ *
+ * An unrecognised or absent word is answered from what this client asked for,
+ * because the two cases are not the same claim. Having sent no Last-Event-ID,
+ * nothing could have been lost, so `none` is true and `gap` would invent a
+ * loss. Having sent one and got back a word this client cannot read, the
+ * resume is unproven — `gap` re-seeds and says frames may be missing, which
+ * is the honest reading of an answer that cannot be understood.
+ */
+function resumeOf(raw, requestedLastEventId) {
+    if (raw === 'none' || raw === 'replayed' || raw === 'gap')
+        return raw;
+    return requestedLastEventId ? 'gap' : 'none';
+}
+/**
  * Connect to the global session-list event stream. Yields one frame per
  * lifecycle change (upsert / delete) plus an initial 'hello' on connect.
  * Mirrors connectSSE's parsing — kept separate so the per-session and global
  * streams have explicit, type-safe entrypoints.
+ *
+ * Pass the id of the last frame seen to resume: the hub replays exactly what
+ * was published after it, and says in `hello` whether it could. Without that
+ * the client re-seeds on every reconnect and an upsert that landed while the
+ * connection was down is gone for good.
  */
-export async function* connectSessionListSSE(fetchFn, basePath, signal) {
+export async function* connectSessionListSSE(fetchFn, basePath, lastEventId, signal) {
+    const headers = { 'Accept': 'text/event-stream' };
+    if (lastEventId) {
+        headers['Last-Event-ID'] = lastEventId;
+    }
     const res = await fetchFn(`${basePath}/session-events`, {
-        headers: { 'Accept': 'text/event-stream' },
+        headers,
         signal,
     });
     if (!res.ok) {
@@ -97,13 +121,21 @@ export async function* connectSessionListSSE(fetchFn, basePath, signal) {
                         try {
                             const data = currentEvent.data ? JSON.parse(currentEvent.data) : {};
                             if (currentEvent.type === 'hello') {
-                                yield { type: 'hello' };
+                                yield {
+                                    type: 'hello',
+                                    streamId: data.stream_id ?? '',
+                                    resume: resumeOf(data.resume, lastEventId ?? ''),
+                                    lastEventId: data.last_event_id ?? '',
+                                };
                             }
                             else if (currentEvent.type === 'upsert' && data.session) {
-                                yield { type: 'upsert', session: data.session };
+                                yield { type: 'upsert', eventId: currentEvent.id, session: data.session };
                             }
                             else if (currentEvent.type === 'delete' && data.session_id) {
-                                yield { type: 'delete', session_id: data.session_id };
+                                yield { type: 'delete', eventId: currentEvent.id, session_id: data.session_id };
+                            }
+                            else {
+                                yield { type: 'unhandled', eventId: currentEvent.id, eventType: currentEvent.type };
                             }
                         }
                         catch {
@@ -117,6 +149,9 @@ export async function* connectSessionListSSE(fetchFn, basePath, signal) {
                 }
                 else if (line.startsWith('data:')) {
                     currentEvent.data += (currentEvent.data ? '\n' : '') + line.slice(5).trim();
+                }
+                else if (line.startsWith('id:')) {
+                    currentEvent.id = line.slice(3).trim();
                 }
             }
         }

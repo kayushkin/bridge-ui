@@ -23,6 +23,7 @@
     "start": "vite --config standalone/vite.config.ts",
     "build:standalone": "vite build --config standalone/vite.config.ts",
     "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs",
+    "session-list-canary": "esbuild scripts/session-list-resume-canary.mjs --bundle --platform=node --format=esm --outfile=node_modules/.cache/bridge-ui-session-list-canary.mjs --log-level=error && node node_modules/.cache/bridge-ui-session-list-canary.mjs",
     "pane-cost": "esbuild scripts/pane-cost.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-pane-cost.cjs --log-level=error && node --max-old-space-size=8192 node_modules/.cache/bridge-ui-pane-cost.cjs"
   },
   "dependencies": {
