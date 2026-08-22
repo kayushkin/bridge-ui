@@ -5,11 +5,14 @@ import type { FetchFn } from './types'
 // A poll of one URL, shared by every component that asks for it.
 //
 // The hooks in this library used to each own their `useState` + `setInterval`,
-// so a page that called `useBridgeInstances()` from three components ran three
-// 30-second polls of `/instances` and held three copies of the answer. dash's
-// `/dashv2` does exactly that, and so does its sibling call to
-// `useBridgeMachines()`. Nothing was wrong with any single caller; the cost
-// only shows up when you count the timers on the page.
+// so a page that calls `useBridgeInstances()` from N components runs N
+// 30-second polls of `/instances` and holds N copies of the answer. dash's
+// `/dashv2` does exactly that: four call sites — `Workspace` through
+// `useNewSessionTarget`, `Sidebar`, `SessionHeader`, and `NewSessionMenu` while
+// the picker is open — and three for its sibling `useBridgeMachines()`, which
+// `NewSessionMenu`, `SessionHeader` and `Sidebar` share. Nothing was wrong with
+// any single caller; the cost only shows up when you count the timers on the
+// page.
 //
 // SharedPoll moves the timer and the snapshot out of the component. The first
 // subscriber starts the poll, the rest attach to the answer it already has,
