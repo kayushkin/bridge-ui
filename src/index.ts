@@ -44,7 +44,13 @@ export type { BridgeConfig, BridgeRoutes } from './context'
 export { BridgeProvider } from './provider'
 
 // SSE
-export { connectSSE } from './bridgeSSE'
+export { connectSSE, connectSessionListSSE } from './bridgeSSE'
+export type { SessionListFrame, SessionListResume } from './bridgeSSE'
+export {
+  SESSION_LIST_BASE_RETRY_MS, SESSION_LIST_MAX_RETRY_MS, SessionListStore,
+  applySessionListFrame, sessionListMustReseed, sharedSessionList, useSharedSessionList,
+} from './sessionListStore'
+export type { SessionListSnapshot } from './sessionListStore'
 
 // Hooks
 export { useBridgeSession } from './useBridgeSession'

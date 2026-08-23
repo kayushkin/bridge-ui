@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBridgeConfig } from './context';
-import { connectSSE, connectSessionListSSE } from './bridgeSSE';
+import { connectSSE } from './bridgeSSE';
+import { sharedSessionList, useSharedSessionList } from './sessionListStore';
 import { createSSEEventBatcher, isDeferrableEventType } from './sseEventBatching';
 import { ErrCodeBudgetExceeded } from './types';
 // --- Event envelope ---
@@ -438,10 +439,15 @@ function shouldHoldSSE(state) {
 // --- Hook ---
 export function useBridgeSession() {
     const { fetch: fetchFn, basePath } = useBridgeConfig();
-    const [sessions, setSessions] = useState([]);
+    // The session list is not this hook's to own. `useBridgeSession` is called
+    // once per chat pane and `BridgeSessions` reads the same list again, so a
+    // per-hook copy meant one `/session-events` connection and one array per
+    // caller. The shared store holds both, and its `patch` is how this hook
+    // still applies the state it learns from the per-session stream first.
+    const sessionList = useMemo(() => sharedSessionList(fetchFn, basePath), [fetchFn, basePath]);
+    const { sessions, connected } = useSharedSessionList(sessionList);
     const [activeSessionId, setActiveSessionId] = useState(null);
     const [logRows, setLogRows] = useState([]);
-    const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [activity, setActivity] = useState({ kind: 'idle' });
@@ -494,84 +500,18 @@ export function useBridgeSession() {
     }, []);
     // --- Session refresh (debounced) ---
     const refreshSessionsImpl = useCallback(async () => {
-        try {
-            const res = await fetchFn(`${basePath}/sessions`);
-            if (res.ok) {
-                const data = await res.json();
-                setSessions(data);
-                setConnected(true);
-            }
-            else {
-                setConnected(false);
-            }
-        }
-        catch {
-            setConnected(false);
-        }
-    }, [fetchFn, basePath]);
+        await sessionList.refresh();
+    }, [sessionList]);
     const debouncedRefresh = useMemo(() => debounce(refreshSessionsImpl, 500), [refreshSessionsImpl]);
     const refreshSessions = useCallback(() => {
         debouncedRefresh();
     }, [debouncedRefresh]);
-    useEffect(() => { refreshSessionsImpl(); }, [refreshSessionsImpl]);
-    // Global session-list SSE subscription. The initial fetch above seeds the
-    // list; this stream then patches it in place on every server-side mutation
-    // (create / state / rename / folder / delete), so the sidebar stays live
-    // without re-fetching `/sessions`. Reconnects with backoff on disconnect.
-    useEffect(() => {
-        let cancelled = false;
-        let abort = null;
-        let retryDelay = 1000;
-        const run = async () => {
-            while (!cancelled) {
-                abort = new AbortController();
-                try {
-                    const stream = connectSessionListSSE(fetchFn, basePath, abort.signal);
-                    for await (const frame of stream) {
-                        if (cancelled)
-                            return;
-                        if (frame.type === 'hello') {
-                            retryDelay = 1000;
-                            continue;
-                        }
-                        if (frame.type === 'upsert') {
-                            const incoming = frame.session;
-                            setSessions(prev => {
-                                const i = prev.findIndex(s => s.session_id === incoming.session_id);
-                                if (i === -1)
-                                    return [incoming, ...prev];
-                                const next = prev.slice();
-                                next[i] = { ...next[i], ...incoming };
-                                return next;
-                            });
-                        }
-                        else if (frame.type === 'delete') {
-                            setSessions(prev => prev.filter(s => s.session_id !== frame.session_id));
-                        }
-                    }
-                }
-                catch {
-                    if (cancelled || abort?.signal.aborted)
-                        return;
-                }
-                if (cancelled)
-                    return;
-                await new Promise(r => setTimeout(r, retryDelay));
-                retryDelay = Math.min(retryDelay * 2, 30000);
-            }
-        };
-        run();
-        return () => {
-            cancelled = true;
-            abort?.abort();
-        };
-    }, [fetchFn, basePath]);
     // --- Derived state ---
     const activeSession = sessions.find(s => s.session_id === activeSessionId) || null;
     activeSessionRef.current = activeSession;
     const patchSessionState = useCallback((sessionId, state) => {
-        setSessions(prev => prev.map(s => s.session_id === sessionId ? { ...s, state } : s));
-    }, []);
+        sessionList.patch(sessionId, { state });
+    }, [sessionList]);
     const uiState = useMemo(() => {
         if (!activeSession)
             return 'empty';
@@ -870,7 +810,7 @@ export function useBridgeSession() {
                     if (res.ok && activeSessionIdRef.current === id) {
                         const full = await res.json();
                         if (full?.info) {
-                            setSessions(prev => prev.map(s => s.session_id === id ? { ...s, info: full.info } : s));
+                            sessionList.patch(id, { info: full.info });
                         }
                     }
                 }
@@ -915,32 +855,20 @@ export function useBridgeSession() {
             startSSE(activeSession.session_id);
         }
     }, [activeSession?.state, activeSession?.session_id, startSSE]);
-    // --- Stuck-running reconciler ---
+    // --- Stuck-running reconciler: RETIRED ---
     //
-    // A freshly created harness reports state='running' while it boots, then
-    // emits a `session_state: idle` event when ready. If that event lands
-    // before our SSE attaches (or is otherwise missed), the Composer stays
-    // disabled forever — no further state changes can rescue it without a
-    // manual refresh. Watchdog: when the active session sits in `running`
-    // with no activity, repoll /sessions every 2s for up to ~10s. As soon as
-    // the server reports a different state, the deps change and the loop
-    // unwinds on its own.
-    useEffect(() => {
-        if (!activeSessionId)
-            return;
-        if (activeSession?.state !== 'running')
-            return;
-        if (activity.kind !== 'idle')
-            return;
-        let attempts = 0;
-        const t = window.setInterval(() => {
-            attempts++;
-            refreshSessionsImpl();
-            if (attempts >= 5)
-                window.clearInterval(t);
-        }, 2000);
-        return () => window.clearInterval(t);
-    }, [activeSessionId, activeSession?.state, activity.kind, refreshSessionsImpl]);
+    // A freshly created harness reports state='running' while it boots and emits
+    // `session_state: idle` when ready. Miss that one frame and the Composer
+    // stayed disabled forever, so this used to re-poll `/sessions` every two
+    // seconds for ~10s whenever the active session sat in `running`.
+    //
+    // `state` has always been on the session-list stream (llm-bridge-server's
+    // `store.UpdateSessionState` fires an upsert); what it lacked was a way to
+    // redeliver a frame dropped by a reconnect. It has one now, so the frame is
+    // replayed instead of guessed at, and there is nothing left for a poll to
+    // recover. Do not restore this without first showing the stream lost a frame
+    // it could not replay — that is a defect in the resume path, and papering
+    // over it here is what hid it for as long as it was hidden.
     // --- Visibility change reconnection ---
     useEffect(() => {
         const onVisible = () => {

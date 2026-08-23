@@ -1,10 +1,11 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useBridgeInstances } from '../useBridgeInstances';
 import { useBridgeHarnesses } from '../useBridgeHarnesses';
 import { useSessionContentSearch, sessionContentSearchReachOf } from '../useSessionContentSearch';
+import { sharedSessionList, useSharedSessionList } from '../sessionListStore';
 import { formatTokens, timeAgo } from '../utils';
 const STATE_COLORS = {
     running: '#22c55e', idle: '#60a5fa', completed: '#888',
@@ -37,9 +38,14 @@ export function applySessionAggregates(known, aggregates, onScreen) {
 }
 export function BridgeSessions() {
     const { fetch: apiFetch, basePath, routes } = useBridgeConfig();
-    const [sessions, setSessions] = useState([]);
+    // The list comes from the shared store: one `GET /sessions` seed and one
+    // `/session-events` connection for the whole page, patched in place on every
+    // server-side mutation. This page used to hold its own copy and re-fetch it
+    // every 15 seconds for a payload byte-for-byte identical to what the stream's
+    // `upsert` and `delete` frames already carry.
+    const sessionList = useMemo(() => sharedSessionList(apiFetch, basePath), [apiFetch, basePath]);
+    const { sessions, loading } = useSharedSessionList(sessionList);
     const [tokensMap, setTokensMap] = useState(new Map());
-    const [loading, setLoading] = useState(true);
     const [filterHarness, setFilterHarness] = useState('');
     const [filterState, setFilterState] = useState('');
     const [filterInstance, setFilterInstance] = useState('');
@@ -47,22 +53,6 @@ export function BridgeSessions() {
     const inst = useBridgeInstances();
     const { harnessMap } = useBridgeHarnesses();
     const navigate = useNavigate();
-    const fetchSessions = useCallback(async () => {
-        try {
-            const res = await apiFetch(`${basePath}/sessions`);
-            if (res.ok)
-                setSessions(await res.json() ?? []);
-        }
-        catch { /* ignore */ }
-        finally {
-            setLoading(false);
-        }
-    }, [apiFetch, basePath]);
-    useEffect(() => {
-        fetchSessions();
-        const interval = setInterval(fetchSessions, 15000);
-        return () => clearInterval(interval);
-    }, [fetchSessions]);
     // Transcript text is the ONLY thing this page's search matches on, so null
     // hits mean it cannot narrow the list at all. It then shows the list
     // unnarrowed and says so — see useSessionContentSearch. Emptying the list on a
@@ -95,11 +85,28 @@ export function BridgeSessions() {
     // session. The aggregate is the same sum over the same result events — see
     // log-store ListSessionAggregates — so the number is unchanged, and the cap
     // is gone with the cost that forced it.
+    // One aggregate request at a time. The effect re-runs whenever `filtered`
+    // changes identity, which the live session stream now makes happen on every
+    // upsert rather than once per 15-second poll — and the response is 2.8MB
+    // that takes seconds to arrive on this host, so without this guard each
+    // frame that lands mid-flight starts another full download of the same
+    // bytes. Measured on the live box: 23 requests and 65.7MB in 24 seconds.
+    //
+    // The guard is a skip, not a queue. A request already in flight will apply
+    // its answer to whatever the list holds when it lands, so a skipped run has
+    // nothing to add; if rows are still missing after that, the next change to
+    // `filtered` runs it again. Refs are read inside the async body for the same
+    // reason — the values that matter are the ones at completion, not at call.
+    const aggregatesInFlight = useRef(false);
+    const filteredRef = useRef(filtered);
+    filteredRef.current = filtered;
     useEffect(() => {
-        const current = tokensMapRef.current;
-        if (!sessionTokenTotalsAreMissing(filtered, current))
+        if (aggregatesInFlight.current)
+            return;
+        if (!sessionTokenTotalsAreMissing(filtered, tokensMapRef.current))
             return;
         let cancelled = false;
+        aggregatesInFlight.current = true;
         (async () => {
             try {
                 const res = await apiFetch(`${basePath}/sessions/aggregates`);
@@ -108,9 +115,12 @@ export function BridgeSessions() {
                 const aggregates = await res.json() ?? [];
                 if (cancelled)
                     return;
-                setTokensMap(applySessionAggregates(current, aggregates, filtered));
+                setTokensMap(applySessionAggregates(tokensMapRef.current, aggregates, filteredRef.current));
             }
             catch { /* leave the column blank */ }
+            finally {
+                aggregatesInFlight.current = false;
+            }
         })();
         return () => { cancelled = true; };
     }, [filtered, apiFetch, basePath]);
