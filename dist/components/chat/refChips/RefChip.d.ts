@@ -4,7 +4,7 @@ interface RefChipNodeProps {
     };
 }
 export declare function RefChip(props: RefChipNodeProps): import("react/jsx-runtime").JSX.Element;
-export declare function TodoChip({ refId }: {
+export declare function NoteboardItemChip({ refId }: {
     refId: string;
 }): import("react/jsx-runtime").JSX.Element;
 export {};

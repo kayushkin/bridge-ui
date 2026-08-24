@@ -1,4 +1,3 @@
-import type { Root } from 'mdast';
-export type RefKind = 'session' | 'todo';
-export declare function remarkRefChips(): (tree: Root) => void;
+export { parseRefChips, remarkRefChips } from '@kayushkin/chat-core';
+export type { RefKind, RefSegment } from '@kayushkin/chat-core';
 //# sourceMappingURL=remarkRefChips.d.ts.map

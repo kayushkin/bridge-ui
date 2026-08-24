@@ -42,6 +42,11 @@ function referenceHref(routes, kind, refId) {
     if (kind === 'session') {
         return routes.chat ? `${routes.chat}?session=${encodeURIComponent(refId)}` : '';
     }
+    // A bare uuid with no cue: only the reference resolver knows what it names,
+    // and this link surface has no resolver. A plain span is the honest render —
+    // a link to the notes page would present a guess as a fact.
+    if (kind === 'uuid')
+        return '';
     // note / todo — one noteboard id space, one host page. `task` never reaches
     // here: the parser has already resolved it to `todo`.
     return routes.notes;

@@ -17,6 +17,9 @@ interface BridgeProviderProps {
     /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
      * an item's title/status and say so. */
     noteboardBasePath?: string;
+    /** The host's reference-resolver endpoint (dash: "/api/resolve"). If
+     * omitted, bare-uuid reference chips stay plain text. */
+    resolveEndpoint?: string;
     /** Base path for llm-bridge-adapter API. If omitted, bus_session links can't
      * resolve to a bridge_id and the chat button on those cards stays disabled. */
     bridgeAdapterBasePath?: string;
@@ -41,6 +44,6 @@ interface BridgeProviderProps {
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map

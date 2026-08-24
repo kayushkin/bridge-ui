@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../../context'
-import { TodoChip } from './refChips/RefChip'
+import { NoteboardItemChip } from './refChips/RefChip'
 import { preserveUnchangedKanbanPayload, useKanban } from '../../useKanban'
 import type { EntityCardView, EntityTag } from '../../types-kanban'
 
@@ -186,7 +186,7 @@ export function LinkedKanbanPanel({ sessionId, onToggleCollapse, style, paneKey 
                             of a reference this fleet already has one of. It would
                             NOT be acceptable per row in a virtualized list. */}
                         <div className="bc-linked-kanban-card-title">
-                          <TodoChip refId={card.card_id} />
+                          <NoteboardItemChip refId={card.card_id} />
                         </div>
                         {item?.status && <span className="bc-linked-kanban-chip">{item.status}</span>}
                       </div>

@@ -84,6 +84,11 @@ export interface BridgeConfig {
    * slash. Used by chat reference chips to resolve a todo/item id to its
    * title/status. If empty, todo chips render but say lookup isn't configured. */
   noteboardBasePath: string
+  /** The host's reference-resolver endpoint (e.g. dash's "/api/resolve"),
+   * which classifies a bare uuid by probing the stores in the entity-type
+   * registry. If empty, bare-uuid ref chips render as plain text — with no
+   * resolver there is no honest way to say what an unclassified id names. */
+  resolveEndpoint: string
   /** Base path for llm-bridge-adapter API (e.g. "/api/llm-bridge-adapter"). No
    * trailing slash. Used to resolve bus_session_id → bridge_id when a kanban
    * card is linked by entity_type=bus_session. If empty, those cards' chat

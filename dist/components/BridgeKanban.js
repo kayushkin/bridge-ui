@@ -11,7 +11,7 @@ import { dispatchAgentOnCard } from '../agentDispatch';
 import { SignalKindQuestion } from '../types';
 import { groupSignalsByRequest, useOpenSignalsByTodo, useOpenSignalsForTodo } from './chat/signalData';
 import { SignalRequestCard } from './chat/SignalCard';
-import { fetchTodoRef } from './chat/refChips/refData';
+import { fetchNoteboardItemRef } from './chat/refChips/refData';
 import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
 // latestSessionLink returns the most recently attached session, which is the one
 // that describes what is happening to the card now.
@@ -784,7 +784,7 @@ export function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPa
  * like from the data side.
  *
  * A `note` ref now resolves to its title and links to the host's notes page.
- * The resolution is `fetchTodoRef`, the same call the chat's reference chips
+ * The resolution is `fetchNoteboardItemRef`, the same call the chat's reference chips
  * make — reused rather than re-derived, so a todo reads identically wherever it
  * is referenced.
  *
@@ -834,7 +834,7 @@ function EntityLinkRow({ link, onOpenChat, onDeleteLink, }) {
         if (!isNoteLink || !noteboardBasePath)
             return;
         let cancelled = false;
-        fetchTodoRef(fetchFn, noteboardBasePath, link.entity_ref)
+        fetchNoteboardItemRef(fetchFn, noteboardBasePath, link.entity_ref)
             .then(ref => {
             if (!cancelled && ref?.title)
                 setTitle(ref.title);

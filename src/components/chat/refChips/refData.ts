@@ -1,4 +1,5 @@
 import type { FetchFn } from '../../../types'
+import type { ResolvedRefMatch, ResolveResponse } from '@kayushkin/chat-core'
 
 // The core session fields the chip needs eagerly — for the label (name +
 // type/purpose emoji) and the dropdown's primary rows. Sourced from
@@ -16,9 +17,13 @@ export interface SessionCore {
   updated_at: string
 }
 
-// The fields the todo chip shows. Sourced from the noteboard item. Fetched
-// eagerly too, so the chip can label itself with the todo title.
-export interface TodoRef {
+// The fields the noteboard chip shows — for any item type in noteboard's one
+// id space (note, todo, rank, workspace). Fetched eagerly too, so the chip can
+// label itself with the item's title. `type` comes from the item itself, which
+// is the authority — the cue word or resolver match that led here is only what
+// made the lookup happen.
+export interface NoteboardItemRef {
+  type: string
   title: string
   status: string
   priority: number
@@ -45,7 +50,7 @@ function str(o: Record<string, unknown>, k: string): string {
 // are cached by id for a short window and shared across chips.
 const CORE_TTL_MS = 30_000
 const sessionCoreCache = new Map<string, { at: number; p: Promise<SessionCore> }>()
-const todoCache = new Map<string, { at: number; p: Promise<TodoRef> }>()
+const noteboardItemCache = new Map<string, { at: number; p: Promise<NoteboardItemRef> }>()
 
 function cached<T>(cache: Map<string, { at: number; p: Promise<T> }>, key: string, make: () => Promise<T>): Promise<T> {
   const now = Date.now()
@@ -77,12 +82,13 @@ export function fetchSessionCore(fetchFn: FetchFn, basePath: string, sessionId: 
   })
 }
 
-export function fetchTodoRef(fetchFn: FetchFn, noteboardBasePath: string, itemId: string): Promise<TodoRef> {
-  return cached(todoCache, itemId, async () => {
+export function fetchNoteboardItemRef(fetchFn: FetchFn, noteboardBasePath: string, itemId: string): Promise<NoteboardItemRef> {
+  return cached(noteboardItemCache, itemId, async () => {
     const raw = await getJSON(fetchFn, `${noteboardBasePath}/api/items/${encodeURIComponent(itemId)}`)
     const o = (raw ?? {}) as Record<string, unknown>
     const tags = Array.isArray(o.tags) ? (o.tags as unknown[]).filter((t): t is string => typeof t === 'string') : []
     return {
+      type: str(o, 'type'),
       title: str(o, 'title'),
       status: str(o, 'status'),
       priority: typeof o.priority === 'number' ? o.priority : 0,
@@ -126,6 +132,90 @@ export async function fetchSessionCost(fetchFn: FetchFn, basePath: string, sessi
   } catch {
     return null
   }
+}
+
+// --- batched reference resolution ---
+//
+// A bare uuid carries no store hint, so the host's resolver (dash's
+// `POST /api/resolve`) classifies it against the entity-type registry. One
+// transcript can mount dozens of uuid chips in a render pass; ids queue for a
+// short flush window and go out as one batch, and results cache like the
+// eager fetches above. Wire types come from `@kayushkin/chat-core`, which owns
+// the resolver contract for every chat surface.
+
+const RESOLVE_FLUSH_MS = 25
+const RESOLVE_BATCH_MAX = 128 // dash's per-call cap
+
+const resolvedRefCache = new Map<string, { at: number; p: Promise<ResolvedRefMatch[]> }>()
+
+interface ResolveWaiter {
+  resolve: (m: ResolvedRefMatch[]) => void
+  reject: (e: unknown) => void
+}
+
+// Keyed by endpoint so two providers on one page never cross wires. The fetch
+// function used for a flush is the one the first enqueuer supplied; every
+// consumer of one endpoint shares one auth'd fetch in practice.
+const resolveQueues = new Map<string, { fetchFn: FetchFn; pending: Map<string, ResolveWaiter[]>; timer: ReturnType<typeof setTimeout> | null }>()
+
+async function flushResolveQueue(endpoint: string): Promise<void> {
+  const queue = resolveQueues.get(endpoint)
+  if (!queue) return
+  queue.timer = null
+  const taken = queue.pending
+  queue.pending = new Map()
+  const ids = [...taken.keys()]
+  for (let start = 0; start < ids.length; start += RESOLVE_BATCH_MAX) {
+    const batch = ids.slice(start, start + RESOLVE_BATCH_MAX)
+    try {
+      const res = await queue.fetchFn(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: batch }),
+      })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      const response = (await res.json()) as ResolveResponse
+      const errorsByID = new Map((response.errors ?? []).map(e => [e.id, e.error]))
+      for (const id of batch) {
+        const idError = errorsByID.get(id)
+        const matches = response.results[id]
+        for (const waiter of taken.get(id) ?? []) {
+          // A per-id error means the misses are not definitive — reject so the
+          // cache evicts and the next mount retries, rather than caching a
+          // store outage as "this id names nothing".
+          if (idError !== undefined) waiter.reject(new Error(idError))
+          else if (matches === undefined) waiter.reject(new Error('resolver response is missing this id'))
+          else waiter.resolve(matches)
+        }
+      }
+    } catch (e) {
+      for (const id of batch) {
+        for (const waiter of taken.get(id) ?? []) waiter.reject(e)
+      }
+    }
+  }
+}
+
+function enqueueResolve(fetchFn: FetchFn, endpoint: string, id: string): Promise<ResolvedRefMatch[]> {
+  let queue = resolveQueues.get(endpoint)
+  if (!queue) {
+    queue = { fetchFn, pending: new Map(), timer: null }
+    resolveQueues.set(endpoint, queue)
+  }
+  const q = queue
+  return new Promise<ResolvedRefMatch[]>((resolve, reject) => {
+    const waiters = q.pending.get(id)
+    if (waiters) waiters.push({ resolve, reject })
+    else q.pending.set(id, [{ resolve, reject }])
+    q.timer ??= setTimeout(() => void flushResolveQueue(endpoint), RESOLVE_FLUSH_MS)
+  })
+}
+
+/** Every registered store that recognizes `id`, per the host's resolver; an
+ *  empty array is a definitive miss. Batched and cached like the other chip
+ *  fetches. */
+export function fetchResolvedRef(fetchFn: FetchFn, resolveEndpoint: string, id: string): Promise<ResolvedRefMatch[]> {
+  return cached(resolvedRefCache, id, () => enqueueResolve(fetchFn, resolveEndpoint, id))
 }
 
 // The chip label emoji categorizes a session the same way the filter bar does:
