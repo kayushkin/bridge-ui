@@ -2384,6 +2384,120 @@ console.log('\nStatusDot: every state it can render has a stylesheet rule')
 }
 
 
+// --- A panel re-checks the capability its button needs -------------------
+//
+// `showTools` and `showSystemPrompt` are Workspace component state. The
+// Workspace stays mounted when its session changes, and `capabilities` is
+// recomputed from the NEW session's harness — so the toggle outlives the
+// capability that justified opening it.
+//
+// Gating only the button is therefore not enough. Open Tools on a claude_code
+// session, point the same workspace at a session on a harness without the
+// `tools` capability, and the button disappears while the panel stays mounted,
+// now rendering the new session's info behind a control that harness never
+// earned. That shipped: `{showTools && bridge.activeSession?.info && ...}` and
+// `{showSystemPrompt && bridge.activeSession?.info && ...}` both omitted the
+// gate their buttons carried. The write half already got this right — dash's
+// SessionControls gates its grid on `showTools && has('tools')`.
+//
+// This is a SOURCE check, not a render check, and deliberately so: reproducing
+// it through the renderer means mounting Workspace with a bridge context, a
+// harness list and two sessions, and the thing being pinned is a one-line JSX
+// condition. The discipline it enforces is that a toggle must never begin a JSX
+// conditional on its own — the capability const comes first.
+{
+  // Same root resolution, and the same reason, as the status-dot block above:
+  // node_modules is often a symlink to another checkout, so __dirname can land
+  // in a different working tree and score a false pass.
+  let root = process.env.npm_config_local_prefix || null
+  if (!root) {
+    root = __dirname
+    while (!(existsSync(join(root, 'package.json')) && existsSync(join(root, 'src')))) {
+      const up = dirname(root)
+      if (up === root) { root = null; break }
+      root = up
+    }
+  }
+  const rootName = root && existsSync(join(root, 'package.json'))
+    ? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name
+    : null
+  check('found THIS package to read Workspace.tsx from', rootName === '@kayushkin/bridge-ui',
+    `resolved ${root} (name ${rootName})`)
+
+  if (rootName === '@kayushkin/bridge-ui') {
+    const workspace = readFileSync(join(root, 'src/components/chat/Workspace.tsx'), 'utf8')
+
+    // The pairs this file owns: a panel toggle, and the capability const its
+    // button is gated on. Derived from the source, not hardcoded, so a renamed
+    // const fails loudly here instead of quietly dropping out of the sweep.
+    const capabilityConsts = new Map(
+      [...workspace.matchAll(/const\s+(\w+CapabilityHeld)\s*=\s*capabilities\.has\('([\w]+)'\)/g)]
+        .map(m => [m[2], m[1]]),
+    )
+    const toggles = new Set(
+      [...workspace.matchAll(/const\s+\[(show\w+),\s*set\w+\]\s*=\s*useState\(false\)/g)].map(m => m[1]),
+    )
+
+    // Prove the instrument can say "yes" before trusting it to say "no": two
+    // regexes that quietly stopped matching would report a vacuous all-clear.
+    check('parsed the capability consts (instrument is live)', capabilityConsts.size >= 2,
+      `parsed ${[...capabilityConsts.keys()].join(', ') || 'nothing'}`)
+    check('parsed the panel toggles (instrument is live)', toggles.size >= 2,
+      `parsed ${[...toggles].join(', ') || 'nothing'}`)
+    check('the two panel toggles this check is about are present',
+      toggles.has('showTools') && toggles.has('showSystemPrompt'),
+      `parsed ${[...toggles].join(', ')}`)
+
+    // One authoring per capability. Two `capabilities.has('tools')` in the file
+    // is how the button and the panel drifted apart in the first place.
+    for (const [capability, constName] of capabilityConsts) {
+      const inline = [...workspace.matchAll(new RegExp(`capabilities\\.has\\('${capability}'\\)`, 'g'))].length
+      check(`capabilities.has('${capability}') is written once, bound to ${constName}`, inline === 1,
+        `found ${inline} occurrences`)
+    }
+
+    // The discipline: a toggle never begins a JSX conditional. Every render
+    // site that branches on the toggle must name the capability const too.
+    const pairs = [['showTools', 'tools'], ['showSystemPrompt', 'system_prompt']]
+    const conditionalLinesFor = (source, toggle) => source
+      .split('\n')
+      .filter(line => new RegExp(`\\{[^}]*\\b${toggle}\\b[^}]*&&`).test(line))
+
+    for (const [toggle, capability] of pairs) {
+      const constName = capabilityConsts.get(capability)
+      const lines = conditionalLinesFor(workspace, toggle)
+      // A toggle with no conditional render site means the panel was removed or
+      // renamed, and an empty sweep would otherwise pass. Say so instead.
+      check(`${toggle} has a conditional render site to check`, lines.length >= 1,
+        `found ${lines.length}`)
+      const ungated = lines.filter(line => !constName || !line.includes(constName))
+      check(`every ${toggle} render site also checks ${constName || `the ${capability} capability`}`,
+        ungated.length === 0,
+        ungated.length ? ungated.map(l => l.trim()).join(' | ') : '')
+    }
+
+    // Negative control. The predicate above is the whole instrument, so run it
+    // against a line carrying the exact defect that shipped: if this scores
+    // clean, the check is a cry-wolf and the greens above mean nothing.
+    const defectiveSource = "  const [showTools, setShowTools] = useState(false)\n" +
+      "      {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}\n"
+    const controlLines = conditionalLinesFor(defectiveSource, 'showTools')
+    check('CONTROL the predicate finds the shipped defect line', controlLines.length === 1,
+      `matched ${controlLines.length}`)
+    check('CONTROL and calls it ungated without the capability const',
+      controlLines.every(line => !line.includes('toolsCapabilityHeld')))
+
+    // Second control, the other direction: a repaired line must NOT be flagged,
+    // or the check would refuse every possible source and pass by refusing.
+    const repairedSource =
+      "      {toolsCapabilityHeld && showTools && bridge.activeSession?.info && <ToolsPanel info={x} />}\n"
+    check('CONTROL a repaired line is accepted',
+      conditionalLinesFor(repairedSource, 'showTools')
+        .every(line => line.includes('toolsCapabilityHeld')))
+  }
+}
+
+
 // --- Live session list: replay across a dropped connection ---------------
 //
 // These are the checks the two retired polls were standing in for. A check

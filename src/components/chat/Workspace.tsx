@@ -271,6 +271,21 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
     return new Set(info?.capabilities ?? [])
   }, [harnesses, activeHarness])
 
+  // One authoring per capability, read by BOTH the button that opens a panel
+  // and the panel's own render site.
+  //
+  // `showTools` / `showSystemPrompt` are component state, and this Workspace
+  // stays mounted when its session changes — while `capabilities` is recomputed
+  // from the NEW session's harness. So the toggle outlives the capability that
+  // justified it. Gating only the button leaves the panel mounted after a swap
+  // to a harness that does not carry the capability: the button disappears and
+  // the panel keeps rendering, now against the new session's info, behind a
+  // control that harness never earned. The write half of `tools` already gets
+  // this right — dash's SessionControls gates its grid on
+  // `showTools && has('tools')`, not on `showTools` alone.
+  const toolsCapabilityHeld = capabilities.has('tools')
+  const systemPromptCapabilityHeld = capabilities.has('system_prompt')
+
   const harnessModels = useMemo(() => {
     const harness = harnesses.find(h => h.name === activeHarness)
     const providers = harness?.supported_providers
@@ -416,7 +431,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
           {capabilities.has('fork') && (
             <button className="bc-ctrl-btn" onClick={handleFork} title="Fork session">Fork</button>
           )}
-          {capabilities.has('system_prompt') && (
+          {systemPromptCapabilityHeld && (
             <button
               className="bc-ctrl-btn"
               onClick={() => setShowSystemPrompt(true)}
@@ -424,7 +439,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
               title={bridge.activeSession.info ? 'View system prompt' : 'System prompt will be available after the session starts'}
             >System Prompt</button>
           )}
-          {capabilities.has('tools') && (
+          {toolsCapabilityHeld && (
             <button
               className={`bc-ctrl-btn ${showTools ? 'bc-ctrl-btn-active' : ''}`}
               onClick={() => setShowTools(s => !s)}
@@ -535,7 +550,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         <LayoutRenderer tree={minimal ? { kind: 'leaf', viewType: mobilePane } : workspace.layout} />
       </WorkspaceProvider>
       {renderControls}
-      {showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
+      {toolsCapabilityHeld && showTools && bridge.activeSession?.info && <ToolsPanel info={bridge.activeSession.info} />}
       {/* Composer stays visible in pty mode too — the server's /send
           handler routes the typed message into the pty fd, so users can
           enter text from either the Composer or the BridgeAttach pane. */}
@@ -548,7 +563,7 @@ export function Workspace({ workspace, focused, onFocus, onUpdate, onClose, onMa
         onStop={bridge.interrupt}
         onResume={bridge.resume}
       />
-      {showSystemPrompt && bridge.activeSession?.info && (
+      {systemPromptCapabilityHeld && showSystemPrompt && bridge.activeSession?.info && (
         <SystemPromptModal
           info={bridge.activeSession.info}
           onClose={() => setShowSystemPrompt(false)}
