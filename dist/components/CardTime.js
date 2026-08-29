@@ -1,6 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
+import { entityTarget } from '../entityLinks';
 import { formatDurationCompact, formatDurationProse } from '../utils';
 /**
  * A card's clock, as a badge.
@@ -186,7 +188,64 @@ function TimelineRow({ entry }) {
     const gap = formatDurationCompact(entry.seconds_since_previous_event);
     const held = formatDurationCompact(entry.segment_seconds);
     const when = new Date(entry.event.occurred_at);
-    return (_jsxs("li", { className: `bk-timeline-entry bk-timeline-${entry.clock_state}`, children: [gap && entry.seconds_since_previous_event > 0 && (_jsxs("div", { className: "bk-timeline-gap", children: ["\u2193 ", gap, " later"] })), _jsxs("div", { className: "bk-timeline-head", children: [_jsx("span", { className: "bk-timeline-kind", children: describeEventKind(entry.event.kind) }), _jsx("span", { className: "bk-timeline-when", title: when.toLocaleString(), children: when.toLocaleString() }), entry.event.actor && _jsx("span", { className: "bk-timeline-actor", children: entry.event.actor })] }), entry.event.summary && _jsx("div", { className: "bk-timeline-summary", children: entry.event.summary }), entry.note && _jsx(NoteBody, { note: entry.note }), held && entry.segment_seconds > 0 && (_jsxs("div", { className: "bk-timeline-segment", children: [entry.counts_against_budget ? 'counted' : entry.clock_state === 'paused' ? 'waiting' : 'after this', ' ', held, entry.segment_open ? ' and running' : ''] }))] }));
+    return (_jsxs("li", { className: `bk-timeline-entry bk-timeline-${entry.clock_state}`, children: [gap && entry.seconds_since_previous_event > 0 && (_jsxs("div", { className: "bk-timeline-gap", children: ["\u2193 ", gap, " later"] })), _jsxs("div", { className: "bk-timeline-head", children: [_jsx("span", { className: "bk-timeline-kind", children: describeEventKind(entry.event.kind) }), _jsx("span", { className: "bk-timeline-when", title: when.toLocaleString(), children: when.toLocaleString() }), entry.event.actor && _jsx("span", { className: "bk-timeline-actor", children: entry.event.actor })] }), entry.event.summary && _jsx("div", { className: "bk-timeline-summary", children: entry.event.summary }), _jsx(TimelineSubject, { event: entry.event }), entry.note && _jsx(NoteBody, { note: entry.note }), held && entry.segment_seconds > 0 && (_jsxs("div", { className: "bk-timeline-segment", children: [entry.counts_against_budget ? 'counted' : entry.clock_state === 'paused' ? 'waiting' : 'after this', ' ', held, entry.segment_open ? ' and running' : ''] }))] }));
+}
+/** What an event was ABOUT, when it was about something addressable.
+ *
+ * kanban-store records the entity on the event's `detail` whenever a link
+ * creates one: the mail that arrived, the session an agent was handed. The
+ * timeline had that all along and rendered none of it, so "Handed to an agent"
+ * named no agent and "Email arrived" named no email — the reader had to go
+ * looking in the links list for something the row already knew.
+ *
+ * Anything without a resolvable subject renders nothing rather than an empty
+ * chip. */
+function TimelineSubject({ event }) {
+    const { routes, mailPagePath } = useBridgeConfig();
+    const subject = eventSubject(event);
+    if (!subject)
+        return null;
+    const { entityType, entityRef } = subject;
+    const target = entityTarget(entityType, entityRef);
+    if (entityType === 'session' && routes.chat) {
+        return (_jsxs("div", { className: "bk-timeline-subject", children: [_jsx("span", { className: "bk-link-type", children: "session" }), _jsxs(Link, { className: "bk-link-ref-action", to: `${routes.chat}?session=${encodeURIComponent(entityRef)}`, title: entityRef, children: [shortRef(entityRef), " \u2197"] })] }));
+    }
+    if (entityType === 'email' && mailPagePath) {
+        // The locator is "account:message id"; the Mail page wants them apart.
+        const cut = entityRef.indexOf(':');
+        if (cut > 0) {
+            const account = entityRef.slice(0, cut);
+            const message = entityRef.slice(cut + 1);
+            return (_jsxs("div", { className: "bk-timeline-subject", children: [_jsx("span", { className: "bk-link-type", children: "email" }), _jsx(Link, { className: "bk-link-ref-action", title: entityRef, to: `${mailPagePath}?account=${encodeURIComponent(account)}&message=${encodeURIComponent(message)}`, children: "open in Mail \u2197" })] }));
+        }
+    }
+    if (target) {
+        return (_jsxs("div", { className: "bk-timeline-subject", children: [_jsx("span", { className: "bk-link-type", children: entityType }), _jsxs("a", { className: "bk-link-ref-action", href: target.href, target: "_blank", rel: "noopener noreferrer", title: entityRef, children: [target.label, " \u2197"] })] }));
+    }
+    return (_jsxs("div", { className: "bk-timeline-subject", children: [_jsx("span", { className: "bk-link-type", children: entityType }), _jsx("span", { className: "bk-link-ref", children: shortRef(entityRef) })] }));
+}
+/** Reads the entity off an event's detail.
+ *
+ * `detail` is free-form JSON by design — kanban-store keeps whatever a caller
+ * recorded — so this checks the shape rather than trusting it. A detail that is
+ * not an object with two string fields is not a subject, and saying so quietly
+ * is right: detail is also where callers put things that are not entities. */
+function eventSubject(event) {
+    const detail = event.detail;
+    if (!detail || typeof detail !== 'object')
+        return null;
+    const entityType = detail.entity_type;
+    const entityRef = detail.entity_ref;
+    if (typeof entityType !== 'string' || typeof entityRef !== 'string')
+        return null;
+    if (!entityType || !entityRef)
+        return null;
+    return { entityType, entityRef };
+}
+/** Session ids and locators are long and mostly prefix. Show the tail, which is
+ * the part that differs, and keep the whole thing on hover. */
+function shortRef(ref) {
+    return ref.length <= 28 ? ref : '…' + ref.slice(-24);
 }
 function NoteBody({ note }) {
     return (_jsxs("div", { className: "bk-timeline-note", children: [note.kind !== 'note' && _jsx("span", { className: "bk-tag", children: note.kind }), note.body] }));

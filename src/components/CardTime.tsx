@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
-import type { CardNote, CardTimeSummary, CardTimeline, ClockState, TimelineEntry } from '../types-kanban'
+import type { CardEvent, CardNote, CardTimeSummary, CardTimeline, ClockState, TimelineEntry } from '../types-kanban'
+import { entityTarget } from '../entityLinks'
 import { formatDurationCompact, formatDurationProse } from '../utils'
 
 /**
@@ -280,6 +282,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
         {entry.event.actor && <span className="bk-timeline-actor">{entry.event.actor}</span>}
       </div>
       {entry.event.summary && <div className="bk-timeline-summary">{entry.event.summary}</div>}
+      <TimelineSubject event={entry.event} />
       {entry.note && <NoteBody note={entry.note} />}
       {held && entry.segment_seconds > 0 && (
         <div className="bk-timeline-segment">
@@ -289,6 +292,88 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
       )}
     </li>
   )
+}
+
+/** What an event was ABOUT, when it was about something addressable.
+ *
+ * kanban-store records the entity on the event's `detail` whenever a link
+ * creates one: the mail that arrived, the session an agent was handed. The
+ * timeline had that all along and rendered none of it, so "Handed to an agent"
+ * named no agent and "Email arrived" named no email — the reader had to go
+ * looking in the links list for something the row already knew.
+ *
+ * Anything without a resolvable subject renders nothing rather than an empty
+ * chip. */
+function TimelineSubject({ event }: { event: CardEvent }) {
+  const { routes, mailPagePath } = useBridgeConfig()
+  const subject = eventSubject(event)
+  if (!subject) return null
+
+  const { entityType, entityRef } = subject
+  const target = entityTarget(entityType, entityRef)
+
+  if (entityType === 'session' && routes.chat) {
+    return (
+      <div className="bk-timeline-subject">
+        <span className="bk-link-type">session</span>
+        <Link className="bk-link-ref-action" to={`${routes.chat}?session=${encodeURIComponent(entityRef)}`}
+          title={entityRef}>{shortRef(entityRef)} ↗</Link>
+      </div>
+    )
+  }
+  if (entityType === 'email' && mailPagePath) {
+    // The locator is "account:message id"; the Mail page wants them apart.
+    const cut = entityRef.indexOf(':')
+    if (cut > 0) {
+      const account = entityRef.slice(0, cut)
+      const message = entityRef.slice(cut + 1)
+      return (
+        <div className="bk-timeline-subject">
+          <span className="bk-link-type">email</span>
+          <Link className="bk-link-ref-action" title={entityRef}
+            to={`${mailPagePath}?account=${encodeURIComponent(account)}&message=${encodeURIComponent(message)}`}
+          >open in Mail ↗</Link>
+        </div>
+      )
+    }
+  }
+  if (target) {
+    return (
+      <div className="bk-timeline-subject">
+        <span className="bk-link-type">{entityType}</span>
+        <a className="bk-link-ref-action" href={target.href} target="_blank" rel="noopener noreferrer"
+          title={entityRef}>{target.label} ↗</a>
+      </div>
+    )
+  }
+  return (
+    <div className="bk-timeline-subject">
+      <span className="bk-link-type">{entityType}</span>
+      <span className="bk-link-ref">{shortRef(entityRef)}</span>
+    </div>
+  )
+}
+
+/** Reads the entity off an event's detail.
+ *
+ * `detail` is free-form JSON by design — kanban-store keeps whatever a caller
+ * recorded — so this checks the shape rather than trusting it. A detail that is
+ * not an object with two string fields is not a subject, and saying so quietly
+ * is right: detail is also where callers put things that are not entities. */
+function eventSubject(event: CardEvent): { entityType: string; entityRef: string } | null {
+  const detail = event.detail
+  if (!detail || typeof detail !== 'object') return null
+  const entityType = (detail as Record<string, unknown>).entity_type
+  const entityRef = (detail as Record<string, unknown>).entity_ref
+  if (typeof entityType !== 'string' || typeof entityRef !== 'string') return null
+  if (!entityType || !entityRef) return null
+  return { entityType, entityRef }
+}
+
+/** Session ids and locators are long and mostly prefix. Show the tail, which is
+ * the part that differs, and keep the whole thing on hover. */
+function shortRef(ref: string): string {
+  return ref.length <= 28 ? ref : '…' + ref.slice(-24)
 }
 
 function NoteBody({ note }: { note: CardNote }) {

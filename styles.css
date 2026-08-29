@@ -5524,3 +5524,28 @@
   padding: 6px 2px;
 }
 .bk-column-more-note { font-size: 0.72em; opacity: 0.5; }
+
+/* ---- What a timeline event was about ---- */
+/* The entity an event names — the session an agent was handed, the mail that
+   arrived. Indented under the row's summary so it reads as part of that step
+   rather than as a step of its own. */
+.bk-timeline-subject {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0 2px;
+  font-size: 0.78em;
+}
+.bk-timeline-subject .bk-link-ref {
+  color: var(--text-dim);
+}
+
+/* A filesystem path is not a link. Shown as what it is, so nobody clicks it
+   expecting a browser to open something. */
+.bk-link-path {
+  font: 0.85em/1.4 var(--mono, ui-monospace, monospace);
+  color: var(--text-dim);
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

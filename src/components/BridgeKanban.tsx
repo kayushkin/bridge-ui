@@ -6,6 +6,7 @@ import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban } from '../useKanban'
 import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
 import { formatAgeCompact } from '../utils'
+import { entityTarget, isLocalPathRef } from '../entityLinks'
 import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime'
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt'
 import { dispatchAgentOnCard } from '../agentDispatch'
@@ -1702,6 +1703,10 @@ function EntityLinkRow({
   const [title, setTitle] = useState<string | null>(null)
 
   const isSessionLink = link.entity_type === 'session' && !!link.entity_ref
+  // A pull request, a commit or a remote repo is a real address. Resolving it
+  // here rather than in kanban-store is deliberate: the store publishes an
+  // entity-type registry and leaves resolution to whoever knows the service.
+  const target = entityTarget(link.entity_type, link.entity_ref)
   // `note` is noteboard's whole item space, todos included — the registry entry
   // points at `/api/items`, not at a notes-only route.
   const isNoteLink = link.entity_type === 'note' && !!link.entity_ref
@@ -1739,6 +1744,22 @@ function EntityLinkRow({
           // uuid is what the row actually records.
           title={`Open ${link.entity_ref} in notes`}
         >{title ?? link.entity_ref} ↗</Link>
+      ) : target ? (
+        <a
+          className="bk-link-ref bk-link-ref-action"
+          href={target.href}
+          target="_blank"
+          // noreferrer as well as noopener: this opens a repository URL, and the
+          // referrer would say which board the reader came from.
+          rel="noopener noreferrer"
+          // The full ref stays on hover. The label is the readable part — a
+          // shortened sha or a PR number — and the ref is what the row records.
+          title={link.entity_ref}
+        >{target.label} ↗</a>
+      ) : isLocalPathRef(link.entity_type) ? (
+        // A path on this machine, shown as one. Not underlined and not
+        // clickable, because there is nothing for a browser to open.
+        <code className="bk-link-ref bk-link-path">{link.entity_ref}</code>
       ) : (
         <span className="bk-link-ref">{title ?? link.entity_ref}</span>
       )}
