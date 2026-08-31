@@ -268,6 +268,11 @@ const EVENT_KIND_LABELS = {
     note_added: 'Note',
     waiting_started: 'Waiting on someone else',
     waiting_ended: 'Ball back with us',
+    // Kinds this store has never defined. kind is deliberately open — an action
+    // it has never heard of is kept — and these are the two the demo team
+    // records: work handed to a reviewer, and the verdict coming back.
+    pull_request_opened: 'Pull request opened',
+    pull_request_reviewed: 'Pull request reviewed',
 };
 export function describeEventKind(kind) {
     return EVENT_KIND_LABELS[kind] ?? kind.replace(/_/g, ' ');
