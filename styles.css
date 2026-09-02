@@ -3360,6 +3360,10 @@
   --bc-surface:        color-mix(in srgb, var(--bg-surface) 55%, var(--bg));
   --bc-surface-strong: color-mix(in srgb, var(--bg-surface) 78%, var(--bg));
   --bc-edge:     color-mix(in srgb, white 6%, var(--bc-surface-thin));
+  /* What the header's chips sit on: the harness tint at the band where they
+   * live (16% at the left edge fading to 5% by 38%), over the header's own
+   * white-4% lift. */
+  --bc-header-surface: color-mix(in srgb, var(--bc-harness, var(--accent)) 12%, color-mix(in srgb, white 4%, var(--bc-surface-thin)));
   --bc-edge-lit: color-mix(in srgb, white 11%, var(--bc-surface-strong));
   --bc-halo: 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent),
              0 0 28px -4px color-mix(in srgb, var(--accent) 50%, transparent);
@@ -3480,8 +3484,8 @@
   gap: 6px;
   padding: 3px 10px 3px 8px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--bc-harness, var(--accent)) 36%, var(--bc-surface-thin));
-  background: color-mix(in srgb, var(--bc-harness, var(--accent)) 14%, var(--bc-surface-thin));
+  border: 1px solid color-mix(in srgb, var(--bc-harness, var(--accent)) 36%, var(--bc-header-surface));
+  background: color-mix(in srgb, var(--bc-harness, var(--accent)) 14%, var(--bc-header-surface));
   color: color-mix(in srgb, var(--bc-harness, var(--accent)) 75%, var(--text));
   font-size: 0.72em;
   font-weight: 500;
@@ -3503,7 +3507,7 @@
   padding: 3px 10px 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--text) 6%, var(--bc-surface-thin));
+  background: color-mix(in srgb, var(--text) 6%, var(--bc-header-surface));
   color: var(--text);
   font-size: 0.72em;
   font-weight: 500;
@@ -3535,7 +3539,7 @@
   padding: 3px 10px 3px 9px;
   border-radius: 999px;
   border: 1px solid var(--bc-edge);
-  background: color-mix(in srgb, white 5%, var(--bc-surface-thin));
+  background: color-mix(in srgb, white 5%, var(--bc-header-surface));
   color: var(--text);
   font-size: 0.74em;
   font-weight: 500;
@@ -3546,7 +3550,7 @@
 }
 .bc-repo-chip:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--bc-edge));
-  background: color-mix(in srgb, white 8%, var(--bc-surface-thin));
+  background: color-mix(in srgb, white 8%, var(--bc-header-surface));
 }
 .bc-repo-chip:focus-within {
   border-color: color-mix(in srgb, var(--accent) 60%, var(--bc-surface-thin));
@@ -3568,7 +3572,7 @@
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 22%, var(--bc-surface-thin));
+  background: color-mix(in srgb, var(--accent) 22%, var(--bc-header-surface));
   color: color-mix(in srgb, var(--accent) 90%, var(--text));
   line-height: 1.4;
 }
@@ -3603,7 +3607,7 @@
   padding: 3px 9px 3px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--text) 5%, var(--bc-surface-thin));
+  background: color-mix(in srgb, var(--text) 5%, var(--bc-header-surface));
   color: var(--text-muted);
   font-size: 0.7em;
   font-weight: 500;
@@ -3618,8 +3622,8 @@
   color: var(--text);
 }
 .bc-source-chip-open {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-surface-thin));
-  background: color-mix(in srgb, var(--accent) 12%, var(--bc-surface-thin));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-header-surface));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bc-header-surface));
   color: var(--text);
 }
 .bc-source-chip-label { line-height: 1; }
@@ -3688,11 +3692,11 @@
 }
 .bc-cost-clickable:hover {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  background: color-mix(in srgb, var(--accent) 6%, var(--bc-surface-thin));
+  background: color-mix(in srgb, var(--accent) 6%, var(--bc-header-surface));
 }
 .bc-cost-open {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-surface-thin));
-  background: color-mix(in srgb, var(--accent) 12%, var(--bc-surface-thin));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-header-surface));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bc-header-surface));
 }
 .bc-cost-caret { font-size: 0.85em; opacity: .55; line-height: 1; }
 .bc-cost-panel {
@@ -3926,7 +3930,7 @@
 .bc-ctrl-btn {
   border-radius: 999px;
   border-color: var(--bc-edge);
-  background: color-mix(in srgb, white 3%, var(--bc-surface-thin));
+  background: color-mix(in srgb, white 3%, color-mix(in srgb, white 4%, var(--bc-surface-thin)));
   padding: 5px 14px;
 }
 .bc-ctrl-btn-active {
@@ -3939,7 +3943,7 @@
 .bc-ctrl-select {
   border-radius: 999px;
   border-color: var(--bc-edge);
-  background: color-mix(in srgb, white 3%, var(--bc-surface-thin));
+  background: color-mix(in srgb, white 3%, color-mix(in srgb, white 4%, var(--bc-surface-thin)));
 }
 
 .bc-jump-latest {
