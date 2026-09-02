@@ -29,14 +29,6 @@ export interface BridgeRoutes {
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane.
    *  Empty means the host doesn't mount it. */
   orchestrator: string
-  /** A second chat surface the host mounts alongside this library's own, shown
-   *  as a tab beside Chat. dash carries one (its chat-core rewrite at
-   *  `/dashv2`); llmux does not, and gets no tab. Empty means none.
-   *
-   *  This library ships no such page and never will — the key exists so the
-   *  host can put its own next to Chat rather than in its outer site nav, which
-   *  is where the two belong while one is replacing the other. */
-  chatV2: string
   /** The host's single-card page, e.g. `/card`. The card id is appended as a
    *  path segment. Empty means the host mounts no such page, and the drawer then
    *  offers no link to one. */
@@ -59,7 +51,6 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   kanban: '/bridge/kanban',
   notes: '',
   orchestrator: '',
-  chatV2: '',
   card: '',
 }
 

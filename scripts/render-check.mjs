@@ -1827,7 +1827,7 @@ console.log('BridgeLayout — a narrow viewport is not permission to hide the na
 // These three render through `../src/index.ts` on purpose. Importing them from
 // their own modules would prove they render but not that they are *reachable*,
 // and reachability is the whole point: a host that builds its own layout out of
-// this library's parts (dashv2 does) can only mount what the index exports.
+// this library's parts (dash's chat page does) can only mount what the index exports.
 //
 // They are also mounted with nothing above them but `BridgeProvider`'s context
 // and a router — no `WorkspaceProvider`. That is the real deployment shape, and

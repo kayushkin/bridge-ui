@@ -16,7 +16,7 @@ import { formatCost } from '../../utils'
 // CostAggregate is a pre-computed cost object a standalone consumer can feed
 // directly instead of the raw LogRow stream. When supplied it takes
 // precedence over the rows/fallback paths and drives a drill-down chip from
-// the aggregate alone — the dashv2 page uses this because it already holds an
+// the aggregate alone — dash's chat page uses this because it already holds an
 // aggregated cost total per session and never materializes the row stream.
 export interface CostAggregate {
   totalUsd: number

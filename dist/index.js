@@ -67,7 +67,7 @@ export { DiffView, UnifiedDiffView } from './components/tools';
 export { ToolContext, useToolContext } from './components/tools';
 // The auto-grow arithmetic, exported so a host that writes its own composer
 // sizes it the same way rather than re-deriving it. Three composers on this
-// fleet grow a textarea to its content (this package's, dash's dashv2 page, and
+// fleet grow a textarea to its content (this package's, dash's chat page, and
 // dash's legacy chat) and two of them shipped the same defect: `scrollHeight`
 // excludes the border, so under `box-sizing: border-box` a bare assignment lands
 // a border-width short and the box scrolls at every size. Sharing the function
@@ -76,7 +76,7 @@ export { composerAutoGrowHeightPx } from './components/chat/Composer';
 // Shared status dot — used by header, sidebar, and composer status chip
 export { StatusDot } from './components/chat/StatusDot';
 // Presentation / self-fetching chat sub-components — exported for standalone
-// consumers (e.g. dashv2) that compose the chat surface themselves rather
+// consumers (e.g. dash's chat page) that compose the chat surface themselves rather
 // than mounting BridgeChat. Behaviour is identical to their use inside
 // BridgeChat; each takes its data via props (SessionPermissionMode also reads
 // the public BridgeConfig via useBridgeConfig).
@@ -167,7 +167,7 @@ export { SplitDragHandle } from './components/chat/SplitDragHandle';
 export { MINIMUM_PANE_PIXELS, EVEN_SPLIT_GROW_UNITS, measureSplitDragGeometry, splitGrowUnitsAfterDrag, } from './components/chat/splitDragGeometry';
 // The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
 // no router — so any surface that owns its own routing can drive the same two-way
-// behaviour BridgeChat has at `/`. dashv2 uses it verbatim rather than growing a second
+// behaviour BridgeChat has at `/`. dash's chat page uses it verbatim rather than growing a second
 // implementation that would have to be kept in step with this one. The `awaiting` latch
 // in there is the whole reason both directions can coexist; read its header before
 // wiring it.

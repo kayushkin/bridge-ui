@@ -37,7 +37,7 @@ export interface GitPanelProps {
    *  It was typed `SessionUIState` and named `uiState`, which claimed the panel
    *  cared what the session was doing. It does not — the value appears once, in
    *  a dependency array. The narrow type was also the only thing stopping a host
-   *  that tracks session state as a plain string (dashv2, on chat-core) from
+   *  that tracks session state as a plain string (dash's chat page, on chat-core) from
    *  mounting this pane at all, for a distinction the panel cannot act on. */
   refetchSignal: string
   // The repo list and the selection are the caller's, not this pane's. Inside

@@ -14,11 +14,6 @@ export function BridgeLayout({ showConformance = true }) {
     const chromeTakenOver = minimal && minimalChromeMounted;
     const tabs = [
         { to: routes.chat, label: 'Chat', end: true },
-        // Beside Chat and nowhere else: while one chat surface is replacing the
-        // other, the only comparison anyone wants is the two of them side by side.
-        // Gated on the route being named, which is how every optional tab here is
-        // gated — llmux mounts no second chat and gets no tab.
-        ...(routes.chatV2 ? [{ to: routes.chatV2, label: 'Chat v2', end: true }] : []),
         { to: routes.instances, label: 'Instances', end: false },
         { to: routes.sessions, label: 'Sessions', end: false },
         { to: routes.auth, label: 'Auth', end: false },
@@ -31,9 +26,9 @@ export function BridgeLayout({ showConformance = true }) {
         ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
         ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
         // Gated on the route being named, like every optional tab above. dash names
-        // it and gets the tab on both chat surfaces, because dashv2 mounts inside
-        // this layout and so shares this row; llmux has no /api/producer proxy, so
-        // it names no route and gets no tab rather than a link to a 404.
+        // it, and its chat mounts inside this layout so it shares this row; llmux
+        // has no /api/producer proxy, so it names no route and gets no tab rather
+        // than a link to a 404.
         ...(routes.orchestrator ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
         ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
     ];

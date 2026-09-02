@@ -7,7 +7,7 @@ import type { FetchFn } from './types'
 // The hooks in this library used to each own their `useState` + `setInterval`,
 // so a page that calls `useBridgeInstances()` from N components runs N
 // 30-second polls of `/instances` and holds N copies of the answer. dash's
-// `/dashv2` does exactly that: four call sites — `Workspace` through
+// dash's chat page does exactly that: four call sites — `Workspace` through
 // `useNewSessionTarget`, `Sidebar`, `SessionHeader`, and `NewSessionMenu` while
 // the picker is open — and three for its sibling `useBridgeMachines()`, which
 // `NewSessionMenu`, `SessionHeader` and `Sidebar` share. Nothing was wrong with

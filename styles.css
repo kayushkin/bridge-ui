@@ -1088,7 +1088,7 @@
   gap: 1px;
 }
 
-/* dashv2's timeline virtualizes one ROW per list child instead of one turn
+/* dash's chat timeline virtualizes one ROW per list child instead of one turn
  * group, so the turn's bar and tint ride on every row rather than on a wrapper
  * around them. The bar runs continuously and the header row's stronger tint
  * marks each boundary.

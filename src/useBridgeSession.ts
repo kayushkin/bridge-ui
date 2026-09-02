@@ -370,7 +370,7 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
 // streaming into a row the UI has closed. `handleInterrupt` 409s while a tool
 // still holds the turn, so this is an everyday answer, not an outage.
 //
-// chat-core settled the same question for dashv2 and wrote the contract down
+// chat-core settled the same question for dash's chat page and wrote the contract down
 // (`src/react/hooks.ts`): `stop()` sets the error and rethrows "rather than
 // optimistically marking the session idle — a failed stop must be visible, never
 // swallowed into a fake-idle." This is that rule, in the shape this hook uses:

@@ -5,7 +5,7 @@ import { SharedPoll, sharedPoll } from './sharedPoll';
 //
 // `GET /instances/{id}/status` already aggregates local / SSH / runner
 // liveness behind a single bool, so the chip needs nothing else. This lived as
-// a private `useState` + `setInterval` inside the chat Workspace; dashv2 needs
+// a private `useState` + `setInterval` inside the chat Workspace; dash's chat page needs
 // the same answer for the same instance, and two copies of that effect would
 // have meant two timers hitting one endpoint. Moving it onto SharedPoll makes
 // N callers cost one request, the same trade `useBridgeInstances` already

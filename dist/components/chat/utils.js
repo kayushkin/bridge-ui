@@ -43,7 +43,7 @@ export function harnessIsWorkingOnTurn(state) {
 // the session's mouth.
 //
 // This mirrors RESUMABLE_STATES in chat-core (src/react/hooks.ts), which
-// dashv2 shipped first. When `e1732f61` (SessionPaused on interrupt) is
+// dash's chat page shipped first. When `e1732f61` (SessionPaused on interrupt) is
 // decided and the manager starts emitting a real paused state, `paused`
 // joins both sets and nothing else changes.
 const resumableStates = new Set([

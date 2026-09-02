@@ -256,7 +256,7 @@ export function BridgeKanban() {
         // tempted to restore the annotation should know it was measured false.
         //
         // ⚠️ Do NOT cite this as precedent for keeping a defensive guard.
-        // `dash/src/pages/dashv2/panePersistence.ts` DELETED an `Array.isArray`
+        // `dash/src/pages/chat/panePersistence.ts` DELETED an `Array.isArray`
         // guard for exactly this property and recorded the measurement in its
         // place. The only thing earning this one its keep is the type.
         const placements: unknown = await res.json()
