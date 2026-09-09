@@ -53,7 +53,6 @@ export {
 export type { SessionListSnapshot } from './sessionListStore'
 
 // Hooks
-export { useBridgeSession } from './useBridgeSession'
 export { useBridgeAttach } from './useBridgeAttach'
 export type {
   AttachStatus,

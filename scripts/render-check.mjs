@@ -20,8 +20,6 @@ import {
   OrchestratorPanel,
 } from '../src/index.ts'
 import { ProducerTextWithReferenceLinks } from '../src/components/chat/producerReferences.tsx'
-import { applyEventToRows, controlRefusal, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
-import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
 import { CardDetail } from '../src/components/BridgeKanban.tsx'
@@ -152,128 +150,6 @@ console.log('BudgetCeilingBanner')
   }))
   check('falls back to the session row for the pair', html.includes('$4.00') && html.includes('$3.50'), html)
 }
-
-// --- SSE event batching -----------------------------------------------------
-//
-// These are not render assertions. They cover the reducer and the frame batcher
-// that feeds it, because that path had no repeatable check at all: the O(n^2)
-// row-merge fix was verified with a scratch harness that was thrown away.
-//
-// The load-bearing one is the differential check. Batching is only allowed to be
-// faster, never to land on different rows, so it asserts that applying a mixed
-// event sequence in frame-sized batches produces exactly what applying it one
-// event at a time does.
-
-console.log('\nsameActivity')
-{
-  check('same kind is unchanged', sameActivity({ kind: 'streaming' }, { kind: 'streaming' }))
-  check('different kind is a change', !sameActivity({ kind: 'streaming' }, { kind: 'thinking' }))
-  check('same tool is unchanged', sameActivity({ kind: 'tool', name: 'Read' }, { kind: 'tool', name: 'Read' }))
-  // The tool name is on screen, so a switch between tools has to re-render even
-  // though the kind is identical.
-  check('a different tool is a change', !sameActivity({ kind: 'tool', name: 'Read' }, { kind: 'tool', name: 'Edit' }))
-}
-
-// A scheduler the test steps by hand. A real frame clock cannot be asserted on:
-// the point is what a batch *contained*, which needs the flush to happen when
-// the test says so.
-function manualScheduler() {
-  const queued = new Map()
-  let next = 1
-  return {
-    scheduler: {
-      request(callback) { queued.set(next, callback); return next++ },
-      cancel(handle) { queued.delete(handle) },
-    },
-    frames() { return queued.size },
-    runFrame() {
-      const entries = [...queued.entries()]
-      queued.clear()
-      for (const [, callback] of entries) callback()
-    },
-  }
-}
-
-let seq = 0
-const streamEvent = (messageId, text) => ({
-  id: String(++seq),
-  type: 'stream',
-  data: {
-    event_id: seq, message_id: messageId, turn_id: 't1',
-    timestamp: '2026-07-31T20:00:00Z',
-    stream: { delta: { index: 0, type: 'text_delta', text } },
-  },
-})
-const thinkingDelta = (messageId, text) => ({
-  id: String(++seq),
-  type: 'stream',
-  data: {
-    event_id: seq, message_id: messageId, turn_id: 't1',
-    timestamp: '2026-07-31T20:00:00Z',
-    stream: { delta: { index: 0, type: 'thinking_delta', thinking: text } },
-  },
-})
-const plainEvent = (type, extra) => ({
-  id: String(++seq),
-  type,
-  data: { event_id: seq, turn_id: 't1', timestamp: '2026-07-31T20:00:00Z', ...extra },
-})
-
-console.log('\ncreateSSEEventBatcher')
-{
-  const m = manualScheduler()
-  const delivered = []
-  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
-  batcher.push(streamEvent('m1', 'a'))
-  batcher.push(streamEvent('m1', 'b'))
-  batcher.push(streamEvent('m1', 'c'))
-  check('three pushes schedule one frame, not three', m.frames() === 1, `frames=${m.frames()}`)
-  check('nothing is delivered before the frame runs', delivered.length === 0)
-  check('three pending', batcher.pending() === 3, `pending=${batcher.pending()}`)
-  m.runFrame()
-  check('the frame delivers one batch', delivered.length === 1, `batches=${delivered.length}`)
-  check('the batch holds all three, in order',
-    delivered[0].length === 3 && delivered[0].map(e => e.data.stream.delta.text).join('') === 'abc',
-    JSON.stringify(delivered[0].map(e => e.data.stream.delta.text)))
-  check('the buffer is empty afterwards', batcher.pending() === 0)
-}
-{
-  const m = manualScheduler()
-  const delivered = []
-  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
-  batcher.push(streamEvent('m1', 'a'))
-  batcher.pushAndFlush(plainEvent('result', { result: { text: 'done' } }))
-  // This is what keeps a `result` handler honest: it runs straight after this
-  // call and must see rows that already carry the delta buffered ahead of it.
-  check('pushAndFlush delivers immediately', delivered.length === 1, `batches=${delivered.length}`)
-  check('the flush carries the buffered delta first, then the event',
-    delivered[0].length === 2 && delivered[0][0].type === 'stream' && delivered[0][1].type === 'result',
-    JSON.stringify(delivered[0].map(e => e.type)))
-  check('the pending frame is cancelled, so it cannot deliver twice', m.frames() === 0, `frames=${m.frames()}`)
-  m.runFrame()
-  check('running the frame anyway delivers nothing', delivered.length === 1, `batches=${delivered.length}`)
-}
-{
-  const m = manualScheduler()
-  const delivered = []
-  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
-  batcher.push(streamEvent('m1', 'a'))
-  batcher.cancel()
-  m.runFrame()
-  // A session switch closes the stream and clears the rows. A batch landing a
-  // frame later would write the old session's deltas into the new one's pane.
-  check('cancel drops the buffer', batcher.pending() === 0)
-  check('cancel means the frame delivers nothing', delivered.length === 0, `batches=${delivered.length}`)
-}
-{
-  const m = manualScheduler()
-  const delivered = []
-  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
-  batcher.flush()
-  m.runFrame()
-  check('flushing an empty buffer delivers nothing', delivered.length === 0, `batches=${delivered.length}`)
-}
-
 console.log('\nkanbanPollWouldFetch')
 {
   // These four cases are the guards at useKanban.ts fetchBoards:62 and
@@ -322,74 +198,6 @@ console.log('\npreserveUnchangedKanbanPayload')
   check('a removed tag is a new reference',
     preserveUnchangedKanbanPayload(tags, []) !== tags)
 }
-
-console.log('\nclosing a stream commits, switching session discards')
-{
-  // The hook's two teardown paths are not the same thing, and conflating them
-  // costs real text. A stream that dies mid-turn is re-attached by the reconnect
-  // effect, and that path closes the old one first — so close has to commit what
-  // it is holding. A session switch is about to replace the rows entirely, so it
-  // has to throw the same buffer away instead.
-  const m = manualScheduler()
-  const delivered = []
-  const batcher = createSSEEventBatcher(batch => delivered.push(batch), m.scheduler)
-  batcher.push(streamEvent('m1', 'half a sentence'))
-  batcher.flush() // what closeSSE does
-  check('closing a stream commits its buffered deltas', delivered.length === 1, `batches=${delivered.length}`)
-  check('and commits the actual text', delivered[0][0].data.stream.delta.text === 'half a sentence')
-
-  batcher.push(streamEvent('m1', 'more'))
-  batcher.cancel() // what a session switch does
-  m.runFrame()
-  check('switching session discards its buffered deltas', delivered.length === 1, `batches=${delivered.length}`)
-}
-
-console.log('\nbatched rows == unbatched rows')
-{
-  // A mixed sequence: two turns of text and thinking deltas with tool calls and
-  // their results interleaved, plus the session-state and result events that a
-  // real turn carries. 240 events, which is a little over one second of the
-  // measured 195 deltas/s.
-  const events = []
-  for (const turn of ['m1', 'm2']) {
-    events.push(plainEvent('user_message', { result: { text: `ask ${turn}` } }))
-    for (let i = 0; i < 40; i++) events.push(thinkingDelta(turn, `t${i} `))
-    events.push(plainEvent('tool_call', { message_id: turn, tool_call: { tool_id: `${turn}_x`, name: 'Read', input: {} } }))
-    for (let i = 0; i < 60; i++) events.push(streamEvent(turn, `w${i} `))
-    events.push(plainEvent('tool_result', { message_id: turn, tool_result: { tool_id: `${turn}_x`, content: 'ok' } }))
-    events.push(plainEvent('session_state', { state: { state: 'running' } }))
-    for (let i = 0; i < 15; i++) events.push(streamEvent(turn, `z${i} `))
-    events.push(plainEvent('result', { result: { text: 'done' } }))
-  }
-
-  const oneAtATime = events.reduce(applyEventToRows, [])
-
-  // Replay through the real batcher with the same policy the hook applies:
-  // stream defers to the next frame, everything else flushes.
-  const m = manualScheduler()
-  let batched = []
-  let batchCount = 0
-  const batcher = createSSEEventBatcher(batch => {
-    batchCount++
-    batched = batch.reduce(applyEventToRows, batched)
-  }, m.scheduler)
-  events.forEach((ev, i) => {
-    if (isDeferrableEventType(ev.type)) batcher.push(ev)
-    else batcher.pushAndFlush(ev)
-    // A frame boundary every 32 events, so the deltas really do arrive in
-    // batches rather than each landing on its own flush.
-    if (i % 32 === 31) m.runFrame()
-  })
-  batcher.flush()
-
-  check(`${events.length} events collapse to ${batchCount} commits`, batchCount < events.length / 4, `commits=${batchCount}`)
-  check('same number of rows', batched.length === oneAtATime.length, `${batched.length} vs ${oneAtATime.length}`)
-  check('identical rows', JSON.stringify(batched) === JSON.stringify(oneAtATime),
-    JSON.stringify(batched.map(r => [r.key, (r.text || '').length, (r.thinking || '').length])) +
-    ' vs ' +
-    JSON.stringify(oneAtATime.map(r => [r.key, (r.text || '').length, (r.thinking || '').length])))
-}
-
 // --- the "streaming…" badge -------------------------------------------------
 //
 // The badge was on for 48 of 53 finished turns on the live dashboard, because
@@ -850,37 +658,11 @@ console.log('Composer turn controls')
     ALL_STATES.filter(sessionCanBeResumed).join(',') === 'aborted,disconnected',
     ALL_STATES.filter(sessionCanBeResumed).join(','))
 
-  // The other half (todo 3622b523's sibling defect): four controls were keyed on
-  // `uiState === 'running'`, and derivation projects `running` away before any
-  // consumer sees it, so none of them ever rendered.
-  check('derivation never yields `running`, whoever wrote the row',
-    ALL_STATES.every(s => projectServerSessionState({ session_id: 'br_check', state: s }) !== 'running'))
-  check('the deprecated `running` still projects to tool_running',
-    projectServerSessionState({ session_id: 'br_check', state: 'running' }) === 'tool_running')
-
-  // `paused` is the SERVER's answer now — the interrupt handler writes it and
-  // broadcasts it. There is no client-side marker layered on top, so the
-  // projection is the whole story and a state the server never sent can never
-  // read as paused.
-  check('paused comes from the server and from nowhere else',
-    ALL_STATES.every(s =>
-      (projectServerSessionState({ session_id: 'br_check', state: s }) === 'paused') === (s === 'paused')))
-  // A control is gated on what the harness is doing. The old marker recorded
-  // what the user PRESSED, so a refused interrupt read as paused while the turn
-  // ran on and took the Stop button away from the one user still needing it.
-  // The server only writes paused after Stop actually succeeded.
-  check('a session whose turn is still running is still working',
-    harnessIsWorkingOnTurn(projectServerSessionState({ session_id: 'br_check', state: 'tool_running' }))
-      && !harnessIsWorkingOnTurn(projectServerSessionState({ session_id: 'br_check', state: 'paused' })))
-
   check('and a running turn is still recognised as working',
     ['starting', 'model_generating', 'tool_running', 'compacting'].every(harnessIsWorkingOnTurn)
       && !harnessIsWorkingOnTurn('paused') && !harnessIsWorkingOnTurn('idle'))
 }
 
-// controlRefusal is what makes interrupt/stop/compact loud. It is async because
-// it reads the server's own words out of the body, so its checks live here rather
-// than in the sync block above.
 // BridgePrefsStore — the bridge-prefs record, held once per endpoint. Driven
 // directly rather than through React for the same reason as SharedPoll: what
 // these pin is how many copies of the record exist and what a second consumer
@@ -1149,33 +931,6 @@ async function bridgePrefsChecks() {
       JSON.stringify(store.getSnapshot().prefs.defaults))
     off()
   }
-}
-
-async function controlRefusalChecks() {
-  const res = (status, body, statusText = '') => ({
-    ok: status >= 200 && status < 300,
-    status,
-    statusText,
-    text: async () => body,
-  })
-
-  console.log('\ncontrolRefusal')
-  check('a 2xx is not a refusal', await controlRefusal(res(200, '{}')) === null)
-  check('a 204 is not a refusal', await controlRefusal(res(204, '')) === null)
-  // The status alone says "no"; the body says which tool holds the turn, which is
-  // the half the user can act on.
-  check('a 409 carries the status and the server\'s words',
-    await controlRefusal(res(409, 'session is busy running a tool')) === '409 session is busy running a tool')
-  check('a body of whitespace falls back to the status text',
-    await controlRefusal(res(500, '  \n ', 'Internal Server Error')) === '500 Internal Server Error')
-  check('an empty body and no status text still names the status',
-    await controlRefusal(res(502, '')) === '502 request refused')
-  // A refusal the UI cannot describe is still a refusal. Reading the body must
-  // never be the thing that turns a loud control quiet again.
-  check('a body that will not read still refuses', await controlRefusal({
-    ok: false, status: 503, statusText: 'Service Unavailable',
-    text: async () => { throw new Error('stream closed') },
-  }) === '503 Service Unavailable')
 }
 
 console.log('\nSplit drag geometry — one implementation for both splits')
@@ -1847,7 +1602,6 @@ async function agentDispatchChecks() {
   }
 }
 
-
 // --- signal grouping: the key's separator ---------------------------------
 //
 // `groupSignalsByRequest` builds a composite key from two free-form ids. The
@@ -1942,7 +1696,6 @@ function nulByteChecks() {
 signalGroupingChecks()
 nulByteChecks()
 
-
 // ---------------------------------------------------------------------------
 console.log('\nStatusDot: every state it can render has a stylesheet rule')
 //
@@ -2032,7 +1785,6 @@ console.log('\nStatusDot: every state it can render has a stylesheet rule')
     check("'failed' is not a spelling this stylesheet has a rule for", !ruled.has('failed'))
   }
 }
-
 
 // --- Live session list: replay across a dropped connection ---------------
 //
@@ -2297,7 +2049,7 @@ async function sessionListChecks() {
   }
 }
 
-agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(controlRefusalChecks).then(sessionListChecks).then(
+agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(sessionListChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)
