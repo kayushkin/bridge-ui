@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { clearDraft, loadDraft, saveDraft } from './persistence';
+import { clearDraft, loadDraft, saveDraft } from './drafts';
 /** The height the auto-growing composer must be given so its content fits.
  *
  *  `scrollHeight` is content plus padding and **excludes the border**. Both hosts

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
-import type { GitRepo } from './chat/WorkspaceContext'
+// The git pane's own type. It lived in the deleted chat's WorkspaceContext until
+// that went; the pane takes its repos as props and always did.
+export interface GitRepo {
+  path: string
+  name: string
+}
 import { UnifiedDiffView } from './tools/DiffView'
 
 interface GitView {

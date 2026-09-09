@@ -54,9 +54,9 @@ function ceilingTone(spendUSD: number, maxBudgetUSD: number): '' | 'warn' | 'cri
 }
 
 export interface CostBreakdownProps {
-  /** Raw log rows to scan for the latest api_spend_total (default path used
-   * by the live BridgeChat `/` page). Optional so an `aggregate`-only
-   * consumer need not supply it. */
+  /** Raw log rows to scan for the latest api_spend_total (the default path, used
+   * by the host's live chat page). Optional so an `aggregate`-only consumer need
+   * not supply it. */
   rows?: LogRow[]
   /** Per-turn EventResult.Cost sum used when no api_call telemetry exists.
    * Optional (defaults to 0) so an `aggregate`-only consumer need not supply

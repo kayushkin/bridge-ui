@@ -124,9 +124,14 @@ export function BridgeSessions() {
         })();
         return () => { cancelled = true; };
     }, [filtered, apiFetch, basePath]);
-    const handleClick = (session) => {
-        navigate(routes.chat, { state: { selectSession: session.session_id } });
-    };
+    // Opening a session means handing it to the host's chat page. A host that
+    // mounts none (bridge-ui ships no chat) has nowhere to send the click, so the
+    // rows are not clickable there rather than navigating to a dead path.
+    const handleClick = routes.chat
+        ? (session) => {
+            navigate(routes.chat, { state: { selectSession: session.session_id } });
+        }
+        : undefined;
     const counts = useMemo(() => {
         const c = {};
         for (const s of sessions)
@@ -139,7 +144,7 @@ export function BridgeSessions() {
                     const hinfo = harnessMap.get(s.harness);
                     const tokens = tokensMap.get(s.session_id);
                     const totalTokens = tokens ? tokens.input + tokens.output : undefined;
-                    return (_jsx("li", { children: _jsxs("button", { className: "bs-row", onClick: () => handleClick(s), children: [_jsx("span", { className: "bs-row-harness", title: hinfo?.label || s.harness, children: hinfo?.image
+                    return (_jsx("li", { children: _jsxs("button", { className: "bs-row", onClick: handleClick && (() => handleClick(s)), disabled: !handleClick, children: [_jsx("span", { className: "bs-row-harness", title: hinfo?.label || s.harness, children: hinfo?.image
                                         ? _jsx("img", { src: `${basePath}${hinfo.image}`, alt: hinfo.label || s.harness })
                                         : _jsx("span", { className: "bs-row-emoji", children: hinfo?.emoji || '·' }) }), _jsx("span", { className: "bs-state-dot", style: { background: STATE_COLORS[s.state] || '#888' } }), _jsx("span", { className: "bs-row-name", children: s.display_name || s.session_id.slice(0, 16) }), instance && _jsx("span", { className: "bs-row-instance", children: instance.name }), _jsx("span", { className: "bs-row-tokens", children: totalTokens !== undefined && totalTokens > 0 ? `${formatTokens(totalTokens)} tok` : '' }), matchCount !== undefined && (_jsxs("span", { className: "bs-match-badge", children: [matchCount, " match", matchCount === 1 ? '' : 'es'] })), _jsx("span", { className: "bs-row-time", children: timeAgo(s.updated_at) })] }) }, s.session_id));
                 }) }))] }));

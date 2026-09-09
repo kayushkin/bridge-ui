@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { clearDraft, loadDraft, saveDraft } from './persistence'
+import { clearDraft, loadDraft, saveDraft } from './drafts'
 
 /** The height the auto-growing composer must be given so its content fits.
  *

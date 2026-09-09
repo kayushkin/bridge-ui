@@ -1,6 +1,11 @@
 # @kayushkin/bridge-ui
 
-Reusable React component library for apps that consume an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend. Ships the chat surface, session/instance/auth/usage/skills/conformance pages, plus the underlying SSE client and React hooks — so a host app only has to wire auth and routes.
+Reusable React component library for apps that consume an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend. Ships the session/instance/auth/usage/skills/kanban/conformance pages, the tool-call renderers, the shared session widgets, plus the underlying SSE client and React hooks — so a host app only has to wire auth and routes.
+
+**It ships no chat page.** The chat lives in dash (`dash/src/pages/chat/`) on
+[`@kayushkin/chat-core`](https://github.com/kayushkin/chat-core), which is the only one. A host
+that mounts a chat names its path as `routes.chat` and this library links into it; a host that
+mounts none gets no Chat tab and no links to sessions it cannot open.
 
 The simplest way to get a working UI on top of llm-bridge-server is to run the server directly — it embeds bridge-ui's built `dist/` and serves it at the root. Embed this package in your own React app if you want to customize the host (chrome, auth, routing).
 
@@ -36,7 +41,6 @@ import { Routes, Route } from 'react-router-dom'
 import {
   BridgeProvider,
   BridgeLayout,
-  BridgeChat,
   BridgeInstances,
   BridgeSessions,
   BridgeAuth,
@@ -66,7 +70,6 @@ export default function App() {
           </BridgeProvider>
         }
       >
-        <Route index element={<BridgeChat />} />
         <Route path="instances" element={<BridgeInstances />} />
         <Route path="sessions" element={<BridgeSessions />} />
         <Route path="auth" element={<BridgeAuth />} />
@@ -113,7 +116,6 @@ export default function App() {
 | Component | Purpose |
 |-----------|---------|
 | `BridgeLayout` | Outer shell with the tab nav. Renders the `<Outlet/>` of nested routes. |
-| `BridgeChat` | Active chat surface: timeline, composer, session list, tools panel, workspace pane. |
 | `BridgeSessions` | Session browser across all instances/harnesses. |
 | `BridgeInstances` | Instance + machine management (create, edit, bind credentials). |
 | `BridgeAuth` | Credential management (Anthropic, OpenAI, Google, etc.). |
@@ -171,7 +173,7 @@ Host app
   │     │
   │     ├─ <BridgeLayout/>       ← outer shell + tab nav
   │     │   └─ <Outlet/>          ← nested route renders one of:
-  │     │       BridgeChat | BridgeSessions | BridgeInstances |
+  │     │       BridgeSessions | BridgeInstances |
   │     │       BridgeAuth | BridgeUsage | BridgeSettings |
   │     │       BridgeSkills | BridgeConformance
   │     │

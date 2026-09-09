@@ -1,4 +1,4 @@
-import type { LogRow, SessionUIState, ToolEvent } from '../../types'
+import type { SessionUIState } from '../../types'
 
 // The states in which the harness holds the turn and more of it is still
 // coming. Everything else — the quiet states (idle, awaiting_user, paused),
@@ -59,26 +59,13 @@ export function sessionCanBeResumed(state: SessionUIState): boolean {
   return resumableStates.has(state)
 }
 
-export function formatHMS(ts: string): string {
-  try {
-    const d = new Date(ts)
-    const hh = String(d.getHours()).padStart(2, '0')
-    const mm = String(d.getMinutes()).padStart(2, '0')
-    const ss = String(d.getSeconds()).padStart(2, '0')
-    return `${hh}:${mm}:${ss}`
-  } catch { return ts }
-}
 
 export function idTail(id: string, n = 10): string {
   return id.length > n ? `…${id.slice(-n)}` : id
 }
 
-export function oneLine(s: string, n = 120): string {
-  const flat = s.replace(/\s+/g, ' ').trim()
-  return flat.length > n ? flat.slice(0, n) + '…' : flat
-}
-
-export function renderValue(v: unknown): string {
+// Private to flattenToRows since the deleted chat's log views went with it.
+function renderValue(v: unknown): string {
   if (v == null) return '-'
   if (typeof v === 'boolean') return v ? 'yes' : 'no'
   if (typeof v === 'number') return `${v}`
@@ -106,123 +93,4 @@ export function flattenToRows(obj: Record<string, unknown>, prefix = ''): Array<
     }
   }
   return rows
-}
-
-export function shouldExpandByDefault(row: LogRow): boolean {
-  if (row.actor === 'user') return true
-  if (row.kind === 'text' && row.text) return true
-  return !!row.meta || row.kind === 'result'
-}
-
-export function groupEventsByType(events: Array<Record<string, unknown>>): Array<{ type: string; events: Array<Record<string, unknown>> }> {
-  const order: string[] = []
-  const buckets: Record<string, Array<Record<string, unknown>>> = {}
-  for (const e of events) {
-    const t = String((e as { type?: unknown }).type ?? 'unknown') || 'unknown'
-    if (!(t in buckets)) { buckets[t] = []; order.push(t) }
-    buckets[t].push(e)
-  }
-  return order.map(t => ({ type: t, events: buckets[t] }))
-}
-
-export function typesInRow(row: LogRow): string[] {
-  return [row.kind]
-}
-
-export function formatTodoWrite(todos: unknown): string | undefined {
-  if (!Array.isArray(todos)) return undefined
-  let done = 0
-  let active = 0
-  let pending = 0
-  let current: string | undefined
-  for (const raw of todos) {
-    if (!raw || typeof raw !== 'object') continue
-    const t = raw as { status?: string; content?: string; activeForm?: string }
-    if (t.status === 'completed') done++
-    else if (t.status === 'in_progress') { active++; current = t.activeForm || t.content || current }
-    else pending++
-  }
-  const total = todos.length
-  const bits: string[] = [`${total} todo${total === 1 ? '' : 's'}`]
-  const counts: string[] = []
-  if (done) counts.push(`${done}✓`)
-  if (active) counts.push(`${active}⏺`)
-  if (pending) counts.push(`${pending}○`)
-  if (counts.length) bits.push(`(${counts.join(' ')})`)
-  if (current) bits.push(`— ${oneLine(current, 60)}`)
-  return bits.join(' ')
-}
-
-export function toolSnippet(t: ToolEvent): string {
-  if (!t.input) return ''
-  const keys = Object.keys(t.input)
-  if (keys.length === 0) return ''
-  if (t.tool === 'TodoWrite') {
-    const summary = formatTodoWrite(t.input.todos)
-    if (summary) return summary
-  }
-  const preferred = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description', 'prompt']
-  for (const k of preferred) {
-    const v = t.input[k]
-    if (typeof v === 'string' && v) return `${k}=${oneLine(v, 80)}`
-  }
-  const first = t.input[keys[0]]
-  if (typeof first === 'string') return `${keys[0]}=${oneLine(first, 80)}`
-  if (Array.isArray(first)) return `${keys[0]}[${first.length}]`
-  return keys.join(',')
-}
-
-export function toolFullText(t: ToolEvent): string | undefined {
-  if (!t.input) return undefined
-  try { return JSON.stringify(t.input, null, 2) } catch { return undefined }
-}
-
-// --- Row-memo comparators ---
-//
-// The three chat panes each memoize their row component, and all three lean on
-// one property of the reducer: `applyEventToRows` replaces only the row an
-// event touched and returns every other row by the same reference. One SSE
-// delta therefore changes one object out of N, and these comparators are what
-// let a pane act on that — they answer "did this row's content change", not
-// "is this a new array".
-//
-// Two shapes, because the panes differ in what they hand a row. Thread passes
-// the reducer's own `LogRow` objects straight through, so identity is the
-// whole test. Turns and Timeline derive fresh item objects from the rows on
-// every render, so identity always differs and the fields are the test.
-
-// True when two row lists hold the same row objects in the same order.
-// Reference equality per element is the point: a row the reducer did not
-// touch is the very same object, so an untouched turn compares equal without
-// reading any of its content.
-export function sameRowList(a: LogRow[], b: LogRow[]): boolean {
-  if (a === b) return true
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
-
-// True when two derived pane items say the same thing.
-//
-// Both `TurnsItem` and `TimelineItem` are flat records of primitives plus an
-// optional `usage`, so a shallow own-key comparison is exact — there is no
-// nested value it could miss. It is deliberately written against the keys
-// actually present rather than a fixed list: a field added to either item type
-// is compared from the moment it is added, instead of being silently ignored
-// until somebody remembers to extend this. `usage` is the one object-valued
-// field, and it is compared by identity because `rowsToTurns` copies it
-// straight off the row it came from, so an unchanged row yields the very same
-// object; a changed one yields a different row and fails an earlier field
-// anyway.
-export function sameItemFields<T extends object>(a: T, b: T): boolean {
-  if (a === b) return true
-  const aKeys = Object.keys(a) as (keyof T)[]
-  const bKeys = Object.keys(b) as (keyof T)[]
-  if (aKeys.length !== bKeys.length) return false
-  for (const k of aKeys) {
-    if (a[k] !== b[k]) return false
-  }
-  return true
 }

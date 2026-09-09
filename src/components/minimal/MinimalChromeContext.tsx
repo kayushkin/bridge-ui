@@ -1,11 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PaneKey } from '../chat/types'
 
 export type ChromeOverride = 'minimal' | 'full' | null
 
 const STORAGE_KEY = 'bridge-chrome-override'
-const PANE_KEY = 'bridge-mobile-pane'
 /**
  * The viewport width below which minimal mode engages on its own.
  *
@@ -16,19 +14,6 @@ const PANE_KEY = 'bridge-mobile-pane'
  * those apart is the whole condition for offering the way back.
  */
 export const MOBILE_BREAKPOINT = 640
-const VALID_PANES: readonly PaneKey[] = ['turns', 'thread', 'timeline', 'git', 'kanban']
-
-function loadMobilePane(): PaneKey {
-  if (typeof window === 'undefined') return 'turns'
-  const v = window.localStorage.getItem(PANE_KEY)
-  if (v && (VALID_PANES as readonly string[]).includes(v)) return v as PaneKey
-  return 'turns'
-}
-
-function saveMobilePane(pane: PaneKey) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(PANE_KEY, pane)
-}
 
 function loadOverride(): ChromeOverride {
   if (typeof window === 'undefined') return null
@@ -53,8 +38,8 @@ interface MinimalChromeValue {
    * `minimal` alone says the viewport is narrow. It does NOT say anyone answered,
    * and the two are not the same fact: `MinimalChromeProvider` is nested inside
    * every `BridgeProvider`, so `minimal` goes true on every page a host mounts
-   * under one — the instance list, the settings page, a host's own rewrite of the
-   * chat — while only `BridgeChat` renders `MinimalTopBar` and `SessionDrawer`.
+   * under one — the instance list, the settings page, the host's chat — while only
+   * the host's chat page renders `MinimalTopBar` and `SessionDrawer`.
    * Anything that HIDES navigation on the strength of a narrow viewport has to
    * gate on this instead, or it takes the navigation away and puts nothing back.
    */
@@ -73,8 +58,6 @@ interface MinimalChromeValue {
   setSheetOpen: (v: boolean) => void
   controlsSlot: HTMLElement | null
   registerControlsSlot: (el: HTMLElement | null) => void
-  mobilePane: PaneKey
-  setMobilePane: (pane: PaneKey) => void
 }
 
 const MinimalChromeContext = createContext<MinimalChromeValue | null>(null)
@@ -94,8 +77,6 @@ export function useMinimalChrome(): MinimalChromeValue {
       setSheetOpen: () => {},
       controlsSlot: null,
       registerControlsSlot: () => {},
-      mobilePane: 'turns',
-      setMobilePane: () => {},
     }
   }
   return ctx
@@ -107,7 +88,6 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpenState] = useState(false)
   const [sheetOpen, setSheetOpenState] = useState(false)
   const [controlsSlot, setControlsSlot] = useState<HTMLElement | null>(null)
-  const [mobilePane, setMobilePaneState] = useState<PaneKey>(() => loadMobilePane())
   const slotRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -172,10 +152,6 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
 
   const setDrawerOpen = useCallback((v: boolean) => setDrawerOpenState(v), [])
   const setSheetOpen = useCallback((v: boolean) => setSheetOpenState(v), [])
-  const setMobilePane = useCallback((pane: PaneKey) => {
-    setMobilePaneState(pane)
-    saveMobilePane(pane)
-  }, [])
 
   const value = useMemo<MinimalChromeValue>(() => ({
     minimal,
@@ -189,9 +165,7 @@ export function MinimalChromeProvider({ children }: { children: ReactNode }) {
     setSheetOpen,
     controlsSlot,
     registerControlsSlot,
-    mobilePane,
-    setMobilePane,
-  }), [minimal, minimalChromeMounted, registerMinimalChrome, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot, mobilePane, setMobilePane])
+  }), [minimal, minimalChromeMounted, registerMinimalChrome, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot])
 
   return (
     <MinimalChromeContext.Provider value={value}>

@@ -5,7 +5,6 @@ import type { FetchFn } from './types'
 export interface BridgeRoutes {
   // Where the consumer mounted each page this library exports. Every entry here
   // has a matching exported component, so a default path is always meaningful.
-  chat: string
   instances: string
   sessions: string
   auth: string
@@ -24,6 +23,12 @@ export interface BridgeRoutes {
   // sensible default for these — dash has both, llmux has neither — so they
   // default to empty and a link to an empty route is not rendered at all. The
   // library never guesses a path for a page it doesn't ship.
+  /** The host's chat page. This library ships no chat — dash owns the only one,
+   *  at `dash/src/pages/chat/` on `@kayushkin/chat-core` — so there is no path
+   *  to default to. Empty means the host mounts none, and every link into a
+   *  session (the Chat tab, a session row, a card's session link, a reference
+   *  chip) then renders as plain text instead of a link to nowhere. */
+  chat: string
   /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
   notes: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
@@ -37,7 +42,7 @@ export interface BridgeRoutes {
 }
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
-  chat: '/bridge',
+  chat: '',
   instances: '/bridge/instances',
   sessions: '/bridge/sessions',
   auth: '/bridge/auth',

@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { PaneKey } from '../chat/types';
 export type ChromeOverride = 'minimal' | 'full' | null;
 /**
  * The viewport width below which minimal mode engages on its own.
@@ -21,8 +20,8 @@ interface MinimalChromeValue {
      * `minimal` alone says the viewport is narrow. It does NOT say anyone answered,
      * and the two are not the same fact: `MinimalChromeProvider` is nested inside
      * every `BridgeProvider`, so `minimal` goes true on every page a host mounts
-     * under one — the instance list, the settings page, a host's own rewrite of the
-     * chat — while only `BridgeChat` renders `MinimalTopBar` and `SessionDrawer`.
+     * under one — the instance list, the settings page, the host's chat — while only
+     * the host's chat page renders `MinimalTopBar` and `SessionDrawer`.
      * Anything that HIDES navigation on the strength of a narrow viewport has to
      * gate on this instead, or it takes the navigation away and puts nothing back.
      */
@@ -41,8 +40,6 @@ interface MinimalChromeValue {
     setSheetOpen: (v: boolean) => void;
     controlsSlot: HTMLElement | null;
     registerControlsSlot: (el: HTMLElement | null) => void;
-    mobilePane: PaneKey;
-    setMobilePane: (pane: PaneKey) => void;
 }
 export declare function useMinimalChrome(): MinimalChromeValue;
 export declare function MinimalChromeProvider({ children }: {

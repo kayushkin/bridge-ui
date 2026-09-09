@@ -5,16 +5,19 @@ import { useMinimalChrome } from './minimal/MinimalChromeContext';
 export function BridgeLayout({ showConformance = true }) {
     const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, } = useBridgeConfig();
     // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
-    // are the only navigation on every page here except the chat, and the routed
-    // child that replaces them exists on the chat alone — so dropping them for a
-    // narrow window used to strand the user on Instances, Sessions, Auth, Usage,
-    // Settings, Agents, Files, Skills, Tools, Permissions, Kanban, Principals and
-    // Conformance,
-    // with the host's own header hidden by the same mistaken signal.
+    // are the only navigation on every page here except the host's chat, and the
+    // routed child that replaces them exists on that chat alone — so dropping them
+    // for a narrow window used to strand the user on Instances, Sessions, Auth,
+    // Usage, Settings, Agents, Files, Skills, Tools, Permissions, Kanban,
+    // Principals and Conformance, with the host's own header hidden by the same
+    // mistaken signal.
     const { minimal, minimalChromeMounted } = useMinimalChrome();
     const chromeTakenOver = minimal && minimalChromeMounted;
     const tabs = [
-        { to: routes.chat, label: 'Chat', end: true },
+        // Gated on the route being named, because this library ships no chat page.
+        // dash names it and mounts its own chat inside this layout, so it gets the
+        // tab; a host that mounts no chat gets no link to one.
+        ...(routes.chat ? [{ to: routes.chat, label: 'Chat', end: true }] : []),
         { to: routes.instances, label: 'Instances', end: false },
         { to: routes.sessions, label: 'Sessions', end: false },
         { to: routes.auth, label: 'Auth', end: false },

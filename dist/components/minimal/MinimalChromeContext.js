@@ -1,7 +1,6 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 const STORAGE_KEY = 'bridge-chrome-override';
-const PANE_KEY = 'bridge-mobile-pane';
 /**
  * The viewport width below which minimal mode engages on its own.
  *
@@ -12,20 +11,6 @@ const PANE_KEY = 'bridge-mobile-pane';
  * those apart is the whole condition for offering the way back.
  */
 export const MOBILE_BREAKPOINT = 640;
-const VALID_PANES = ['turns', 'thread', 'timeline', 'git', 'kanban'];
-function loadMobilePane() {
-    if (typeof window === 'undefined')
-        return 'turns';
-    const v = window.localStorage.getItem(PANE_KEY);
-    if (v && VALID_PANES.includes(v))
-        return v;
-    return 'turns';
-}
-function saveMobilePane(pane) {
-    if (typeof window === 'undefined')
-        return;
-    window.localStorage.setItem(PANE_KEY, pane);
-}
 function loadOverride() {
     if (typeof window === 'undefined')
         return null;
@@ -58,8 +43,6 @@ export function useMinimalChrome() {
             setSheetOpen: () => { },
             controlsSlot: null,
             registerControlsSlot: () => { },
-            mobilePane: 'turns',
-            setMobilePane: () => { },
         };
     }
     return ctx;
@@ -70,7 +53,6 @@ export function MinimalChromeProvider({ children }) {
     const [drawerOpen, setDrawerOpenState] = useState(false);
     const [sheetOpen, setSheetOpenState] = useState(false);
     const [controlsSlot, setControlsSlot] = useState(null);
-    const [mobilePane, setMobilePaneState] = useState(() => loadMobilePane());
     const slotRef = useRef(null);
     useEffect(() => {
         if (typeof window === 'undefined')
@@ -133,10 +115,6 @@ export function MinimalChromeProvider({ children }) {
     }, []);
     const setDrawerOpen = useCallback((v) => setDrawerOpenState(v), []);
     const setSheetOpen = useCallback((v) => setSheetOpenState(v), []);
-    const setMobilePane = useCallback((pane) => {
-        setMobilePaneState(pane);
-        saveMobilePane(pane);
-    }, []);
     const value = useMemo(() => ({
         minimal,
         minimalChromeMounted,
@@ -149,9 +127,7 @@ export function MinimalChromeProvider({ children }) {
         setSheetOpen,
         controlsSlot,
         registerControlsSlot,
-        mobilePane,
-        setMobilePane,
-    }), [minimal, minimalChromeMounted, registerMinimalChrome, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot, mobilePane, setMobilePane]);
+    }), [minimal, minimalChromeMounted, registerMinimalChrome, override, setOverride, drawerOpen, setDrawerOpen, sheetOpen, setSheetOpen, controlsSlot, registerControlsSlot]);
     return (_jsx(MinimalChromeContext.Provider, { value: value, children: children }));
 }
 /**

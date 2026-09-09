@@ -119,9 +119,14 @@ export function BridgeKanban() {
     // board is a one-off request that hook has no verb for.
     kanbanStoreBasePath, } = useBridgeConfig();
     const navigate = useNavigate();
-    const openSessionLink = (link) => {
-        navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
-    };
+    // A session link can only be opened in the host's chat page. This library
+    // ships none, so a host that names no chat route gets no navigation rather
+    // than a jump to a path nothing serves.
+    const openSessionLink = routes.chat
+        ? (link) => {
+            navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`);
+        }
+        : undefined;
     // A screenful a column. The largest board here holds 6,466 cards and answered
     // 12 MB per read before this cap; the rest arrive when asked for.
     const k = useKanban(selectedBoardID, { columnPageSize: CARDS_PER_COLUMN });
@@ -345,7 +350,10 @@ export function BridgeKanban() {
                                                 prompt,
                                                 addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
                                             });
-                                            navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`);
+                                            // The agent is running either way; only the jump to watch
+                                            // it needs a chat page to jump to.
+                                            if (routes.chat)
+                                                navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`);
                                             return true;
                                         }
                                         catch (e) {
@@ -598,7 +606,7 @@ function CardTile({ card, signals, principals, currentColumn, boardColumns, onMo
                             finally {
                                 setRunning(false);
                             }
-                        }, children: running ? '…' : '🤖' }), session && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
+                        }, children: running ? '…' : '🤖' }), session && onOpenChat && (_jsx("button", { type: "button", className: "bk-card-chat", title: `Open chat session ${session.ref}`, onClick: e => { e.stopPropagation(); onOpenChat(session); }, children: "chat \u2197" })), _jsx("select", { value: currentColumn, onClick: e => e.stopPropagation(), onChange: e => onMove(card.placement.card_id, e.target.value), title: "Move to column", children: boardColumns.map(c => (_jsx("option", { value: c.id, children: c.name }, c.id))) })] })] }));
 }
 // CardTiming is the drawer's answer to "how long has this been going?".
 //
@@ -670,7 +678,8 @@ function AgentPromptPanel({ cardID, title, body, linkedEmailCount, prompt, onPro
             const sessionID = await dispatchAgentOnCard({
                 basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
             });
-            onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() });
+            // The agent is dispatched either way; only watching it needs a chat page.
+            onOpenChat?.({ ref: sessionID, dispatchedAt: new Date().toISOString() });
         }
         catch (e) {
             setError(e instanceof Error ? e.message : String(e));
@@ -679,7 +688,7 @@ function AgentPromptPanel({ cardID, title, body, linkedEmailCount, prompt, onPro
             setStarting(false);
         }
     };
-    return (_jsxs("section", { className: "bk-agent-prompt", children: [_jsxs("div", { className: "bk-agent-prompt-head", children: [_jsx("label", { className: "bk-drawer-label", children: "Agent prompt" }), usingSuggestion && _jsx("span", { className: "bk-agent-prompt-note", children: "suggested \u2014 edit and save to keep" })] }), _jsx("textarea", { className: "bk-agent-prompt-text", rows: 10, value: effective, onChange: e => onPromptChange(e.target.value) }), _jsxs("div", { className: "bk-agent-prompt-actions", children: [_jsx("button", { type: "button", className: "bi-add-btn", disabled: starting || !effective.trim(), onClick: start, children: starting ? 'Starting…' : '▶ Start an agent on this' }), prompt.trim() && (_jsx("button", { type: "button", className: "bk-agent-prompt-reset", disabled: starting, onClick: () => onPromptChange(''), title: "Drop the saved prompt and go back to the suggested one. Takes effect on save.", children: "reset to suggested" })), existingSession && (_jsx("button", { type: "button", className: "bk-agent-prompt-reset", onClick: () => onOpenChat(existingSession), title: `This card already has session ${existingSession.ref}. Starting another adds a second one.`, children: "open current session \u2197" }))] }), existingSession && (_jsx("p", { className: "bk-agent-prompt-warn", children: "An agent already has this card. Starting another gives it a second session." })), error && _jsx("div", { className: "bridge-error", children: error })] }));
+    return (_jsxs("section", { className: "bk-agent-prompt", children: [_jsxs("div", { className: "bk-agent-prompt-head", children: [_jsx("label", { className: "bk-drawer-label", children: "Agent prompt" }), usingSuggestion && _jsx("span", { className: "bk-agent-prompt-note", children: "suggested \u2014 edit and save to keep" })] }), _jsx("textarea", { className: "bk-agent-prompt-text", rows: 10, value: effective, onChange: e => onPromptChange(e.target.value) }), _jsxs("div", { className: "bk-agent-prompt-actions", children: [_jsx("button", { type: "button", className: "bi-add-btn", disabled: starting || !effective.trim(), onClick: start, children: starting ? 'Starting…' : '▶ Start an agent on this' }), prompt.trim() && (_jsx("button", { type: "button", className: "bk-agent-prompt-reset", disabled: starting, onClick: () => onPromptChange(''), title: "Drop the saved prompt and go back to the suggested one. Takes effect on save.", children: "reset to suggested" })), existingSession && onOpenChat && (_jsx("button", { type: "button", className: "bk-agent-prompt-reset", onClick: () => onOpenChat(existingSession), title: `This card already has session ${existingSession.ref}. Starting another adds a second one.`, children: "open current session \u2197" }))] }), existingSession && (_jsx("p", { className: "bk-agent-prompt-warn", children: "An agent already has this card. Starting another gives it a second session." })), error && _jsx("div", { className: "bridge-error", children: error })] }));
 }
 /** Every open signal raised against this card's todo, read and closed in the
  * drawer.
@@ -867,7 +876,7 @@ function EntityLinkRow({ link, onOpenChat, onDeleteLink, }) {
             cancelled = true;
         };
     }, [isNoteLink, noteboardBasePath, fetchFn, link.entity_ref]);
-    return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: link.entity_type }), isSessionLink ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${link.entity_ref}`, onClick: () => onOpenChat({ ref: link.entity_ref, dispatchedAt: link.created_at }), children: [link.entity_ref, " \u2197"] })) : isNoteLink && routes.notes ? (_jsxs(Link, { className: "bk-link-ref bk-link-ref-action", to: `${routes.notes}?item=${encodeURIComponent(link.entity_ref)}`, 
+    return (_jsxs("li", { children: [_jsx("span", { className: "bk-link-type", children: link.entity_type }), isSessionLink && onOpenChat ? (_jsxs("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open chat session ${link.entity_ref}`, onClick: () => onOpenChat({ ref: link.entity_ref, dispatchedAt: link.created_at }), children: [link.entity_ref, " \u2197"] })) : isNoteLink && routes.notes ? (_jsxs(Link, { className: "bk-link-ref bk-link-ref-action", to: `${routes.notes}?item=${encodeURIComponent(link.entity_ref)}`, 
                 // The id stays reachable on hover: the title is the readable name, the
                 // uuid is what the row actually records.
                 title: `Open ${link.entity_ref} in notes`, children: [title ?? link.entity_ref, " \u2197"] })) : target ? (_jsxs("a", { className: "bk-link-ref bk-link-ref-action", href: target.href, target: "_blank", 

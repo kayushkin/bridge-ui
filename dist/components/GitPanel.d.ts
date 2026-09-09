@@ -1,4 +1,7 @@
-import type { GitRepo } from './chat/WorkspaceContext';
+export interface GitRepo {
+    path: string;
+    name: string;
+}
 export interface GitPanelProps {
     sessionId: string;
     /** Any value that changes when the working tree might have. The panel

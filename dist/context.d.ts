@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import type { FetchFn } from './types';
 export interface BridgeRoutes {
-    chat: string;
     instances: string;
     sessions: string;
     auth: string;
@@ -15,6 +14,12 @@ export interface BridgeRoutes {
     conformance: string;
     kanban: string;
     principals: string;
+    /** The host's chat page. This library ships no chat — dash owns the only one,
+     *  at `dash/src/pages/chat/` on `@kayushkin/chat-core` — so there is no path
+     *  to default to. Empty means the host mounts none, and every link into a
+     *  session (the Chat tab, a session row, a card's session link, a reference
+     *  chip) then renders as plain text instead of a link to nowhere. */
+    chat: string;
     /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
     notes: string;
     /** The producer's full review surface (WAL, prior versions, filters), linked

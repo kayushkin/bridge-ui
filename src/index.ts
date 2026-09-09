@@ -129,7 +129,6 @@ export {
 
 // Page components
 export { BridgeLayout } from './components/BridgeLayout'
-export { BridgeChat } from './components/BridgeChat'
 export { BridgeSessions } from './components/BridgeSessions'
 export { BridgeInstances } from './components/BridgeInstances'
 export { BridgeSettings } from './components/BridgeSettings'
@@ -192,11 +191,10 @@ export { composerAutoGrowHeightPx } from './components/chat/Composer'
 export { StatusDot } from './components/chat/StatusDot'
 export type { StatusDotState } from './components/chat/StatusDot'
 
-// Presentation / self-fetching chat sub-components — exported for standalone
-// consumers (e.g. dash's chat page) that compose the chat surface themselves rather
-// than mounting BridgeChat. Behaviour is identical to their use inside
-// BridgeChat; each takes its data via props (SessionPermissionMode also reads
-// the public BridgeConfig via useBridgeConfig).
+// Presentation / self-fetching session widgets, for a host that composes its own
+// chat surface — dash's chat page is the one that does. Each takes its data via
+// props (SessionPermissionMode also reads the public BridgeConfig via
+// useBridgeConfig), so none of them assumes a particular layout around it.
 export { ToolsPanel } from './components/chat/ToolsPanel'
 export type { ToolsPanelProps } from './components/chat/ToolsPanel'
 export { SystemPromptModal } from './components/chat/SystemPromptModal'
@@ -221,9 +219,9 @@ export { ProducerRow } from './components/chat/ProducerRow'
 export type { ProducerRowProps } from './components/chat/ProducerRow'
 
 // The three side panes. Each is a self-contained pane with its own header and
-// collapse control, so a host that owns its own layout decides where the pane
-// goes and hands it `style` and `onToggleCollapse`; nothing here assumes the
-// recursive workspace tree `BridgeChat` puts them in.
+// collapse control, so the host that owns the layout decides where the pane goes
+// and hands it `style` and `onToggleCollapse`; nothing here assumes any
+// particular arrangement around it.
 //
 // Kanban and Orchestrator fetch their own state from the paths their
 // BridgeProvider was given (`kanbanStoreBasePath`, `producerBasePath`), and
@@ -233,7 +231,7 @@ export type { ProducerRowProps } from './components/chat/ProducerRow'
 // caller owns them. See `GitPanelProps`.
 export { GitPanel } from './components/GitPanel'
 export type { GitPanelProps } from './components/GitPanel'
-export type { GitRepo } from './components/chat/WorkspaceContext'
+export type { GitRepo } from './components/GitPanel'
 export { LinkedKanbanPanel } from './components/chat/LinkedKanbanPanel'
 export type { LinkedKanbanPanelProps } from './components/chat/LinkedKanbanPanel'
 export { OrchestratorPanel } from './components/chat/OrchestratorPanel'
@@ -281,11 +279,6 @@ export type { ChromeOverride } from './components/minimal/MinimalChromeContext'
 // same top bar, the same drawer and the same controls sheet rather than a copy that
 // drifts from this one.
 //
-// `MinimalPaneSwitch` is deliberately NOT here. It hardcodes bridge-ui's own five
-// `PaneKey`s and the callback names behind them, so a host whose views are a different
-// set could not mount it as it stands — exporting it would only offer buttons for panes
-// that host cannot draw. A pane switch is ~25 lines over the `bc-mc-paneswitch` classes
-// this stylesheet already carries; hosts write their own against their own views.
 export { MinimalTopBar } from './components/minimal/MinimalTopBar'
 export type { MinimalTopBarProps } from './components/minimal/MinimalTopBar'
 export { SessionDrawer } from './components/minimal/SessionDrawer'
@@ -318,8 +311,8 @@ export {
 export type { SplitDragGeometry, SplitGrowUnits } from './components/chat/splitDragGeometry'
 
 // The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
-// no router — so any surface that owns its own routing can drive the same two-way
-// behaviour BridgeChat has at `/`. dash's chat page uses it verbatim rather than growing a second
+// no router — so any surface that owns its own routing can drive the two-way
+// behaviour. dash's chat page uses it verbatim rather than growing a second
 // implementation that would have to be kept in step with this one. The `awaiting` latch
 // in there is the whole reason both directions can coexist; read its header before
 // wiring it.

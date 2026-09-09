@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import {
   BridgeProvider,
   BridgeLayout,
-  BridgeChat,
   BridgeInstances,
   BridgeSessions,
   BridgeAuth,
@@ -35,7 +34,9 @@ const BASE = import.meta.env.VITE_BRIDGE_BASE ?? '/api/bridge'
 
 // Root-relative routes so the launcher mounts the chat at "/".
 const ROUTES = {
-  chat: '/',
+  // No chat: this library ships no chat page. dash mounts its own and names it
+  // here; the standalone demo has none, so the Chat tab is not drawn.
+  chat: '',
   instances: '/instances',
   sessions: '/sessions',
   auth: '/auth',
@@ -64,7 +65,7 @@ function App() {
     >
       <Routes>
         <Route element={<BridgeLayout />}>
-          <Route index element={<BridgeChat />} />
+          <Route index element={<BridgeSessions />} />
           <Route path="instances" element={<BridgeInstances />} />
           <Route path="sessions" element={<BridgeSessions />} />
           <Route path="auth" element={<BridgeAuth />} />

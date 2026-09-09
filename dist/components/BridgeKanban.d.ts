@@ -5,7 +5,7 @@ type SessionLinkRef = {
     ref: string;
     dispatchedAt: string;
 };
-type OpenChatFn = (link: SessionLinkRef) => void;
+type OpenChatFn = ((link: SessionLinkRef) => void) | undefined;
 /**
  * Kanban page. The header carries a board selector and a layout toggle so the
  * column flow can run side-by-side (landscape) or stacked (portrait). Card

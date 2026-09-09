@@ -34,7 +34,10 @@ type SessionLinkRef = {
   // it costs nothing — the board view already carries every link.
   dispatchedAt: string
 }
-type OpenChatFn = (link: SessionLinkRef) => void
+// Undefined when the host mounts no chat page. This library ships none — dash
+// owns the only chat — so every control whose whole purpose is to open a session
+// is rendered only when this is present, rather than linking to nothing.
+type OpenChatFn = ((link: SessionLinkRef) => void) | undefined
 
 // latestSessionLink returns the most recently attached session, which is the one
 // that describes what is happening to the card now.
@@ -148,9 +151,14 @@ export function BridgeKanban() {
     kanbanStoreBasePath,
   } = useBridgeConfig()
   const navigate = useNavigate()
-  const openSessionLink = (link: SessionLinkRef) => {
-    navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
-  }
+  // A session link can only be opened in the host's chat page. This library
+  // ships none, so a host that names no chat route gets no navigation rather
+  // than a jump to a path nothing serves.
+  const openSessionLink = routes.chat
+    ? (link: SessionLinkRef) => {
+        navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
+      }
+    : undefined
 
   // A screenful a column. The largest board here holds 6,466 cards and answered
   // 12 MB per read before this cap; the rest arrive when asked for.
@@ -462,7 +470,9 @@ export function BridgeKanban() {
                         prompt,
                         addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
                       })
-                      navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
+                      // The agent is running either way; only the jump to watch
+                      // it needs a chat page to jump to.
+                      if (routes.chat) navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
                       return true
                     } catch (e) {
                       // No toast surface on this page, and a dispatch that
@@ -1128,7 +1138,7 @@ function CardTile({
             try { await onRunAgent(card) } finally { setRunning(false) }
           }}
         >{running ? '…' : '🤖'}</button>
-        {session && (
+        {session && onOpenChat && (
           <button
             type="button"
             className="bk-card-chat"
@@ -1285,7 +1295,8 @@ function AgentPromptPanel({
       const sessionID = await dispatchAgentOnCard({
         basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
       })
-      onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })
+      // The agent is dispatched either way; only watching it needs a chat page.
+      onOpenChat?.({ ref: sessionID, dispatchedAt: new Date().toISOString() })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -1321,7 +1332,7 @@ function AgentPromptPanel({
             title="Drop the saved prompt and go back to the suggested one. Takes effect on save."
           >reset to suggested</button>
         )}
-        {existingSession && (
+        {existingSession && onOpenChat && (
           <button
             type="button"
             className="bk-agent-prompt-reset"
@@ -1779,7 +1790,7 @@ function EntityLinkRow({
   return (
     <li>
       <span className="bk-link-type">{link.entity_type}</span>
-      {isSessionLink ? (
+      {isSessionLink && onOpenChat ? (
         <button
           type="button"
           className="bk-link-ref bk-link-ref-action"

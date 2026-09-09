@@ -29,11 +29,10 @@ import type { BridgeRoutes } from '../../context'
 // ⚠️ The PRESENTATION is not one thing, and the split is a hard constraint
 // rather than a preference. `RefChip` and `useOpenSignals` are chat-core hooks:
 // they read `ChatProvider`'s context and THROW ("chat-core hooks must be used
-// inside <ChatProvider>") when there is none above them. `BridgeChat` — the
-// only host that mounts `OrchestratorPanel` — supplies `BridgeProvider` and no
-// `ChatProvider`, so a chip rendered in that pane would take the whole chat page
-// down the first time the producer wrote a session id, which it does on every
-// run. So:
+// inside <ChatProvider>") when there is none above them. A host that mounts
+// `OrchestratorPanel` under `BridgeProvider` alone — with no `ChatProvider` — would
+// take the whole page down the first time the producer wrote a session id, which it
+// does on every run. So:
 //
 //   - a surface INSIDE a `ChatProvider` (the `BridgeOrchestrator` page, which
 //     documents that requirement) renders chips, with the detail panel and the

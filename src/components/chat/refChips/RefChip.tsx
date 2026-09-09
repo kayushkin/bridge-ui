@@ -88,15 +88,24 @@ function SessionChip({ refId }: { refId: string }) {
 
   const emoji = core ? sessionEmoji(core.type, core.purpose, refId) : '💬'
   const label = core && core.display_name ? truncate(core.display_name) : idTail(refId, 12)
-  const chatHref = `${cfg.routes.chat}?session=${encodeURIComponent(refId)}`
+  // No chat page in the host means no link to one: the chip still names the
+  // session and still opens its detail dropdown, it just isn't clickable.
+  const chatHref = cfg.routes.chat ? `${cfg.routes.chat}?session=${encodeURIComponent(refId)}` : ''
 
   return (
     <span className="bc-ref-wrap" ref={wrapRef}>
-      {/* Main chip navigates to the referenced session's chat. */}
-      <Link className="bc-ref bc-ref-session" to={chatHref} title={`Open chat — ${core?.display_name || refId}`}>
-        <span className="bc-ref-glyph" aria-hidden>{emoji}</span>
-        <span className="bc-ref-label">{label}</span>
-      </Link>
+      {/* Main chip navigates to the referenced session's chat, when there is one. */}
+      {chatHref ? (
+        <Link className="bc-ref bc-ref-session" to={chatHref} title={`Open chat — ${core?.display_name || refId}`}>
+          <span className="bc-ref-glyph" aria-hidden>{emoji}</span>
+          <span className="bc-ref-label">{label}</span>
+        </Link>
+      ) : (
+        <span className="bc-ref bc-ref-session" title={core?.display_name || refId}>
+          <span className="bc-ref-glyph" aria-hidden>{emoji}</span>
+          <span className="bc-ref-label">{label}</span>
+        </span>
+      )}
       {/* Caret opens the detail dropdown to the side without navigating. */}
       <button
         type="button"

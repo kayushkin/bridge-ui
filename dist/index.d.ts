@@ -36,7 +36,6 @@ export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyB
 export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';
 export { readAgentPrompt, writeAgentPrompt, stripAgentPrompt, suggestAgentPrompt, AGENT_PROMPT_OPEN, AGENT_PROMPT_CLOSE, } from './agentPrompt';
 export { BridgeLayout } from './components/BridgeLayout';
-export { BridgeChat } from './components/BridgeChat';
 export { BridgeSessions } from './components/BridgeSessions';
 export { BridgeInstances } from './components/BridgeInstances';
 export { BridgeSettings } from './components/BridgeSettings';
@@ -84,7 +83,7 @@ export { ProducerRow } from './components/chat/ProducerRow';
 export type { ProducerRowProps } from './components/chat/ProducerRow';
 export { GitPanel } from './components/GitPanel';
 export type { GitPanelProps } from './components/GitPanel';
-export type { GitRepo } from './components/chat/WorkspaceContext';
+export type { GitRepo } from './components/GitPanel';
 export { LinkedKanbanPanel } from './components/chat/LinkedKanbanPanel';
 export type { LinkedKanbanPanelProps } from './components/chat/LinkedKanbanPanel';
 export { OrchestratorPanel } from './components/chat/OrchestratorPanel';
