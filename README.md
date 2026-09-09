@@ -1,11 +1,6 @@
 # @kayushkin/bridge-ui
 
-Reusable React component library for apps that consume an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend. Ships the session/instance/auth/usage/skills/kanban/conformance pages, the tool-call renderers, the shared session widgets, plus the underlying SSE client and React hooks — so a host app only has to wire auth and routes.
-
-**It ships no chat page.** The chat lives in dash (`dash/src/pages/chat/`) on
-[`@kayushkin/chat-core`](https://github.com/kayushkin/chat-core), which is the only one. A host
-that mounts a chat names its path as `routes.chat` and this library links into it; a host that
-mounts none gets no Chat tab and no links to sessions it cannot open.
+The whole bridge surface for an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend, as one React component. `<Bridge>` routes its own pages — the chat at `/` (on [`@kayushkin/chat-core`](https://github.com/kayushkin/chat-core)), instances, sessions, auth, usage, settings, agents, files, skills, tools, permissions, kanban, a card page, principals, the orchestrator and conformance — draws the tab row, and mounts both providers. A host wires auth and where it proxies each backend, mounts `<Bridge>` at the root of a router, and is done.
 
 The simplest way to get a working UI on top of llm-bridge-server is to run the server directly — it embeds bridge-ui's built `dist/` and serves it at the root. Embed this package in your own React app if you want to customize the host (chrome, auth, routing).
 
@@ -34,21 +29,14 @@ The library is ESM-only (`"type": "module"`) and ships two stylesheets:
 
 ## Usage
 
-Wrap the bridge area in a `BridgeProvider` and mount `BridgeLayout` (or the page components individually) under your router.
+Mount `<Bridge>` at the root of a router. It owns the root: `/` is its chat and every other
+page is a route it renders itself, so a `?session=` deeplink or a card link built by one page
+lands on another. A host with pages of its own puts them beside it as static routes — they rank
+above the splat.
 
 ```tsx
 import { Routes, Route } from 'react-router-dom'
-import {
-  BridgeProvider,
-  BridgeLayout,
-  BridgeInstances,
-  BridgeSessions,
-  BridgeAuth,
-  BridgeUsage,
-  BridgeSettings,
-  BridgeSkills,
-  BridgeConformance,
-} from '@kayushkin/bridge-ui'
+import { Bridge } from '@kayushkin/bridge-ui'
 import '@kayushkin/bridge-ui/styles.css'
 
 // Your auth'd fetch — adds cookies, bearer tokens, etc. before every request.
@@ -58,32 +46,30 @@ const apiFetch: typeof fetch = (url, init) =>
 export default function App() {
   return (
     <Routes>
-      <Route
-        path="bridge"
-        element={
-          <BridgeProvider
-            fetch={apiFetch}
-            basePath="/api/bridge"
-            skillStoreBasePath="/api/skill-store"
-          >
-            <BridgeLayout />
-          </BridgeProvider>
-        }
-      >
-        <Route path="instances" element={<BridgeInstances />} />
-        <Route path="sessions" element={<BridgeSessions />} />
-        <Route path="auth" element={<BridgeAuth />} />
-        <Route path="usage" element={<BridgeUsage />} />
-        <Route path="settings" element={<BridgeSettings />} />
-        <Route path="skills" element={<BridgeSkills />} />
-        <Route path="conformance" element={<BridgeConformance />} />
-      </Route>
+      <Route path="settings" element={<HostSettings />} />
+      <Route path="*" element={
+        <Bridge
+          fetch={apiFetch}
+          basePath="/api/bridge"
+          skillStoreBasePath="/api/skill-store"
+          kanbanStoreBasePath="/api/kanban"
+          notesPath="/notes"
+        />
+      } />
     </Routes>
   )
 }
 ```
 
-`BridgeProvider` is the single configuration point. Every hook and page component pulls its `fetch`, `basePath`, and route map from context — components never read globals or hit a hardcoded URL.
+`<Bridge>` takes every `BridgeProvider` prop except `routes` and `children`, plus `notesPath` (the
+host's notes page, for `[todo:…]` references) and `showConformance`. Each `*BasePath` names where
+the host proxies that backend; omit one and the feature that needs it is hidden rather than
+pointed at a 404.
+
+`BridgeProvider` remains the single configuration point underneath. Every hook and page pulls its
+`fetch`, `basePath` and route map from context — nothing reads a global or a hardcoded URL — so a
+host that would rather compose pages by hand mounts `BridgeProvider` + `BridgeLayout` and the page
+components itself, passing its own `routes`.
 
 ### `BridgeProvider` props
 
@@ -92,20 +78,17 @@ export default function App() {
 | `fetch` | `(url, init?) => Promise<Response>` | required | Auth'd fetch function. Add cookies / bearer tokens here. |
 | `basePath` | `string` | `/api/bridge` | Base path for the llm-bridge-server API (no trailing slash). |
 | `skillStoreBasePath` | `string` | `""` | Base path for skill-store API. If empty, the Skills tab is hidden. |
-| `routes` | `Partial<BridgeRoutes>` | `DEFAULT_BRIDGE_ROUTES` | Override individual route paths used by inter-page navigation. |
+| `routes` | `Partial<BridgeRoutes>` | `DEFAULT_BRIDGE_ROUTES` | Override individual route paths used by inter-page navigation. `<Bridge>` sets only `notes`. |
 
-`DEFAULT_BRIDGE_ROUTES` is exported for inspection/extension:
+`DEFAULT_BRIDGE_ROUTES` is what `<Bridge>` renders:
 
 ```ts
 {
-  chat:        '/bridge',
-  instances:   '/bridge/instances',
-  sessions:    '/bridge/sessions',
-  auth:        '/bridge/auth',
-  usage:       '/bridge/usage',
-  settings:    '/bridge/settings',
-  skills:      '/bridge/skills',
-  conformance: '/bridge/conformance',
+  chat: '/', instances: '/instances', sessions: '/sessions', auth: '/auth', usage: '/usage',
+  settings: '/settings', agents: '/agents', files: '/files', skills: '/skills', tools: '/tools',
+  permissions: '/permissions', conformance: '/conformance', kanban: '/kanban',
+  principals: '/principals', orchestrator: '/orchestrator', card: '/card',
+  notes: '',   // the host's, if it has one
 }
 ```
 
@@ -115,6 +98,8 @@ export default function App() {
 
 | Component | Purpose |
 |-----------|---------|
+| `Bridge` | The whole surface: both providers, the tab row and every page below, routed. |
+| `BridgeChat` | The chat — sidebar, thread, panes, composer — on `@kayushkin/chat-core`. |
 | `BridgeLayout` | Outer shell with the tab nav. Renders the `<Outlet/>` of nested routes. |
 | `BridgeSessions` | Session browser across all instances/harnesses. |
 | `BridgeInstances` | Instance + machine management (create, edit, bind credentials). |
@@ -129,7 +114,6 @@ export default function App() {
 | Hook | Returns | Notes |
 |------|---------|-------|
 | `useBridgeConfig()` | `BridgeConfig` | The current provider config. Throws if not under `BridgeProvider`. |
-| `useBridgeSession()` | `UseBridgeSessionReturn` | List/create/select sessions, send messages, interrupt/resume/stop, fork, compact, send config, live `LogRow[]` from SSE. |
 | `useBridgeInstances()` | `{ instances, loading, error, ... }` | Polls `/instances` every 30 s; create/update/delete helpers. |
 | `useBridgeMachines()` | `{ machines, loading, error, ... }` | Host registry instances bind to. Same poll-and-snapshot shape as instances. |
 | `useBridgePrefs(opts?)` | `[prefs, setPrefs]`-style object | Server-synced (when `fetch`+`endpoint` provided) or `localStorage`-only. |
@@ -138,7 +122,7 @@ export default function App() {
 
 ### SSE & utilities
 
-- `connectSSE(fetch, basePath, sessionId, lastEventId?, signal?)` — async generator yielding `BridgeEvent`s. Used internally by `useBridgeSession`; exposed for consumers that need raw event streams.
+- `connectSSE(fetch, basePath, sessionId, lastEventId?, signal?)` — async generator yielding `BridgeEvent`s, for consumers that need a raw event stream. The chat itself reads through chat-core's sync engine.
 - `formatTokens`, `formatCost`, `formatDuration`, `timeAgo` — display helpers used by the built-in components.
 - `TRANSPORT_LABEL` — display name lookup for credential transports.
 
@@ -160,7 +144,7 @@ registerToolRenderer('MyTool', MyToolRenderer)
 
 ### Types
 
-All canonical types come from `@kayushkin/llm-bridge-types` (auto-generated from the Go structs in `llm-bridge/msg/`) and are re-exported here. UI-specific types (`Message`, `LogRow`, `BridgeEvent`, `SessionUIState`, `ActivityKind`, `UseBridgeSessionReturn`, etc.) are defined in `src/types.ts`.
+All canonical types come from `@kayushkin/llm-bridge-types` (auto-generated from the Go structs in `llm-bridge/msg/`) and are re-exported here. UI-specific types (`Message`, `LogRow`, `BridgeEvent`, `SessionUIState`, `ActivityKind`, etc.) are defined in `src/types.ts`.
 
 Do **not** copy these types into your host app — they are a single source of truth for the wire protocol; importing them from this package keeps host code in lock-step with the server.
 
@@ -169,20 +153,24 @@ Do **not** copy these types into your host app — they are a single source of t
 ```
 Host app
   │
-  ├─ <BridgeProvider fetch=… basePath=… skillStoreBasePath=…>
+  ├─ <Bridge fetch=… basePath=… skillStoreBasePath=… notesPath=…>
   │     │
-  │     ├─ <BridgeLayout/>       ← outer shell + tab nav
-  │     │   └─ <Outlet/>          ← nested route renders one of:
-  │     │       BridgeSessions | BridgeInstances |
-  │     │       BridgeAuth | BridgeUsage | BridgeSettings |
-  │     │       BridgeSkills | BridgeConformance
+  │     ├─ <BridgeProvider>        ← config context + the one MinimalChromeProvider
+  │     │   └─ <ChatProvider>      ← chat-core's session store + sync engine, above the router
+  │     │       └─ <Routes>
+  │     │           └─ <BridgeLayout/>     ← tab row
+  │     │               └─ <Outlet/>       ← one of:
+  │     │                   BridgeChat (index) | BridgeInstances | BridgeSessions | BridgeAuth |
+  │     │                   BridgeUsage | BridgeSettings | BridgeAgents | BridgeFiles | BridgeSkills |
+  │     │                   BridgeTools | BridgePermissions | BridgeKanban | BridgeCardPage |
+  │     │                   BridgePrincipals | BridgeOrchestrator | BridgeConformance
   │     │
   │     └─ hooks read config from BridgeContext:
-  │         useBridgeSession   → /sessions, /events (SSE), /send, /interrupt, …
   │         useBridgeInstances → /instances
   │         useBridgeMachines  → /machines
   │         useBridgeFolders   → /folders
   │         useBridgePrefs     → /session-meta/bridge (or localStorage)
+  │         useKanban          → kanban-store, via kanbanStoreBasePath
   │
   └─ apiFetch — host's job: cookies, bearer tokens, error handling
 ```
@@ -193,18 +181,18 @@ The library never opens a connection that isn't routed through the host's `fetch
 
 ```bash
 npm install
-npm run build    # tsc → dist/
+npm run build    # tsc → dist/, then scripts/copy-css.mjs puts every src/**/*.css beside its .js
 npm run dev      # tsc --watch
 ```
 
-`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. The published package contains `dist/`, `styles.css`, and `theme.css` only (`files` field in `package.json`).
+`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. tsc emits no CSS, so the build copies every stylesheet under `src/` into `dist/` at the same path — the chat's `Chat.module.css` included — and the consumer's bundler resolves the relative import as it would in a source tree. The published package contains `dist/`, `styles.css`, and `theme.css` only (`files` field in `package.json`).
 
 ## Standalone launcher
 
 A minimal Vite app under `standalone/` runs the full UI on its own — useful for
 developing the library or driving a bare llm-bridge-server without a host app. It mounts
-`BridgeProvider` + `BridgeLayout` against `src/` directly (no prior build needed) and
-imports both `theme.css` and `styles.css`, so it's fully styled out of the box.
+`<Bridge>` at the root against `src/` directly (no prior build needed) and imports both
+`theme.css` and `styles.css`, so it's fully styled out of the box.
 
 ```bash
 npm install
