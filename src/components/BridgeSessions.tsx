@@ -149,14 +149,9 @@ export function BridgeSessions() {
     return () => { cancelled = true }
   }, [filtered, apiFetch, basePath])
 
-  // Opening a session means handing it to the host's chat page. A host that
-  // mounts none (bridge-ui ships no chat) has nowhere to send the click, so the
-  // rows are not clickable there rather than navigating to a dead path.
-  const handleClick = routes.chat
-    ? (session: BridgeSession) => {
-        navigate(routes.chat, { state: { selectSession: session.session_id } })
-      }
-    : undefined
+  const handleClick = (session: BridgeSession) => {
+    navigate(routes.chat, { state: { selectSession: session.session_id } })
+  }
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
@@ -225,7 +220,7 @@ export function BridgeSessions() {
             const totalTokens = tokens ? tokens.input + tokens.output : undefined
             return (
               <li key={s.session_id}>
-                <button className="bs-row" onClick={handleClick && (() => handleClick(s))} disabled={!handleClick}>
+                <button className="bs-row" onClick={() => handleClick(s)}>
                   <span className="bs-row-harness" title={hinfo?.label || s.harness}>
                     {hinfo?.image
                       ? <img src={`${basePath}${hinfo.image}`} alt={hinfo.label || s.harness} />

@@ -1197,7 +1197,7 @@ console.log('\nBridgePrincipals — the directory editor')
       h(BridgeContext.Provider, { value: bridgeConfig(principalStoreBasePath) },
         h(MinimalChromeProvider, null, h(BridgeLayout)))))
   check('BridgeLayout shows a Principals tab when principal-store is configured',
-    layout('/api/principals').includes('>Principals<') && layout('/api/principals').includes('href="/bridge/principals"'))
+    layout('/api/principals').includes('>Principals<') && layout('/api/principals').includes('href="/principals"'))
   check('and none when it is not', !layout('').includes('Principals'))
 }
 

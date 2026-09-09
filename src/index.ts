@@ -126,7 +126,12 @@ export {
   AGENT_PROMPT_OPEN, AGENT_PROMPT_CLOSE,
 } from './agentPrompt'
 
-// Page components
+// The whole surface as one component: every page below, the tab row, and both
+// providers. A host mounts this at the root of a router and is done.
+export { Bridge } from './components/Bridge'
+export type { BridgeProps } from './components/Bridge'
+
+// Page components — for a host that composes them by hand instead.
 export { BridgeLayout } from './components/BridgeLayout'
 export { BridgeChat } from './components/chat/BridgeChat'
 export { BridgeSessions } from './components/BridgeSessions'
@@ -144,18 +149,20 @@ export { BridgeKanban } from './components/BridgeKanban'
 // The principal-store editor. Renders nothing without `principalStoreBasePath`,
 // and BridgeLayout shows no tab for it then either.
 export { BridgePrincipals } from './components/BridgePrincipals'
-// The card view, minus the drawer chrome. A host that wants a card as a PAGE
-// mounts this inside its own `.bk-drawer` wrapper; the board's drawer mounts it
-// inside the backdrop. Only the chrome differs, so only the chrome is repeated.
+// One card as a page of its own, assembled from its four separately addressable
+// parts. `<Bridge>` routes it at `card/:cardId`.
+export { BridgeCardPage } from './components/BridgeCardPage'
+// The card view, minus the drawer chrome. The board's drawer mounts it inside
+// the backdrop; BridgeCardPage inside its own `.bk-drawer` wrapper. Only the
+// chrome differs, so only the chrome is repeated.
 export { CardDetail } from './components/BridgeKanban'
 export type { CardDetailProps } from './components/BridgeKanban'
 // The producer's full review page — conversation + composer (one run per send),
-// runs log, cost windows and the injected-context inspector. Ported out of dash,
-// which now mounts this at its own `/orchestrator`.
+// runs log, cost windows and the injected-context inspector.
 //
-// ⚠️ Two providers, not one: `BridgeProvider` for `producerBasePath` and
-// `routes`, and chat-core's `<ChatProvider>` for the reference chips, whose
-// hooks throw without it. Every other page here needs only the first.
+// ⚠️ Needs chat-core's `<ChatProvider>` above it as well as `BridgeProvider`:
+// the reference chips' hooks throw without it. `<Bridge>` mounts both; a host
+// composing pages by hand must too.
 export { BridgeOrchestrator } from './components/BridgeOrchestrator'
 export type { BridgeOrchestratorProps } from './components/BridgeOrchestrator'
 export { BridgeAttach } from './components/BridgeAttach'

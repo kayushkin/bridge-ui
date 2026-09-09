@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { type BridgeRoutes } from './context';
 import type { FetchFn } from './types';
-interface BridgeProviderProps {
+export interface BridgeProviderProps {
     /** Auth'd fetch function */
     fetch: FetchFn;
     /** Base path for bridge API (default: "/api/bridge") */
@@ -48,5 +48,4 @@ interface BridgeProviderProps {
     children: ReactNode;
 }
 export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
-export {};
 //# sourceMappingURL=provider.d.ts.map

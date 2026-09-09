@@ -1,7 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  ChatProvider,
   useActiveSession,
   useActivity,
   useComposer,
@@ -9,8 +8,6 @@ import {
   useSessionControls,
 } from '@kayushkin/chat-core'
 import { createPortal } from 'react-dom'
-import { useBridgeConfig } from '../../context'
-import type { FetchFn } from '../../types'
 import { readSessionDeeplink, writeSessionParam, initialSessionDeeplinkState, type SessionDeeplinkState } from '../../sessionDeeplink'
 import { BridgeAttach } from '../BridgeAttach'
 import { GitPanel } from '../GitPanel'
@@ -52,16 +49,6 @@ import {
   type PaneSizes,
 } from './panePersistence'
 
-// Adapt the host's fetch (bridge-ui's `FetchFn`, string-only) to the full
-// `typeof fetch` signature ChatProvider expects. ApiClient only ever passes string
-// URLs, but URL/Request are covered too so the types are honest.
-function chatFetchOver(fetchFn: FetchFn): typeof fetch {
-  return (input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-    return fetchFn(url, init)
-  }
-}
-
 /** States in which the session is busy — it drives the live streaming indicator AND
  *  the composer's Stop button, which is why it must be the server's answer rather than
  *  the client's own in-flight-POST flag. `paused` is deliberately absent: a parked
@@ -75,37 +62,15 @@ const STREAMING_STATES = new Set([
   'compacting',
 ])
 
-/** The chat: sidebar + thread + panes, on the `@kayushkin/chat-core` data layer —
- *  it renders from an in-memory store and the network only reconciles.
+/** The chat: sidebar + thread + panes, on the `@kayushkin/chat-core` data layer — it
+ *  renders from an in-memory store and the network only reconciles.
  *
- *  ⚠️ This mounts ONE provider, and the absence of the second is deliberate.
- *  `BridgeProvider` comes from the host's `BridgeLayout`, which this page routes
- *  under. Mounting another here would still resolve every value — but
- *  `BridgeProvider` nests a `MinimalChromeProvider` unconditionally
- *  (`provider.tsx`), so the page would hold TWO: `useRegisterMinimalChrome`
- *  below would register its phone chrome with the inner one while the tab row
- *  reads the outer, which would never learn a surface had taken over and would
- *  draw its tabs on top of that chrome at narrow widths (bridge-ui `936ec04`).
+ *  Mounts no provider. `<Bridge>` supplies both: `BridgeProvider` (config, and the
+ *  one `MinimalChromeProvider` the tab row and this page's phone chrome must share
+ *  — bridge-ui `936ec04`) and chat-core's `ChatProvider`, held above the router so
+ *  the session store survives a switch to another tab and back.
  *
- *  `ChatProvider` is chat-core's data layer and nothing above supplies it. Its
- *  paths come from the same `BridgeConfig` every other page reads, so the chat
- *  reaches noteboard and the resolver through whatever the host proxies. */
-export function BridgeChat() {
-  const { fetch: fetchFn, basePath, noteboardBasePath, resolveEndpoint } = useBridgeConfig()
-  const chatFetch = useMemo(() => chatFetchOver(fetchFn), [fetchFn])
-  return (
-    <ChatProvider
-      fetch={chatFetch}
-      basePath={basePath}
-      noteboardBasePath={noteboardBasePath}
-      resolveEndpoint={resolveEndpoint}
-    >
-      <Workspace />
-    </ChatProvider>
-  )
-}
-
-/** The page inside both providers: sidebar + thread, plus the cold-load bootstrap.
+ *  Plus the cold-load bootstrap.
  *
  *  Landing on `/` used to show an empty pane, because nothing ever opened a chat:
  *  `activeId` starts null (no session is restored across a reload) and no pending pane
@@ -117,7 +82,7 @@ export function BridgeChat() {
  *  reads an empty prefs snapshot and targets nothing. It re-checks `activeId` at fire
  *  time rather than trusting the value it was mounted with: a session clicked in the
  *  sidebar while prefs were still in flight must not be replaced by a new chat. */
-function Workspace() {
+export function BridgeChat() {
   const target = useNewSessionTarget()
   const { newSession } = useSessionActions()
   const { id: activeId, summary: activeSummary, select } = useActiveSession()

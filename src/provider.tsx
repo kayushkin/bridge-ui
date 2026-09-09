@@ -4,7 +4,7 @@ import { BridgeContext, DEFAULT_BRIDGE_ROUTES, type BridgeConfig, type BridgeRou
 import type { FetchFn } from './types'
 import { MinimalChromeProvider } from './components/minimal/MinimalChromeContext'
 
-interface BridgeProviderProps {
+export interface BridgeProviderProps {
   /** Auth'd fetch function */
   fetch: FetchFn
   /** Base path for bridge API (default: "/api/bridge") */

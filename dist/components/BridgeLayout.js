@@ -3,7 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { useMinimalChrome } from './minimal/MinimalChromeContext';
 export function BridgeLayout({ showConformance = true }) {
-    const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, } = useBridgeConfig();
+    const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, producerBasePath, } = useBridgeConfig();
     // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
     // are the only navigation on every page here except the host's chat, and the
     // routed child that replaces them exists on that chat alone — so dropping them
@@ -14,10 +14,7 @@ export function BridgeLayout({ showConformance = true }) {
     const { minimal, minimalChromeMounted } = useMinimalChrome();
     const chromeTakenOver = minimal && minimalChromeMounted;
     const tabs = [
-        // Gated on the route being named, because this library ships no chat page.
-        // dash names it and mounts its own chat inside this layout, so it gets the
-        // tab; a host that mounts no chat gets no link to one.
-        ...(routes.chat ? [{ to: routes.chat, label: 'Chat', end: true }] : []),
+        { to: routes.chat, label: 'Chat', end: true },
         { to: routes.instances, label: 'Instances', end: false },
         { to: routes.sessions, label: 'Sessions', end: false },
         { to: routes.auth, label: 'Auth', end: false },
@@ -32,11 +29,9 @@ export function BridgeLayout({ showConformance = true }) {
         // The directory the Kanban assignees resolve against. Same gate as the
         // assignee UI itself: a host that proxies no principal-store gets no tab.
         ...(principalStoreBasePath ? [{ to: routes.principals, label: 'Principals', end: false }] : []),
-        // Gated on the route being named, like every optional tab above. dash names
-        // it, and its chat mounts inside this layout so it shares this row; llmux
-        // has no /api/producer proxy, so it names no route and gets no tab rather
-        // than a link to a 404.
-        ...(routes.orchestrator ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
+        // The page exists on every host; the tab is drawn only where the producer is
+        // proxied, since without it the page can say nothing but "not configured".
+        ...(producerBasePath ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
         ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
     ];
     return (_jsxs("div", { className: `bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`, children: [!chromeTakenOver && _jsx("nav", { className: "bridge-nav", children: tabs.map(t => (_jsx(NavLink, { to: t.to, end: t.end, className: ({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`, children: t.label }, t.to))) }), _jsx("div", { className: "bridge-content", children: _jsx(Outlet, {}) })] }));

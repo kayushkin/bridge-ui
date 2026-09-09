@@ -3,8 +3,10 @@ import type { ReactNode } from 'react'
 import type { FetchFn } from './types'
 
 export interface BridgeRoutes {
-  // Where the consumer mounted each page this library exports. Every entry here
-  // has a matching exported component, so a default path is always meaningful.
+  // Where each page this library ships is mounted. `<Bridge>` owns its host's
+  // root and routes these itself, so the defaults are the truth for every host
+  // that mounts it; a host composing pages by hand under a prefix overrides them.
+  chat: string
   instances: string
   sessions: string
   auth: string
@@ -18,47 +20,37 @@ export interface BridgeRoutes {
   conformance: string
   kanban: string
   principals: string
+  /** The producer's full review surface (WAL, prior versions, filters), linked
+   *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
+  orchestrator: string
+  /** The single-card page. The card id is appended as a path segment. */
+  card: string
 
-  // Pages the consumer owns and this library does not provide. There is no
-  // sensible default for these — dash has both, llmux has neither — so they
-  // default to empty and a link to an empty route is not rendered at all. The
-  // library never guesses a path for a page it doesn't ship.
-  /** The host's chat page. This library ships no chat — dash owns the only one,
-   *  at `dash/src/pages/chat/` on `@kayushkin/chat-core` — so there is no path
-   *  to default to. Empty means the host mounts none, and every link into a
-   *  session (the Chat tab, a session row, a card's session link, a reference
-   *  chip) then renders as plain text instead of a link to nowhere. */
-  chat: string
+  // Pages the HOST owns and this library does not provide. No sensible default
+  // exists, so it is empty, and a link to an empty route is not rendered at all —
+  // the library never guesses a path for a page it doesn't ship.
   /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
   notes: string
-  /** The producer's full review surface (WAL, prior versions, filters), linked
-   *  from the sidebar's Orchestrator row and the in-chat orchestrator pane.
-   *  Empty means the host doesn't mount it. */
-  orchestrator: string
-  /** The host's single-card page, e.g. `/card`. The card id is appended as a
-   *  path segment. Empty means the host mounts no such page, and the drawer then
-   *  offers no link to one. */
-  card: string
 }
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
-  chat: '',
-  instances: '/bridge/instances',
-  sessions: '/bridge/sessions',
-  auth: '/bridge/auth',
-  usage: '/bridge/usage',
-  settings: '/bridge/settings',
-  agents: '/bridge/agents',
-  files: '/bridge/files',
-  skills: '/bridge/skills',
-  tools: '/bridge/tools',
-  permissions: '/bridge/permissions',
-  conformance: '/bridge/conformance',
-  kanban: '/bridge/kanban',
-  principals: '/bridge/principals',
+  chat: '/',
+  instances: '/instances',
+  sessions: '/sessions',
+  auth: '/auth',
+  usage: '/usage',
+  settings: '/settings',
+  agents: '/agents',
+  files: '/files',
+  skills: '/skills',
+  tools: '/tools',
+  permissions: '/permissions',
+  conformance: '/conformance',
+  kanban: '/kanban',
+  principals: '/principals',
+  orchestrator: '/orchestrator',
+  card: '/card',
   notes: '',
-  orchestrator: '',
-  card: '',
 }
 
 export interface BridgeConfig {

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { FetchFn } from './types';
 export interface BridgeRoutes {
+    chat: string;
     instances: string;
     sessions: string;
     auth: string;
@@ -14,22 +15,13 @@ export interface BridgeRoutes {
     conformance: string;
     kanban: string;
     principals: string;
-    /** The host's chat page. This library ships no chat — dash owns the only one,
-     *  at `dash/src/pages/chat/` on `@kayushkin/chat-core` — so there is no path
-     *  to default to. Empty means the host mounts none, and every link into a
-     *  session (the Chat tab, a session row, a card's session link, a reference
-     *  chip) then renders as plain text instead of a link to nowhere. */
-    chat: string;
+    /** The producer's full review surface (WAL, prior versions, filters), linked
+     *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
+    orchestrator: string;
+    /** The single-card page. The card id is appended as a path segment. */
+    card: string;
     /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
     notes: string;
-    /** The producer's full review surface (WAL, prior versions, filters), linked
-     *  from the sidebar's Orchestrator row and the in-chat orchestrator pane.
-     *  Empty means the host doesn't mount it. */
-    orchestrator: string;
-    /** The host's single-card page, e.g. `/card`. The card id is appended as a
-     *  path segment. Empty means the host mounts no such page, and the drawer then
-     *  offers no link to one. */
-    card: string;
 }
 export declare const DEFAULT_BRIDGE_ROUTES: BridgeRoutes;
 export interface BridgeConfig {

@@ -75,10 +75,8 @@ function SessionChip({ refId }) {
     const { data: core, error } = useRefLoad(() => fetchSessionCore(cfg.fetch, cfg.basePath, refId));
     const emoji = core ? sessionEmoji(core.type, core.purpose, refId) : '💬';
     const label = core && core.display_name ? truncate(core.display_name) : idTail(refId, 12);
-    // No chat page in the host means no link to one: the chip still names the
-    // session and still opens its detail dropdown, it just isn't clickable.
-    const chatHref = cfg.routes.chat ? `${cfg.routes.chat}?session=${encodeURIComponent(refId)}` : '';
-    return (_jsxs("span", { className: "bc-ref-wrap", ref: wrapRef, children: [chatHref ? (_jsxs(Link, { className: "bc-ref bc-ref-session", to: chatHref, title: `Open chat — ${core?.display_name || refId}`, children: [_jsx("span", { className: "bc-ref-glyph", "aria-hidden": true, children: emoji }), _jsx("span", { className: "bc-ref-label", children: label })] })) : (_jsxs("span", { className: "bc-ref bc-ref-session", title: core?.display_name || refId, children: [_jsx("span", { className: "bc-ref-glyph", "aria-hidden": true, children: emoji }), _jsx("span", { className: "bc-ref-label", children: label })] })), _jsx("button", { type: "button", className: `bc-ref-caret-btn${open ? ' bc-ref-open' : ''}`, onClick: () => setOpen(o => !o), "aria-expanded": open, "aria-label": "Session details", title: "Details", children: "\u25BE" }), open && _jsx(SessionRefPanel, { core: core, error: error, refId: refId })] }));
+    const chatHref = `${cfg.routes.chat}?session=${encodeURIComponent(refId)}`;
+    return (_jsxs("span", { className: "bc-ref-wrap", ref: wrapRef, children: [_jsxs(Link, { className: "bc-ref bc-ref-session", to: chatHref, title: `Open chat — ${core?.display_name || refId}`, children: [_jsx("span", { className: "bc-ref-glyph", "aria-hidden": true, children: emoji }), _jsx("span", { className: "bc-ref-label", children: label })] }), _jsx("button", { type: "button", className: `bc-ref-caret-btn${open ? ' bc-ref-open' : ''}`, onClick: () => setOpen(o => !o), "aria-expanded": open, "aria-label": "Session details", title: "Details", children: "\u25BE" }), open && _jsx(SessionRefPanel, { core: core, error: error, refId: refId })] }));
 }
 function SessionRefPanel({ core, error, refId }) {
     const cfg = useBridgeConfig();
