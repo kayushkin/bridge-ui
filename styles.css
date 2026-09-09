@@ -5116,6 +5116,152 @@
 .bk-orphans { margin-top: 16px; padding: 8px; border: 1px dashed #d97757; border-radius: 4px; }
 .bk-orphan-note { font-size: 0.85em; opacity: 0.75; }
 
+/* ============================ Principals (BridgePrincipals) ============================
+   The principal-store editor: roster on the left, the selected principal on the
+   right. Avatars reuse the kanban assignee vocabulary (initials for a person,
+   the group glyph for a group) so a face here is the face on the card. */
+.bp-container { display: flex; flex-direction: column; gap: 16px; max-width: 1200px; }
+.bp-header { display: flex; flex-direction: column; gap: 4px; }
+.bp-title { margin: 0; font-size: 1.2em; color: var(--text); }
+.bp-subtitle { margin: 0; font-size: 0.85em; color: var(--text-muted); }
+.bp-columns { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 768px) { .bp-columns { grid-template-columns: 1fr; } }
+
+.bp-list-pane, .bp-detail-pane {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface);
+}
+.bp-detail-pane { min-height: 200px; }
+
+.bp-toolbar { display: flex; flex-direction: column; gap: 8px; }
+.bp-search, .bp-input, .bp-picker-query, .bp-create-name, .bp-create-email, .bp-create-kind {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 6px; font-size: 0.85em;
+}
+.bp-search:focus, .bp-input:focus, .bp-picker-query:focus, .bp-create-name:focus, .bp-create-email:focus { outline: none; border-color: var(--accent); }
+.bp-kinds { display: flex; gap: 2px; }
+.bp-kind {
+  flex: 1; font-size: 0.8em; padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: none; color: var(--text-muted); cursor: pointer;
+}
+.bp-kind[aria-pressed="true"] { background: var(--accent-soft, rgba(99,102,241,0.12)); color: var(--accent); border-color: var(--accent); }
+.bp-check { display: flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text-muted); cursor: pointer; }
+
+.bp-error { margin: 0; padding: 8px 10px; font-size: 0.85em; }
+.bp-empty { padding: 24px 8px; text-align: center; color: var(--text-dim); font-size: 0.9em; }
+.bp-empty-inline { padding: 6px 8px; color: var(--text-dim); font-size: 0.85em; }
+
+/* Roster rows */
+.bp-list-wrap { display: flex; flex-direction: column; gap: 6px; }
+.bp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; }
+.bp-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border: 1px solid transparent; border-radius: 6px;
+  background: none; color: var(--text); text-align: left; cursor: pointer; font-size: 0.9em;
+}
+.bp-row:hover { background: var(--accent-soft, rgba(99,102,241,0.08)); }
+.bp-row-selected { border-color: var(--accent); background: var(--accent-soft, rgba(99,102,241,0.12)); }
+.bp-row-disabled .bp-row-name { text-decoration: line-through; opacity: 0.7; }
+.bp-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.bp-row-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-row-email { font-size: 0.8em; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bp-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em;
+}
+.bp-avatar-group { background: none; font-size: 1.1rem; }
+.bp-avatar-large { width: 40px; height: 40px; font-size: 1rem; }
+.bp-avatar-large.bp-avatar-group { font-size: 1.8rem; }
+
+.bp-badge {
+  font-size: 0.7em; padding: 1px 6px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--text-muted); background: var(--bg);
+  white-space: nowrap;
+}
+.bp-badge-disabled { color: #d97757; border-color: #d97757; }
+.bp-badge-human, .bp-badge-group { text-transform: none; }
+
+/* Create form */
+.bp-create-toggle { display: flex; }
+.bp-create { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--border); border-radius: 6px; }
+.bp-create-row { display: flex; gap: 6px; }
+.bp-create-kind { width: auto; flex: none; }
+.bp-create-actions, .bp-edit-actions { display: flex; gap: 6px; align-items: center; }
+.bp-cancel { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+.bp-cancel:hover { color: var(--text); }
+
+/* Detail */
+.bp-detail { display: flex; flex-direction: column; gap: 14px; }
+.bp-detail-head { display: flex; align-items: center; gap: 12px; }
+.bp-detail-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bp-detail-name { margin: 0; font-size: 1.15em; color: var(--text); }
+.bp-detail-disabled .bp-detail-name { text-decoration: line-through; opacity: 0.75; }
+.bp-detail-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The id is the thing other stores join on and the thing to paste into a chat;
+   monospace and selectable, never truncated. */
+.bp-id { font-family: var(--mono, ui-monospace, monospace); font-size: 0.85em; color: var(--text-muted); user-select: all; }
+
+.bp-section { display: flex; flex-direction: column; gap: 6px; }
+.bp-section-title { margin: 0; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.bp-count { font-weight: 400; opacity: 0.7; }
+.bp-hint { margin: 0; font-size: 0.8em; color: var(--text-dim); }
+
+.bp-edit { display: flex; flex-direction: column; gap: 8px; max-width: 480px; }
+.bp-field { display: flex; flex-direction: column; gap: 3px; }
+.bp-field-label { font-size: 0.8em; color: var(--text-muted); }
+
+.bp-status-row { display: flex; align-items: center; gap: 12px; }
+.bp-status { font-size: 0.9em; }
+.bp-status-active { color: #22c55e; }
+.bp-status-disabled { color: #d97757; }
+.bp-danger-btn {
+  background: none; border: 1px solid #d97757; color: #d97757;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em;
+}
+.bp-danger-btn:hover:not(:disabled) { background: rgba(217,119,87,0.12); }
+.bp-danger-btn:disabled { opacity: 0.5; }
+
+/* Memberships */
+.bp-membership-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.bp-membership { display: flex; align-items: center; gap: 4px; }
+.bp-membership-open {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  padding: 4px 8px; border: none; border-radius: 6px;
+  background: none; color: var(--text); text-align: left; cursor: pointer; font-size: 0.9em;
+}
+.bp-membership-open:hover { background: var(--accent-soft, rgba(99,102,241,0.08)); }
+.bp-membership-disabled .bp-membership-name { text-decoration: line-through; opacity: 0.7; }
+.bp-membership-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-membership-email { margin-left: auto; font-size: 0.8em; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-membership-remove {
+  background: none; border: none; padding: 2px 8px;
+  cursor: pointer; opacity: 0.5; color: inherit; font-size: 1.2em; line-height: 1;
+}
+.bp-membership-remove:hover:not(:disabled) { opacity: 1; color: #d97757; }
+.bp-membership-remove:disabled { cursor: progress; }
+.bp-membership-error { margin-top: 4px; }
+
+.bp-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 480px; }
+.bp-picker-matches {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.bp-picker-matches li + li { border-top: 1px solid var(--border); }
+.bp-picker-match {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 5px 8px;
+  background: none; border: none; text-align: left;
+  color: var(--text); cursor: pointer; font-size: 0.85em;
+}
+.bp-picker-match:hover:not(:disabled) { background: var(--accent-soft, rgba(99,102,241,0.12)); }
+.bp-picker-match:disabled { cursor: progress; opacity: 0.7; }
+
 /* ===== BridgeAttach (pty terminal) =====
  * Consumer must also import '@xterm/xterm/css/xterm.css' for the
  * terminal canvas itself; these styles are the surrounding chrome.

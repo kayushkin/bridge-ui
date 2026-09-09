@@ -13,6 +13,7 @@ export const DEFAULT_BRIDGE_ROUTES = {
     permissions: '/bridge/permissions',
     conformance: '/bridge/conformance',
     kanban: '/bridge/kanban',
+    principals: '/bridge/principals',
     notes: '',
     orchestrator: '',
     card: '',

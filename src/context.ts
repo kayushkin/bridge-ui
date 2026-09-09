@@ -18,6 +18,7 @@ export interface BridgeRoutes {
   permissions: string
   conformance: string
   kanban: string
+  principals: string
 
   // Pages the consumer owns and this library does not provide. There is no
   // sensible default for these — dash has both, llmux has neither — so they
@@ -49,6 +50,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   permissions: '/bridge/permissions',
   conformance: '/bridge/conformance',
   kanban: '/bridge/kanban',
+  principals: '/bridge/principals',
   notes: '',
   orchestrator: '',
   card: '',
@@ -72,8 +74,9 @@ export interface BridgeConfig {
    * If empty, the Kanban tab is hidden. */
   kanbanStoreBasePath: string
   /** Base path for principal-store API (e.g. "/api/principals"). No trailing
-   * slash. If empty, assignee chips and the assignee editor are hidden — the
-   * same convention as `kanbanStoreBasePath` hiding the Kanban tab. */
+   * slash. If empty, the Principals tab, assignee chips and the assignee
+   * editor are hidden — the same convention as `kanbanStoreBasePath` hiding
+   * the Kanban tab. */
   principalStoreBasePath: string
   /** Base path for the noteboard API (e.g. "/api/noteboard"). No trailing
    * slash. Used by chat reference chips to resolve a todo/item id to its

@@ -25,6 +25,10 @@ import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBat
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
 import { CardDetail } from '../src/components/BridgeKanban.tsx'
+import {
+  BridgePrincipals, MembershipsSection, PrincipalDetailView, PrincipalListView,
+} from '../src/components/BridgePrincipals.tsx'
+import { principalsSearchURL } from '../src/principalStoreClient.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import {
   SessionListStore, applySessionListFrame, sessionListMustReseed, sharedSessionList,
@@ -1901,6 +1905,101 @@ console.log('\nCardDetail — assignees render honestly without a directory')
   const unknown = mount('/api/principals', undefined)
   check('a card whose assignments were never loaded says so, not "nobody"',
     unknown.includes('not loaded on this view') && !unknown.includes('Nobody yet') && !unknown.includes('bk-assignee-picker'))
+}
+
+// The Principals page — the editor for the directory the assignee chips
+// resolve against. Static renders cannot run its fetches, so these pin what
+// can be pinned without one: the request it would make, what its views do with
+// a given answer, and that an unconfigured host gets nothing at all.
+console.log('\nBridgePrincipals — the directory editor')
+{
+  const bridgeConfig = (principalStoreBasePath) => ({
+    fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
+    basePath: '/api/bridge', kanbanStoreBasePath: '/api/kanban', principalStoreBasePath,
+    noteboardBasePath: '', mailBasePath: '', mailPagePath: '', routes: DEFAULT_BRIDGE_ROUTES,
+  })
+  const mountPage = (principalStoreBasePath) => renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/principals'] },
+      h(BridgeContext.Provider, { value: bridgeConfig(principalStoreBasePath) }, h(BridgePrincipals))))
+
+  check('no principal-store path renders nothing', mountPage('') === '', JSON.stringify(mountPage('')))
+  const page = mountPage('/api/principals')
+  check('a configured host gets the page', page.includes('bp-container') && page.includes('>Principals<'), page.slice(0, 300))
+  check('the kind filter offers All / People / Groups', ['>All<', '>People<', '>Groups<'].every(t => page.includes(t)), page.slice(0, 600))
+  check('the disabled toggle is off by default', page.includes('Show disabled') && !page.includes('checked=""'), page.slice(0, 900))
+
+  // The listing request. Disabled principals are hidden unless the toggle is
+  // on, and that is the SERVER's rule (`include_disabled`), so the honest
+  // check is on the URL the page asks for, not on a client-side filter.
+  const base = '/api/principals'
+  const url = (search) => principalsSearchURL(base, { query: '', kind: 'all', includeDisabled: false, limit: 500, ...search })
+  check('the default listing does not ask for disabled principals', !url({}).includes('include_disabled'), url({}))
+  check('the toggle asks for them', url({ includeDisabled: true }).includes('include_disabled=true'), url({ includeDisabled: true }))
+  check('the kind filter is a server parameter', url({ kind: 'group' }).includes('kind=group') && !url({ kind: 'all' }).includes('kind='), url({ kind: 'group' }))
+  check('the search box is the store\'s prefix search', url({ query: '  pri ' }).includes('q=pri'), url({ query: '  pri ' }))
+  check('an empty query sends no q', !url({ query: '' }).includes('q='), url({}))
+
+  const TS = 1_700_000_000
+  const vlad = { id: 'principal_000001', kind: 'human', display_name: 'Vlad Kayushkin', email: 'v@example.com', disabled_at: 0, created_at: TS, updated_at: TS }
+  const gone = { id: 'principal_000002', kind: 'human', display_name: 'Gone Person', email: '', disabled_at: TS, created_at: TS, updated_at: TS }
+  const team = { id: 'principal_000003', kind: 'group', display_name: 'Platform Team', email: '', disabled_at: 0, created_at: TS, updated_at: TS }
+
+  // The roster renders what the server sent and flags the disabled row; it
+  // never drops one on its own, or the toggle would lie.
+  const roster = renderToStaticMarkup(h(PrincipalListView, {
+    principals: [vlad, gone, team], selectedID: 'principal_000003', onSelect: () => {}, loading: false, error: null,
+  }))
+  check('every row the server sent is listed', ['principal_000001', 'principal_000002', 'principal_000003'].every(id => roster.includes(`data-principal-id="${id}"`)), roster.slice(0, 400))
+  check('a disabled row carries the badge, an active one does not',
+    roster.split('data-principal-id="principal_000002"')[1].split('</li>')[0].includes('bp-badge-disabled')
+      && !roster.split('data-principal-id="principal_000001"')[1].split('</li>')[0].includes('bp-badge-disabled'))
+  check('a person is an initials avatar, a group the group glyph', roster.includes('>VK<') && roster.includes('👥'), roster.slice(0, 400))
+  check('the selected row is marked', roster.includes('bp-row-selected') && roster.includes('aria-pressed="true"'))
+  const failed = renderToStaticMarkup(h(PrincipalListView, {
+    principals: [vlad], selectedID: null, onSelect: () => {}, loading: false, error: 'HTTP 502',
+  }))
+  check('a failed listing shows the failure and keeps the last rows', failed.includes('HTTP 502') && failed.includes('principal_000001'), failed)
+
+  // The detail view: the id in monospace for pasting, and the state said plainly.
+  const outcome = async () => ({ ok: true, value: vlad })
+  const never = () => new Promise(() => {})
+  const detail = (row) => renderToStaticMarkup(h(PrincipalDetailView, {
+    detail: row, loading: false, readError: null,
+    save: outcome, setDisabled: outcome, addMembership: outcome, removeMembership: outcome,
+    searchCandidates: never, onChanged: async () => {}, onOpen: () => {},
+  }))
+  const human = detail({ ...vlad, groups: [team] })
+  check('the id is shown as monospace text', human.includes('<code class="bp-id"') && human.includes('>principal_000001</code>'), human.slice(0, 500))
+  check('an active principal offers Disable, and says Active', human.includes('>Disable<') && human.includes('>Active<') && !human.includes('>Enable<'))
+  check('a person has an email field', human.includes('>Email<'))
+  check('a human lists its groups with a remove control', human.includes('>Groups <') && human.includes('Platform Team') && human.includes('Remove Platform Team'))
+  check('and its picker offers groups', human.includes('data-picker-kind="group"') && human.includes('Add to a group'))
+  const group = detail({ ...team, members: [vlad, gone] })
+  check('a group has no email field', !group.includes('>Email<'), group.slice(0, 800))
+  check('a group lists its members, a disabled one flagged', group.includes('>Members <') && group.includes('Gone Person')
+    && group.split('data-principal-id="principal_000002"')[1].split('</li>')[0].includes('bp-badge-disabled'))
+  check('and its picker offers people', group.includes('data-picker-kind="human"') && group.includes('Add a person'))
+  const disabledRow = detail({ ...gone, groups: [] })
+  check('a disabled principal offers Enable, and says since when', disabledRow.includes('>Enable<') && disabledRow.includes('Disabled since') && !disabledRow.includes('>Disable<'))
+
+  // A refusal is shown in the server's words. The nested-group 400 is the one
+  // this page is most likely to meet.
+  const refusal = "nested groups are not supported in v1: add the group's humans directly"
+  const refused = renderToStaticMarkup(h(MembershipsSection, {
+    title: 'Members', emptyText: 'No members yet.', entries: [vlad], pickerKind: 'human', pickerPlaceholder: 'Add a person…',
+    selfID: 'principal_000003', add: outcome, remove: outcome, searchCandidates: never, onChanged: async () => {}, onOpen: () => {},
+    initialError: refusal,
+  }))
+  check('a group-as-member refusal is shown verbatim', refused.includes('bp-membership-error') && refused.includes('nested groups are not supported in v1: add the group&#x27;s humans directly'), refused)
+
+  // The tab follows the base path, exactly as the Kanban tab does.
+  const layout = (principalStoreBasePath) => renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/bridge/instances'] },
+      h(BridgeContext.Provider, { value: bridgeConfig(principalStoreBasePath) },
+        h(MinimalChromeProvider, null, h(BridgeLayout)))))
+  check('BridgeLayout shows a Principals tab when principal-store is configured',
+    layout('/api/principals').includes('>Principals<') && layout('/api/principals').includes('href="/bridge/principals"'))
+  check('and none when it is not', !layout('').includes('Principals'))
 }
 
 sidePanelChecks()

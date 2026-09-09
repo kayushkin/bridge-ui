@@ -23,3 +23,22 @@ export interface Principal {
   /** Unix seconds. */
   updated_at: number
 }
+
+/** What `GET /principals/{id}` returns: the row plus its memberships, computed
+ * on read. Exactly one of the two lists is present — `groups` for a human,
+ * `members` for a group — so the kind can be read off the shape as well as off
+ * `kind`. Neither is expanded by the `GET /principals` listing. */
+export interface PrincipalDetail extends Principal {
+  /** A human's groups. Present (possibly empty) for a human, absent for a group. */
+  groups?: Principal[]
+  /** A group's human members. Present (possibly empty) for a group, absent for a human. */
+  members?: Principal[]
+}
+
+/** What `PUT /principals/{group}/members/{member}` answers: 201 with
+ * `created: true` the first time, 200 with `created: false` after. */
+export interface GroupMembership {
+  group_id: string
+  member_id: string
+  created: boolean
+}

@@ -14,6 +14,7 @@ export interface BridgeRoutes {
     permissions: string;
     conformance: string;
     kanban: string;
+    principals: string;
     /** The host's notes page, for `[todo:<id>]` references. Empty means none. */
     notes: string;
     /** The producer's full review surface (WAL, prior versions, filters), linked
@@ -44,8 +45,9 @@ export interface BridgeConfig {
      * If empty, the Kanban tab is hidden. */
     kanbanStoreBasePath: string;
     /** Base path for principal-store API (e.g. "/api/principals"). No trailing
-     * slash. If empty, assignee chips and the assignee editor are hidden — the
-     * same convention as `kanbanStoreBasePath` hiding the Kanban tab. */
+     * slash. If empty, the Principals tab, assignee chips and the assignee
+     * editor are hidden — the same convention as `kanbanStoreBasePath` hiding
+     * the Kanban tab. */
     principalStoreBasePath: string;
     /** Base path for the noteboard API (e.g. "/api/noteboard"). No trailing
      * slash. Used by chat reference chips to resolve a todo/item id to its

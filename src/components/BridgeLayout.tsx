@@ -8,12 +8,15 @@ interface BridgeLayoutProps {
 }
 
 export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
-  const { routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath } = useBridgeConfig()
+  const {
+    routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath,
+  } = useBridgeConfig()
   // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
   // are the only navigation on every page here except the chat, and the routed
   // child that replaces them exists on the chat alone — so dropping them for a
   // narrow window used to strand the user on Instances, Sessions, Auth, Usage,
-  // Settings, Agents, Files, Skills, Tools, Permissions, Kanban and Conformance,
+  // Settings, Agents, Files, Skills, Tools, Permissions, Kanban, Principals and
+  // Conformance,
   // with the host's own header hidden by the same mistaken signal.
   const { minimal, minimalChromeMounted } = useMinimalChrome()
   const chromeTakenOver = minimal && minimalChromeMounted
@@ -30,6 +33,9 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
     ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
     ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
+    // The directory the Kanban assignees resolve against. Same gate as the
+    // assignee UI itself: a host that proxies no principal-store gets no tab.
+    ...(principalStoreBasePath ? [{ to: routes.principals, label: 'Principals', end: false }] : []),
     // Gated on the route being named, like every optional tab above. dash names
     // it, and its chat mounts inside this layout so it shares this row; llmux
     // has no /api/producer proxy, so it names no route and gets no tab rather

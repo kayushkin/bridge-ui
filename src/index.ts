@@ -82,7 +82,17 @@ export {
   usePrincipals, pickablePrincipals, principalInitials, principalIsDisabled, indexPrincipalsByID,
 } from './usePrincipals'
 export type { PrincipalsDirectory, PrincipalKindFilter, PickablePrincipalsFilter } from './usePrincipals'
-export type { Principal, PrincipalKind } from './types-principals'
+export type { Principal, PrincipalKind, PrincipalDetail, GroupMembership } from './types-principals'
+// The principal-store write client behind the Principals page, for a host that
+// wants a principal picker or an inline rename of its own without a second
+// copy of the error-text rule. `principalsSearchURL` is the one URL builder.
+export {
+  principalsSearchURL, principalStoreErrorText, searchPrincipals, getPrincipal, createPrincipal, patchPrincipal,
+  setPrincipalDisabled, addGroupMember, removeGroupMember, listPrincipalKinds, PRINCIPALS_SEARCH_LIMIT,
+} from './principalStoreClient'
+export type {
+  PrincipalStoreResult, PrincipalsSearch, CreatePrincipalRequest, PatchPrincipalRequest,
+} from './principalStoreClient'
 export type {
   Board,
   Column,
@@ -132,6 +142,9 @@ export { BridgePermissions } from './components/BridgePermissions'
 export { BridgeAgents } from './components/BridgeAgents'
 export { BridgeFiles } from './components/BridgeFiles'
 export { BridgeKanban } from './components/BridgeKanban'
+// The principal-store editor. Renders nothing without `principalStoreBasePath`,
+// and BridgeLayout shows no tab for it then either.
+export { BridgePrincipals } from './components/BridgePrincipals'
 // The card view, minus the drawer chrome. A host that wants a card as a PAGE
 // mounts this inside its own `.bk-drawer` wrapper; the board's drawer mounts it
 // inside the backdrop. Only the chrome differs, so only the chrome is repeated.

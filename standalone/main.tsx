@@ -16,6 +16,7 @@ import {
   BridgeTools,
   BridgePermissions,
   BridgeKanban,
+  BridgePrincipals,
   BridgeConformance,
 } from '@kayushkin/bridge-ui'
 
@@ -46,6 +47,7 @@ const ROUTES = {
   tools: '/tools',
   permissions: '/permissions',
   kanban: '/kanban',
+  principals: '/principals',
   conformance: '/conformance',
 }
 
@@ -74,6 +76,7 @@ function App() {
           <Route path="tools" element={<BridgeTools />} />
           <Route path="permissions" element={<BridgePermissions />} />
           <Route path="kanban" element={<BridgeKanban />} />
+          <Route path="principals" element={<BridgePrincipals />} />
           <Route path="conformance" element={<BridgeConformance />} />
         </Route>
       </Routes>
