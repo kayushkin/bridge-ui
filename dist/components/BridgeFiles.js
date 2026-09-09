@@ -175,7 +175,7 @@ export function BridgeFiles() {
     if (error)
         return (_jsxs("div", { className: "bfiles-container", children: [_jsxs("p", { className: "bridge-error", children: ["Error: ", error] }), _jsx("button", { onClick: () => { setLoading(true); fetchFiles(); }, className: "bfiles-btn", children: "Retry" })] }));
     const scopes = SCOPE_ORDER.filter(s => byScope[s]?.length);
-    return (_jsxs("div", { className: "bfiles-container", children: [_jsxs("div", { className: "bfiles-header", children: [_jsxs("h2", { children: ["Agent files ", _jsx("span", { className: "bfiles-count", children: files.length })] }), _jsxs("div", { className: "bfiles-header-right", children: [_jsx("input", { type: "text", placeholder: "Search path / slug / scope / agent\u2026", value: query, onChange: e => setQuery(e.target.value), className: "bfiles-search" }), _jsx("button", { className: "bfiles-btn", onClick: fetchFiles, children: "Refresh" }), _jsx("button", { className: "bfiles-btn-primary", onClick: runScan, disabled: scanning, children: scanning ? 'Scanning…' : 'Scan disk' })] })] }), _jsxs("div", { className: "bfiles-explainer", children: [_jsx("strong", { children: "How these files reach agents:" }), " Claude Code reads ", _jsx("code", { children: "CLAUDE.md" }), " directly from disk on every session \u2014 the bridge does not inject it. ", _jsx("code", { children: "AGENTS.md" }), " is injected as ", _jsx("code", { children: "system_prompt" }), " by llm-bridge-server for every other harness (codex, gemini, hermes, \u2026) so the same context applies universally. Per-tool files (", _jsx("code", { children: ".cursorrules" }), ", ", _jsx("code", { children: "GEMINI.md" }), ", etc.) are read natively by their respective tools. Remote runners pull the same files via ", _jsx("code", { children: "/seed/manifest" }), " and reconcile non-destructively (drift is captured as a runner-drift version before any overwrite)."] }), _jsx(MachinesSeedPanel, { apiFetch: apiFetch, basePath: basePath }), _jsxs("div", { className: "bfiles-preview-section", children: [_jsxs("div", { className: "bfiles-preview-header", children: [_jsx("strong", { children: "Resolved injection preview" }), _jsx("span", { className: "bfiles-preview-hint", children: "What does each non-Claude harness receive?" })] }), _jsx("div", { className: "bfiles-preview-tabs", children: INJECTION_HARNESSES.map(h => (_jsx("button", { className: `bfiles-preview-tab ${previewHarness === h.slug ? 'bfiles-preview-tab-active' : ''}`, onClick: () => setPreviewHarness(previewHarness === h.slug ? null : h.slug), children: h.label }, h.slug))) }), previewHarness && (_jsxs("div", { className: "bfiles-preview-body", children: [previewLoading && _jsx("p", { children: "Resolving\u2026" }), previewError && _jsx("p", { className: "bridge-error", children: previewError }), preview && !previewLoading && (_jsxs(_Fragment, { children: [preview.skip_reason && (_jsxs("p", { className: "bfiles-preview-skip", children: ["Skipped: ", preview.skip_reason] })), !preview.skip_reason && preview.manifest.length === 0 && (_jsxs("p", { className: "bfiles-preview-skip", children: ["No AGENTS.md files matched. Add one in ", _jsx("code", { children: "$HOME/AGENTS.md" }), " for global scope, or in a project root."] })), preview.manifest.length > 0 && (_jsxs(_Fragment, { children: [_jsx("ul", { className: "bfiles-manifest-list", children: preview.manifest.map((m, i) => (_jsxs("li", { children: [_jsx("span", { className: "bfiles-manifest-scope", children: m.scope }), _jsx("code", { children: m.path }), _jsxs("span", { className: "bfiles-manifest-bytes", children: [m.bytes, " B"] })] }, i))) }), _jsx("pre", { className: "bfiles-preview-content", children: preview.content })] }))] }))] }))] }), scanMsg && _jsx("p", { className: "bfiles-scan-msg", children: scanMsg }), scopes.length === 0 && _jsx("p", { className: "bfiles-empty", children: "No files indexed. Click Scan disk." }), scopes.map(scope => {
+    return (_jsxs("div", { className: "bfiles-container", children: [_jsxs("div", { className: "bfiles-header", children: [_jsxs("h2", { children: ["Agent files ", _jsx("span", { className: "bfiles-count", children: files.length })] }), _jsxs("div", { className: "bfiles-header-right", children: [_jsx("input", { type: "text", placeholder: "Search path / slug / scope / agent\u2026", value: query, onChange: e => setQuery(e.target.value), className: "bfiles-search" }), _jsx("button", { className: "bfiles-btn", onClick: fetchFiles, children: "Refresh" }), _jsx("button", { className: "bfiles-btn-primary", onClick: runScan, disabled: scanning, children: scanning ? 'Scanning…' : 'Scan disk' })] })] }), _jsx(PromptCollectionsPanel, { apiFetch: apiFetch, basePath: basePath }), _jsxs("div", { className: "bfiles-explainer", children: [_jsx("strong", { children: "How these files reach agents:" }), " the prompt collections above are the editable source. They compile into host-level and project-level ", _jsx("code", { children: "CLAUDE.md" }), " and ", _jsx("code", { children: "AGENTS.md" }), ", which stay versioned here as tracked files. Claude Code reads ", _jsx("code", { children: "CLAUDE.md" }), " directly from disk; non-Claude harnesses receive", _jsx("code", { children: " AGENTS.md" }), " through bridge injection. Remote runners pull the same compiled files through", _jsx("code", { children: " /seed/manifest" }), " and reconcile non-destructively."] }), _jsx(MachinesSeedPanel, { apiFetch: apiFetch, basePath: basePath }), _jsxs("div", { className: "bfiles-preview-section", children: [_jsxs("div", { className: "bfiles-preview-header", children: [_jsx("strong", { children: "Resolved injection preview" }), _jsx("span", { className: "bfiles-preview-hint", children: "What does each non-Claude harness receive?" })] }), _jsx("div", { className: "bfiles-preview-tabs", children: INJECTION_HARNESSES.map(h => (_jsx("button", { className: `bfiles-preview-tab ${previewHarness === h.slug ? 'bfiles-preview-tab-active' : ''}`, onClick: () => setPreviewHarness(previewHarness === h.slug ? null : h.slug), children: h.label }, h.slug))) }), previewHarness && (_jsxs("div", { className: "bfiles-preview-body", children: [previewLoading && _jsx("p", { children: "Resolving\u2026" }), previewError && _jsx("p", { className: "bridge-error", children: previewError }), preview && !previewLoading && (_jsxs(_Fragment, { children: [preview.skip_reason && (_jsxs("p", { className: "bfiles-preview-skip", children: ["Skipped: ", preview.skip_reason] })), !preview.skip_reason && preview.manifest.length === 0 && (_jsxs("p", { className: "bfiles-preview-skip", children: ["No AGENTS.md files matched. Add one in ", _jsx("code", { children: "$HOME/AGENTS.md" }), " for global scope, or in a project root."] })), preview.manifest.length > 0 && (_jsxs(_Fragment, { children: [_jsx("ul", { className: "bfiles-manifest-list", children: preview.manifest.map((m, i) => (_jsxs("li", { children: [_jsx("span", { className: "bfiles-manifest-scope", children: m.scope }), _jsx("code", { children: m.path }), _jsxs("span", { className: "bfiles-manifest-bytes", children: [m.bytes, " B"] })] }, i))) }), _jsx("pre", { className: "bfiles-preview-content", children: preview.content })] }))] }))] }))] }), scanMsg && _jsx("p", { className: "bfiles-scan-msg", children: scanMsg }), _jsx("div", { className: "bfiles-preview-section", children: _jsxs("div", { className: "bfiles-preview-header", children: [_jsx("strong", { children: "Materialized files" }), _jsx("span", { className: "bfiles-preview-hint", children: "Compiled prompt outputs, native tool files, seed state, and history." })] }) }), scopes.length === 0 && _jsx("p", { className: "bfiles-empty", children: "No files indexed. Click Scan disk." }), scopes.map(scope => {
                 const meta = SCOPE_META[scope] || { label: scope, emoji: '\u{1F4C4}', description: '' };
                 const items = byScope[scope];
                 const isCollapsed = collapsed.has(scope);
@@ -184,6 +184,164 @@ export function BridgeFiles() {
                                 .sort((a, b) => a.path.localeCompare(b.path))
                                 .map(f => (_jsx(FileRow, { file: f, apiFetch: apiFetch, basePath: basePath, expanded: openId === f.id, onToggle: () => setOpenId(openId === f.id ? null : f.id), onToggleEnabled: () => toggleEnabled(f), onSaved: updated => setFiles(prev => prev.map(x => x.id === updated.id ? updated : x)) }, f.id))) }))] }, scope));
             })] }));
+}
+function PromptCollectionsPanel({ apiFetch, basePath }) {
+    const [collections, setCollections] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [openId, setOpenId] = useState(null);
+    const [creating, setCreating] = useState(false);
+    const [createPath, setCreatePath] = useState('');
+    const [createTitle, setCreateTitle] = useState('');
+    const load = async () => {
+        setLoading(true);
+        try {
+            const res = await apiFetch(`${basePath}/prompt-collections`);
+            if (!res.ok)
+                throw new Error(await res.text() || `HTTP ${res.status}`);
+            const data = await res.json();
+            setCollections(Array.isArray(data) ? data : []);
+            setError(null);
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : 'Failed to load prompt collections');
+        }
+        finally {
+            setLoading(false);
+        }
+    };
+    useEffect(() => { load(); }, []);
+    const global = collections.filter(c => c.collection.scope === 'global');
+    const projects = collections.filter(c => c.collection.scope === 'project');
+    const createProject = async () => {
+        setCreating(true);
+        try {
+            const res = await apiFetch(`${basePath}/prompt-collections`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scope: 'project',
+                    root_path: createPath.trim(),
+                    title: createTitle.trim(),
+                    description: 'Shared prompt source for this project.',
+                }),
+            });
+            if (!res.ok)
+                throw new Error(await res.text() || `HTTP ${res.status}`);
+            setCreatePath('');
+            setCreateTitle('');
+            await load();
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : 'Create failed');
+        }
+        finally {
+            setCreating(false);
+        }
+    };
+    return (_jsxs("div", { className: "bfiles-preview-section", children: [_jsxs("div", { className: "bfiles-preview-header", children: [_jsx("strong", { children: "Main prompt" }), _jsx("span", { className: "bfiles-preview-hint", children: "Structured source for the compiled prompt files." })] }), loading && _jsx("p", { children: "Loading prompt collections\u2026" }), error && _jsx("p", { className: "bridge-error", children: error }), !loading && global.map(view => (_jsx(PromptCollectionCard, { view: view, apiFetch: apiFetch, basePath: basePath, open: openId === view.collection.id, onToggle: () => setOpenId(openId === view.collection.id ? null : view.collection.id), onChanged: load }, view.collection.id))), _jsxs("div", { className: "bfiles-preview-header", style: { marginTop: 18 }, children: [_jsx("strong", { children: "Project prompts" }), _jsx("span", { className: "bfiles-preview-hint", children: "One collection per repo root. Create one even if the repo has no prompt files yet." })] }), _jsxs("div", { className: "bfiles-actions", style: { marginBottom: 12 }, children: [_jsx("input", { className: "bfiles-search", placeholder: "/home/kayushkincom/repos/my-repo", value: createPath, onChange: e => setCreatePath(e.target.value) }), _jsx("input", { className: "bfiles-search", placeholder: "Optional title", value: createTitle, onChange: e => setCreateTitle(e.target.value) }), _jsx("button", { className: "bfiles-btn-primary", onClick: createProject, disabled: creating || !createPath.trim(), children: creating ? 'Creating…' : 'Add project prompt' })] }), !loading && projects.length === 0 && (_jsx("p", { className: "bfiles-empty", children: "No project prompt collections yet." })), !loading && projects.map(view => (_jsx(PromptCollectionCard, { view: view, apiFetch: apiFetch, basePath: basePath, open: openId === view.collection.id, onToggle: () => setOpenId(openId === view.collection.id ? null : view.collection.id), onChanged: load }, view.collection.id)))] }));
+}
+function PromptCollectionCard({ view, apiFetch, basePath, open, onToggle, onChanged, }) {
+    const [busy, setBusy] = useState(false);
+    const compile = async () => {
+        setBusy(true);
+        try {
+            const res = await apiFetch(`${basePath}/prompt-collections/${view.collection.id}/compile`, { method: 'POST' });
+            if (!res.ok)
+                throw new Error(await res.text() || `HTTP ${res.status}`);
+            await onChanged();
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    return (_jsxs("div", { className: "bfiles-machine-card", style: { marginBottom: 12 }, children: [_jsxs("div", { className: "bfiles-file-header", children: [_jsx("button", { className: "bfiles-caret", onClick: onToggle, children: open ? '▾' : '▸' }), _jsxs("button", { className: "bfiles-file-title", onClick: onToggle, children: [_jsx("span", { className: "bfiles-file-basename", children: view.collection.title }), _jsx("span", { className: "bfiles-file-parent", children: view.collection.root_path })] }), _jsx("span", { className: "bfiles-usedby-tag bfiles-mode-injected", children: view.collection.scope }), _jsx("button", { className: "bfiles-btn", onClick: compile, disabled: busy, children: busy ? 'Compiling…' : 'Compile now' })] }), open && (_jsxs("div", { className: "bfiles-file-body", children: [_jsx("p", { className: "bfiles-machines-hint", children: "Edit sections here. Saving a section recompiles the target files and nudges connected runners to reconcile." }), view.outputs.map(output => (_jsxs("div", { className: "bfiles-version-preview", style: { marginBottom: 12 }, children: [_jsxs("div", { className: "bfiles-version-preview-header", children: [_jsx("strong", { children: output.target === 'claude' ? 'CLAUDE.md' : 'AGENTS.md' }), _jsx("span", { className: "bfiles-meta", children: output.path })] }), _jsx("pre", { className: "bfiles-version-content", children: output.content || '(no sections for this target yet)' })] }, output.target))), _jsx("div", { className: "bfiles-history-body", children: view.sections.map(section => (_jsx(PromptSectionEditor, { section: section, apiFetch: apiFetch, basePath: basePath, onChanged: onChanged }, section.id))) }), _jsx(AddPromptSectionForm, { collectionID: view.collection.id, apiFetch: apiFetch, basePath: basePath, onChanged: onChanged })] }))] }));
+}
+function PromptSectionEditor({ section, apiFetch, basePath, onChanged, }) {
+    const [draft, setDraft] = useState(section);
+    const [saving, setSaving] = useState(false);
+    const [err, setErr] = useState(null);
+    const dirty = JSON.stringify(draft) !== JSON.stringify(section);
+    useEffect(() => { setDraft(section); }, [section]);
+    const save = async () => {
+        setSaving(true);
+        setErr(null);
+        try {
+            const res = await apiFetch(`${basePath}/prompt-sections/${section.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(draft),
+            });
+            if (!res.ok)
+                throw new Error(await res.text() || `HTTP ${res.status}`);
+            await onChanged();
+        }
+        catch (e) {
+            setErr(e instanceof Error ? e.message : 'Save failed');
+        }
+        finally {
+            setSaving(false);
+        }
+    };
+    const remove = async () => {
+        setSaving(true);
+        setErr(null);
+        try {
+            const res = await apiFetch(`${basePath}/prompt-sections/${section.id}`, { method: 'DELETE' });
+            if (!res.ok)
+                throw new Error(await res.text() || `HTTP ${res.status}`);
+            await onChanged();
+        }
+        catch (e) {
+            setErr(e instanceof Error ? e.message : 'Delete failed');
+        }
+        finally {
+            setSaving(false);
+        }
+    };
+    return (_jsxs("div", { className: "bfiles-version-preview", style: { marginBottom: 12 }, children: [_jsxs("div", { className: "bfiles-actions", style: { marginBottom: 8 }, children: [_jsx("input", { className: "bfiles-search", value: draft.title, onChange: e => setDraft({ ...draft, title: e.target.value }), placeholder: "Section title" }), _jsxs("select", { className: "bfiles-search", value: draft.applies_to, onChange: e => setDraft({ ...draft, applies_to: e.target.value }), children: [_jsx("option", { value: "all", children: "All harnesses" }), _jsx("option", { value: "claude", children: "Claude only" }), _jsx("option", { value: "agents", children: "Non-Claude only" })] }), _jsx("input", { className: "bfiles-search", type: "number", value: draft.priority, onChange: e => setDraft({ ...draft, priority: Number(e.target.value) }), placeholder: "Priority" }), _jsxs("label", { className: "bfiles-meta", children: [_jsx("input", { type: "checkbox", checked: draft.enabled, onChange: e => setDraft({ ...draft, enabled: e.target.checked }) }), " enabled"] })] }), _jsx("input", { className: "bfiles-search", style: { width: '100%', marginBottom: 8 }, value: draft.heading || '', onChange: e => setDraft({ ...draft, heading: e.target.value }), placeholder: "Heading line, e.g. # Directives" }), _jsx("textarea", { className: "bfiles-editor", value: draft.body, onChange: e => setDraft({ ...draft, body: e.target.value }), spellCheck: false }), _jsxs("div", { className: "bfiles-actions", children: [_jsx("button", { className: "bfiles-btn-primary", onClick: save, disabled: !dirty || saving, children: saving ? 'Saving…' : dirty ? 'Save section' : 'Saved' }), _jsx("button", { className: "bfiles-btn", onClick: () => setDraft(section), disabled: !dirty || saving, children: "Revert" }), _jsx("button", { className: "bfiles-btn", onClick: remove, disabled: saving, children: "Delete" })] }), err && _jsx("p", { className: "bridge-error", children: err })] }));
+}
+function AddPromptSectionForm({ collectionID, apiFetch, basePath, onChanged, }) {
+    const [open, setOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [title, setTitle] = useState('');
+    const [heading, setHeading] = useState('');
+    const [body, setBody] = useState('');
+    const [appliesTo, setAppliesTo] = useState('all');
+    const [priority, setPriority] = useState(1000);
+    const [err, setErr] = useState(null);
+    const submit = async () => {
+        setSaving(true);
+        setErr(null);
+        try {
+            const res = await apiFetch(`${basePath}/prompt-collections/${collectionID}/sections`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title, heading, body, applies_to: appliesTo, priority, enabled: true,
+                }),
+            });
+            if (!res.ok)
+                throw new Error(await res.text() || `HTTP ${res.status}`);
+            setTitle('');
+            setHeading('');
+            setBody('');
+            setAppliesTo('all');
+            setPriority(1000);
+            setOpen(false);
+            await onChanged();
+        }
+        catch (e) {
+            setErr(e instanceof Error ? e.message : 'Create failed');
+        }
+        finally {
+            setSaving(false);
+        }
+    };
+    if (!open) {
+        return _jsx("button", { className: "bfiles-btn-primary", onClick: () => setOpen(true), children: "Add section" });
+    }
+    return (_jsxs("div", { className: "bfiles-version-preview", children: [_jsxs("div", { className: "bfiles-actions", style: { marginBottom: 8 }, children: [_jsx("input", { className: "bfiles-search", value: title, onChange: e => setTitle(e.target.value), placeholder: "Section title" }), _jsxs("select", { className: "bfiles-search", value: appliesTo, onChange: e => setAppliesTo(e.target.value), children: [_jsx("option", { value: "all", children: "All harnesses" }), _jsx("option", { value: "claude", children: "Claude only" }), _jsx("option", { value: "agents", children: "Non-Claude only" })] }), _jsx("input", { className: "bfiles-search", type: "number", value: priority, onChange: e => setPriority(Number(e.target.value)) })] }), _jsx("input", { className: "bfiles-search", style: { width: '100%', marginBottom: 8 }, value: heading, onChange: e => setHeading(e.target.value), placeholder: "Heading line" }), _jsx("textarea", { className: "bfiles-editor", value: body, onChange: e => setBody(e.target.value), spellCheck: false }), _jsxs("div", { className: "bfiles-actions", children: [_jsx("button", { className: "bfiles-btn-primary", onClick: submit, disabled: saving || !title.trim(), children: saving ? 'Creating…' : 'Create section' }), _jsx("button", { className: "bfiles-btn", onClick: () => setOpen(false), disabled: saving, children: "Cancel" })] }), err && _jsx("p", { className: "bridge-error", children: err })] }));
 }
 function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled, onSaved }) {
     const [content, setContent] = useState(null);
