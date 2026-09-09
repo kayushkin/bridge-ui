@@ -35,6 +35,7 @@ import type {
   Signal,
   SignalAnswer,
   SignalOption,
+  SignalCustomerReplyDraft,
 } from '@kayushkin/llm-bridge-types'
 
 export {
@@ -92,6 +93,7 @@ export type {
   Signal,
   SignalAnswer,
   SignalOption,
+  SignalCustomerReplyDraft,
 }
 
 // Re-export with backward-compatible aliases where names differ.

@@ -5421,6 +5421,42 @@
 .bc-signal-submit:hover { background: color-mix(in srgb, #4caf50 10%, transparent); border-color: #4caf50 !important; }
 .bc-signal-decline { color: #e57373 !important; }
 .bc-signal-decline:hover { background: color-mix(in srgb, #e57373 10%, transparent); border-color: #e57373 !important; }
+/* Who triage judged the question is for. A chip beside the kind, in the
+   header's own scale: it is a label on the question, not a second kind. */
+.bc-signal-audience {
+  font-size: 0.68em; font-weight: 600; letter-spacing: 0.02em;
+  padding: 1px 6px; border-radius: 3px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent); color: var(--text-muted);
+}
+.bc-signal-audience-customer { background: color-mix(in srgb, #e0a24a 18%, transparent); color: #c8892e; }
+/* The drafted reply to the customer. Its own box inside the card, because it
+   is a different act from answering the worker: this goes out, that goes back. */
+.bc-signal-draft {
+  margin-top: 8px; padding: 8px 10px; border-radius: 5px;
+  border: 1px dashed color-mix(in srgb, #e0a24a 55%, var(--border));
+  background: color-mix(in srgb, #e0a24a 6%, transparent);
+}
+.bc-signal-draft-header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.bc-signal-draft-label { font-size: 0.78em; font-weight: 600; color: var(--text); }
+.bc-signal-draft-hint { font-size: 0.72em; color: var(--text-muted); }
+.bc-signal-draft-fields {
+  display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px;
+  margin: 6px 0 0; font-size: 0.82em; align-items: center;
+}
+.bc-signal-draft-fields dt { color: var(--text-muted); }
+.bc-signal-draft-fields dd { margin: 0; }
+.bc-signal-draft-to { color: var(--text); }
+.bc-signal-draft-unresolved { color: #e57373; font-style: italic; cursor: help; }
+.bc-signal-draft-subject, .bc-signal-draft-body {
+  width: 100%; padding: 5px 8px;
+  background: var(--bg-surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  font: inherit; font-size: 0.85em;
+}
+.bc-signal-draft-body { margin-top: 6px; resize: vertical; }
+.bc-signal-draft-subject:focus, .bc-signal-draft-body:focus { outline: none; border-color: var(--accent); }
+.bc-signal-reply { color: #c8892e !important; }
+.bc-signal-draft-stub { font-size: 0.72em; color: var(--text-muted); align-self: center; font-style: italic; }
 /* Dismiss closes a question nobody will answer. Muted rather than red: it is
    not a refusal aimed at a waiting tool call, it is letting the question go. */
 .bc-signal-dismiss { color: var(--text-muted) !important; }

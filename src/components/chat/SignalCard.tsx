@@ -41,6 +41,7 @@ export function SignalCard({ signal, answer, onChangeAnswer, onAcknowledge, busy
   const options = signal.options ?? []
   const chosen = answer?.option ?? ''
   const text = answer?.text ?? ''
+  const audience = signal.audience ?? ''
 
   return (
     <div className={`bc-signal-card${compact ? ' bc-signal-card-compact' : ''}`}>
@@ -51,10 +52,19 @@ export function SignalCard({ signal, answer, onChangeAnswer, onAcknowledge, busy
         {isNotification && signal.severity === SignalSeverityWarn && (
           <span className="bc-signal-severity">warn</span>
         )}
+        {!isNotification && audience && (
+          <span className={`bc-signal-audience bc-signal-audience-${audience}`} title={AUDIENCE_TITLES[audience] ?? audience}>
+            {AUDIENCE_LABELS[audience] ?? `for the ${audience}`}
+          </span>
+        )}
       </div>
 
       <p className="bc-signal-title">{signal.title}</p>
       {signal.body && !compact && <p className="bc-signal-body">{signal.body}</p>}
+
+      {!isNotification && signal.customer_reply_draft && !compact && (
+        <CustomerReplyDraft draft={signal.customer_reply_draft} busy={busy} />
+      )}
 
       {!isNotification && options.length > 0 && (
         <div className="bc-signal-options">
@@ -100,6 +110,77 @@ export function SignalCard({ signal, answer, onChangeAnswer, onAcknowledge, busy
         </div>
       )}
     </div>
+  )
+}
+
+/** What the audience chip says. The server's triage judged who can answer;
+ * the chip states that judgement and nothing else — the answer box below it
+ * stays, because the person on the card may answer either way. */
+const AUDIENCE_LABELS: Record<string, string> = {
+  assignee: 'for you',
+  customer: 'for the customer',
+}
+
+const AUDIENCE_TITLES: Record<string, string> = {
+  assignee: 'Triage judged that the person working this card can answer this from what they know.',
+  customer: 'Triage judged that only the person who asked for the work can answer this. A reply to them is drafted below.',
+}
+
+/** The reply to the customer that triage drafted, shown ready to send and
+ * editable, with a Reply button that does not send.
+ *
+ * The button is a stub on purpose and says so. mailstack has no send route
+ * today — SMTP settings are stored on its accounts and nothing uses them — so
+ * a button that pretended to send would either fail or lie. It renders
+ * disabled with the reason on hover, so the affordance is visible where it
+ * belongs and the gap is named rather than hidden. Answering the worker
+ * yourself is still the form below; forwarding to the customer is this. */
+function CustomerReplyDraft({ draft, busy }: { draft: NonNullable<Signal['customer_reply_draft']>; busy?: boolean }) {
+  const [body, setBody] = useState(draft.body)
+  const [subject, setSubject] = useState(draft.subject)
+  const recipient = draft.to || ''
+  return (
+    <section className="bc-signal-draft" aria-label="Drafted reply to the customer">
+      <div className="bc-signal-draft-header">
+        <span className="bc-signal-draft-label">Forward to the customer</span>
+        <span className="bc-signal-draft-hint">drafted by triage — edit before sending</span>
+      </div>
+      <dl className="bc-signal-draft-fields">
+        <dt>To</dt>
+        <dd>
+          {recipient
+            ? <span className="bc-signal-draft-to">{recipient}</span>
+            : <span className="bc-signal-draft-unresolved" title="The sender of the card's mail could not be read from mailstack, so no address was filled in.">recipient unresolved</span>}
+        </dd>
+        <dt>Subject</dt>
+        <dd>
+          <input
+            className="bc-signal-draft-subject"
+            value={subject}
+            disabled={busy}
+            onChange={e => setSubject(e.target.value)}
+          />
+        </dd>
+      </dl>
+      <textarea
+        className="bc-signal-draft-body"
+        value={body}
+        disabled={busy}
+        rows={Math.min(10, Math.max(3, body.split('\n').length + 1))}
+        onChange={e => setBody(e.target.value)}
+      />
+      <div className="bc-signal-actions">
+        <button
+          type="button"
+          className="bc-signal-reply"
+          disabled
+          title="Sending is not wired yet: mailstack has no send route. Copy the draft into your mail client for now."
+        >
+          Reply to customer
+        </button>
+        <span className="bc-signal-draft-stub">not wired to send yet</span>
+      </div>
+    </section>
   )
 }
 
