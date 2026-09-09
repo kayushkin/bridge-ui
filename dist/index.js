@@ -7,7 +7,6 @@ export { BridgeProvider } from './provider';
 export { connectSSE, connectSessionListSSE } from './bridgeSSE';
 export { SESSION_LIST_BASE_RETRY_MS, SESSION_LIST_MAX_RETRY_MS, SessionListStore, applySessionListFrame, sessionListMustReseed, sharedSessionList, useSharedSessionList, } from './sessionListStore';
 // Hooks
-export { useBridgeSession } from './useBridgeSession';
 export { useBridgeAttach } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
 export { useInstanceReachable, REACHABILITY_INTERVAL_MS } from './useInstanceReachable';
@@ -30,6 +29,7 @@ export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } f
 export { readAgentPrompt, writeAgentPrompt, stripAgentPrompt, suggestAgentPrompt, AGENT_PROMPT_OPEN, AGENT_PROMPT_CLOSE, } from './agentPrompt';
 // Page components
 export { BridgeLayout } from './components/BridgeLayout';
+export { BridgeChat } from './components/chat/BridgeChat';
 export { BridgeSessions } from './components/BridgeSessions';
 export { BridgeInstances } from './components/BridgeInstances';
 export { BridgeSettings } from './components/BridgeSettings';
@@ -79,7 +79,7 @@ export { ToolContext, useToolContext } from './components/tools';
 // excludes the border, so under `box-sizing: border-box` a bare assignment lands
 // a border-width short and the box scrolls at every size. Sharing the function
 // is what stops the third copy from being written wrong again.
-export { composerAutoGrowHeightPx } from './components/chat/Composer';
+export { composerAutoGrowHeightPx } from './components/chat/composerAutoGrow';
 // Shared status dot — used by header, sidebar, and composer status chip
 export { StatusDot } from './components/chat/StatusDot';
 // Presentation / self-fetching session widgets, for a host that composes its own

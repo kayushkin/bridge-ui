@@ -1,60 +1,55 @@
-/** The height the auto-growing composer must be given so its content fits.
- *
- *  `scrollHeight` is content plus padding and **excludes the border**. Both hosts
- *  that mount this component reset `* { box-sizing: border-box }` (dash
- *  `src/index.css:55`, llmux `src/index.css:13`), which makes an assigned height
- *  the height of the *box* — border included. Assigning a bare `scrollHeight`
- *  therefore lands a border-width short of the content it was measured from, so
- *  the content never fits and `overflow-y: auto` gives the textarea a scrollbar at
- *  **every** size rather than only past the cap. On this origin that was 2px, and
- *  it was small enough to read as a rendering artefact for as long as it shipped.
- *
- *  The border is added back only under `border-box`. Under `content-box` the
- *  assigned height already excludes the border, so adding it would overshoot by
- *  the same amount in the other direction. Reading the used value rather than
- *  assuming either one keeps this correct for a host that resets neither.
- *
- *  No cap is applied here. `.bc-composer-input` carries `max-height: 220px` in
- *  this package's own `styles.css` (both the base rule and the themed one), so the
- *  browser clamps whatever inline height we set and `overflow-y: auto` takes over
- *  past it. This function used to compare against a duplicate `MAX_INPUT_PX = 220`
- *  in this file, which had to be kept in step with the stylesheet by hand — and
- *  which was wrong by the border anyway, since it was compared against a
- *  `scrollHeight` that means something slightly different from the height it set.
- *  Letting the stylesheet own the number leaves it in one place. */
-export declare function composerAutoGrowHeightPx(measurements: {
-    scrollHeight: number;
-    boxSizing: string;
-    borderTopWidth: string;
-    borderBottomWidth: string;
-}): number;
-/** The composer and the turn controls for the active session.
- *
- *  `turnRunning` is the server-reported "the harness holds the turn" state
- *  (`harnessIsWorkingOnTurn`), never a bare `uiState === 'running'`: derivation
- *  projects the deprecated `running` to `tool_running` before any consumer sees
- *  it, so that comparison is false for every session on the box and the Stop
- *  button behind it never rendered at all.
- *
- *  `resumable` says the server will actually accept POST /resume — see
- *  `sessionCanBeResumed`. It is NOT `paused`: bridge-ui's paused marker means
- *  "the user interrupted this session", whose process is still alive, which is
- *  precisely the 409 case. The marker stays (the status chip and the sidebar dot
- *  are the only record that a user stopped a session); what goes is the button
- *  behind it.
- *
- *  Stop and Resume sit BESIDE Send rather than replacing it. They are not
- *  alternatives to sending: a running turn is exactly when a user most often
- *  wants to redirect the model, and an interrupted session is continued by
- *  saying something to it. Replacing Send with Resume left a paused session with
- *  one visible action, and it was the one that could not work. */
-export declare function Composer({ sessionId, connected, turnRunning, resumable, onSend, onStop, onResume }: {
-    sessionId: string | null | undefined;
-    connected: boolean;
+import { type useComposer } from '@kayushkin/chat-core';
+interface ComposerProps {
+    sessionId: string | null;
+    /** True while the SESSION is producing output, as the server reports it (the
+     *  STREAMING_STATES set in Chat). This is not `composer.sending`, which
+     *  only means "my own POST /send has not returned yet" and clears in about a
+     *  second — reading it as "a turn is running" is what made Stop a flicker. */
     turnRunning: boolean;
-    resumable: boolean;
-    onSend: (text: string) => void;
-    onStop: () => void;
-    onResume: () => void;
-}): import("react/jsx-runtime").JSX.Element;
+    /** The pane's ONE `useComposer` instance, owned by Chat — its `error` is
+     *  hook-local, and the turns pane's status slot renders it, so both must read
+     *  the same instance (the `useSessionControls` rule again). */
+    composer: ReturnType<typeof useComposer>;
+    /** Tells Chat which action `composer.error` now describes, so the status slot
+     *  can phrase it ("couldn't stop — still running: …"). null clears the phrasing
+     *  when a new action starts. */
+    onFailedAction: (action: 'stop' | 'resume' | null) => void;
+}
+/** Draft + optimistic send for the active (or pending/new) session. Enter sends,
+ *  Shift+Enter inserts a newline. Mirrors bridge-ui's Composer DOM (bc-composer-wrap /
+ *  bc-composer / bc-composer-input / bc-composer-actions / bc-composer-btn /
+ *  bc-btn-stop) so it inherits the shared stylesheet.
+ *
+ *  Stop sits BESIDE Send rather than replacing it. The two verbs are not alternatives:
+ *  a running turn is exactly when a user most often wants to redirect the model, and an
+ *  exclusive ternary made Send unreachable for the whole turn. Submitting mid-turn
+ *  interrupts first and then sends.
+ *
+ *  Which turn is "running" comes from `turnRunning` (the server-reported session state),
+ *  NOT from `useComposer().sending`. `sending` is this client's own in-flight POST and
+ *  clears in about a second, so a Stop button keyed on it appeared for a blink at the
+ *  start of a turn and was gone for all the minutes the user might actually want it.
+ *
+ *  **The order is load-bearing.** `send()` is fire-and-forget optimistic (it does not
+ *  return a promise), so the interrupt has to be awaited BEFORE it or the two race and
+ *  the new message can reach the harness while the old turn still owns it.
+ *
+ *  `stop()` is a LOUD control (chat-core contract): it throws on a non-2xx (e.g. the
+ *  409 the server returns while a tool still holds the turn) and sets `error` — it
+ *  never optimistically fakes idle. We surface that failure inline instead of
+ *  swallowing it, and a submit whose interrupt failed does NOT go on to send: the turn
+ *  is demonstrably still running, so sending anyway is the race the await exists to stop.
+ *
+ *  Send is also refused while the session-list stream is not open (`useConnState`). The
+ *  POST would still be accepted by the server, but nothing would carry the reply back,
+ *  so the message would look lost.
+ *
+ *  Resume appears when the session's harness process is gone (`resumable` — see
+ *  RESUMABLE_STATES in chat-core). It is NOT keyed on `paused`: nothing on this box
+ *  emits `msg.SessionPaused`, so the "⏸ paused" label this component used to carry on
+ *  its own had never once rendered, and a button behind the same flag would have been
+ *  the same dead code with a click handler. `resume()` is LOUD like `stop()` — a
+ *  refusal is shown, never swallowed into a fake-revived session. */
+export default function Composer({ sessionId, turnRunning, composer, onFailedAction }: ComposerProps): import("react/jsx-runtime").JSX.Element;
+export {};
 //# sourceMappingURL=Composer.d.ts.map

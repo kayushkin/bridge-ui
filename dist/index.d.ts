@@ -8,7 +8,6 @@ export { connectSSE, connectSessionListSSE } from './bridgeSSE';
 export type { SessionListFrame, SessionListResume } from './bridgeSSE';
 export { SESSION_LIST_BASE_RETRY_MS, SESSION_LIST_MAX_RETRY_MS, SessionListStore, applySessionListFrame, sessionListMustReseed, sharedSessionList, useSharedSessionList, } from './sessionListStore';
 export type { SessionListSnapshot } from './sessionListStore';
-export { useBridgeSession } from './useBridgeSession';
 export { useBridgeAttach } from './useBridgeAttach';
 export type { AttachStatus, AttachRole, AttachExit, UseBridgeAttachReturn, UseBridgeAttachOptions, } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
@@ -36,6 +35,7 @@ export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyB
 export { formatTokens, formatCost, formatDuration, timeAgo, formatAgeCompact } from './utils';
 export { readAgentPrompt, writeAgentPrompt, stripAgentPrompt, suggestAgentPrompt, AGENT_PROMPT_OPEN, AGENT_PROMPT_CLOSE, } from './agentPrompt';
 export { BridgeLayout } from './components/BridgeLayout';
+export { BridgeChat } from './components/chat/BridgeChat';
 export { BridgeSessions } from './components/BridgeSessions';
 export { BridgeInstances } from './components/BridgeInstances';
 export { BridgeSettings } from './components/BridgeSettings';
@@ -59,7 +59,7 @@ export { ToolItem, DefaultRenderer, ToolsSection, getToolRenderer, registerToolR
 export { DiffView, UnifiedDiffView } from './components/tools';
 export type { ToolRendererProps } from './components/tools';
 export { ToolContext, useToolContext } from './components/tools';
-export { composerAutoGrowHeightPx } from './components/chat/Composer';
+export { composerAutoGrowHeightPx } from './components/chat/composerAutoGrow';
 export { StatusDot } from './components/chat/StatusDot';
 export type { StatusDotState } from './components/chat/StatusDot';
 export { ToolsPanel } from './components/chat/ToolsPanel';

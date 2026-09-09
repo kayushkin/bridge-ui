@@ -128,6 +128,7 @@ export {
 
 // Page components
 export { BridgeLayout } from './components/BridgeLayout'
+export { BridgeChat } from './components/chat/BridgeChat'
 export { BridgeSessions } from './components/BridgeSessions'
 export { BridgeInstances } from './components/BridgeInstances'
 export { BridgeSettings } from './components/BridgeSettings'
@@ -184,7 +185,7 @@ export { ToolContext, useToolContext } from './components/tools'
 // excludes the border, so under `box-sizing: border-box` a bare assignment lands
 // a border-width short and the box scrolls at every size. Sharing the function
 // is what stops the third copy from being written wrong again.
-export { composerAutoGrowHeightPx } from './components/chat/Composer'
+export { composerAutoGrowHeightPx } from './components/chat/composerAutoGrow'
 
 // Shared status dot — used by header, sidebar, and composer status chip
 export { StatusDot } from './components/chat/StatusDot'

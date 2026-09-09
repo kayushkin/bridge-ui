@@ -1,0 +1,296 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { useEffect, useState } from 'react';
+import { useActiveSession, usePendingSession, useSessionActions, useHarness, useHarnessCapabilities, useModels, useManagedSession, useSessionInfo, } from '@kayushkin/chat-core';
+import styles from './Chat.module.css';
+/** The per-session settings, split by how often they are reached for.
+ *
+ *  This file used to be `ControlsBar.tsx` and drew a second bar between the thread and
+ *  the composer. The bar is gone: its controls moved onto the top bar, which is where
+ *  the rest of the session's state already lived, and the row it occupied went back to
+ *  the transcript. The rename is not cosmetic — nothing here is a bar any more, and a
+ *  file called `ControlsBar` that renders two disconnected clusters would be lying about
+ *  what it does.
+ *
+ *  The split is by REACH, not by capability:
+ *
+ *  - `SessionSettingsInline` is what sits on the top bar: the model picker and Compact.
+ *    Those are the two a person touches mid-conversation, so they cost a click of zero.
+ *  - `SessionSettingsPanel` is what sits inside the header's details dropdown: effort
+ *    and Fork. Both are set once and then left alone, so they cost a click of one.
+ *
+ *  Everything is still gated on the harness's own capability set (`GET /harnesses`),
+ *  never a per-harness list written here — a harness that does not advertise `model`
+ *  simply gets no model picker.
+ */
+/** Format a token count the way a person reads one: `142k`, `1M`, `1.5M`.
+ *
+ *  Not `toLocaleString` — `142,336 / 1,000,000` is nineteen characters and this has to
+ *  fit on a strip beside a session name. The full, exact pair stays on the strip's
+ *  `title`, so the rounding here costs nothing a hover cannot recover.
+ *
+ *  Rounds rather than truncates: a window at 999,600 tokens reading `999k` and then
+ *  jumping to `1M` is the honest sequence, where truncation would show `999k` for the
+ *  last four hundred tokens before the limit and make a nearly-full window look like it
+ *  had room. */
+export function formatTokens(n) {
+    if (n >= 1_000_000) {
+        const millions = n / 1_000_000;
+        // One decimal below 10M, none above — `12.3M` is noise at that size, `1.5M` is not.
+        const text = millions >= 10 ? millions.toFixed(0) : millions.toFixed(1);
+        return `${text.replace(/\.0$/, '')}M`;
+    }
+    if (n >= 1_000)
+        return `${Math.round(n / 1_000)}k`;
+    return String(n);
+}
+/** Everything both clusters need, resolved once.
+ *
+ *  ⚠️ `controls` arrives as a PROP and is not re-resolved here. `useSessionControls`'s
+ *  `compacting` is hook-local `useState`, set by whichever instance called `compact()`.
+ *  The Turns pane shows a "Compacting context…" strip off the same flag, so a second
+ *  call of the hook in either place would give one of them a flag that can never go
+ *  true. `Chat` owns the single instance and hands it to every consumer.
+ *
+ *  The gate is SPLIT, not one flag. Model and effort are PRE-START settings: they are
+ *  the two things a chat is worth choosing before it exists, and a user who has to send
+ *  a message first has already spent a turn on the wrong model. So they resolve for a
+ *  pending pane as well as a live session. Compact and Fork do not — neither means
+ *  anything before there is a session to compact or fork.
+ *
+ *  The two halves also write to different places. On a live session a pick is a
+ *  `POST /sessions/{id}/config`. On a pending pane there is no session id to post to, so
+ *  the pick is recorded on the pending pane itself (`patchPending`) and chat-core applies
+ *  it in the single config call it already makes right after the lazy create. */
+export function useSessionSettings(newTarget, controls) {
+    const { id, summary } = useActiveSession();
+    const pending = usePendingSession();
+    const { patchPending } = useSessionActions();
+    // A pending pane names the harness its first message will create the session on, which
+    // is what lets the capability gate and the model list resolve before the session exists.
+    const isPending = !id && !!pending;
+    const harness = summary?.harness ?? pending?.harness ?? null;
+    const capabilities = useHarnessCapabilities(harness);
+    // ⚠️ `pty` is NOT in `capabilities`. It is a top-level boolean on the harness registry
+    // row — `GET /harnesses` reports claude_code with `pty: true` and capabilities
+    // `['compact','fork','model','tools','system_prompt']` — so `capabilities.has('pty')`
+    // is false for every harness that supports it, and a control gated that way would
+    // never appear at all. See chat-core's `useHarness`.
+    const harnessRow = useHarness(harness);
+    const models = useModels(harness);
+    const { setConfig } = controls;
+    const { session: managed } = useManagedSession(id);
+    const { info } = useSessionInfo(id);
+    // Model & effort are LIVE changes on an existing session (POST /config via setConfig).
+    // Seed the selects from the session's current harnessConfig so they reflect what is in
+    // effect, then hold the choice locally so the control stays responsive before the config
+    // refetch lands. setConfig is LOUD (it rethrows on any non-2xx); the rejection is
+    // swallowed here only so a refused change does not become an unhandled rejection — it
+    // still surfaces through `controls.error`, and the select never advances to a value the
+    // server rejected.
+    const configuredModel = managed?.harnessConfig?.model ?? '';
+    const configuredEffort = managed?.harnessConfig?.effort ?? '';
+    const [model, setModel] = useState('');
+    const [effort, setEffort] = useState('');
+    useEffect(() => { setModel(configuredModel); }, [configuredModel]);
+    useEffect(() => { setEffort(configuredEffort); }, [configuredEffort]);
+    const hasLiveSession = !!id && !!summary;
+    // On a pending pane the store IS the value: `patchPending` is synchronous, so there is
+    // nothing to reconcile against and no local copy that could disagree with it.
+    const modelValue = isPending ? pending?.model ?? '' : model;
+    const effortValue = isPending ? pending?.effort ?? '' : effort;
+    // A deliberate pick is also the user telling us what they want next time, so it is
+    // written back as the harness's saved default — MERGED over the record already stored,
+    // never in place of it (see `rememberDefaults`; a bare write deletes that harness's
+    // spend ceiling and disabled-tool list).
+    //
+    // The live path remembers only AFTER the server accepts. A refused model is not a
+    // preference, and saving it would make every subsequent new chat start on a model this
+    // instance has already said it cannot run. A pending pane has nothing to refuse it yet,
+    // so its pick is recorded immediately.
+    const remember = (override) => {
+        if (harness)
+            newTarget.rememberDefaults(harness, override);
+    };
+    const chooseModel = (next) => {
+        if (isPending) {
+            patchPending({ model: next });
+            remember({ model: next });
+            return;
+        }
+        setModel(next);
+        void setConfig({ model: next }).then(() => remember({ model: next })).catch(() => { });
+    };
+    const chooseEffort = (next) => {
+        if (isPending) {
+            patchPending({ effort: next });
+            remember({ effort: next });
+            return;
+        }
+        setEffort(next);
+        void setConfig({ effort: next }).then(() => remember({ effort: next })).catch(() => { });
+    };
+    return {
+        capabilities,
+        models,
+        modelValue,
+        effortValue,
+        chooseModel,
+        chooseEffort,
+        isPending,
+        hasLiveSession,
+        /** What the harness reports it is actually RUNNING, which is not the same question as
+         *  what override is set. See the note in `ModelPicker`. */
+        runningModel: info?.model ?? '',
+        /** Whether this harness can be switched between events and pty at all. */
+        supportsPty: harnessRow?.pty === true,
+        /** Which I/O mode the session is in now: `events`, `pty`, or empty before the
+         *  summary lands. */
+        sessionMode: summary?.mode ?? '',
+        /** True when either half of the gate is open, so a caller can skip rendering a
+         *  container that would otherwise be empty. */
+        anySettings: hasLiveSession || isPending,
+    };
+}
+/** The model picker.
+ *
+ *  The select's VALUE is the override on `harness_config`, and an empty value honestly
+ *  means "no override; the harness picks". That leaves a picker whose whole job is model
+ *  selection unable to say what the session is actually running. The harness reports that
+ *  separately as `info.model`, so it is named on the EMPTY OPTION's label rather than
+ *  seeded as the value: seeding it would make an un-overridden session look identical to
+ *  one deliberately pinned to that model, and re-picking the shown value would convert a
+ *  default into an override without the user asking for one.
+ *
+ *  ## Short names
+ *
+ *  Each option shows model-store's `short_name` — `opus-4.6` rather than
+ *  `Claude Opus 4.6` — because this now sits on a top bar beside eight other controls and
+ *  a 180px select was the widest thing on it. The full `label` moves to the option's own
+ *  `title`, so the shortening costs a hover rather than the information.
+ *
+ *  When a model has no `short_name` yet the option falls back to the model ID, and that is
+ *  deliberately NOT a fallback to `label`: the ID is the model's canonical identity rather
+ *  than a guess at a nickname, and showing it makes a missing nickname visible so it gets
+ *  filled in. Falling back to the full name would hide the gap forever. */
+/** A trailing bracketed variant on a running-model string, e.g. the `[1m]` in
+ *  `claude-opus-5[1m]`. */
+const MODEL_VARIANT_SUFFIX = /\[[^\]]+\]$/;
+/** Resolve what the harness says it is RUNNING against the model registry, as a short
+ *  form for the closed select and a full form for its tooltip.
+ *
+ *  A plain `find` on the id is not enough, and the gap is visible rather than theoretical:
+ *  Claude Code reports `claude-opus-5[1m]` for the million-token context variant, and the
+ *  registry has no row under that id — only `claude-opus-5`. The exact lookup missed, and
+ *  the placeholder fell all the way through to the raw string, which is the long name in a
+ *  132px select that the short names existed to get rid of.
+ *
+ *  So: match exactly, and failing that match again with the variant stripped — then put
+ *  the variant BACK on the short name (`opus-5[1m]`). Dropping it is not an option. It is
+ *  the harness distinguishing a 1M-context model from a 200k one, which is the single most
+ *  useful thing about that string, and a picker that quietly reported the wrong context
+ *  window would be worse than one that reported an ugly id.
+ *
+ *  When neither lookup matches, the raw string survives untouched. That is the registry
+ *  honestly having nothing to say about this model, not a licence to invent a nickname. */
+function matchRunningModel(models, runningModel) {
+    if (!runningModel)
+        return { short: '', full: '' };
+    const exact = models.find((m) => m.value === runningModel);
+    if (exact)
+        return { short: exact.shortName || exact.value, full: exact.label };
+    const variant = runningModel.match(MODEL_VARIANT_SUFFIX)?.[0] ?? '';
+    if (variant) {
+        const base = runningModel.slice(0, -variant.length);
+        const baseMatch = models.find((m) => m.value === base);
+        if (baseMatch) {
+            return {
+                short: `${baseMatch.shortName || baseMatch.value}${variant}`,
+                full: `${baseMatch.label} ${variant}`,
+            };
+        }
+    }
+    return { short: runningModel, full: runningModel };
+}
+function ModelPicker({ settings }) {
+    const { models, modelValue, chooseModel, runningModel } = settings;
+    const running = matchRunningModel(models, runningModel);
+    // The placeholder falls back to the model ID, NEVER to `label`. `label` carries the
+    // per-million cost suffix (`Claude Opus 5 ($15/$75)`), which is a fine thing to read in
+    // a dropdown row and a terrible thing to squeeze into a 132px closed select — a
+    // `<select>` cannot ellipsis, so it clipped mid-character to `auto (Claude Opus 5 ($15/$7`.
+    // The ID is short, canonical, and matches what the options themselves fall back to.
+    const runningShort = running.short;
+    const placeholder = runningShort ? `auto (${runningShort})` : 'Model';
+    const title = runningShort
+        ? `Model — running ${running.full}${modelValue ? '' : ' (harness default, no override set)'}`
+        : 'Model';
+    return (_jsxs("select", { className: `bc-ctrl-select ${styles.modelPicker}`, value: modelValue, onChange: (e) => chooseModel(e.target.value), "aria-label": "Model", title: title, children: [_jsx("option", { value: "", title: title, children: placeholder }), models.map((m) => (_jsx("option", { value: m.value, title: m.label, children: m.shortName || m.value }, m.value)))] }));
+}
+/** The always-visible cluster on the top bar: the model picker, Compact, and — only when
+ *  something has just been refused — the error chip.
+ *
+ *  Compact is icon-only now, and the percentage that used to be baked into its label has
+ *  moved to the context strip along the header's bottom edge. It was on the button because
+ *  there was nowhere else to put it; there is now, and a button that reports a measurement
+ *  AND performs an action was doing two jobs.
+ *
+ *  The error chip stays inline rather than moving into the dropdown with the rest of the
+ *  overflow. A refused setting is not a detail to go looking for — without it the select
+ *  silently snaps back to its old value and the user is told nothing. */
+export function SessionSettingsInline({ settings, controls, }) {
+    const { capabilities, models, hasLiveSession, anySettings } = settings;
+    const { compact, compacting, error } = controls;
+    if (!anySettings)
+        return null;
+    return (_jsxs(_Fragment, { children: [capabilities.has('model') && models.length > 0 && _jsx(ModelPicker, { settings: settings }), hasLiveSession && capabilities.has('compact') && (_jsx("button", { className: styles.iconButton, onClick: () => void compact().catch(() => { }), disabled: compacting, "aria-label": compacting ? 'Compacting context' : 'Compact context', title: compacting ? 'Compacting context…' : 'Compact context', children: compacting ? '⏳' : '🗜' })), error && (_jsx("span", { className: `bc-status-chip bc-status-chip-error ${styles.settingsError}`, role: "status", title: error, "aria-label": `Control error: ${error}`, children: _jsxs("span", { className: "bc-status-chip-label", children: ["\u26A0 ", error] }) }))] }));
+}
+/** The overflow cluster, rendered inside the header's details dropdown: reasoning effort
+ *  and Fork.
+ *
+ *  Both are set-once settings. Effort is picked when a chat starts and rarely touched
+ *  again, and Fork is a thing done deliberately rather than in passing — neither earns a
+ *  permanent slot on a row that has to stay one line wide.
+ *
+ *  Effort keeps the pre-start half of the gate (it is a pending-pane setting like model),
+ *  Fork keeps the live half. */
+export function SessionSettingsPanel({ settings, controls, }) {
+    const { capabilities, effortValue, chooseEffort, hasLiveSession, anySettings, supportsPty, sessionMode, } = settings;
+    const { fork, forking, switchMode } = controls;
+    const [switchingMode, setSwitchingMode] = useState(false);
+    if (!anySettings)
+        return null;
+    const showEffort = capabilities.has('effort');
+    const showFork = hasLiveSession && capabilities.has('fork');
+    const showMode = hasLiveSession && supportsPty;
+    if (!showEffort && !showFork && !showMode)
+        return null;
+    const isPty = sessionMode === 'pty';
+    const nextMode = isPty ? 'events' : 'pty';
+    return (_jsxs("div", { className: styles.detailsSection, children: [_jsx("span", { className: styles.detailsSectionLabel, children: "Session settings" }), showEffort && (_jsxs("select", { className: "bc-ctrl-select", value: effortValue, onChange: (e) => chooseEffort(e.target.value), "aria-label": "Reasoning effort", title: "Reasoning effort", children: [_jsx("option", { value: "", children: "Effort" }), _jsx("option", { value: "low", children: "Low" }), _jsx("option", { value: "medium", children: "Medium" }), _jsx("option", { value: "high", children: "High" }), _jsx("option", { value: "xhigh", children: "XHigh" }), _jsx("option", { value: "max", children: "Max" })] })), showFork && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => void fork().catch(() => { }), disabled: forking, title: "Fork session", children: forking ? 'Forking…' : 'Fork' })), showMode && (_jsx("button", { className: "bc-ctrl-btn", onClick: () => {
+                    setSwitchingMode(true);
+                    void switchMode(nextMode)
+                        .catch(() => { })
+                        .finally(() => setSwitchingMode(false));
+                }, disabled: switchingMode, "aria-label": `Switch to ${nextMode} mode`, title: isPty
+                    ? 'Switch back to events mode — the terminal closes'
+                    : 'Switch to pty mode — restarts the harness with --resume and opens a terminal', children: switchingMode ? 'Switching…' : `Mode: ${isPty ? 'pty' : 'events'}` }))] }));
+}
+/** The context readout: a fill bar across the header's bottom edge with the token pair and
+ *  percentage sitting on it.
+ *
+ *  ⚠️ Renders NOTHING without a real measurement. "0%" is a different answer from "no
+ *  reading yet", not a smaller one — a session that has reported no usage has no context
+ *  measurement at all, and painting an empty bar with `0/0` beside it would claim it did.
+ *  The old 2px hairline had the same guard for the same reason.
+ *
+ *  The fill is clamped to 100% while the readout is not: a session over its limit should
+ *  say `210k / 200k · 105%`, which is the fact, but a bar wider than its own container is
+ *  just a broken bar. */
+export function ContextStrip({ tokens, limit, pct, }) {
+    if (!(tokens > 0 && limit > 0))
+        return null;
+    const tone = pct >= 90 ? 'Crit' : pct >= 70 ? 'Warn' : '';
+    const pctLabel = pct.toFixed(0);
+    return (_jsxs("div", { className: styles.contextStrip, title: `Context window: ${tokens.toLocaleString()} / ${limit.toLocaleString()} tokens (${pctLabel}%)`, children: [_jsx("div", { className: `${styles.contextFill}${tone ? ` ${styles[`contextFill${tone}`]}` : ''}`, style: { width: `${Math.min(100, pct)}%` }, "aria-hidden": true }), _jsxs("span", { className: `${styles.contextReadout}${tone ? ` ${styles[`contextReadout${tone}`]}` : ''}`, role: "status", "aria-label": `Context window ${pctLabel}% full, ${tokens.toLocaleString()} of ${limit.toLocaleString()} tokens`, children: [formatTokens(tokens), " / ", formatTokens(limit), " \u00B7 ", pctLabel, "%"] })] }));
+}
+//# sourceMappingURL=SessionSettings.js.map

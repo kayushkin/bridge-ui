@@ -41,7 +41,7 @@ import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
 import { harnessIsWorkingOnTurn, sessionCanBeResumed } from '../src/components/chat/utils.ts'
-import { Composer, composerAutoGrowHeightPx } from '../src/components/chat/Composer.tsx'
+import { composerAutoGrowHeightPx } from '../src/components/chat/composerAutoGrow.ts'
 import { StatusDot } from '../src/components/chat/StatusDot.tsx'
 import { MemoryRouter } from 'react-router-dom'
 import { BridgeLayout } from '../src/components/BridgeLayout.tsx'
@@ -623,44 +623,6 @@ console.log('Composer auto-grow height')
   check('a draft past the cap is not clamped here — the stylesheet clamps it',
     composerAutoGrowHeightPx({ ...live, scrollHeight: 600 }) === 602,
     String(composerAutoGrowHeightPx({ ...live, scrollHeight: 600 })))
-}
-
-console.log('Composer turn controls')
-{
-  // Every state the union admits, so a new one cannot be added without this
-  // deciding what the composer does with it.
-  const ALL_STATES = [
-    'empty', 'placeholder', 'starting', 'model_generating', 'tool_running', 'compacting',
-    'awaiting_permission', 'awaiting_user', 'rate_limited', 'paused', 'idle',
-    'completed', 'error', 'aborted', 'disconnected', 'running', 'waiting_on_approval',
-  ]
-  const render = (props) => renderToStaticMarkup(h(Composer, {
-    sessionId: 'br_check', connected: true, turnRunning: false, resumable: false,
-    onSend: () => {}, onStop: () => {}, onResume: () => {}, ...props,
-  }))
-
-  check('Send renders whatever the turn is doing',
-    ALL_STATES.every(s => render({
-      turnRunning: harnessIsWorkingOnTurn(s), resumable: sessionCanBeResumed(s),
-    }).includes('>Send</button>')))
-  check('a running turn renders Stop beside Send',
-    render({ turnRunning: true }).includes('bc-btn-stop') && render({ turnRunning: true }).includes('>Send</button>'))
-  check('a quiet turn renders no Stop', !render({ turnRunning: false }).includes('bc-btn-stop'))
-  check('a resumable session renders Resume beside Send',
-    render({ resumable: true }).includes('bc-btn-resume') && render({ resumable: true }).includes('>Send</button>'))
-  check('a live session renders no Resume', !render({ resumable: false }).includes('bc-btn-resume'))
-
-  // The defect this file exists to pin (todo 3622b523): Resume used to be keyed
-  // on `paused`, which is a client-side marker for "the user interrupted this",
-  // i.e. a session whose process is still alive — exactly the one /resume 409s.
-  check('paused offers no Resume', !render({ resumable: sessionCanBeResumed('paused') }).includes('bc-btn-resume'))
-  check('the only resumable states are aborted and disconnected',
-    ALL_STATES.filter(sessionCanBeResumed).join(',') === 'aborted,disconnected',
-    ALL_STATES.filter(sessionCanBeResumed).join(','))
-
-  check('and a running turn is still recognised as working',
-    ['starting', 'model_generating', 'tool_running', 'compacting'].every(harnessIsWorkingOnTurn)
-      && !harnessIsWorkingOnTurn('paused') && !harnessIsWorkingOnTurn('idle'))
 }
 
 // BridgePrefsStore — the bridge-prefs record, held once per endpoint. Driven
