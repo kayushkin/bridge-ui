@@ -161,10 +161,14 @@ export interface CardView {
      * was hard-deleted out from under kanban-store — these surface in `orphans`. */
     item: NoteboardItem | null;
     links?: CardLink[];
-    /** Who the card is assigned to. Carried by the board and column reads, which
-     * is why it is optional: a card assembled from the per-card routes (dash's
-     * card page) has no source for it, and `undefined` there means "not loaded",
-     * not "nobody". */
+    /** Who the card is assigned to. Carried by the board and column reads, and
+     * OMITTED by kanban-store when the card has none (measured live 2026-09-09:
+     * an unassigned card has no `assignments` key at all, not an empty list). So
+     * on a card that came from a board or column read, absent means nobody. A
+     * card assembled from the per-card routes (dash's card page) has no source
+     * for it at all, and there `undefined` means "not loaded". The board's own
+     * drawer normalises the first case before handing the card to CardDetail,
+     * which is what lets CardDetail read `undefined` as the second. */
     assignments?: CardAssignment[];
     /** The card's clock, computed from its events on every read. Absent on a
      * board served by a kanban-store that predates time accounting. */

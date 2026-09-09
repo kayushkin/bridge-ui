@@ -513,7 +513,11 @@ export function BridgeKanban() {
 
       {drawerCard && k.view && (
         <CardDrawer
-          card={drawerCard}
+          // This card came off the board read, which carries assignments and
+          // omits the key when there are none. Absent here means nobody, and
+          // CardDetail reads `undefined` as "not loaded" — the card page's
+          // case — so the board says what it knows before handing it over.
+          card={drawerCard.assignments ? drawerCard : { ...drawerCard, assignments: [] }}
           boardID={k.view.board.id}
           entityTypes={k.entityTypes}
           onClose={() => setDrawerCardID(null)}

@@ -365,7 +365,17 @@ export function BridgeKanban() {
                                                 return;
                                         }
                                         await k.deleteColumn(cv.column.id);
-                                    } }, cv.column.id))) }), k.view.orphans && k.view.orphans.length > 0 && (_jsxs("div", { className: "bk-orphans", children: [_jsxs("h3", { children: ["Orphaned placements (", k.view.orphans.length, ")"] }), _jsx("p", { className: "bk-orphan-note", children: "These placements are still on the board but their noteboard items were deleted, so there is nothing left to show. A reversible delete leaves the placement behind on purpose \u2014 restoring the item has to be able to put it back here \u2014 which is why they accumulate." }), k.view.orphans.map(o => (_jsxs("div", { className: "bk-orphan-row", children: [_jsx("code", { children: o.placement.card_id }), _jsx("button", { className: "bi-add-btn", title: "Remove this empty placement from the board", onClick: () => k.detachCard(k.view.board.id, o.placement.card_id), children: "Detach" })] }, o.placement.card_id)))] }))] }))] }), drawerCard && k.view && (_jsx(CardDrawer, { card: drawerCard, boardID: k.view.board.id, entityTypes: k.entityTypes, onClose: () => setDrawerCardID(null), onPatch: (patch) => k.patchCard(drawerCard.placement.card_id, patch), onDetach: async () => {
+                                    } }, cv.column.id))) }), k.view.orphans && k.view.orphans.length > 0 && (_jsxs("div", { className: "bk-orphans", children: [_jsxs("h3", { children: ["Orphaned placements (", k.view.orphans.length, ")"] }), _jsx("p", { className: "bk-orphan-note", children: "These placements are still on the board but their noteboard items were deleted, so there is nothing left to show. A reversible delete leaves the placement behind on purpose \u2014 restoring the item has to be able to put it back here \u2014 which is why they accumulate." }), k.view.orphans.map(o => (_jsxs("div", { className: "bk-orphan-row", children: [_jsx("code", { children: o.placement.card_id }), _jsx("button", { className: "bi-add-btn", title: "Remove this empty placement from the board", onClick: () => k.detachCard(k.view.board.id, o.placement.card_id), children: "Detach" })] }, o.placement.card_id)))] }))] }))] }), drawerCard && k.view && (_jsx(CardDrawer
+            // This card came off the board read, which carries assignments and
+            // omits the key when there are none. Absent here means nobody, and
+            // CardDetail reads `undefined` as "not loaded" — the card page's
+            // case — so the board says what it knows before handing it over.
+            , { 
+                // This card came off the board read, which carries assignments and
+                // omits the key when there are none. Absent here means nobody, and
+                // CardDetail reads `undefined` as "not loaded" — the card page's
+                // case — so the board says what it knows before handing it over.
+                card: drawerCard.assignments ? drawerCard : { ...drawerCard, assignments: [] }, boardID: k.view.board.id, entityTypes: k.entityTypes, onClose: () => setDrawerCardID(null), onPatch: (patch) => k.patchCard(drawerCard.placement.card_id, patch), onDetach: async () => {
                     const ok = await k.detachCard(k.view.board.id, drawerCard.placement.card_id);
                     if (ok)
                         setDrawerCardID(null);
