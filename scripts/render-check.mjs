@@ -23,6 +23,8 @@ import { ProducerTextWithReferenceLinks } from '../src/components/chat/producerR
 import { applyEventToRows, controlRefusal, projectServerSessionState, sameActivity } from '../src/useBridgeSession.ts'
 import { createSSEEventBatcher, isDeferrableEventType } from '../src/sseEventBatching.ts'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
+import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
+import { CardDetail } from '../src/components/BridgeKanban.tsx'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import {
   SessionListStore, applySessionListFrame, sessionListMustReseed, sharedSessionList,
@@ -1834,6 +1836,73 @@ console.log('BridgeLayout — a narrow viewport is not permission to hide the na
 // it is the condition `GitPanel` used to fail: it read the workspace context
 // directly, and `useWorkspace` throws rather than returning a default, so the
 // export alone would have handed a host a component that dies on first render.
+// The principal directory's two rules, which pull in opposite directions and
+// are both load-bearing: a disabled principal RESOLVES (a card assigned to
+// someone who left still names them) and is NOT PICKABLE (nobody assigns new
+// work to them, and kanban-store would 400 the attempt anyway).
+console.log('\nprincipals — disabled resolves but is not pickable')
+{
+  const vlad = { id: 'principal_000001', kind: 'human', display_name: 'Vlad Kayushkin', email: 'v@example.com', disabled_at: 0, created_at: 1, updated_at: 1 }
+  const gone = { id: 'principal_000002', kind: 'human', display_name: 'Gone Person', email: '', disabled_at: 1_700_000_000, created_at: 1, updated_at: 1 }
+  const team = { id: 'principal_000003', kind: 'group', display_name: 'Platform Team', email: '', disabled_at: 0, created_at: 1, updated_at: 1 }
+  const list = [vlad, gone, team]
+  const byId = indexPrincipalsByID(list)
+  check('a disabled principal still resolves by id', byId.get('principal_000002') === gone)
+  check('and is reported disabled', principalIsDisabled(gone) && !principalIsDisabled(vlad))
+  const all = pickablePrincipals(list, { query: '', kind: 'all', excludeIDs: [] })
+  check('the picker never offers a disabled principal', !all.includes(gone) && all.length === 2, JSON.stringify(all.map(p => p.id)))
+  check('the query is a case-insensitive substring of display_name',
+    pickablePrincipals(list, { query: 'KAYUSH', kind: 'all', excludeIDs: [] }).map(p => p.id).join() === 'principal_000001')
+  check('an already-assigned principal is not offered again',
+    pickablePrincipals(list, { query: '', kind: 'all', excludeIDs: ['principal_000001'] }).map(p => p.id).join() === 'principal_000003')
+  check('the kind toggle narrows to people', pickablePrincipals(list, { query: '', kind: 'human', excludeIDs: [] }).map(p => p.id).join() === 'principal_000001')
+  check('the kind toggle narrows to groups', pickablePrincipals(list, { query: '', kind: 'group', excludeIDs: [] }).map(p => p.id).join() === 'principal_000003')
+  check('initials are the first letters of the first two words', principalInitials('Vlad Kayushkin') === 'VK' && principalInitials('priya') === 'P' && principalInitials('  ') === '?')
+}
+
+// The drawer's "Assigned" section, rendered with no directory answer yet. A
+// static render never runs the fetch, so the directory is in exactly the state
+// it is in when principal-store is down or slow — and that is the case the
+// chips must survive: the raw id is on screen, never nothing.
+console.log('\nCardDetail — assignees render honestly without a directory')
+{
+  const TS = '2026-08-16T05:00:00Z'
+  const card = (assignments) => ({
+    placement: { card_id: 'c1', board_id: 'b1', column_id: 'col1', position: 0, created_at: TS, updated_at: TS },
+    item: { id: 'c1', type: 'todo', title: 'A card', body: '', tags: [], status: 'open', created_at: TS, updated_at: TS },
+    links: [],
+    assignments,
+  })
+  const noop = async () => true
+  const outcome = async () => ({ ok: true })
+  const mount = (principalStoreBasePath, assignments) => renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/kanban'] },
+      h(BridgeContext.Provider, { value: {
+        fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
+        basePath: '/api/bridge', kanbanStoreBasePath: '/api/kanban', principalStoreBasePath,
+        noteboardBasePath: '', mailBasePath: '', mailPagePath: '', routes: DEFAULT_BRIDGE_ROUTES,
+      } },
+        h(CardDetail, {
+          card: card(assignments), boardID: 'b1', entityTypes: [{ type: 'session' }],
+          onClose: () => {}, onPatch: noop, onDetach: () => {}, onArchive: () => {}, onDelete: () => {},
+          onAddLink: noop, onDeleteLink: noop, onAssign: outcome, onUnassign: outcome,
+          onOpenChat: () => {}, onOpenInMail: () => {}, mailBasePath: '', fetchFn: async () => ({ ok: true }),
+        }))))
+  const two = mount('/api/principals', [
+    { card_id: 'c1', principal_id: 'principal_000001', assigned_by: 'me', created_at: TS },
+    { card_id: 'c1', principal_id: 'principal_000002', assigned_by: 'me', created_at: TS },
+  ])
+  check('the section is present when a principal-store path is configured', two.includes('>Assigned<'), two)
+  check('an unresolved assignee shows its raw id rather than nothing',
+    two.includes('principal_000001') && two.includes('principal_000002') && two.includes('bk-assignee-unresolved'))
+  check('the unresolved chip explains why on hover', two.includes('principals are still loading'))
+  const none = mount('', [{ card_id: 'c1', principal_id: 'principal_000001', assigned_by: 'me', created_at: TS }])
+  check('no principal-store path hides the whole section', !none.includes('>Assigned<') && !none.includes('bk-assignee'), none.slice(0, 400))
+  const unknown = mount('/api/principals', undefined)
+  check('a card whose assignments were never loaded says so, not "nobody"',
+    unknown.includes('not loaded on this view') && !unknown.includes('Nobody yet') && !unknown.includes('bk-assignee-picker'))
+}
+
 sidePanelChecks()
 function sidePanelChecks() {
   console.log('\nSide panels mount outside a Workspace')

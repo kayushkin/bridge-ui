@@ -77,11 +77,18 @@ export type { SessionContentSearch, SessionContentSearchHits } from './useSessio
 export { useBridgeTools } from './useBridgeTools'
 export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools'
 export { useKanban } from './useKanban'
+export type { AssignmentOutcome } from './useKanban'
+export {
+  usePrincipals, pickablePrincipals, principalInitials, principalIsDisabled, indexPrincipalsByID,
+} from './usePrincipals'
+export type { PrincipalsDirectory, PrincipalKindFilter, PickablePrincipalsFilter } from './usePrincipals'
+export type { Principal, PrincipalKind } from './types-principals'
 export type {
   Board,
   Column,
   Placement,
   CardLink,
+  CardAssignment,
   EntityTag,
   CardView,
   ColumnView,

@@ -1,4 +1,5 @@
 import type { FetchFn } from '../types';
+import { type AssignmentOutcome } from '../useKanban';
 import type { CardView } from '../types-kanban';
 type SessionLinkRef = {
     ref: string;
@@ -39,6 +40,13 @@ export interface CardDetailProps {
     onDelete: (hard: boolean) => void | Promise<void>;
     onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>;
     onDeleteLink: (linkID: string) => Promise<boolean>;
+    /** Put a principal on the card. Optional because a host may mount this view
+     *  without the verb; the picker is then not offered. The outcome carries the
+     *  server's refusal, which is shown beside the picker. */
+    onAssign?: (principalID: string) => Promise<AssignmentOutcome>;
+    /** Take a principal off the card. Optional for the same reason; the chips
+     *  then have no remove button. */
+    onUnassign?: (principalID: string) => Promise<AssignmentOutcome>;
     onOpenChat: OpenChatFn;
     onOpenInMail: (accountID: string, messageID: string) => void;
     mailBasePath: string;
@@ -48,6 +56,6 @@ export interface CardDetailProps {
      *  link to where you already are is noise. */
     headerAction?: React.ReactNode;
 }
-export declare function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDetach, onArchive, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }: CardDetailProps): import("react/jsx-runtime").JSX.Element;
+export declare function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDetach, onArchive, onDelete, onAddLink, onDeleteLink, onAssign, onUnassign, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }: CardDetailProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=BridgeKanban.d.ts.map

@@ -48,6 +48,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/kanban/, '') || '/',
       },
+      '/api/principals': {
+        target: 'http://127.0.0.1:8314',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/principals/, '') || '/',
+      },
     },
   },
   build: {

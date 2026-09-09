@@ -57,6 +57,7 @@ function App() {
       skillStoreBasePath="/api/skill-store"
       toolStoreBasePath="/api/tool-store"
       kanbanStoreBasePath="/api/kanban"
+      principalStoreBasePath="/api/principals"
       routes={ROUTES}
     >
       <Routes>

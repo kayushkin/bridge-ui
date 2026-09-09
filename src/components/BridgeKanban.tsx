@@ -3,8 +3,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
 import { cleanEmailBodyForPreview } from '../emailText'
-import { useKanban } from '../useKanban'
-import type { CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
+import { useKanban, type AssignmentOutcome } from '../useKanban'
+import {
+  pickablePrincipals, principalInitials, principalIsDisabled, usePrincipals,
+  type PrincipalKindFilter, type PrincipalsDirectory,
+} from '../usePrincipals'
+import type { CardAssignment, CardLink, CardView, ColumnView, MailMessage, NoteboardItem, Placement } from '../types-kanban'
 import { formatAgeCompact } from '../utils'
 import { entityTarget, isLocalPathRef } from '../entityLinks'
 import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime'
@@ -151,6 +155,10 @@ export function BridgeKanban() {
   // A screenful a column. The largest board here holds 6,466 cards and answered
   // 12 MB per read before this cap; the rest arrive when asked for.
   const k = useKanban(selectedBoardID, { columnPageSize: CARDS_PER_COLUMN })
+  // One directory for every tile's assignee chips. Resolved here, not per tile:
+  // the hook shares one request either way, but hundreds of subscriptions for
+  // one answer is still hundreds of subscriptions.
+  const principals = usePrincipals()
   // A card id IS a noteboard todo id here, so the signals a session raised
   // against its todo land on the card that todo already has. The map covers
   // every todo, so switching boards needs no refetch.
@@ -389,6 +397,7 @@ export function BridgeKanban() {
                   cv={cv}
                   onLoadMore={() => k.loadMoreCards(cv.column.id, CARDS_PER_COLUMN)}
                   signalsByTodo={signalsByTodo}
+                  principals={principals}
                   boardColumns={k.view!.columns.map(c => c.column)}
                   collapsed={collapsedColumns.has(cv.column.id)}
                   onToggleCollapse={() => toggleColumnCollapsed(cv.column.id)}
@@ -523,6 +532,8 @@ export function BridgeKanban() {
           }}
           onAddLink={(et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label)}
           onDeleteLink={(linkID) => k.deleteCardLink(linkID)}
+          onAssign={(principalID) => k.assign(drawerCard.placement.card_id, principalID)}
+          onUnassign={(principalID) => k.unassign(drawerCard.placement.card_id, principalID)}
           onOpenChat={openSessionLink}
           onOpenInMail={openEmailInMail}
           mailBasePath={mailBasePath}
@@ -718,6 +729,7 @@ function NewColumnForm({
 function ColumnPane({
   cv,
   signalsByTodo,
+  principals,
   boardColumns,
   collapsed,
   onToggleCollapse,
@@ -737,6 +749,7 @@ function ColumnPane({
   cv: ColumnView
   onLoadMore: () => void
   signalsByTodo: Map<string, Signal[]>
+  principals: PrincipalsDirectory
   boardColumns: { id: string; name: string }[]
   collapsed: boolean
   onToggleCollapse: () => void
@@ -803,6 +816,7 @@ function ColumnPane({
               key={c.placement.card_id}
               card={c}
               signals={signalsByTodo.get(c.placement.card_id) ?? []}
+              principals={principals}
               currentColumn={cv.column.id}
               boardColumns={boardColumns}
               onMove={onMoveCard}
@@ -999,6 +1013,7 @@ function CardAgeBadge({
 function CardTile({
   card,
   signals,
+  principals,
   currentColumn,
   boardColumns,
   onMove,
@@ -1010,6 +1025,7 @@ function CardTile({
 }: {
   card: CardView
   signals: Signal[]
+  principals: PrincipalsDirectory
   currentColumn: string
   boardColumns: { id: string; name: string }[]
   onMove: (cardID: string, columnID: string) => Promise<boolean>
@@ -1059,6 +1075,13 @@ function CardTile({
       {tags.length > 0 && (
         <div className="bk-card-tags">
           {tags.map(t => <span key={t} className="bk-tag">{t}</span>)}
+        </div>
+      )}
+      {principals.enabled && (card.assignments?.length ?? 0) > 0 && (
+        <div className="bk-card-assignees">
+          {card.assignments!.map(a => (
+            <AssigneeChip key={a.principal_id} assignment={a} directory={principals} compact />
+          ))}
         </div>
       )}
       <div className="bk-card-foot">
@@ -1382,6 +1405,13 @@ export interface CardDetailProps {
   onDelete: (hard: boolean) => void | Promise<void>
   onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
   onDeleteLink: (linkID: string) => Promise<boolean>
+  /** Put a principal on the card. Optional because a host may mount this view
+   *  without the verb; the picker is then not offered. The outcome carries the
+   *  server's refusal, which is shown beside the picker. */
+  onAssign?: (principalID: string) => Promise<AssignmentOutcome>
+  /** Take a principal off the card. Optional for the same reason; the chips
+   *  then have no remove button. */
+  onUnassign?: (principalID: string) => Promise<AssignmentOutcome>
   onOpenChat: OpenChatFn
   onOpenInMail: (accountID: string, messageID: string) => void
   mailBasePath: string
@@ -1403,6 +1433,8 @@ export function CardDetail({
   onDelete,
   onAddLink,
   onDeleteLink,
+  onAssign,
+  onUnassign,
   onOpenChat,
   onOpenInMail,
   mailBasePath,
@@ -1410,6 +1442,7 @@ export function CardDetail({
   headerAction,
 }: CardDetailProps) {
   const item = card.item as NoteboardItem | null
+  const principals = usePrincipals()
   const [title, setTitle] = useState(item?.title ?? '')
   // The prompt block is split out of the body here and recombined on save, so
   // the body box shows what the card says and the prompt box shows what the
@@ -1562,6 +1595,19 @@ export function CardDetail({
             />
 
             <hr />
+
+            {principals.enabled && (
+              <>
+                <h4>Assigned</h4>
+                <CardAssignees
+                  assignments={card.assignments}
+                  directory={principals}
+                  onAssign={onAssign}
+                  onUnassign={onUnassign}
+                />
+                <hr />
+              </>
+            )}
 
             {/* Email links are split out and capped. A bucket card gathers every
                 message from a sender, so "Medium Daily Digest" reaches hundreds
@@ -1853,6 +1899,235 @@ function LinkedEmailRow({
         </div>
       )}
     </li>
+  )
+}
+
+/**
+ * One assignee as a chip. A human is an initials avatar, a group is the group
+ * glyph and its name; hover gives the full name and the kind.
+ *
+ * An id the directory cannot resolve — principal-store down, or an id it has
+ * never heard of — renders as the raw `principal_…` in a dimmed chip, never as
+ * nothing. The assignment is a true record that someone is on this card; only
+ * the name is unknown, and a tile with no chip would read as unassigned.
+ *
+ * A disabled principal resolves and renders struck through. The card was
+ * assigned to them and still is; that they have since left is information, not
+ * a reason to hide who had the work.
+ */
+function AssigneeChip({
+  assignment,
+  directory,
+  compact = false,
+  onRemove,
+}: {
+  assignment: CardAssignment
+  directory: PrincipalsDirectory
+  /** The tile's variant: humans show initials only, and group names truncate. */
+  compact?: boolean
+  onRemove?: () => void
+}) {
+  const id = assignment.principal_id
+  const principal = directory.byId.get(id)
+  if (!principal) {
+    const why = directory.loading
+      ? 'principals are still loading'
+      : directory.error
+        ? `principal-store did not answer: ${directory.error}`
+        : 'principal-store does not know this id'
+    return (
+      <span className="bk-assignee bk-assignee-unresolved" data-principal-id={id} title={`${id} — ${why}`}>
+        <span className="bk-assignee-name">{id}</span>
+        {onRemove && <button type="button" className="bk-assignee-remove" title={`Unassign ${id}`} onClick={onRemove}>×</button>}
+      </span>
+    )
+  }
+  const disabled = principalIsDisabled(principal)
+  const title = `${principal.display_name} (${principal.kind}${disabled ? ', disabled' : ''})`
+  return (
+    <span
+      className={`bk-assignee bk-assignee-${principal.kind}${disabled ? ' bk-assignee-disabled' : ''}`}
+      data-principal-id={id}
+      title={title}
+    >
+      {principal.kind === 'group'
+        ? <span className="bk-assignee-glyph" aria-hidden="true">👥</span>
+        : <span className="bk-assignee-avatar" aria-hidden="true">{principalInitials(principal.display_name)}</span>}
+      {(principal.kind === 'group' || !compact) && (
+        <span className="bk-assignee-name">{principal.display_name}</span>
+      )}
+      {onRemove && (
+        <button type="button" className="bk-assignee-remove" title={`Unassign ${principal.display_name}`} onClick={onRemove}>×</button>
+      )}
+    </span>
+  )
+}
+
+/**
+ * The drawer's "Assigned" section: the chips, and the picker that adds one.
+ *
+ * `assignments` undefined means the host assembled this card from the per-card
+ * routes, which do not carry assignments — dash's card page does exactly that.
+ * That is said plainly rather than shown as an empty list, because "nobody is
+ * assigned" and "this view was not told who is assigned" are different facts
+ * and only one of them is true here. The picker is withheld in that case too:
+ * it could write, but the section could not show the result.
+ */
+function CardAssignees({
+  assignments,
+  directory,
+  onAssign,
+  onUnassign,
+}: {
+  assignments: CardAssignment[] | undefined
+  directory: PrincipalsDirectory
+  onAssign?: (principalID: string) => Promise<AssignmentOutcome>
+  onUnassign?: (principalID: string) => Promise<AssignmentOutcome>
+}) {
+  const [error, setError] = useState<string | null>(null)
+  if (assignments === undefined) {
+    return <p className="bk-assignee-note">Assignees are not loaded on this view — open the card on its board.</p>
+  }
+  const assignedIDs = assignments.map(a => a.principal_id)
+  const run = async (outcome: Promise<AssignmentOutcome>) => {
+    const result = await outcome
+    setError(result.ok ? null : result.error)
+    return result.ok
+  }
+  return (
+    <>
+      <div className="bk-assignee-list">
+        {assignments.map(a => (
+          <AssigneeChip
+            key={a.principal_id}
+            assignment={a}
+            directory={directory}
+            onRemove={onUnassign ? () => { void run(onUnassign(a.principal_id)) } : undefined}
+          />
+        ))}
+        {assignments.length === 0 && <span className="bk-assignee-empty">Nobody yet.</span>}
+      </div>
+      {error && <div className="bridge-error bk-assignee-error">{error}</div>}
+      {onAssign && (
+        <AssigneePicker
+          directory={directory}
+          assignedIDs={assignedIDs}
+          onPick={principalID => run(onAssign(principalID))}
+        />
+      )}
+    </>
+  )
+}
+
+/** How many matches the picker lists before asking for a narrower search. The
+ *  directory is capped at 500 and a list that long is not a choice. */
+const ASSIGNEE_MATCHES_SHOWN = 30
+
+/**
+ * The assignee picker: a text filter over display names, a kind toggle, and
+ * the matches as buttons. Already-assigned and disabled principals are not
+ * offered (`pickablePrincipals`).
+ *
+ * A directory that failed to load renders the failure, not an empty list. An
+ * empty list here would say "there is nobody to assign", which is a claim
+ * about the organisation, when the truth is that principal-store did not
+ * answer.
+ */
+function AssigneePicker({
+  directory,
+  assignedIDs,
+  onPick,
+}: {
+  directory: PrincipalsDirectory
+  assignedIDs: string[]
+  onPick: (principalID: string) => Promise<boolean>
+}) {
+  const [query, setQuery] = useState('')
+  const [kind, setKind] = useState<PrincipalKindFilter>('all')
+  const [busyID, setBusyID] = useState<string | null>(null)
+
+  const matches = useMemo(
+    () => pickablePrincipals(directory.list, { query, kind, excludeIDs: assignedIDs }),
+    [directory.list, query, kind, assignedIDs],
+  )
+  const shown = matches.slice(0, ASSIGNEE_MATCHES_SHOWN)
+
+  const kinds: { value: PrincipalKindFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'human', label: 'People' },
+    { value: 'group', label: 'Groups' },
+  ]
+
+  return (
+    <div className="bk-assignee-picker">
+      <div className="bk-assignee-picker-row">
+        <input
+          type="search"
+          className="bk-assignee-query"
+          placeholder="Assign someone…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          aria-label="Filter principals by name"
+        />
+        <div className="bk-assignee-kinds" role="group" aria-label="Principal kind">
+          {kinds.map(k => (
+            <button
+              key={k.value}
+              type="button"
+              className="bk-assignee-kind"
+              aria-pressed={kind === k.value}
+              onClick={() => setKind(k.value)}
+            >{k.label}</button>
+          ))}
+        </div>
+      </div>
+      {directory.error && (
+        <div className="bridge-error bk-assignee-error">
+          Could not load principals: {directory.error}
+          {' '}
+          <button type="button" className="bk-link-ref-action" onClick={() => { void directory.refresh() }}>retry</button>
+        </div>
+      )}
+      {directory.loading && !directory.error && (
+        <div className="bk-assignee-empty">Loading principals…</div>
+      )}
+      {/* Matches are listed only when there is a directory to list from. A
+          failed load with nothing cached must not present "no matches". */}
+      {!directory.loading && (directory.list.length > 0 || !directory.error) && (
+        <ul className="bk-assignee-matches">
+          {shown.map(p => (
+            <li key={p.id}>
+              <button
+                type="button"
+                className="bk-assignee-match"
+                data-principal-id={p.id}
+                disabled={busyID !== null}
+                title={`Assign ${p.display_name} (${p.kind})`}
+                onClick={async () => {
+                  setBusyID(p.id)
+                  try { await onPick(p.id) } finally { setBusyID(null) }
+                }}
+              >
+                {p.kind === 'group'
+                  ? <span className="bk-assignee-glyph" aria-hidden="true">👥</span>
+                  : <span className="bk-assignee-avatar" aria-hidden="true">{principalInitials(p.display_name)}</span>}
+                <span className="bk-assignee-name">{p.display_name}</span>
+                {p.email && <span className="bk-assignee-email">{p.email}</span>}
+                {busyID === p.id && <span className="bk-assignee-busy">…</span>}
+              </button>
+            </li>
+          ))}
+          {shown.length === 0 && (
+            <li className="bk-assignee-empty">
+              {directory.list.length === 0 ? 'principal-store has no principals.' : 'No matching principals.'}
+            </li>
+          )}
+          {matches.length > shown.length && (
+            <li className="bk-assignee-empty">{matches.length - shown.length} more — narrow the search.</li>
+          )}
+        </ul>
+      )}
+    </div>
   )
 }
 

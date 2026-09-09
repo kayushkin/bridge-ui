@@ -5040,6 +5040,79 @@
   align-items: center;
 }
 
+/* Assignees. A chip per principal: an initials avatar for a person, the group
+   glyph and name for a group. The tile variant (`.bk-card-assignees`) keeps
+   people to their initials so a dense card stays dense; the drawer variant
+   (`.bk-assignee-list`) shows names and a remove button. */
+.bk-card-assignees { display: flex; flex-wrap: wrap; gap: 4px; }
+.bk-assignee {
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 100%;
+  font-size: 0.75em; line-height: 1.4;
+  padding: 1px 6px 1px 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(99,102,241,0.12));
+}
+.bk-assignee-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 0.65rem; font-weight: 600; letter-spacing: 0.02em;
+  flex: none;
+}
+.bk-assignee-glyph { flex: none; }
+.bk-assignee-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-card-assignees .bk-assignee-name { max-width: 9em; }
+/* Left the card's record intact, but the person has been disabled since. */
+.bk-assignee-disabled { opacity: 0.55; }
+.bk-assignee-disabled .bk-assignee-name { text-decoration: line-through; }
+/* principal-store could not say who this is. The id is shown, dimmed. */
+.bk-assignee-unresolved { opacity: 0.6; background: none; }
+.bk-assignee-unresolved .bk-assignee-name { font-family: var(--mono, ui-monospace, monospace); padding-left: 4px; }
+.bk-assignee-remove {
+  background: none; border: none; padding: 0 0 0 2px;
+  cursor: pointer; opacity: 0.5; color: inherit; font-size: 1.1em; line-height: 1;
+}
+.bk-assignee-remove:hover { opacity: 1; color: #d97757; }
+
+.bk-assignee-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.bk-assignee-list .bk-assignee { font-size: 0.85em; }
+.bk-assignee-empty { font-size: 0.85em; opacity: 0.7; }
+.bk-assignee-note { font-size: 0.85em; opacity: 0.7; margin: 4px 0; }
+.bk-assignee-error { margin: 4px 0; }
+
+.bk-assignee-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.bk-assignee-picker-row { display: flex; gap: 6px; align-items: center; }
+.bk-assignee-picker-row .bk-assignee-query { flex: 1; min-width: 0; }
+.bk-assignee-kinds { display: flex; gap: 2px; flex: none; }
+.bk-assignee-kind {
+  font-size: 0.8em; padding: 3px 8px;
+  border: 1px solid var(--border); border-radius: 3px;
+  background: none; color: inherit; cursor: pointer;
+}
+.bk-assignee-kind[aria-pressed="true"] {
+  background: var(--accent-soft, rgba(99,102,241,0.12));
+  color: var(--accent); border-color: var(--accent);
+}
+.bk-assignee-matches {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 3px;
+}
+.bk-assignee-matches li + li { border-top: 1px solid var(--border); }
+.bk-assignee-matches li.bk-assignee-empty { padding: 6px 8px; }
+.bk-assignee-match {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 4px 8px;
+  background: none; border: none; text-align: left;
+  color: inherit; cursor: pointer; font-size: 0.85em;
+}
+.bk-assignee-match:hover:not(:disabled) { background: var(--accent-soft, rgba(99,102,241,0.12)); }
+.bk-assignee-match:disabled { cursor: progress; opacity: 0.7; }
+.bk-assignee-email { margin-left: auto; opacity: 0.6; font-size: 0.9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-assignee-busy { opacity: 0.7; }
+
 .bk-orphans { margin-top: 16px; padding: 8px; border: 1px dashed #d97757; border-radius: 4px; }
 .bk-orphan-note { font-size: 0.85em; opacity: 0.75; }
 

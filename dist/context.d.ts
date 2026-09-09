@@ -43,6 +43,10 @@ export interface BridgeConfig {
     /** Base path for kanban-store API (e.g. "/api/kanban"). No trailing slash.
      * If empty, the Kanban tab is hidden. */
     kanbanStoreBasePath: string;
+    /** Base path for principal-store API (e.g. "/api/principals"). No trailing
+     * slash. If empty, assignee chips and the assignee editor are hidden — the
+     * same convention as `kanbanStoreBasePath` hiding the Kanban tab. */
+    principalStoreBasePath: string;
     /** Base path for the noteboard API (e.g. "/api/noteboard"). No trailing
      * slash. Used by chat reference chips to resolve a todo/item id to its
      * title/status. If empty, todo chips render but say lookup isn't configured. */

@@ -5,6 +5,17 @@ export interface CreateBoardArgs {
     name: string;
     description?: string;
 }
+/** What assigning or unassigning a principal came to. A refusal carries the
+ * server's own words — kanban-store answers a 400 with `{"error":"principal is
+ * disabled"}` and a 502 with why principal-store could not be asked — because
+ * the drawer shows that text next to the picker, and a bare `false` would leave
+ * it guessing. */
+export type AssignmentOutcome = {
+    ok: true;
+} | {
+    ok: false;
+    error: string;
+};
 export interface UseKanbanOptions {
     loadBoards?: boolean;
     loadEntityTypes?: boolean;
@@ -70,6 +81,8 @@ export declare function useKanban(boardID: string | null, options?: UseKanbanOpt
     listCardLinks: (cardID: string) => Promise<CardLink[]>;
     addCardLink: (cardID: string, entity_type: string, entity_ref: string, label?: string) => Promise<boolean>;
     deleteCardLink: (linkID: string) => Promise<boolean>;
+    assign: (cardID: string, principalID: string) => Promise<AssignmentOutcome>;
+    unassign: (cardID: string, principalID: string) => Promise<AssignmentOutcome>;
     listCardsForEntity: (entityType: string, entityRef: string) => Promise<EntityCardView[]>;
     listEntityTags: (entityType: string, entityRef: string) => Promise<EntityTag[]>;
     addEntityTag: (entityType: string, entityRef: string, tag: string) => Promise<boolean>;

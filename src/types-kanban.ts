@@ -60,6 +60,17 @@ export interface CardLink {
   created_at: string
 }
 
+/** One principal assigned to one card. The principal is referenced by the id
+ * principal-store issued; resolving it to a name is the reader's job, via
+ * `usePrincipals`, exactly as entity links leave resolution to whoever knows
+ * the service. */
+export interface CardAssignment {
+  card_id: string
+  principal_id: string
+  assigned_by: string
+  created_at: string
+}
+
 export interface EntityTag {
   entity_type: string
   entity_ref: string
@@ -169,6 +180,11 @@ export interface CardView {
    * was hard-deleted out from under kanban-store — these surface in `orphans`. */
   item: NoteboardItem | null
   links?: CardLink[]
+  /** Who the card is assigned to. Carried by the board and column reads, which
+   * is why it is optional: a card assembled from the per-card routes (dash's
+   * card page) has no source for it, and `undefined` there means "not loaded",
+   * not "nobody". */
+  assignments?: CardAssignment[]
   /** The card's clock, computed from its events on every read. Absent on a
    * board served by a kanban-store that predates time accounting. */
   time?: CardTimeSummary

@@ -17,6 +17,9 @@ interface BridgeProviderProps {
   permissionStoreBasePath?: string
   /** Base path for kanban-store API. If omitted, the Kanban tab is hidden. */
   kanbanStoreBasePath?: string
+  /** Base path for principal-store API. If omitted, kanban cards show no
+   * assignee chips and the card drawer has no assignee editor. */
+  principalStoreBasePath?: string
   /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
    * an item's title/status and say so. */
   noteboardBasePath?: string
@@ -55,6 +58,7 @@ export function BridgeProvider({
   toolStoreBasePath = '',
   permissionStoreBasePath = '',
   kanbanStoreBasePath = '',
+  principalStoreBasePath = '',
   mailBasePath = '',
   mailPagePath = '',
   noteboardBasePath = '',
@@ -73,6 +77,7 @@ export function BridgeProvider({
     toolStoreBasePath,
     permissionStoreBasePath,
     kanbanStoreBasePath,
+    principalStoreBasePath,
     mailBasePath,
     mailPagePath,
     noteboardBasePath,
@@ -82,7 +87,7 @@ export function BridgeProvider({
     usageStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

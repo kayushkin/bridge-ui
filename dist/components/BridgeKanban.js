@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useBridgeConfig } from '../context';
 import { cleanEmailBodyForPreview } from '../emailText';
 import { useKanban } from '../useKanban';
+import { pickablePrincipals, principalInitials, principalIsDisabled, usePrincipals, } from '../usePrincipals';
 import { formatAgeCompact } from '../utils';
 import { entityTarget, isLocalPathRef } from '../entityLinks';
 import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime';
@@ -124,6 +125,10 @@ export function BridgeKanban() {
     // A screenful a column. The largest board here holds 6,466 cards and answered
     // 12 MB per read before this cap; the rest arrive when asked for.
     const k = useKanban(selectedBoardID, { columnPageSize: CARDS_PER_COLUMN });
+    // One directory for every tile's assignee chips. Resolved here, not per tile:
+    // the hook shares one request either way, but hundreds of subscriptions for
+    // one answer is still hundreds of subscriptions.
+    const principals = usePrincipals();
     // A card id IS a noteboard todo id here, so the signals a session raised
     // against its todo land on the card that todo already has. The map covers
     // every todo, so switching boards needs no refetch.
@@ -286,7 +291,7 @@ export function BridgeKanban() {
                                     const ok = await k.createColumn(args);
                                     if (ok)
                                         setShowNewColumn(false);
-                                }, onCancel: () => setShowNewColumn(false) })), axes.length > 0 && (_jsx(CardAxisToolbar, { axes: axes, filter: axisFilter, onFilterChange: setAxisFilter, sortKey: sortKey, onSortChange: setSortKey, hiddenCardCount: hiddenCardCount })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: visibleColumns.map(cv => (_jsx(ColumnPane, { cv: cv, onLoadMore: () => k.loadMoreCards(cv.column.id, CARDS_PER_COLUMN), signalsByTodo: signalsByTodo, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
+                                }, onCancel: () => setShowNewColumn(false) })), axes.length > 0 && (_jsx(CardAxisToolbar, { axes: axes, filter: axisFilter, onFilterChange: setAxisFilter, sortKey: sortKey, onSortChange: setSortKey, hiddenCardCount: hiddenCardCount })), _jsx("div", { className: `bk-columns bk-columns-${layout}`, children: visibleColumns.map(cv => (_jsx(ColumnPane, { cv: cv, onLoadMore: () => k.loadMoreCards(cv.column.id, CARDS_PER_COLUMN), signalsByTodo: signalsByTodo, principals: principals, boardColumns: k.view.columns.map(c => c.column), collapsed: collapsedColumns.has(cv.column.id), onToggleCollapse: () => toggleColumnCollapsed(cv.column.id), onCompose: () => setComposeColumn(cv.column.id), composeOpen: composeColumn === cv.column.id, onCancelCompose: () => setComposeColumn(null), onCreateCard: async (args) => {
                                         const ok = await k.createCard({ ...args, column_id: cv.column.id });
                                         if (ok)
                                             setComposeColumn(null);
@@ -372,7 +377,7 @@ export function BridgeKanban() {
                     const ok = await k.deleteCard(drawerCard.placement.card_id, hard);
                     if (ok)
                         setDrawerCardID(null);
-                }, onAddLink: (et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label), onDeleteLink: (linkID) => k.deleteCardLink(linkID), onOpenChat: openSessionLink, onOpenInMail: openEmailInMail, mailBasePath: mailBasePath, fetchFn: fetchFn }))] }));
+                }, onAddLink: (et, er, label) => k.addCardLink(drawerCard.placement.card_id, et, er, label), onDeleteLink: (linkID) => k.deleteCardLink(linkID), onAssign: (principalID) => k.assign(drawerCard.placement.card_id, principalID), onUnassign: (principalID) => k.unassign(drawerCard.placement.card_id, principalID), onOpenChat: openSessionLink, onOpenInMail: openEmailInMail, mailBasePath: mailBasePath, fetchFn: fetchFn }))] }));
 }
 // ============================ Sub-components ============================
 /**
@@ -434,7 +439,7 @@ function NewColumnForm({ onCreate, onCancel, }) {
             });
         }, children: [_jsx("input", { autoFocus: true, placeholder: "Column name", value: name, onChange: e => setName(e.target.value) }), _jsx("input", { placeholder: "WIP limit (optional)", type: "number", min: 1, value: wip, onChange: e => setWip(e.target.value) }), _jsxs("select", { value: autoStatus, onChange: e => setAutoStatus(e.target.value), children: [_jsx("option", { value: "", children: "\u2014 no auto-status \u2014" }), _jsx("option", { value: "open", children: "open" }), _jsx("option", { value: "done", children: "done" }), _jsx("option", { value: "archived", children: "archived" })] }), _jsxs("div", { className: "bk-form-actions", children: [_jsx("button", { type: "submit", className: "bi-save-btn", children: "Add column" }), _jsx("button", { type: "button", onClick: onCancel, children: "Cancel" })] })] }));
 }
-function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollapse, onLoadMore, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onRunAgent, onDeleteColumn, }) {
+function ColumnPane({ cv, signalsByTodo, principals, boardColumns, collapsed, onToggleCollapse, onLoadMore, onCompose, composeOpen, onCancelCompose, onCreateCard, onMoveCard, onOpenCard, onOpenChat, onStopCard, onPlayCard, onRunAgent, onDeleteColumn, }) {
     const cards = cv.cards ?? [];
     const wip = cv.column.wip_limit;
     // Against the column's real size, not the page's: a column of 200 with 25
@@ -447,7 +452,7 @@ function ColumnPane({ cv, signalsByTodo, boardColumns, collapsed, onToggleCollap
         overWIP ? 'bk-column-over-wip' : '',
         collapsed ? 'bk-column-collapsed' : '',
     ].filter(Boolean).join(' ');
-    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", title: hidden > 0 ? `${hidden} more not loaded` : undefined, children: [hidden > 0 ? `${cards.length} of ${cv.total}` : cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard, onRunAgent: onRunAgent }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" })), hidden > 0 && (_jsxs("div", { className: "bk-column-more", children: [_jsxs("button", { type: "button", className: "bi-add-btn", onClick: onLoadMore, children: ["Show ", Math.min(hidden, 25), " more"] }), _jsxs("span", { className: "bk-column-more-note", children: [hidden, " more \u2014 sorting applies to the ", cards.length, " loaded"] })] }))] }))] }));
+    return (_jsxs("section", { className: className, children: [_jsxs("header", { className: "bk-column-head", style: cv.column.color ? { borderTopColor: cv.column.color } : undefined, children: [_jsxs("div", { className: "bk-column-title", children: [_jsx("button", { className: "bk-column-collapse-btn", onClick: onToggleCollapse, title: collapsed ? 'Expand column' : 'Collapse column', "aria-label": collapsed ? 'Expand column' : 'Collapse column', children: collapsed ? '▸' : '▾' }), _jsx("strong", { children: cv.column.name }), _jsxs("span", { className: "bk-column-count", title: hidden > 0 ? `${hidden} more not loaded` : undefined, children: [hidden > 0 ? `${cards.length} of ${cv.total}` : cards.length, wip != null ? ` / ${wip}` : ''] })] }), !collapsed && (_jsxs("div", { className: "bk-column-actions", children: [_jsx("button", { className: "bi-add-btn", onClick: onCompose, children: "+" }), _jsx("button", { className: "bi-add-btn", onClick: onDeleteColumn, title: "Delete column", children: "\u00D7" })] })), cv.column.auto_status && !collapsed && (_jsxs("div", { className: "bk-column-meta", children: ["auto-status: ", cv.column.auto_status] }))] }), !collapsed && composeOpen && (_jsx(NewCardForm, { onCreate: onCreateCard, onCancel: onCancelCompose })), !collapsed && (_jsxs("div", { className: "bk-card-list", children: [cards.map(c => (_jsx(CardTile, { card: c, signals: signalsByTodo.get(c.placement.card_id) ?? [], principals: principals, currentColumn: cv.column.id, boardColumns: boardColumns, onMove: onMoveCard, onOpen: () => onOpenCard(c.placement.card_id), onOpenChat: onOpenChat, onStop: onStopCard, onPlay: onPlayCard, onRunAgent: onRunAgent }, c.placement.card_id))), cards.length === 0 && (_jsx("div", { className: "bk-card-empty", children: "no cards" })), hidden > 0 && (_jsxs("div", { className: "bk-column-more", children: [_jsxs("button", { type: "button", className: "bi-add-btn", onClick: onLoadMore, children: ["Show ", Math.min(hidden, 25), " more"] }), _jsxs("span", { className: "bk-column-more-note", children: [hidden, " more \u2014 sorting applies to the ", cards.length, " loaded"] })] }))] }))] }));
 }
 function NewCardForm({ onCreate, onCancel, }) {
     const [title, setTitle] = useState('');
@@ -550,7 +555,7 @@ function CardAgeBadge({ card, placement, }) {
     ].join('\n');
     return (_jsxs("span", { className: "bk-card-age", title: title, children: [activity ? (activity.kind === 'email' ? '✉' : '▶') : '🕒', " ", shown] }));
 }
-function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, onRunAgent, }) {
+function CardTile({ card, signals, principals, currentColumn, boardColumns, onMove, onOpen, onOpenChat, onStop, onPlay, onRunAgent, }) {
     // Guards the button between click and session id, so an impatient second
     // click cannot start a second agent on the same card.
     const [running, setRunning] = useState(false);
@@ -565,7 +570,7 @@ function CardTile({ card, signals, currentColumn, boardColumns, onMove, onOpen, 
     // button renders on every card in every column, not just in a gate column.
     const held = !!item.held_at;
     const ceiling = typeof item.auto_hold_at_usd === 'number' ? item.auto_hold_at_usd : null;
-    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), hasClockData(card.time) && _jsx(CardBudgetBadge, { time: card.time }), (card.time?.event_count ?? 0) === 0 && (_jsx(CardAgeBadge, { card: card, placement: card.placement })), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
+    return (_jsxs("div", { className: `bk-card${held ? ' bk-card-held' : ''}`, onClick: onOpen, children: [_jsx("div", { className: "bk-card-title", children: item.title }), ceiling !== null && (_jsxs("div", { className: "bk-card-ceiling", title: `Auto-holds once this card's sessions have cost $${ceiling.toFixed(2)} in total. Each session is capped at whatever is left of that.`, children: ["\u26FD auto-hold at $", ceiling.toFixed(2)] })), held && (_jsxs("div", { className: "bk-card-hold", title: item.hold_reason || 'No reason given', children: ["\u23F8 held \u2014 no agent will pick this up", item.hold_reason ? `: ${item.hold_reason}` : ''] })), _jsx(SignalBadge, { signals: signals }), tags.length > 0 && (_jsx("div", { className: "bk-card-tags", children: tags.map(t => _jsx("span", { className: "bk-tag", children: t }, t)) })), principals.enabled && (card.assignments?.length ?? 0) > 0 && (_jsx("div", { className: "bk-card-assignees", children: card.assignments.map(a => (_jsx(AssigneeChip, { assignment: a, directory: principals, compact: true }, a.principal_id))) })), _jsxs("div", { className: "bk-card-foot", children: [_jsx("span", { className: `bk-status bk-status-${status}`, children: status }), hasClockData(card.time) && _jsx(CardBudgetBadge, { time: card.time }), (card.time?.event_count ?? 0) === 0 && (_jsx(CardAgeBadge, { card: card, placement: card.placement })), _jsx("button", { type: "button", className: held ? 'bk-card-play' : 'bk-card-stop', title: held
                             ? 'Play — clear the hold so agents may work this, and resume its session if it was paused'
                             : 'Stop — park this work so no agent picks it up, and pause any session already running it', onClick: e => {
                             e.stopPropagation();
@@ -701,8 +706,9 @@ function CardSignals({ todoID }) {
                 // more. Nothing on the board could close it.
                 allowDismissWithoutAnswer: true }, request.requestId || request.signals[0].id)))] }));
 }
-export function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDetach, onArchive, onDelete, onAddLink, onDeleteLink, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }) {
+export function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPatch, onDetach, onArchive, onDelete, onAddLink, onDeleteLink, onAssign, onUnassign, onOpenChat, onOpenInMail, mailBasePath, fetchFn, headerAction, }) {
     const item = card.item;
+    const principals = usePrincipals();
     const [title, setTitle] = useState(item?.title ?? '');
     // The prompt block is split out of the body here and recombined on save, so
     // the body box shows what the card says and the prompt box shows what the
@@ -756,7 +762,7 @@ export function CardDetail({ card, boardID: _boardID, entityTypes, onClose, onPa
                                         onDelete(false);
                                     }
                                 }, children: "Delete todo" }), _jsx("button", { onClick: () => { if (confirm('Hard delete card from noteboard? Cannot be undone.'))
-                                    onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), _jsx("h4", { children: "History" }), _jsx(CardTimelinePanel, { cardID: card.placement.card_id, boardID: card.placement.board_id || undefined }), _jsx("hr", {}), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => (_jsx(EntityLinkRow, { link: l, onOpenChat: onOpenChat, onDeleteLink: onDeleteLink }, l.id))), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }));
+                                    onDelete(true); }, children: "Hard delete" })] }), _jsx("hr", {}), _jsx("h4", { children: "History" }), _jsx(CardTimelinePanel, { cardID: card.placement.card_id, boardID: card.placement.board_id || undefined }), _jsx("hr", {}), principals.enabled && (_jsxs(_Fragment, { children: [_jsx("h4", { children: "Assigned" }), _jsx(CardAssignees, { assignments: card.assignments, directory: principals, onAssign: onAssign, onUnassign: onUnassign }), _jsx("hr", {})] })), emailLinks.length > 0 && (_jsxs(_Fragment, { children: [_jsxs("h4", { children: ["Linked emails (", emailLinks.length, ")"] }), _jsxs("ul", { className: "bk-link-list", children: [shownEmailLinks.map(l => (_jsx(LinkedEmailRow, { link: l, mailBasePath: mailBasePath, fetchFn: fetchFn, onOpenInMail: onOpenInMail, onDeleteLink: onDeleteLink }, l.id))), emailLinks.length > shownEmailLinks.length && (_jsx("li", { children: _jsxs("button", { type: "button", className: "bi-add-btn", onClick: () => setShowAllEmails(true), children: ["Show ", emailLinks.length - shownEmailLinks.length, " more"] }) }))] })] })), _jsx("h4", { children: "Entity links" }), _jsxs("ul", { className: "bk-link-list", children: [otherLinks.map(l => (_jsx(EntityLinkRow, { link: l, onOpenChat: onOpenChat, onDeleteLink: onDeleteLink }, l.id))), otherLinks.length === 0 && _jsx("li", { className: "bi-empty", children: "No links yet." })] }), _jsx(AddLinkForm, { entityTypes: entityTypes, onAdd: onAddLink })] }))] }));
 }
 /**
  * One linked email: its label, a deep link into the Mail page, and an expandable
@@ -904,6 +910,95 @@ function LinkedEmailRow({ link, mailBasePath, fetchFn, onOpenInMail, onDeleteLin
     return (_jsxs("li", { className: "bk-email-row", children: [_jsxs("div", { className: "bk-email-head", children: [_jsx("button", { type: "button", className: "bk-email-toggle", onClick: toggle, disabled: !canOpen, title: canOpen ? 'Show this email' : 'Mail service is not configured for this host', children: expanded ? '▾' : '▸' }), _jsx("span", { className: "bk-link-label", children: link.label || '(no label)' }), canOpen && (_jsx("button", { type: "button", className: "bk-link-ref bk-link-ref-action", title: `Open in Mail — account ${parsed.accountID}`, onClick: () => onOpenInMail(parsed.accountID, parsed.messageID), children: "open \u2197" })), _jsx("button", { className: "bk-link-del", onClick: () => onDeleteLink(link.id), title: "Unlink this email", children: "\u00D7" })] }), expanded && (_jsxs("div", { className: "bk-email-body", children: [loading && _jsx("span", { className: "bi-empty", children: "Loading\u2026" }), error && _jsx("span", { className: "bridge-error", children: error }), message && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "bk-email-meta", children: [_jsx("strong", { children: message.meta?.subject || '(no subject)' }), _jsx("span", { children: message.meta?.from?.name || message.meta?.from?.email }), _jsx("span", { children: message.meta?.date ? new Date(message.meta.date).toLocaleString() : '' })] }), _jsx("pre", { className: "bk-email-text", children: cleanEmailBodyForPreview(message.body_text)
                                     || message.meta?.snippet
                                     || '(this message has only an HTML body — use “open ↗” to read it in Mail)' })] }))] }))] }));
+}
+/**
+ * One assignee as a chip. A human is an initials avatar, a group is the group
+ * glyph and its name; hover gives the full name and the kind.
+ *
+ * An id the directory cannot resolve — principal-store down, or an id it has
+ * never heard of — renders as the raw `principal_…` in a dimmed chip, never as
+ * nothing. The assignment is a true record that someone is on this card; only
+ * the name is unknown, and a tile with no chip would read as unassigned.
+ *
+ * A disabled principal resolves and renders struck through. The card was
+ * assigned to them and still is; that they have since left is information, not
+ * a reason to hide who had the work.
+ */
+function AssigneeChip({ assignment, directory, compact = false, onRemove, }) {
+    const id = assignment.principal_id;
+    const principal = directory.byId.get(id);
+    if (!principal) {
+        const why = directory.loading
+            ? 'principals are still loading'
+            : directory.error
+                ? `principal-store did not answer: ${directory.error}`
+                : 'principal-store does not know this id';
+        return (_jsxs("span", { className: "bk-assignee bk-assignee-unresolved", "data-principal-id": id, title: `${id} — ${why}`, children: [_jsx("span", { className: "bk-assignee-name", children: id }), onRemove && _jsx("button", { type: "button", className: "bk-assignee-remove", title: `Unassign ${id}`, onClick: onRemove, children: "\u00D7" })] }));
+    }
+    const disabled = principalIsDisabled(principal);
+    const title = `${principal.display_name} (${principal.kind}${disabled ? ', disabled' : ''})`;
+    return (_jsxs("span", { className: `bk-assignee bk-assignee-${principal.kind}${disabled ? ' bk-assignee-disabled' : ''}`, "data-principal-id": id, title: title, children: [principal.kind === 'group'
+                ? _jsx("span", { className: "bk-assignee-glyph", "aria-hidden": "true", children: "\uD83D\uDC65" })
+                : _jsx("span", { className: "bk-assignee-avatar", "aria-hidden": "true", children: principalInitials(principal.display_name) }), (principal.kind === 'group' || !compact) && (_jsx("span", { className: "bk-assignee-name", children: principal.display_name })), onRemove && (_jsx("button", { type: "button", className: "bk-assignee-remove", title: `Unassign ${principal.display_name}`, onClick: onRemove, children: "\u00D7" }))] }));
+}
+/**
+ * The drawer's "Assigned" section: the chips, and the picker that adds one.
+ *
+ * `assignments` undefined means the host assembled this card from the per-card
+ * routes, which do not carry assignments — dash's card page does exactly that.
+ * That is said plainly rather than shown as an empty list, because "nobody is
+ * assigned" and "this view was not told who is assigned" are different facts
+ * and only one of them is true here. The picker is withheld in that case too:
+ * it could write, but the section could not show the result.
+ */
+function CardAssignees({ assignments, directory, onAssign, onUnassign, }) {
+    const [error, setError] = useState(null);
+    if (assignments === undefined) {
+        return _jsx("p", { className: "bk-assignee-note", children: "Assignees are not loaded on this view \u2014 open the card on its board." });
+    }
+    const assignedIDs = assignments.map(a => a.principal_id);
+    const run = async (outcome) => {
+        const result = await outcome;
+        setError(result.ok ? null : result.error);
+        return result.ok;
+    };
+    return (_jsxs(_Fragment, { children: [_jsxs("div", { className: "bk-assignee-list", children: [assignments.map(a => (_jsx(AssigneeChip, { assignment: a, directory: directory, onRemove: onUnassign ? () => { void run(onUnassign(a.principal_id)); } : undefined }, a.principal_id))), assignments.length === 0 && _jsx("span", { className: "bk-assignee-empty", children: "Nobody yet." })] }), error && _jsx("div", { className: "bridge-error bk-assignee-error", children: error }), onAssign && (_jsx(AssigneePicker, { directory: directory, assignedIDs: assignedIDs, onPick: principalID => run(onAssign(principalID)) }))] }));
+}
+/** How many matches the picker lists before asking for a narrower search. The
+ *  directory is capped at 500 and a list that long is not a choice. */
+const ASSIGNEE_MATCHES_SHOWN = 30;
+/**
+ * The assignee picker: a text filter over display names, a kind toggle, and
+ * the matches as buttons. Already-assigned and disabled principals are not
+ * offered (`pickablePrincipals`).
+ *
+ * A directory that failed to load renders the failure, not an empty list. An
+ * empty list here would say "there is nobody to assign", which is a claim
+ * about the organisation, when the truth is that principal-store did not
+ * answer.
+ */
+function AssigneePicker({ directory, assignedIDs, onPick, }) {
+    const [query, setQuery] = useState('');
+    const [kind, setKind] = useState('all');
+    const [busyID, setBusyID] = useState(null);
+    const matches = useMemo(() => pickablePrincipals(directory.list, { query, kind, excludeIDs: assignedIDs }), [directory.list, query, kind, assignedIDs]);
+    const shown = matches.slice(0, ASSIGNEE_MATCHES_SHOWN);
+    const kinds = [
+        { value: 'all', label: 'All' },
+        { value: 'human', label: 'People' },
+        { value: 'group', label: 'Groups' },
+    ];
+    return (_jsxs("div", { className: "bk-assignee-picker", children: [_jsxs("div", { className: "bk-assignee-picker-row", children: [_jsx("input", { type: "search", className: "bk-assignee-query", placeholder: "Assign someone\u2026", value: query, onChange: e => setQuery(e.target.value), "aria-label": "Filter principals by name" }), _jsx("div", { className: "bk-assignee-kinds", role: "group", "aria-label": "Principal kind", children: kinds.map(k => (_jsx("button", { type: "button", className: "bk-assignee-kind", "aria-pressed": kind === k.value, onClick: () => setKind(k.value), children: k.label }, k.value))) })] }), directory.error && (_jsxs("div", { className: "bridge-error bk-assignee-error", children: ["Could not load principals: ", directory.error, ' ', _jsx("button", { type: "button", className: "bk-link-ref-action", onClick: () => { void directory.refresh(); }, children: "retry" })] })), directory.loading && !directory.error && (_jsx("div", { className: "bk-assignee-empty", children: "Loading principals\u2026" })), !directory.loading && (directory.list.length > 0 || !directory.error) && (_jsxs("ul", { className: "bk-assignee-matches", children: [shown.map(p => (_jsx("li", { children: _jsxs("button", { type: "button", className: "bk-assignee-match", "data-principal-id": p.id, disabled: busyID !== null, title: `Assign ${p.display_name} (${p.kind})`, onClick: async () => {
+                                setBusyID(p.id);
+                                try {
+                                    await onPick(p.id);
+                                }
+                                finally {
+                                    setBusyID(null);
+                                }
+                            }, children: [p.kind === 'group'
+                                    ? _jsx("span", { className: "bk-assignee-glyph", "aria-hidden": "true", children: "\uD83D\uDC65" })
+                                    : _jsx("span", { className: "bk-assignee-avatar", "aria-hidden": "true", children: principalInitials(p.display_name) }), _jsx("span", { className: "bk-assignee-name", children: p.display_name }), p.email && _jsx("span", { className: "bk-assignee-email", children: p.email }), busyID === p.id && _jsx("span", { className: "bk-assignee-busy", children: "\u2026" })] }) }, p.id))), shown.length === 0 && (_jsx("li", { className: "bk-assignee-empty", children: directory.list.length === 0 ? 'principal-store has no principals.' : 'No matching principals.' })), matches.length > shown.length && (_jsxs("li", { className: "bk-assignee-empty", children: [matches.length - shown.length, " more \u2014 narrow the search."] }))] }))] }));
 }
 function AddLinkForm({ entityTypes, onAdd, }) {
     const [type, setType] = useState(entityTypes[0]?.type ?? 'session');

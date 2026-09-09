@@ -14,6 +14,9 @@ interface BridgeProviderProps {
     permissionStoreBasePath?: string;
     /** Base path for kanban-store API. If omitted, the Kanban tab is hidden. */
     kanbanStoreBasePath?: string;
+    /** Base path for principal-store API. If omitted, kanban cards show no
+     * assignee chips and the card drawer has no assignee editor. */
+    principalStoreBasePath?: string;
     /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
      * an item's title/status and say so. */
     noteboardBasePath?: string;
@@ -44,6 +47,6 @@ interface BridgeProviderProps {
     routes?: Partial<BridgeRoutes>;
     children: ReactNode;
 }
-export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function BridgeProvider({ fetch: fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes, children, }: BridgeProviderProps): import("react/jsx-runtime").JSX.Element;
 export {};
 //# sourceMappingURL=provider.d.ts.map

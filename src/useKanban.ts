@@ -32,6 +32,30 @@ export function preserveUnchangedKanbanPayload<T>(previous: T[], next: T[]): T[]
 }
 
 export interface CreateBoardArgs { name: string; description?: string }
+
+/** What assigning or unassigning a principal came to. A refusal carries the
+ * server's own words — kanban-store answers a 400 with `{"error":"principal is
+ * disabled"}` and a 502 with why principal-store could not be asked — because
+ * the drawer shows that text next to the picker, and a bare `false` would leave
+ * it guessing. */
+export type AssignmentOutcome = { ok: true } | { ok: false; error: string }
+
+/** The `error` field of a JSON error body, the raw body when it is not JSON,
+ * and the status when there is no body at all — in that order, so the server's
+ * wording survives whenever it gave any. */
+async function readErrorText(res: Response, verb: string): Promise<string> {
+  const text = await res.text().catch(() => '')
+  if (text) {
+    try {
+      const parsed = JSON.parse(text) as { error?: unknown }
+      if (typeof parsed?.error === 'string' && parsed.error) return parsed.error
+    } catch {
+      // Not JSON; the raw text is the message.
+    }
+    return text
+  }
+  return `${verb} HTTP ${res.status}`
+}
 export interface UseKanbanOptions {
   loadBoards?: boolean
   loadEntityTypes?: boolean
@@ -412,6 +436,38 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     return true
   }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
 
+  /**
+   * assign / unassign — put a principal on a card, or take them off.
+   *
+   * Same shape as the link verbs: write, refetch the board so every tile and
+   * the drawer read the new assignment list from the server rather than from a
+   * local guess, report the result. Unlike them, a refusal is RETURNED with the
+   * server's message instead of being folded into the board-level `error`: the
+   * caller is a picker, and "principal is disabled" belongs beside the name the
+   * user just clicked, not in a banner over the whole board.
+   */
+  const assign = useCallback(async (cardID: string, principalID: string): Promise<AssignmentOutcome> => {
+    if (!enabled) return { ok: false, error: 'kanban-store is not configured' }
+    const res = await fetchFn(
+      `${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}/assignments/${encodeURIComponent(principalID)}`,
+      { method: 'PUT' },
+    )
+    if (!res.ok) return { ok: false, error: await readErrorText(res, 'assign') }
+    await fetchView()
+    return { ok: true }
+  }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
+
+  const unassign = useCallback(async (cardID: string, principalID: string): Promise<AssignmentOutcome> => {
+    if (!enabled) return { ok: false, error: 'kanban-store is not configured' }
+    const res = await fetchFn(
+      `${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}/assignments/${encodeURIComponent(principalID)}`,
+      { method: 'DELETE' },
+    )
+    if (!res.ok) return { ok: false, error: await readErrorText(res, 'unassign') }
+    await fetchView()
+    return { ok: true }
+  }, [fetchFn, kanbanStoreBasePath, enabled, fetchView])
+
   const deleteCardLink = useCallback(async (linkID: string): Promise<boolean> => {
     if (!enabled) return false
     const res = await fetchFn(`${kanbanStoreBasePath}/api/links/${encodeURIComponent(linkID)}`, { method: 'DELETE' })
@@ -493,6 +549,8 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     listCardLinks,
     addCardLink,
     deleteCardLink,
+    assign,
+    unassign,
     listCardsForEntity,
     listEntityTags,
     addEntityTag,
@@ -504,7 +562,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     createBoard, deleteBoard, createColumn, deleteColumn,
     createCard, moveCard, patchCard, deleteCard, detachCard, archiveCard,
     holdCard, unholdCard, stopCard, playCard,
-    listCardLinks, addCardLink, deleteCardLink,
+    listCardLinks, addCardLink, deleteCardLink, assign, unassign,
     listCardsForEntity, listEntityTags, addEntityTag, deleteEntityTag,
   ])
 }

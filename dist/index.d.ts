@@ -23,7 +23,11 @@ export type { SessionContentSearch, SessionContentSearchHits } from './useSessio
 export { useBridgeTools } from './useBridgeTools';
 export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools';
 export { useKanban } from './useKanban';
-export type { Board, Column, Placement, CardLink, EntityTag, CardView, ColumnView, BoardView, NoteboardItem, EntityTypeInfo, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline, } from './types-kanban';
+export type { AssignmentOutcome } from './useKanban';
+export { usePrincipals, pickablePrincipals, principalInitials, principalIsDisabled, indexPrincipalsByID, } from './usePrincipals';
+export type { PrincipalsDirectory, PrincipalKindFilter, PickablePrincipalsFilter } from './usePrincipals';
+export type { Principal, PrincipalKind } from './types-principals';
+export type { Board, Column, Placement, CardLink, CardAssignment, EntityTag, CardView, ColumnView, BoardView, NoteboardItem, EntityTypeInfo, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline, } from './types-kanban';
 export { CardBudgetBadge, CardTimelinePanel, describeCardTime, hasClockData } from './components/CardTime';
 export { useStickyBottomScroll } from './useStickyBottomScroll';
 export type { StickyBottomScroll, StickyBottomScrollOptions } from './useStickyBottomScroll';
