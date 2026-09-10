@@ -26,7 +26,9 @@ import { CardDetail } from '../src/components/BridgeKanban.tsx'
 import {
   BridgePrincipals, MembershipsSection, PrincipalDetailView, PrincipalListView,
 } from '../src/components/BridgePrincipals.tsx'
-import { principalsSearchURL } from '../src/principalStoreClient.ts'
+import { principalResourcesURL, principalsSearchURL } from '../src/principalStoreClient.ts'
+import { dispatchInstanceChoices, partitionResourceRows, resourceTypeWording } from '../src/principalResources.ts'
+import { ResourceGroup } from '../src/components/PrincipalResources.tsx'
 import { BridgeBundles, BundleCard } from '../src/components/BridgeBundles.tsx'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePrefsStore.ts'
@@ -1059,6 +1061,12 @@ console.log('\nCardDetail — assignees render honestly without a directory')
   const unknown = mount('/api/principals', undefined)
   check('a card whose assignments were never loaded says so, not "nobody"',
     unknown.includes('not loaded on this view') && !unknown.includes('Nobody yet') && !unknown.includes('bk-assignee-picker'))
+  // Where the agent runs is a choice on the drawer, and a card with no session
+  // has nothing chosen: the start button waits for one rather than guessing.
+  check('the drawer offers a "Runs on" select', two.includes('bk-agent-target-select') && two.includes('Choose a harness instance'), two.slice(0, 1200))
+  check('with nothing chosen, the start button is disabled and says why',
+    /<button[^>]*disabled=""[^>]*title="Choose where the agent runs first"[^>]*>▶ Start an agent on this/.test(two))
+  check('and the note says the card has had no session yet', two.includes('this card has had no session yet'))
 }
 
 // The Principals page — the editor for the directory the assignee chips
@@ -1400,6 +1408,87 @@ console.log('\nagentPrompt — the suggestion')
   check('a stored prompt does not leak into the suggestion', !clean.includes('STALE INSTRUCTION'), clean)
 }
 
+// What a principal works with, and the card's "runs on" choices built from it.
+// principal-store keeps ids; these pin how rows are split into own and
+// inherited, what the select offers, and that a row always renders something.
+console.log('\nprincipal resources — a list, not a lock')
+{
+  const PERSON = 'principal_000004'
+  const TEAM = 'principal_000003'
+  const rows = [
+    { resource_type: 'instance', resource_id: 'inst-cc-local', assigned_to: PERSON, created_at: 1 },
+    { resource_type: 'instance', resource_id: 'inst-codex-local', assigned_to: TEAM, created_at: 1 },
+    { resource_type: 'skill', resource_id: '12', assigned_to: PERSON, created_at: 1 },
+  ]
+  const { direct, inherited } = partitionResourceRows(rows, PERSON, 'instance')
+  check('a row assigned to the principal is its own', direct.map(r => r.resource_id).join() === 'inst-cc-local')
+  check('a row assigned to a group is inherited', inherited.map(r => r.resource_id).join() === 'inst-codex-local')
+  check('rows of other types are left out', [...direct, ...inherited].every(r => r.resource_type === 'instance'))
+  check('the list URL names one type when asked for one',
+    principalResourcesURL('/api/principals', PERSON, 'instance') === `/api/principals/principals/${PERSON}/resources?resource_type=instance`,
+    principalResourcesURL('/api/principals', PERSON, 'instance'))
+  check('machines are worded as environments, and an unknown type keeps its own name',
+    resourceTypeWording('machine').plural === 'Environments' && resourceTypeWording('widget').plural === 'widget')
+
+  const machines = [{ id: 'm_localhost', name: 'Linode', emoji: '☁️' }, { id: 'm_ssdawn', name: 'SSDawn' }]
+  const inst = (id, name, harness_type, machine_id, enabled = true) => ({ id, name, harness_type, machine_id, enabled })
+  const instances = [
+    inst('inst-codex-local', 'Jipitee', 'codex', 'm_localhost'),
+    inst('inst-cc-local', 'Clawd', 'claude_code', 'm_localhost'),
+    inst('inst-ss', 'SSDawn', 'claude_code', 'm_ssdawn'),
+    inst('inst-off', 'Off', 'cline', 'm_localhost', false),
+    inst('inst-orphan', 'Orphan', 'hermes', 'm_gone'),
+  ]
+  const choices = dispatchInstanceChoices(instances, machines, new Map([['inst-ss', [PERSON]]]))
+  check('an instance on an assignee\'s list is offered first, naming who',
+    choices.listed.map(c => c.instance.id).join() === 'inst-ss' && choices.listed[0].listedBy.join() === PERSON)
+  check('and not a second time under its environment',
+    !choices.byMachine.some(g => g.choices.some(c => c.instance.id === 'inst-ss')))
+  check('a disabled instance is not offered', !JSON.stringify(choices).includes('inst-off'))
+  const linode = choices.byMachine.find(g => g.machineID === 'm_localhost')
+  check('the rest are grouped by environment, named and sorted',
+    linode && linode.machineLabel === '☁️ Linode' && linode.choices.map(c => c.instance.name).join() === 'Clawd,Jipitee',
+    JSON.stringify(linode))
+  check('an environment the machine list does not know groups under its raw id',
+    choices.byMachine.some(g => g.machineID === 'm_gone' && g.machineLabel === 'm_gone'))
+
+  const catalog = (options, extra = {}) => ({
+    unavailable: null, byID: new Map(options.map(o => [o.id, o])), settled: () => true, matches: options, error: null, ...extra,
+  })
+  const clawd = { id: 'inst-cc-local', label: 'Clawd', detail: 'claude_code · ☁️ Linode', disabled: false }
+  const jipitee = { id: 'inst-codex-local', label: 'Jipitee', detail: 'codex · ☁️ Linode', disabled: false }
+  const ssdawn = { id: 'inst-ss', label: 'SSDawn', detail: 'claude_code · SSDawn', disabled: true }
+  const group = (props) => renderToStaticMarkup(h(ResourceGroup, {
+    type: 'instance', principalID: PERSON, rows, groupNames: new Map([[TEAM, 'Platform Team']]),
+    catalog: catalog([clawd, jipitee, ssdawn]), query: '', onQueryChange: () => {},
+    add: async () => ({ ok: true }), remove: async () => ({ ok: true }), onChanged: async () => {}, onOpen: () => {},
+    ...props,
+  }))
+
+  const open = group({ initialPickerOpen: true })
+  check('the heading is the type\'s wording with its count', open.includes('Harness instances') && open.includes('<span class="bp-count">2</span>'), open.slice(0, 300))
+  check('an own row can be removed', open.includes('aria-label="Remove Clawd"'))
+  check('an inherited row names its group and cannot be removed here',
+    open.includes('via Platform Team') && !open.includes('aria-label="Remove Jipitee"'))
+  check('the picker leaves out what is already on the own list',
+    !open.includes('title="Add Clawd"') && open.includes('title="Add Jipitee"') && open.includes('title="Add SSDawn"'))
+  check('a disabled option is flagged, not hidden', open.includes('bp-badge-disabled'))
+
+  const unresolved = group({ catalog: catalog([], { settled: () => true }) })
+  check('an id its owner does not know shows raw, with the reason on hover',
+    unresolved.includes('>inst-cc-local</span>') && unresolved.includes('harness-store has no harness instance with this id'), unresolved.slice(0, 600))
+  const pending = group({ catalog: catalog([], { settled: () => false, matches: null }) })
+  check('an id still being looked up says so', pending.includes('still loading'))
+  const unread = group({ rows: null })
+  check('a list not yet read says loading, never none', unread.includes('Loading…') && !unread.includes('None.'))
+  const unreachable = group({
+    type: 'tool', rows: [],
+    catalog: { unavailable: 'This host has no route to tool-store.', byID: new Map(), settled: () => true, matches: null, error: null },
+  })
+  check('an owner this host cannot reach says so and offers no picker',
+    unreachable.includes('no route to tool-store') && !unreachable.includes('bp-picker-query'))
+}
+
 async function agentDispatchChecks() {
   console.log('\nagentDispatch — handing a card to an agent')
 
@@ -1421,9 +1510,12 @@ async function agentDispatchChecks() {
       title: 'Cancel the subscription',
       prompt: 'Do the thing.',
       addLink: async (t, r, l) => { calls.push({ link: [t, r, l] }); return true },
+      instance: { id: 'inst_1777240078763912300', harness_type: 'claude_code' },
     })
 
     check('returns the new session id', sessionID === 'br_1')
+    check('asks for the chosen instance', calls[0].body.instance_id === 'inst_1777240078763912300', JSON.stringify(calls[0].body))
+    check('with that instance\'s own harness', calls[0].body.harness === 'claude_code', JSON.stringify(calls[0].body))
     check('creates, then links, then sends — in that order',
       calls.length === 3 &&
       calls[0].url === '/api/bridge/sessions' &&
@@ -1450,6 +1542,7 @@ async function agentDispatchChecks() {
         },
         title: 'T', prompt: 'p',
         addLink: async () => { order.push('link'); return true },
+        instance: { id: 'inst-cc-local', harness_type: 'claude_code' },
       })
     } catch (e) { threw = e }
     check('a failed send still throws', threw !== null)
@@ -1470,6 +1563,7 @@ async function agentDispatchChecks() {
         },
         title: 'T', prompt: 'p',
         addLink: async () => false,
+        instance: { id: 'inst-cc-local', harness_type: 'claude_code' },
       })
     } catch (e) { threw = e }
     check('a link that fails aborts the dispatch', threw !== null)
@@ -1483,9 +1577,24 @@ async function agentDispatchChecks() {
       await dispatchAgentOnCard({
         basePath: '/b', fetchFn: () => res(201, { session_id: 'x' }),
         title: 'T', prompt: '   ', addLink: async () => true,
+        instance: { id: 'inst-cc-local', harness_type: 'claude_code' },
       })
     } catch (e) { threw = e }
     check('refuses an empty prompt before spending anything', threw !== null)
+  }
+
+  // Where the agent runs is chosen, never defaulted: a dispatch with no instance
+  // is refused before any session is created.
+  {
+    let created = false
+    let threw = null
+    try {
+      await dispatchAgentOnCard({
+        basePath: '/b', fetchFn: () => { created = true; return res(201, { session_id: 'x' }) },
+        title: 'T', prompt: 'p', addLink: async () => true,
+      })
+    } catch (e) { threw = e }
+    check('refuses to start without an instance', threw !== null && !created, threw && threw.message)
   }
 
   {
@@ -1494,6 +1603,7 @@ async function agentDispatchChecks() {
       await dispatchAgentOnCard({
         basePath: '/b', fetchFn: () => res(201, {}),
         title: 'T', prompt: 'p', addLink: async () => true,
+        instance: { id: 'inst-cc-local', harness_type: 'claude_code' },
       })
     } catch (e) { threw = e }
     check('a create with no session_id is an error, not a silent success', threw !== null)

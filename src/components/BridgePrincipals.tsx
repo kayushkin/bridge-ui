@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useBridgeConfig } from '../context'
 import {
-  PRINCIPALS_SEARCH_LIMIT, addGroupMember, createPrincipal, getPrincipal, listPrincipalKinds,
-  patchPrincipal, removeGroupMember, searchPrincipals, setPrincipalDisabled,
+  PRINCIPALS_SEARCH_LIMIT, addGroupMember, addResourceToPrincipal, createPrincipal, getPrincipal,
+  listPrincipalKinds, listPrincipalResources, listResourceTypes, patchPrincipal, removeGroupMember,
+  removeResourceFromPrincipal, searchPrincipals, setPrincipalDisabled,
 } from '../principalStoreClient'
+import { PrincipalResourcesSection, type PrincipalResourcesAccess } from './PrincipalResources'
 import type { PatchPrincipalRequest, PrincipalStoreResult, PrincipalsSearch } from '../principalStoreClient'
 import { pickablePrincipals, principalInitials, principalIsDisabled } from '../usePrincipals'
 import type { PrincipalKindFilter } from '../usePrincipals'
@@ -20,7 +22,10 @@ import type { Principal, PrincipalDetail, PrincipalKind } from '../types-princip
  * disabled" toggle, plus the form that creates a principal. Right, the one
  * selected: its id in monospace so it can be pasted into a chat, its editable
  * name and email, its disabled state, and its memberships — a human's groups
- * or a group's members — each removable, with a picker to add one.
+ * or a group's members — each removable, with a picker to add one. Below them,
+ * what it works with: the agents, harness instances, environments, skills and
+ * tools on its list (a person's includes their groups'), which is a list and
+ * not a permission.
  *
  * Every mutation goes to the store and the affected views are re-read from it;
  * nothing here is updated optimistically, because the store is the source of
@@ -138,6 +143,13 @@ function PrincipalsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string }) {
     setSelectedID(created.id)
   }, [])
 
+  const resourcesAccess = useMemo<PrincipalResourcesAccess>(() => ({
+    listTypes: () => listResourceTypes(fetchFn, base),
+    list: principalID => listPrincipalResources(fetchFn, base, principalID),
+    add: (principalID, resourceType, resourceID) => addResourceToPrincipal(fetchFn, base, principalID, resourceType, resourceID),
+    remove: (principalID, resourceType, resourceID) => removeResourceFromPrincipal(fetchFn, base, principalID, resourceType, resourceID),
+  }), [fetchFn, base])
+
   const searchCandidates = useCallback(
     (candidateQuery: string, candidateKind: PrincipalKind) =>
       searchPrincipals(fetchFn, base, { query: candidateQuery, kind: candidateKind, includeDisabled: false, limit: PRINCIPALS_SEARCH_LIMIT }),
@@ -215,6 +227,7 @@ function PrincipalsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string }) {
               searchCandidates={searchCandidates}
               onChanged={reloadAfterMutation}
               onOpen={setSelectedID}
+              resources={resourcesAccess}
             />
           )}
         </section>
@@ -395,10 +408,13 @@ export interface PrincipalDetailViewProps {
   onChanged: () => Promise<void>
   /** Open another principal — a member or a group named in this one's lists. */
   onOpen: (id: string) => void
+  /** principal-store's "works with" routes. Absent, the section is not shown. */
+  resources?: PrincipalResourcesAccess
 }
 
 export function PrincipalDetailView({
   detail, loading, readError, save, setDisabled, addMembership, removeMembership, searchCandidates, onChanged, onOpen,
+  resources,
 }: PrincipalDetailViewProps) {
   const disabled = principalIsDisabled(detail)
   const [statusBusy, setStatusBusy] = useState(false)
@@ -491,6 +507,10 @@ export function PrincipalDetailView({
           onChanged={onChanged}
           onOpen={onOpen}
         />
+      )}
+
+      {resources && (
+        <PrincipalResourcesSection key={`resources:${detail.id}`} detail={detail} access={resources} onOpen={onOpen} />
       )}
     </div>
   )

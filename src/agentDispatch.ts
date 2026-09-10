@@ -20,6 +20,13 @@ export type DispatchAgentArgs = {
    * closure over it.
    */
   addLink: (entityType: string, entityRef: string, label?: string) => Promise<boolean>
+  /**
+   * The harness instance the agent runs on, which also fixes the environment
+   * (machine). The session's harness is the instance's own: llm-bridge-server
+   * refuses a session whose harness differs from its instance's, so sending
+   * them separately would only invite a 400.
+   */
+  instance: { id: string; harness_type: string }
 }
 
 /**
@@ -40,16 +47,18 @@ export type DispatchAgentArgs = {
  * quietly treat a failed dispatch as a started one.
  */
 export async function dispatchAgentOnCard(args: DispatchAgentArgs): Promise<string> {
-  const { basePath, fetchFn, title, prompt, addLink } = args
+  const { basePath, fetchFn, title, prompt, addLink, instance } = args
 
   const trimmed = prompt.trim()
   if (!trimmed) throw new Error('refusing to start an agent with an empty prompt')
+  if (!instance?.id || !instance.harness_type) throw new Error('refusing to start an agent without choosing where it runs')
 
   const created = await fetchFn(`${basePath}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      harness: 'claude_code',
+      harness: instance.harness_type,
+      instance_id: instance.id,
       display_name: `card: ${title}`.slice(0, 80),
       type: 'autonomous',
       purpose: 'dispatcher',

@@ -78,6 +78,17 @@ export {
 export type {
   PrincipalStoreResult, PrincipalsSearch, CreatePrincipalRequest, PatchPrincipalRequest,
 } from './principalStoreClient'
+// What a principal works with — a list, not a lock — and where a session runs.
+export {
+  listResourceTypes, principalResourcesURL, listPrincipalResources, addResourceToPrincipal, removeResourceFromPrincipal,
+} from './principalStoreClient'
+export type { PrincipalResource, PrincipalResourceType } from './types-principals'
+export {
+  resourceTypeWording, partitionResourceRows, filterResourceOptions, dispatchInstanceChoices, machineLabel,
+} from './principalResources'
+export type { ResourceOption, DispatchInstanceChoice, DispatchInstanceChoices } from './principalResources'
+export { fetchSessionRunsOn, useSessionRunsOn } from './sessionRunsOn'
+export type { SessionRunsOn } from './sessionRunsOn'
 export type {
   Board,
   Column,

@@ -4146,6 +4146,21 @@
   color: #d97706;
 }
 
+/* Where the agent runs: the select above the start button. */
+.bk-agent-target { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.bk-agent-target .bk-drawer-label { margin: 0; }
+.bk-agent-target-select { min-width: 16em; max-width: 100%; }
+.bk-agent-target-note { font-size: 0.8em; opacity: 0.7; }
+
+/* Where a session runs: instance, harness, environment. On the drawer's timing
+   rows and beside every session link. */
+.bk-runs-on { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.bk-runs-on-instance { font-weight: 600; }
+.bk-runs-on-harness { font-family: var(--mono, ui-monospace, monospace); font-size: 0.85em; opacity: 0.75; }
+.bk-runs-on-machine { opacity: 0.85; }
+.bk-runs-on-unknown { color: #d97706; }
+.bk-link-list .bk-runs-on { margin-left: 6px; font-size: 0.85em; }
+
 /* The drawer's timing summary. A row per question so the three ages line up and
    can be compared down the column rather than read as a sentence. */
 .bk-drawer-timing {
@@ -4547,6 +4562,26 @@
 .bp-membership-remove:hover:not(:disabled) { opacity: 1; color: #d97757; }
 .bp-membership-remove:disabled { cursor: progress; }
 .bp-membership-error { margin-top: 4px; }
+
+/* A principal's "Works with" lists, one group per resource type. An inherited
+   row names the group it comes from and cannot be removed here. */
+.bp-resources { gap: 10px; }
+.bp-resource-group { display: flex; flex-direction: column; gap: 4px; }
+.bp-resource-title { margin: 0; font-size: 0.85em; font-weight: 600; color: var(--text); }
+.bp-resource-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.bp-resource { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-radius: 6px; font-size: 0.9em; min-width: 0; }
+.bp-resource:hover { background: var(--accent-soft, rgba(99,102,241,0.06)); }
+.bp-resource-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-resource-detail { font-size: 0.8em; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-resource-disabled .bp-resource-name { text-decoration: line-through; opacity: 0.7; }
+.bp-resource-unresolved .bp-resource-name { font-family: var(--mono, ui-monospace, monospace); opacity: 0.7; }
+.bp-resource-via {
+  margin-left: auto; background: none; border: 1px solid var(--border); border-radius: 10px;
+  padding: 0 8px; font-size: 0.75em; color: var(--text-muted); cursor: pointer; white-space: nowrap;
+}
+.bp-resource-via:hover { color: var(--accent); border-color: var(--accent); }
+.bp-resource .bp-membership-remove { margin-left: auto; }
+.bp-resource-match { display: flex; align-items: center; gap: 8px; }
 
 .bp-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 480px; }
 .bp-picker-matches {

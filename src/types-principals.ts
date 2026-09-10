@@ -42,3 +42,25 @@ export interface GroupMembership {
   member_id: string
   created: boolean
 }
+
+/** A kind of thing a principal's "works with" list can carry. The vocabulary is
+ * served by `GET /resource-types`, and the names are kanban-store's entity-type
+ * names, so the two stores speak of the same things the same way. */
+export type PrincipalResourceType = 'agent' | 'instance' | 'machine' | 'skill' | 'tool'
+
+/** One row of `GET /principals/{id}/resources`, and what
+ * `PUT /principals/{id}/resources/{type}/{resource_id}` answers.
+ *
+ * ⚠️ A list, not a lock: nothing enforces it. */
+export interface PrincipalResource {
+  resource_type: PrincipalResourceType
+  /** The owning store's id, as text: agent-store's numeric `agents.id`,
+   * skill-store's and tool-store's numeric ids, harness-store's instance and
+   * machine ids. Never a name. */
+  resource_id: string
+  /** The principal whose list the row is on: the principal asked about for its
+   * own rows, a group's id for a row a person inherits from that group. */
+  assigned_to: string
+  /** Unix seconds. */
+  created_at: number
+}

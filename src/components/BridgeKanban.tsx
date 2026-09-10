@@ -14,6 +14,11 @@ import { entityTarget, isLocalPathRef } from '../entityLinks'
 import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime'
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt'
 import { dispatchAgentOnCard } from '../agentDispatch'
+import { useBridgeInstances } from '../useBridgeInstances'
+import { useBridgeMachines } from '../useBridgeMachines'
+import { fetchSessionRunsOn, useSessionRunsOn } from '../sessionRunsOn'
+import { dispatchInstanceChoices, machineLabel } from '../principalResources'
+import { useInstancesListedForPrincipals } from '../useResourceCatalogs'
 import { SIGNAL_KIND_QUESTION, groupSignalsByRequest, type Signal } from '@kayushkin/chat-core'
 import { SignalRequestCard } from './chat/SignalCard'
 import { useOpenSignalsByTodo, useOpenSignalsForTodo } from '../kanbanSignals'
@@ -158,6 +163,10 @@ export function BridgeKanban() {
   // the hook shares one request either way, but hundreds of subscriptions for
   // one answer is still hundreds of subscriptions.
   const principals = usePrincipals()
+  // The tile's 🤖 names where the agent will run in its confirmation, so the
+  // board reads the bridge's instance and machine lists (one shared poll each).
+  const { instances: bridgeInstances } = useBridgeInstances()
+  const { machines: bridgeMachines } = useBridgeMachines()
   // A card id IS a noteboard todo id here, so the signals a session raised
   // against its todo land on the card that todo already has. The map covers
   // every todo, so switching boards needs no refetch.
@@ -443,13 +452,37 @@ export function BridgeKanban() {
                     // confirmation names the card, says whether the prompt was
                     // written or merely suggested, and warns about a second
                     // agent when one is already attached.
+                    //
+                    // Where it runs is a choice, and a tile has no room to offer
+                    // one. A card whose last session ran somewhere reuses that
+                    // instance and names it in the confirmation. A card with no
+                    // session yet opens instead, so the choice is made in the
+                    // drawer's "Runs on" select rather than guessed here.
                     const existing = latestSessionLink(card)
+                    const openToChoose = (why?: string) => {
+                      if (why) window.alert(`${why} Open the card to choose where the agent runs.`)
+                      setDrawerCardID(card.placement.card_id)
+                      return false
+                    }
+                    if (!existing) return openToChoose()
+                    let lastInstanceID: string
+                    try {
+                      lastInstanceID = (await fetchSessionRunsOn(fetchFn, bridgeBasePath, existing.ref)).instanceID
+                    } catch (e) {
+                      return openToChoose(`Could not tell where this card's last session ran (${e instanceof Error ? e.message : String(e)}).`)
+                    }
+                    const instance = bridgeInstances.find(i => i.id === lastInstanceID)
+                    if (!instance) return openToChoose(`This card's last session ran on instance ${lastInstanceID}, which the bridge does not list.`)
+                    if (!instance.enabled) return openToChoose(`This card's last session ran on ${instance.name}, which is disabled.`)
+                    const machine = bridgeMachines.find(m => m.id === instance.machine_id)
                     const lines = [
                       `Start an agent on "${title}"?`,
                       '',
+                      `Runs on ${instance.name} (${instance.harness_type}) in ${machine ? machineLabel(machine) : instance.machine_id}, where this card's last session ran.`,
                       stored ? 'Using the prompt saved on this card.' : 'Using the suggested prompt (nothing saved on this card).',
+                      '',
+                      'This card already has a session. This adds a second one.',
                     ]
-                    if (existing) lines.push('', 'This card already has a session. This adds a second one.')
                     lines.push('', '--- prompt ---', prompt.length > 600 ? prompt.slice(0, 600) + '…' : prompt)
                     if (!window.confirm(lines.join('\n'))) return false
 
@@ -460,6 +493,7 @@ export function BridgeKanban() {
                         title,
                         prompt,
                         addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
+                        instance: { id: instance.id, harness_type: instance.harness_type },
                       })
                       navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
                       return true
@@ -1119,8 +1153,8 @@ function CardTile({
           title={held
             ? 'Held — clear the hold before starting an agent'
             : session
-              ? 'Start another agent on this card. It already has one.'
-              : 'Start an agent on this card, using its prompt'}
+              ? 'Start another agent on this card, on the instance its last session ran on. It already has one.'
+              : 'Open this card to choose where an agent runs, and start it there'}
           onClick={async e => {
             e.stopPropagation()
             setRunning(true)
@@ -1218,6 +1252,10 @@ function CardTiming({
             <dd title={new Date(session.dispatchedAt).toLocaleString()}>{dispatchAge ?? '—'}</dd>
           </div>
           <div>
+            <dt>Runs on</dt>
+            <dd><SessionRunsOnLabel sessionID={session.ref} /></dd>
+          </div>
+          <div>
             <dt>Last agent activity</dt>
             <dd title={lastActivity ? new Date(lastActivity).toLocaleString() : undefined}>
               {activityAge
@@ -1233,8 +1271,44 @@ function CardTiming({
   )
 }
 
+/**
+ * Where one session runs: its harness instance, the harness, and the
+ * environment (machine) the instance lives in. Every session record carries the
+ * instance the server bound it to at creation, so a card already knows this for
+ * each agent it has had; this puts it on screen.
+ *
+ * An instance or machine the bridge's lists do not name shows as its raw id,
+ * never as nothing — the session record is true even when a name is missing.
+ */
+function SessionRunsOnLabel({ sessionID }: { sessionID: string }) {
+  const { runsOn, error } = useSessionRunsOn(sessionID)
+  const { instances } = useBridgeInstances()
+  const { machines } = useBridgeMachines()
+  if (error) {
+    return (
+      <span className="bk-runs-on bk-runs-on-unknown" title={`The bridge could not say where ${sessionID} runs: ${error}`}>
+        unknown ({error})
+      </span>
+    )
+  }
+  if (!runsOn) return <span className="bk-runs-on">…</span>
+  const instance = instances.find(i => i.id === runsOn.instanceID)
+  const machine = instance ? machines.find(m => m.id === instance.machine_id) : undefined
+  return (
+    <span
+      className="bk-runs-on"
+      data-instance-id={runsOn.instanceID}
+      title={`instance ${runsOn.instanceID}${instance ? `, machine ${instance.machine_id}` : ''}`}
+    >
+      <span className="bk-runs-on-instance">{instance ? instance.name : runsOn.instanceID}</span>
+      {runsOn.harness && <span className="bk-runs-on-harness">{runsOn.harness}</span>}
+      {instance && <span className="bk-runs-on-machine">{machine ? machineLabel(machine) : instance.machine_id}</span>}
+    </span>
+  )
+}
+
 // AgentPromptPanel is the card's "hand this to an agent" control: the prompt it
-// will be given, editable in place, and the button that starts it.
+// will be given, editable in place, where it runs, and the button that starts it.
 //
 // The prompt shown when a card carries none is a suggestion, not a saved value —
 // it renders in the box but is not written to the card until the drawer is
@@ -1248,6 +1322,8 @@ function AgentPromptPanel({
   prompt,
   onPromptChange,
   existingSession,
+  assignments,
+  principals,
   onAddLink,
   onOpenChat,
   fetchFn,
@@ -1259,6 +1335,10 @@ function AgentPromptPanel({
   prompt: string
   onPromptChange: (next: string) => void
   existingSession: SessionLinkRef | null
+  /** Who is on the card. The instances on their lists are offered first.
+   *  Undefined on a view that did not load assignments. */
+  assignments: CardAssignment[] | undefined
+  principals: PrincipalsDirectory
   onAddLink: (entity_type: string, entity_ref: string, label?: string) => Promise<boolean>
   onOpenChat: OpenChatFn
   fetchFn: FetchFn
@@ -1266,6 +1346,32 @@ function AgentPromptPanel({
   const { basePath } = useBridgeConfig()
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Where the agent runs. The select starts on the instance this card's last
+  // session ran on, read off that session's own record, and on nothing for a
+  // card that has had no session: a default the card never chose would be a
+  // guess about where paid, auto-allowed work runs.
+  const { instances, error: instancesError } = useBridgeInstances()
+  const { machines } = useBridgeMachines()
+  const assigneeIDs = useMemo(() => (assignments ?? []).map(a => a.principal_id), [assignments])
+  const { listedBy, error: listsError } = useInstancesListedForPrincipals(assigneeIDs)
+  const choices = useMemo(() => dispatchInstanceChoices(instances, machines, listedBy), [instances, machines, listedBy])
+  const { runsOn: lastRunsOn } = useSessionRunsOn(existingSession?.ref ?? null)
+  const [chosenInstanceID, setChosenInstanceID] = useState<string | null>(null)
+  useEffect(() => { setChosenInstanceID(null) }, [cardID])
+  const lastInstance = lastRunsOn ? instances.find(i => i.id === lastRunsOn.instanceID) : undefined
+  const selectedInstanceID = chosenInstanceID ?? (lastInstance?.enabled ? lastInstance.id : '')
+  const selectedInstance = instances.find(i => i.id === selectedInstanceID && i.enabled)
+  const targetNote = chosenInstanceID !== null
+    ? ''
+    : lastRunsOn
+      ? lastInstance?.enabled
+        ? 'where this card’s last session ran'
+        : `this card’s last session ran on ${lastInstance ? `${lastInstance.name}, which is disabled` : `${lastRunsOn.instanceID}, which the bridge does not list`}`
+      : existingSession
+        ? ''
+        : 'this card has had no session yet'
+  const principalName = (id: string) => principals.byId.get(id)?.display_name ?? id
 
   const suggestion = useMemo(
     () => suggestAgentPrompt({ cardID, title, body, linkedEmailCount }),
@@ -1278,11 +1384,16 @@ function AgentPromptPanel({
   const usingSuggestion = !prompt.trim()
 
   const start = async () => {
+    if (!selectedInstance) {
+      setError('Choose where the agent runs first.')
+      return
+    }
     setStarting(true)
     setError(null)
     try {
       const sessionID = await dispatchAgentOnCard({
         basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
+        instance: { id: selectedInstance.id, harness_type: selectedInstance.harness_type },
       })
       onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })
     } catch (e) {
@@ -1304,11 +1415,44 @@ function AgentPromptPanel({
         value={effective}
         onChange={e => onPromptChange(e.target.value)}
       />
+      <div className="bk-agent-target">
+        <label className="bk-drawer-label" htmlFor={`bk-agent-target-${cardID}`}>Runs on</label>
+        <select
+          id={`bk-agent-target-${cardID}`}
+          className="bk-agent-target-select"
+          value={selectedInstanceID}
+          onChange={e => setChosenInstanceID(e.target.value)}
+        >
+          <option value="" disabled>Choose a harness instance…</option>
+          {choices.listed.length > 0 && (
+            <optgroup label="On an assignee’s list">
+              {choices.listed.map(choice => (
+                <option key={choice.instance.id} value={choice.instance.id}>
+                  {`${choice.instance.name} — ${choice.instance.harness_type} · ${choice.machineLabel} · ${choice.listedBy.map(principalName).join(', ')}`}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {choices.byMachine.map(group => (
+            <optgroup key={group.machineID} label={group.machineLabel}>
+              {group.choices.map(choice => (
+                <option key={choice.instance.id} value={choice.instance.id}>
+                  {`${choice.instance.name} — ${choice.instance.harness_type}`}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {targetNote && <span className="bk-agent-target-note">{targetNote}</span>}
+      </div>
+      {instancesError && <div className="bridge-error">Could not list harness instances: {instancesError}</div>}
+      {listsError && <div className="bridge-error">Could not read an assignee’s list: {listsError}</div>}
       <div className="bk-agent-prompt-actions">
         <button
           type="button"
           className="bi-add-btn"
-          disabled={starting || !effective.trim()}
+          disabled={starting || !effective.trim() || !selectedInstance}
+          title={selectedInstance ? undefined : 'Choose where the agent runs first'}
           onClick={start}
         >{starting ? 'Starting…' : '▶ Start an agent on this'}</button>
         {prompt.trim() && (
@@ -1516,6 +1660,8 @@ export function CardDetail({
             prompt={agentPrompt}
             onPromptChange={next => { setAgentPrompt(next); setDirty(true) }}
             existingSession={latestSessionLink(card)}
+            assignments={card.assignments}
+            principals={principals}
             onAddLink={onAddLink}
             onOpenChat={onOpenChat}
             fetchFn={fetchFn}
@@ -1779,12 +1925,15 @@ function EntityLinkRow({
     <li>
       <span className="bk-link-type">{link.entity_type}</span>
       {isSessionLink ? (
-        <button
-          type="button"
-          className="bk-link-ref bk-link-ref-action"
-          title={`Open chat session ${link.entity_ref}`}
-          onClick={() => onOpenChat({ ref: link.entity_ref, dispatchedAt: link.created_at })}
-        >{link.entity_ref} ↗</button>
+        <>
+          <button
+            type="button"
+            className="bk-link-ref bk-link-ref-action"
+            title={`Open chat session ${link.entity_ref}`}
+            onClick={() => onOpenChat({ ref: link.entity_ref, dispatchedAt: link.created_at })}
+          >{link.entity_ref} ↗</button>
+          <SessionRunsOnLabel sessionID={link.entity_ref} />
+        </>
       ) : isNoteLink && routes.notes ? (
         <Link
           className="bk-link-ref bk-link-ref-action"
