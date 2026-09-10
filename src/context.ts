@@ -21,6 +21,8 @@ export interface BridgeRoutes {
   kanban: string
   principals: string
   bundles: string
+  /** The host's services, their databases, and a read-only look inside. */
+  services: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
@@ -50,6 +52,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   kanban: '/kanban',
   principals: '/principals',
   bundles: '/bundles',
+  services: '/services',
   orchestrator: '/orchestrator',
   card: '/card',
   notes: '',

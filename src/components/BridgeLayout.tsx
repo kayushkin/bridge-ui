@@ -5,9 +5,11 @@ import { useMinimalChrome } from './minimal/MinimalChromeContext'
 interface BridgeLayoutProps {
   /** If true, include the Conformance tab. Default: true. */
   showConformance?: boolean
+  /** If true, include the Services tab. Default: true. */
+  showServices?: boolean
 }
 
-export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
+export function BridgeLayout({ showConformance = true, showServices = true }: BridgeLayoutProps) {
   const {
     routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath,
     bundleStoreBasePath, producerBasePath,
@@ -42,6 +44,9 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     // proxied, since without it the page can say nothing but "not configured".
     ...(producerBasePath ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
     ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
+    // Reads the bridge server itself (`GET /services` on basePath), so no
+    // store base path gates it; a host whose server lacks the route turns it off.
+    ...(showServices ? [{ to: routes.services, label: 'Services', end: false }] : []),
   ]
 
   return (

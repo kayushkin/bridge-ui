@@ -152,6 +152,12 @@ export { BridgeBundles } from './components/BridgeBundles'
 export type {
   Bundle, BundleMember, BundleMemberKind, BundleMemberRef, BundleRef, BundleResolution, RepoStoreRepo,
 } from './types-bundles'
+// The host's services (healthcheck's list), the SQLite files each holds open,
+// their schemas and newest rows — read-only, through the bridge server's
+// `/services` routes on `basePath`.
+export { BridgeServices } from './components/BridgeServices'
+export { listServices, readDatabaseSchema, readDatabaseRows, rowsQueryString } from './servicesClient'
+export type { ServicesResult, RowsQuery } from './servicesClient'
 // One card as a page of its own, assembled from its four separately addressable
 // parts. `<Bridge>` routes it at `card/:cardId`.
 export { BridgeCardPage } from './components/BridgeCardPage'

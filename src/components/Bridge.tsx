@@ -19,6 +19,7 @@ import { BridgePermissions } from './BridgePermissions'
 import { BridgeKanban } from './BridgeKanban'
 import { BridgePrincipals } from './BridgePrincipals'
 import { BridgeBundles } from './BridgeBundles'
+import { BridgeServices } from './BridgeServices'
 import { BridgeConformance } from './BridgeConformance'
 import { BridgeCardPage } from './BridgeCardPage'
 import { BridgeOrchestrator } from './BridgeOrchestrator'
@@ -29,6 +30,9 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
   notesPath?: string
   /** Draw the Conformance tab. Default true. */
   showConformance?: boolean
+  /** Draw the Services tab. Default true. Its page reads `GET /services` on
+   *  `basePath`, so a host whose bridge server predates that route hides it. */
+  showServices?: boolean
 }
 
 /** The bridge, whole: every page this library ships, its tab row, and the two
@@ -45,13 +49,13 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
  *  store and sync engine, and holding it here rather than inside the chat page
  *  means the store survives a switch to Instances or Kanban and back — and that
  *  every page can render a reference chip, which throws without it. */
-export function Bridge({ notesPath = '', showConformance, ...provider }: BridgeProps): JSX.Element {
+export function Bridge({ notesPath = '', showConformance, showServices, ...provider }: BridgeProps): JSX.Element {
   const routes = useMemo(() => ({ notes: notesPath }), [notesPath])
   return (
     <BridgeProvider {...provider} routes={routes}>
       <ChatStore>
         <Routes>
-          <Route element={<BridgeLayout showConformance={showConformance} />}>
+          <Route element={<BridgeLayout showConformance={showConformance} showServices={showServices} />}>
             <Route index element={<BridgeChat />} />
             <Route path="instances" element={<BridgeInstances />} />
             <Route path="sessions" element={<BridgeSessions />} />
@@ -67,6 +71,7 @@ export function Bridge({ notesPath = '', showConformance, ...provider }: BridgeP
             <Route path="card/:cardId" element={<BridgeCardPage />} />
             <Route path="principals" element={<BridgePrincipals />} />
             <Route path="bundles" element={<BridgeBundles />} />
+            <Route path="services" element={<BridgeServices />} />
             <Route path="orchestrator" element={<BridgeOrchestrator />} />
             <Route path="conformance" element={<BridgeConformance />} />
           </Route>
