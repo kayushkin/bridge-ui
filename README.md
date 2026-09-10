@@ -185,7 +185,7 @@ npm run build    # tsc → dist/, then scripts/copy-css.mjs puts every src/**/*.
 npm run dev      # tsc --watch
 ```
 
-`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. tsc emits no CSS, so the build copies every stylesheet under `src/` into `dist/` at the same path — the chat's `Chat.module.css` included — and the consumer's bundler resolves the relative import as it would in a source tree. The published package contains `dist/`, `styles.css`, and `theme.css` only (`files` field in `package.json`).
+`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. tsc emits no CSS, so the build copies every stylesheet under `src/` into `dist/` at the same path — the chat's `Chat.module.css` included — and the consumer's bundler resolves the relative import as it would in a source tree. The published package contains `dist/`, `styles.css`, and `theme.css` only (`files` field in `package.json`). `dist/` is not committed: `npm install` builds it (`prepare`), and a host's deploy rebuilds every linked library before bundling.
 
 ## Standalone launcher
 

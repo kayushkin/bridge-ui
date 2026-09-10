@@ -1,1 +1,0 @@
-{"version":3,"file":"MinimalTopBar.d.ts","sourceRoot":"","sources":["../../../src/components/minimal/MinimalTopBar.tsx"],"names":[],"mappings":"AAEA,MAAM,WAAW,kBAAkB;IACjC,KAAK,EAAE,MAAM,CAAA;IACb,QAAQ,CAAC,EAAE,MAAM,CAAA;CAClB;AAED,wBAAgB,aAAa,CAAC,EAAE,KAAK,EAAE,QAAQ,EAAE,EAAE,kBAAkB,2CAuCpE"}

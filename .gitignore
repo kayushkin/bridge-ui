@@ -1,6 +1,12 @@
 node_modules/
 *.tsbuildinfo
 
+# Build output. Not committed: `npm install` builds it (the prepare script) and
+# every host's deploy rebuilds every linked library before bundling (dash's
+# scripts/build-linked-libraries.mjs). 525 tracked files of compiled output
+# shadowed every grep of the source until 2026-09-10.
+/dist/
+
 # Standalone launcher build output (the published package ships dist/ +
 # the two stylesheets only — see "files" in package.json).
 /standalone/dist/

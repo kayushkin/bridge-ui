@@ -18,6 +18,7 @@
     "theme.css"
   ],
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc && node scripts/copy-css.mjs",
     "dev": "tsc --watch",
     "start": "vite --config standalone/vite.config.ts",
