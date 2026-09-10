@@ -7,10 +7,10 @@ import type {
   ServiceDatabase, ServiceInventoryEntry, ServiceInventoryResponse,
 } from '@kayushkin/llm-bridge-types'
 import { timeAgo } from '../utils'
-import styles from './BridgeServices.module.css'
+import styles from './BridgeServiceInventory.module.css'
 
 /**
- * Top-level Services page: every service healthcheck watches on this host,
+ * Top-level Service inventory page: every service healthcheck watches on this host,
  * whether it is up, the SQLite files its processes hold open, each file's
  * tables with their DDL and row counts, and the newest rows of any table with
  * a few filters.
@@ -25,7 +25,7 @@ import styles from './BridgeServices.module.css'
  * are whatever /proc said when the server was asked. A refusal from the
  * server is shown in the server's own words.
  */
-export function BridgeServices() {
+export function BridgeServiceInventory() {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
   return <ServicesPage fetchFn={fetchFn} basePath={basePath} />
 }
@@ -78,7 +78,7 @@ function ServicesPage({ fetchFn, basePath }: { fetchFn: FetchFn; basePath: strin
     <div className={styles.page}>
       <div className={styles.header}>
         <div className={styles.headerRow}>
-          <h2 className={styles.title}>Services</h2>
+          <h2 className={styles.title}>Service inventory</h2>
           {inventory && (
             <span className={styles.muted}>
               {upCount} up · {downCount} down · healthcheck read {timeAgo(inventory.checked_at)}

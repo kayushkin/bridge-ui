@@ -5,11 +5,11 @@ import { useMinimalChrome } from './minimal/MinimalChromeContext'
 interface BridgeLayoutProps {
   /** If true, include the Conformance tab. Default: true. */
   showConformance?: boolean
-  /** If true, include the Services tab. Default: true. */
-  showServices?: boolean
+  /** If true, include the Service inventory tab. Default: true. */
+  showServiceInventory?: boolean
 }
 
-export function BridgeLayout({ showConformance = true, showServices = true }: BridgeLayoutProps) {
+export function BridgeLayout({ showConformance = true, showServiceInventory = true }: BridgeLayoutProps) {
   const {
     routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath,
     bundleStoreBasePath, producerBasePath,
@@ -46,7 +46,7 @@ export function BridgeLayout({ showConformance = true, showServices = true }: Br
     ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
     // Reads the bridge server itself (`GET /services` on basePath), so no
     // store base path gates it; a host whose server lacks the route turns it off.
-    ...(showServices ? [{ to: routes.services, label: 'Services', end: false }] : []),
+    ...(showServiceInventory ? [{ to: routes.serviceInventory, label: 'Service inventory', end: false }] : []),
   ]
 
   return (

@@ -21,8 +21,10 @@ export interface BridgeRoutes {
   kanban: string
   principals: string
   bundles: string
-  /** The host's services, their databases, and a read-only look inside. */
-  services: string
+  /** The host's services, their databases, and a read-only look inside.
+   *  Not `/services`: dash owns that path for its topology page and matches
+   *  it before the bridge's splat, so the bridge page there was unreachable. */
+  serviceInventory: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
@@ -52,7 +54,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   kanban: '/kanban',
   principals: '/principals',
   bundles: '/bundles',
-  services: '/services',
+  serviceInventory: '/service-inventory',
   orchestrator: '/orchestrator',
   card: '/card',
   notes: '',
