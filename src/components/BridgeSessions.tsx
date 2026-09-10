@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useFilters, useSessionList, type SessionSummary } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeHarnesses } from '../useBridgeHarnesses'
-import { useSessionContentSearch, sessionContentSearchReachOf } from '../useSessionContentSearch'
-import { sharedSessionList, useSharedSessionList } from '../sessionListStore'
 import { formatTokens, timeAgo } from '../utils'
-import type { BridgeSession } from '../types'
-
-type FilterState = '' | 'running' | 'idle' | 'completed' | 'error' | 'aborted'
 
 const STATE_COLORS: Record<string, string> = {
   running: '#22c55e', idle: '#60a5fa', completed: '#888',
@@ -28,7 +24,7 @@ interface SessionAggregate {
 
 /** A session the token column can show a number for. `empty` sessions never
  *  had a turn, so they are excluded here and never counted as missing. */
-type TokenColumnSession = { session_id: string; state: string }
+type TokenColumnSession = { sessionId: string; state: string }
 
 /** True when some session on screen has no token total yet, which is what
  *  makes the page ask the server for the aggregate. */
@@ -36,7 +32,7 @@ export function sessionTokenTotalsAreMissing(
   sessions: TokenColumnSession[],
   known: Map<string, SessionTokens>,
 ): boolean {
-  return sessions.some(s => s.state !== 'empty' && !known.has(s.session_id))
+  return sessions.some(s => s.state !== 'empty' && !known.has(s.sessionId))
 }
 
 /**
@@ -57,52 +53,43 @@ export function applySessionAggregates(
     next.set(a.session_id, { input: a.input_tokens || 0, output: a.output_tokens || 0 })
   }
   for (const s of onScreen) {
-    if (s.state !== 'empty' && !next.has(s.session_id)) {
-      next.set(s.session_id, { input: 0, output: 0 })
+    if (s.state !== 'empty' && !next.has(s.sessionId)) {
+      next.set(s.sessionId, { input: 0, output: 0 })
     }
   }
   return next
 }
 
+/** Every session as a flat table, over the SAME store and the SAME filter the
+ *  chat sidebar reads. This page used to hold a second copy of the list — its
+ *  own `GET /sessions` seed and `/session-events` stream, its own transcript
+ *  search — that predated chat-core and was never moved when the chat was.
+ *  Filtering here now filters the sidebar and vice versa, which is the honest
+ *  consequence of one list: the two were never different sessions.
+ *
+ *  The page's dropdowns are single-select over chat-core's multi-select axes,
+ *  so each writes a one-element list and shows the first element back.
+ *  `machine` is the instance axis (it matches `SessionSummary.instanceId`). */
 export function BridgeSessions() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
-  // The list comes from the shared store: one `GET /sessions` seed and one
-  // `/session-events` connection for the whole page, patched in place on every
-  // server-side mutation. This page used to hold its own copy and re-fetch it
-  // every 15 seconds for a payload byte-for-byte identical to what the stream's
-  // `upsert` and `delete` frames already carry.
-  const sessionList = useMemo(() => sharedSessionList(apiFetch, basePath), [apiFetch, basePath])
-  const { sessions, loading } = useSharedSessionList(sessionList)
+  const { groups, loading, effectiveState, facets, moreSessions, loadingOlderSessions, loadOlderSessions } = useSessionList()
+  const { filter, set, contentSearchReach, searching, searchError } = useFilters()
   const [tokensMap, setTokensMap] = useState<Map<string, SessionTokens>>(new Map())
-  const [filterHarness, setFilterHarness] = useState('')
-  const [filterState, setFilterState] = useState<FilterState>('')
-  const [filterInstance, setFilterInstance] = useState('')
-  const [searchInput, setSearchInput] = useState('')
   const inst = useBridgeInstances()
   const { harnessMap } = useBridgeHarnesses()
   const navigate = useNavigate()
 
-  // Transcript text is the ONLY thing this page's search matches on, so null
-  // hits mean it cannot narrow the list at all. It then shows the list
-  // unnarrowed and says so — see useSessionContentSearch. Emptying the list on a
-  // failure, which is what this used to do, reported a dead log-store as "no
-  // session contains your words".
-  const searchQuery = searchInput.trim()
-  const contentSearch = useSessionContentSearch(searchQuery, apiFetch, basePath)
-  const { hits: searchHits, error: searchError } = contentSearch
-  const searchReach = sessionContentSearchReachOf(searchQuery, contentSearch)
+  // The groups are the sidebar's folders; this table has no folders, so it
+  // flattens them and orders by recency. Every filter axis, including the
+  // transcript search, is already applied by the store's selector.
+  const sessions = useMemo<SessionSummary[]>(
+    () => groups.flatMap(g => g.sessions).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [groups],
+  )
 
-  const harnessesAvail = useMemo(() => [...new Set(sessions.map(s => s.harness))].sort(), [sessions])
-  const states = useMemo(() => [...new Set(sessions.map(s => s.state))].sort(), [sessions])
-
-  const filtered = useMemo(() => {
-    let list = [...sessions]
-    if (filterHarness) list = list.filter(s => s.harness === filterHarness)
-    if (filterState) list = list.filter(s => s.state === filterState)
-    if (filterInstance) list = list.filter(s => s.instance_id === filterInstance)
-    if (searchHits) list = list.filter(s => searchHits.has(s.session_id))
-    return list.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-  }, [sessions, filterHarness, filterState, filterInstance, searchHits])
+  const harnessesAvail = useMemo(() => Object.keys(facets.harness).sort(), [facets])
+  const states = useMemo(() => Object.keys(facets.status).sort(), [facets])
+  const searchQuery = filter.search.trim()
 
   const tokensMapRef = useRef(tokensMap)
   tokensMapRef.current = tokensMap
@@ -114,25 +101,26 @@ export function BridgeSessions() {
   // session. The aggregate is the same sum over the same result events — see
   // log-store ListSessionAggregates — so the number is unchanged, and the cap
   // is gone with the cost that forced it.
-  // One aggregate request at a time. The effect re-runs whenever `filtered`
-  // changes identity, which the live session stream now makes happen on every
-  // upsert rather than once per 15-second poll — and the response is 2.8MB
-  // that takes seconds to arrive on this host, so without this guard each
-  // frame that lands mid-flight starts another full download of the same
-  // bytes. Measured on the live box: 23 requests and 65.7MB in 24 seconds.
+  //
+  // One aggregate request at a time. The effect re-runs whenever `sessions`
+  // changes identity, which the live store makes happen on every upsert — and
+  // the response is 2.8MB that takes seconds to arrive on this host, so without
+  // this guard each frame that lands mid-flight starts another full download
+  // of the same bytes. Measured on the live box: 23 requests and 65.7MB in 24
+  // seconds.
   //
   // The guard is a skip, not a queue. A request already in flight will apply
   // its answer to whatever the list holds when it lands, so a skipped run has
   // nothing to add; if rows are still missing after that, the next change to
-  // `filtered` runs it again. Refs are read inside the async body for the same
+  // `sessions` runs it again. Refs are read inside the async body for the same
   // reason — the values that matter are the ones at completion, not at call.
   const aggregatesInFlight = useRef(false)
-  const filteredRef = useRef(filtered)
-  filteredRef.current = filtered
+  const sessionsRef = useRef(sessions)
+  sessionsRef.current = sessions
 
   useEffect(() => {
     if (aggregatesInFlight.current) return
-    if (!sessionTokenTotalsAreMissing(filtered, tokensMapRef.current)) return
+    if (!sessionTokenTotalsAreMissing(sessions, tokensMapRef.current)) return
 
     let cancelled = false
     aggregatesInFlight.current = true
@@ -142,29 +130,23 @@ export function BridgeSessions() {
         if (!res.ok) return
         const aggregates: SessionAggregate[] = await res.json() ?? []
         if (cancelled) return
-        setTokensMap(applySessionAggregates(tokensMapRef.current, aggregates, filteredRef.current))
+        setTokensMap(applySessionAggregates(tokensMapRef.current, aggregates, sessionsRef.current))
       } catch { /* leave the column blank */ }
       finally { aggregatesInFlight.current = false }
     })()
     return () => { cancelled = true }
-  }, [filtered, apiFetch, basePath])
+  }, [sessions, apiFetch, basePath])
 
-  const handleClick = (session: BridgeSession) => {
-    navigate(routes.chat, { state: { selectSession: session.session_id } })
+  const handleClick = (session: SessionSummary) => {
+    navigate(routes.chat, { state: { selectSession: session.sessionId } })
   }
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const s of sessions) c[s.state] = (c[s.state] || 0) + 1
-    return c
-  }, [sessions])
 
   return (
     <div className="bs-container">
       <div className="bs-header">
         <h2>All Sessions</h2>
         <div className="bs-counts">
-          {Object.entries(counts).map(([state, n]) => (
+          {Object.entries(facets.status).map(([state, n]) => (
             <span key={state} className="bs-count-badge" style={{ color: STATE_COLORS[state] || '#888' }}>
               {n} {state}
             </span>
@@ -176,71 +158,83 @@ export function BridgeSessions() {
         <input
           type="search"
           placeholder="Search message content…"
-          value={searchInput}
-          onChange={e => setSearchInput(e.target.value)}
+          value={filter.search}
+          onChange={e => set({ search: e.target.value })}
           className="bs-search"
         />
-        <select value={filterHarness} onChange={e => setFilterHarness(e.target.value)}>
+        <select value={filter.harness[0] ?? ''} onChange={e => set({ harness: e.target.value ? [e.target.value] : [] })}>
           <option value="">All harnesses</option>
           {harnessesAvail.map(h => <option key={h} value={h}>{h}</option>)}
         </select>
-        <select value={filterState} onChange={e => setFilterState(e.target.value as FilterState)}>
+        <select value={filter.status[0] ?? ''} onChange={e => set({ status: e.target.value ? [e.target.value] : [] })}>
           <option value="">All states</option>
           {states.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filterInstance} onChange={e => setFilterInstance(e.target.value)}>
+        <select value={filter.machine[0] ?? ''} onChange={e => set({ machine: e.target.value ? [e.target.value] : [] })}>
           <option value="">All instances</option>
           {inst.instances.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
-        {searchReach === 'searching' && <span className="bs-search-status">Searching…</span>}
-        {searchReach === 'transcripts-included' && (
-          <span className="bs-search-status">{filtered.length} match{filtered.length === 1 ? '' : 'es'}</span>
+        {searching && <span className="bs-search-status">Searching…</span>}
+        {searchQuery && !searching && !searchError && (
+          <span className="bs-search-status">{sessions.length} match{sessions.length === 1 ? '' : 'es'}</span>
         )}
       </div>
 
       {/* The count above deliberately does not render on a failure: there is no
-          match count to report, because the search never ran. */}
-      {searchReach === 'transcripts-unavailable' && (
+          match count to report, because the search never ran. The list is then
+          name matches only, and says so. */}
+      {searchQuery && searchError && (
         <div className="bs-search-degraded" role="status">
           Message-content search failed ({searchError}) — the list below is NOT filtered by your search.
+        </div>
+      )}
+      {contentSearchReach && contentSearchReach.hiddenHitCount > 0 && (
+        <div className="bs-search-degraded" role="status">
+          {contentSearchReach.shownHitCount} of {contentSearchReach.truncated ? 'at least ' : ''}
+          {contentSearchReach.hitCount} transcript {contentSearchReach.hitCount === 1 ? 'match' : 'matches'} shown — the rest are filtered out or not loaded.
         </div>
       )}
 
       {loading ? (
         <div className="bs-loading">Loading...</div>
-      ) : filtered.length === 0 ? (
+      ) : sessions.length === 0 ? (
         <div className="bs-empty">No sessions match filters</div>
       ) : (
         <ul className="bs-list">
-          {filtered.map(s => {
-            const instance = s.instance_id ? inst.instanceMap.get(s.instance_id) : undefined
-            const matchCount = searchHits?.get(s.session_id)
+          {sessions.map(s => {
+            const instance = s.instanceId ? inst.instanceMap.get(s.instanceId) : undefined
             const hinfo = harnessMap.get(s.harness)
-            const tokens = tokensMap.get(s.session_id)
+            const tokens = tokensMap.get(s.sessionId)
             const totalTokens = tokens ? tokens.input + tokens.output : undefined
+            const state = effectiveState(s.sessionId)
             return (
-              <li key={s.session_id}>
+              <li key={s.sessionId}>
                 <button className="bs-row" onClick={() => handleClick(s)}>
                   <span className="bs-row-harness" title={hinfo?.label || s.harness}>
                     {hinfo?.image
                       ? <img src={`${basePath}${hinfo.image}`} alt={hinfo.label || s.harness} />
                       : <span className="bs-row-emoji">{hinfo?.emoji || '·'}</span>}
                   </span>
-                  <span className="bs-state-dot" style={{ background: STATE_COLORS[s.state] || '#888' }} />
-                  <span className="bs-row-name">{s.display_name || s.session_id.slice(0, 16)}</span>
+                  <span className="bs-state-dot" style={{ background: STATE_COLORS[state] || '#888' }} />
+                  <span className="bs-row-name">{s.displayName || s.sessionId.slice(0, 16)}</span>
                   {instance && <span className="bs-row-instance">{instance.name}</span>}
                   <span className="bs-row-tokens">
                     {totalTokens !== undefined && totalTokens > 0 ? `${formatTokens(totalTokens)} tok` : ''}
                   </span>
-                  {matchCount !== undefined && (
-                    <span className="bs-match-badge">{matchCount} match{matchCount === 1 ? '' : 'es'}</span>
-                  )}
-                  <span className="bs-row-time">{timeAgo(s.updated_at)}</span>
+                  <span className="bs-row-time">{timeAgo(s.updatedAt)}</span>
                 </button>
               </li>
             )
           })}
         </ul>
+      )}
+
+      {/* The store pages the list; the sidebar deepens it in the background and
+          this table offers the same step explicitly. */}
+      {moreSessions && (
+        <button type="button" className="bs-load-older" onClick={loadOlderSessions} disabled={loadingOlderSessions}>
+          {loadingOlderSessions ? 'Loading older sessions…' : 'Load older sessions'}
+        </button>
       )}
     </div>
   )

@@ -23,8 +23,7 @@
     "start": "vite --config standalone/vite.config.ts",
     "build:standalone": "vite build --config standalone/vite.config.ts",
     "test": "vitest run",
-    "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs",
-    "session-list-canary": "esbuild scripts/session-list-resume-canary.mjs --bundle --platform=node --format=esm --outfile=node_modules/.cache/bridge-ui-session-list-canary.mjs --log-level=error && node node_modules/.cache/bridge-ui-session-list-canary.mjs"
+    "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs"
   },
   "dependencies": {
     "@kayushkin/chat-core": "file:../chat-core",

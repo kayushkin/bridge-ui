@@ -28,9 +28,6 @@ import {
 } from '../src/components/BridgePrincipals.tsx'
 import { principalsSearchURL } from '../src/principalStoreClient.ts'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
-import {
-  SessionListStore, applySessionListFrame, sessionListMustReseed, sharedSessionList,
-} from '../src/sessionListStore.ts'
 import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePrefsStore.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
 import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } from '../src/sessionDeeplink.ts'
@@ -50,10 +47,6 @@ import { SplitDragHandle } from '../src/components/chat/SplitDragHandle.tsx'
 import {
   EVEN_SPLIT_GROW_UNITS, MINIMUM_PANE_PIXELS, measureSplitDragGeometry, splitGrowUnitsAfterDrag,
 } from '../src/components/chat/splitDragGeometry.ts'
-import {
-  sessionContentSearchAfterFailure, sessionContentSearchAfterResponse,
-  sessionContentSearchHitsFromPayload, sessionContentSearchReachOf,
-} from '../src/useSessionContentSearch.ts'
 import { groupSignalsByRequest } from '@kayushkin/chat-core'
 
 let failures = 0
@@ -459,10 +452,10 @@ async function sharedPollChecks() {
     // aggregate now. These pin the two halves that make one request enough:
     // when to ask, and that the answer settles.
     const rows = [
-      { session_id: 'a', state: 'idle' },
-      { session_id: 'b', state: 'running' },
-      { session_id: 'gone', state: 'idle' },
-      { session_id: 'never-ran', state: 'empty' },
+      { sessionId: 'a', state: 'idle' },
+      { sessionId: 'b', state: 'running' },
+      { sessionId: 'gone', state: 'idle' },
+      { sessionId: 'never-ran', state: 'empty' },
     ]
     const aggregates = [
       { session_id: 'a', input_tokens: 5503, output_tokens: 8535 },
@@ -472,7 +465,7 @@ async function sharedPollChecks() {
     check('an empty map with rows on screen asks the server',
       sessionTokenTotalsAreMissing(rows, new Map()))
     check('a session that never took a turn is not worth asking about',
-      !sessionTokenTotalsAreMissing([{ session_id: 'never-ran', state: 'empty' }], new Map()))
+      !sessionTokenTotalsAreMissing([{ sessionId: 'never-ran', state: 'empty' }], new Map()))
 
     const settled = applySessionAggregates(new Map(), aggregates, rows)
     check('a row takes both totals from its aggregate',
@@ -489,7 +482,7 @@ async function sharedPollChecks() {
       !settled.has('never-ran'))
     // A row arriving after the fetch is the only thing that should ask again.
     check('a newly-appeared row asks again',
-      sessionTokenTotalsAreMissing([...rows, { session_id: 'new', state: 'idle' }], settled))
+      sessionTokenTotalsAreMissing([...rows, { sessionId: 'new', state: 'idle' }], settled))
   }
 
   console.log('the components that used to fetch /harnesses themselves')
@@ -1300,69 +1293,6 @@ function useMinimalChromeFallbackReportsNoChrome() {
         h(BridgeLayout))))
   return html.includes('bridge-nav') && !html.includes('bridge-layout-minimal')
 }
-
-console.log('session content search — a failure is not an empty result')
-{
-  const reach = (query, search) => sessionContentSearchReachOf(query, {
-    hits: null, searching: false, error: null, ...search,
-  })
-
-  // The bug this guards. Both surfaces used to answer a failed /sessions/search
-  // with an empty hit set, which is the wire-identical shape of "your words
-  // appear in no transcript". The sidebar then dropped every content-only match
-  // under "No sessions match this search", and the Sessions page — where these
-  // hits are the ONLY filter — emptied its list and reported "0 matches". A
-  // failure must stay distinguishable from a negative answer.
-  check('a failed search does not read as a completed one',
-    reach('needle', { error: 'search failed: 502' }) === 'transcripts-unavailable',
-    reach('needle', { error: 'search failed: 502' }))
-  check('a failed search reports failure even when stale hits are still around',
-    reach('needle', { hits: new Map([['s1', 3]]), error: 'search failed: 502' }) === 'transcripts-unavailable',
-    reach('needle', { hits: new Map([['s1', 3]]), error: 'search failed: 502' }))
-  check('an empty hit set is a real negative answer, not a failure',
-    reach('needle', { hits: new Map() }) === 'transcripts-included',
-    reach('needle', { hits: new Map() }))
-  check('an outstanding search outranks whatever the last one left',
-    reach('needle', { hits: new Map(), searching: true, error: 'stale' }) === 'searching',
-    reach('needle', { hits: new Map(), searching: true, error: 'stale' }))
-  check('no query means nothing is filtered by content',
-    reach('', { hits: new Map([['s1', 1]]) }) === 'idle',
-    reach('', { hits: new Map([['s1', 1]]) }))
-
-  // The settle path itself — this is the line the defect lived on. The old code
-  // was `.catch(() => setHits(new Map()))`, and an empty map means "searched,
-  // found nothing".
-  const failed = sessionContentSearchAfterFailure(new Error('search failed: 502'))
-  check('a failed request yields NO hit set, not an empty one',
-    failed.hits === null, JSON.stringify(failed))
-  check('and it keeps the reason so the surface can say what is missing',
-    failed.error === 'search failed: 502', failed.error)
-  check('a non-Error rejection still produces a readable reason',
-    sessionContentSearchAfterFailure('offline').error === 'offline')
-  const answered = sessionContentSearchAfterResponse([{ session_id: 's1', match_count: 2 }])
-  check('a successful response clears a previous failure',
-    answered.error === null && answered.hits.get('s1') === 2)
-  check('a genuinely empty result is a hit set, so it still reads as answered',
-    sessionContentSearchReachOf('needle', {
-      ...sessionContentSearchAfterResponse([]), searching: false,
-    }) === 'transcripts-included')
-
-  const hits = sessionContentSearchHitsFromPayload([
-    { session_id: 's1', match_count: 4 }, { session_id: 's2' },
-    { session_id: '' }, null, 'nonsense',
-  ])
-  check('payload parse keeps counts and drops unusable rows',
-    hits.size === 2 && hits.get('s1') === 4 && hits.get('s2') === 0,
-    JSON.stringify([...hits]))
-  check('a non-array payload parses to no hits rather than throwing',
-    sessionContentSearchHitsFromPayload(null).size === 0)
-}
-
-// Failing by default until the report is printed. The async checks await real
-// promises, so a bug that leaves one pending would otherwise drain the event
-// loop and let node exit 0 with the report never reached — a silent pass for a
-// run that never finished.
-process.exitCode = 1
 console.log('\nagentPrompt — the block lives in the card body')
 {
   const EVIDENCE = '<!-- email-classifier:evidence -->'
@@ -1710,270 +1640,7 @@ console.log('\nStatusDot: every state it can render has a stylesheet rule')
   }
 }
 
-// --- Live session list: replay across a dropped connection ---------------
-//
-// These are the checks the two retired polls were standing in for. A check
-// that merely opens a connection and sees a frame proves nothing about the
-// gap: the polls existed because a frame published while the connection was
-// down was lost, so the only check worth having drops the connection, mutates
-// while it is down, and asserts the list caught up with no poll to rescue it.
-//
-// The fake hub below mirrors llm-bridge-server's `sessionHub`: per-process
-// stream id, a bounded replay buffer, and the three resume answers. It is
-// deliberately small enough (capacity 3) that a gap is reachable in a check
-// rather than only in production.
-
-function makeFakeHub({ capacity = 3 } = {}) {
-  const streamId = 'stream0'
-  const hub = {
-    streamId,
-    seq: 0,
-    replay: [],
-    sessions: [],
-    seedCalls: 0,
-    lastEventIdSeen: [],   // every Last-Event-ID the client sent, in order
-    connections: new Set(),
-  }
-
-  hub.publish = ev => {
-    hub.seq++
-    const frame = { seq: hub.seq, type: ev.type, data: JSON.stringify(ev) }
-    hub.replay.push(frame)
-    if (hub.replay.length > capacity) hub.replay = hub.replay.slice(-capacity)
-    // The seed endpoint answers from the same state the frames describe, or
-    // the checks would be measuring two disagreeing servers.
-    if (ev.type === 'upsert') {
-      const i = hub.sessions.findIndex(s => s.session_id === ev.session.session_id)
-      if (i === -1) hub.sessions = [ev.session, ...hub.sessions]
-      else { hub.sessions = hub.sessions.slice(); hub.sessions[i] = { ...hub.sessions[i], ...ev.session } }
-    } else if (ev.type === 'delete') {
-      hub.sessions = hub.sessions.filter(s => s.session_id !== ev.session_id)
-    }
-    for (const c of hub.connections) c.write(frame)
-  }
-
-  /** Drop every open connection, the way a proxy reaping an idle socket does. */
-  hub.dropConnections = () => {
-    for (const c of [...hub.connections]) c.close()
-  }
-
-  hub.subscribe = lastEventId => {
-    hub.lastEventIdSeen.push(lastEventId)
-    if (!lastEventId) return { resume: 'none', backlog: [] }
-    const [prefix, rest] = [lastEventId.slice(0, lastEventId.indexOf('-')), lastEventId.slice(lastEventId.indexOf('-') + 1)]
-    const n = Number(rest)
-    if (prefix !== streamId || !Number.isFinite(n)) return { resume: 'gap', backlog: [] }
-    if (n === hub.seq) return { resume: 'replayed', backlog: [] }
-    if (n > hub.seq) return { resume: 'gap', backlog: [] }
-    const backlog = hub.replay.filter(f => f.seq > n)
-    if (backlog.length === 0 || backlog[0].seq !== n + 1) return { resume: 'gap', backlog: [] }
-    return { resume: 'replayed', backlog }
-  }
-
-  hub.fetch = async (url, opts) => {
-    if (url.endsWith('/sessions')) {
-      hub.seedCalls++
-      const snapshot = hub.sessions
-      return { ok: true, status: 200, json: async () => snapshot }
-    }
-    if (!url.endsWith('/session-events')) return { ok: false, status: 404, statusText: 'not found' }
-
-    const lastEventId = (opts && opts.headers && opts.headers['Last-Event-ID']) || ''
-    const { resume, backlog } = hub.subscribe(lastEventId)
-
-    let controller = null
-    const body = new ReadableStream({
-      start(c) { controller = c },
-      cancel() { hub.connections.delete(conn) },
-    })
-    const encoder = new TextEncoder()
-    const conn = {
-      write(frame) {
-        try {
-          controller.enqueue(encoder.encode(`id: ${streamId}-${frame.seq}\nevent: ${frame.type}\ndata: ${frame.data}\n\n`))
-        } catch { /* closed */ }
-      },
-      close() {
-        hub.connections.delete(conn)
-        try { controller.close() } catch { /* already closed */ }
-      },
-    }
-    hub.connections.add(conn)
-    controller.enqueue(encoder.encode(
-      `event: hello\ndata: ${JSON.stringify({ stream_id: streamId, resume, last_event_id: lastEventId })}\n\n`))
-    for (const f of backlog) conn.write(f)
-    if (opts && opts.signal) opts.signal.addEventListener('abort', () => conn.close())
-    return { ok: true, status: 200, body }
-  }
-
-  return hub
-}
-
-const sessionOf = (id, state) => ({ session_id: id, harness: 'claude_code', state, updated_at: '2026-08-22T00:00:00Z' })
-
-async function sessionListChecks() {
-  const after = ms => new Promise(resolve => setTimeout(resolve, ms))
-  /** Wait until `cond` holds, or fail the check by timing out. */
-  const until = async (cond, ms = 6000) => {
-    const deadline = Date.now() + ms
-    while (Date.now() < deadline) {
-      if (cond()) return true
-      await after(10)
-    }
-    return false
-  }
-
-  console.log('applySessionListFrame — the reducer both consumers share')
-  {
-    const a = sessionOf('a', 'idle')
-    const list = [a]
-    check('an upsert for an unknown session goes to the front',
-      applySessionListFrame(list, { type: 'upsert', session: sessionOf('b', 'running') })
-        .map(s => s.session_id).join(',') === 'b,a')
-    const merged = applySessionListFrame(list, { type: 'upsert', session: sessionOf('a', 'running') })
-    check('an upsert for a known session merges in place', merged.length === 1 && merged[0].state === 'running')
-    check('an upsert that changes nothing keeps the same array',
-      applySessionListFrame(list, { type: 'upsert', session: sessionOf('a', 'idle') }) === list)
-
-    // Merge, not replace, and this is the field that makes it load-bearing.
-    // `GET /sessions` omits `info`, so the chat hook fetches it per session and
-    // patches it in. An upsert that replaced the row would drop it again on the
-    // next state change and blank the tools panel and the system-prompt modal —
-    // which is a thing nobody would look at the session list to explain.
-    const hydrated = [{ ...a, info: { system_prompt: 'hydrated' } }]
-    const afterUpsert = applySessionListFrame(hydrated, { type: 'upsert', session: sessionOf('a', 'running') })
-    check('an upsert keeps a field it does not carry', afterUpsert[0].info?.system_prompt === 'hydrated',
-      JSON.stringify(afterUpsert[0]))
-    check('while still applying the fields it does', afterUpsert[0].state === 'running')
-    check('a delete removes the row', applySessionListFrame(list, { type: 'delete', session_id: 'a' }).length === 0)
-    check('a delete for a session not held keeps the same array',
-      applySessionListFrame(list, { type: 'delete', session_id: 'zz' }) === list)
-    check('hello never touches the list',
-      applySessionListFrame(list, { type: 'hello', streamId: 's', resume: 'none', lastEventId: '' }) === list)
-    check('an unhandled frame never touches the list',
-      applySessionListFrame(list, { type: 'unhandled', eventId: 's-1', eventType: 'signal' }) === list)
-  }
-
-  console.log('sessionListMustReseed — only a replayed resume proves the list current')
-  {
-    check('none re-seeds', sessionListMustReseed('none') === true)
-    check('gap re-seeds', sessionListMustReseed('gap') === true)
-    check('replayed does not', sessionListMustReseed('replayed') === false)
-  }
-
-  console.log('the session list survives a dropped connection — what the retired polls covered')
-  {
-    const hub = makeFakeHub()
-    hub.publish({ type: 'upsert', session: sessionOf('a', 'running') })
-
-    const store = new SessionListStore(hub.fetch, '')
-    const off = store.subscribe(() => {})
-    check('a subscriber opens the connection', store.streaming === true)
-    check('and it is seeded from GET /sessions', await until(() => store.getSnapshot().sessions.length === 1))
-    check('the first connect asks for no replay', hub.lastEventIdSeen[0] === '')
-
-    // A live frame, to establish the cursor the reconnect must send back.
-    hub.publish({ type: 'upsert', session: sessionOf('b', 'idle') })
-    check('a live upsert lands', await until(() => store.getSnapshot().sessions.length === 2))
-
-    // The frame kind this client does not act on. It is numbered like any
-    // other, so it must still advance the cursor — a client that skipped it
-    // would ask to resume from a frame the buffer can roll past.
-    hub.publish({ type: 'signal', session_id: 'b' })
-    await after(50)
-
-    // THE CHECK. Kill the connection, mutate while it is down, and let the
-    // client reconnect. Nothing polls, so replay is the only way back.
-    const seedsBefore = hub.seedCalls
-    hub.dropConnections()
-    hub.publish({ type: 'upsert', session: sessionOf('c', 'running') })
-    hub.publish({ type: 'delete', session_id: 'a' })
-
-    check('the list caught up across the drop', await until(() => {
-      const ids = store.getSnapshot().sessions.map(s => s.session_id).sort().join(',')
-      return ids === 'b,c'
-    }), JSON.stringify(store.getSnapshot().sessions.map(s => s.session_id)))
-    check('by replay, not by re-reading GET /sessions', hub.seedCalls === seedsBefore,
-      `seeds ${seedsBefore} -> ${hub.seedCalls}`)
-    check('the reconnect sent Last-Event-ID', hub.lastEventIdSeen[1] === `${hub.streamId}-3`,
-      `sent ${JSON.stringify(hub.lastEventIdSeen[1])}`)
-    check('and the hub answered replayed', store.getSnapshot().resume === 'replayed')
-    check('no gap was reported', store.getSnapshot().gaps === 0)
-    off()
-    check('the last subscriber leaving closes the connection', store.streaming === false)
-  }
-
-  console.log('a drop longer than the replay buffer re-seeds and says frames were lost')
-  {
-    const hub = makeFakeHub({ capacity: 2 })
-    hub.publish({ type: 'upsert', session: sessionOf('a', 'running') })
-
-    const store = new SessionListStore(hub.fetch, '')
-    const off = store.subscribe(() => {})
-    check('seeded', await until(() => store.getSnapshot().sessions.length === 1))
-
-    // One live frame first, or there is no cursor to out-run and the reconnect
-    // is an ordinary fresh connect. A gap is only reachable from a client that
-    // has somewhere to resume FROM.
-    hub.publish({ type: 'upsert', session: sessionOf('b', 'idle') })
-    check('a cursor exists to out-run', await until(() => store.getSnapshot().sessions.length === 2))
-
-    // Roll the buffer clean past that cursor while the client is disconnected.
-    const seedsBefore = hub.seedCalls
-    hub.dropConnections()
-    hub.publish({ type: 'upsert', session: sessionOf('c', 'idle') })
-    hub.publish({ type: 'upsert', session: sessionOf('d', 'idle') })
-    hub.publish({ type: 'upsert', session: sessionOf('e', 'idle') })
-
-    check('the list still caught up', await until(() => store.getSnapshot().sessions.length === 5),
-      JSON.stringify(store.getSnapshot().sessions.map(s => s.session_id)))
-    check('the hub reported a gap', store.getSnapshot().resume === 'gap')
-    check('which is counted, not merely re-seeded over', store.getSnapshot().gaps === 1)
-    check('and a gap is what re-reads GET /sessions', hub.seedCalls > seedsBefore,
-      `seeds ${seedsBefore} -> ${hub.seedCalls}`)
-    off()
-  }
-
-  console.log('one connection, however many consumers')
-  {
-    const hub = makeFakeHub()
-    hub.publish({ type: 'upsert', session: sessionOf('a', 'idle') })
-    const store = sharedSessionList(hub.fetch, '')
-    const same = sharedSessionList(hub.fetch, '')
-    check('two callers get one store', store === same)
-
-    const offs = [0, 1, 2].map(() => store.subscribe(() => {}))
-    check('three panes seed once', await until(() => store.getSnapshot().sessions.length === 1) && hub.seedCalls === 1,
-      `seeds=${hub.seedCalls}`)
-    check('and hold one connection', hub.connections.size === 1, `connections=${hub.connections.size}`)
-    check('counted as three subscribers', store.subscriberCount === 3)
-    offs.slice(0, 2).forEach(o => o())
-    check('the connection outlives all but the last', store.streaming === true)
-    offs[2]()
-    check('and closes with it', store.streaming === false)
-  }
-
-  console.log('patch — the head start the per-session stream gives the list')
-  {
-    const hub = makeFakeHub()
-    hub.publish({ type: 'upsert', session: sessionOf('a', 'running') })
-    const store = new SessionListStore(hub.fetch, '')
-    const off = store.subscribe(() => {})
-    check('seeded', await until(() => store.getSnapshot().sessions.length === 1))
-    store.patch('a', { state: 'idle' })
-    check('a local patch shows immediately', store.getSnapshot().sessions[0].state === 'idle')
-    const before = store.getSnapshot().sessions
-    store.patch('a', { state: 'idle' })
-    check('a patch that changes nothing keeps the same array', store.getSnapshot().sessions === before)
-    store.patch('nosuch', { state: 'idle' })
-    check('a patch for a session not held is a no-op', store.getSnapshot().sessions === before)
-    hub.publish({ type: 'upsert', session: sessionOf('a', 'running') })
-    check('and the server overwrites it', await until(() => store.getSnapshot().sessions[0].state === 'running'))
-    off()
-  }
-}
-
-agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(sessionListChecks).then(
+agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)

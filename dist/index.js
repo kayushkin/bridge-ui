@@ -3,9 +3,6 @@ export { TRANSPORT_LABEL } from './constants';
 // Context & Provider
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context';
 export { BridgeProvider } from './provider';
-// SSE
-export { connectSSE, connectSessionListSSE } from './bridgeSSE';
-export { SESSION_LIST_BASE_RETRY_MS, SESSION_LIST_MAX_RETRY_MS, SessionListStore, applySessionListFrame, sessionListMustReseed, sharedSessionList, useSharedSessionList, } from './sessionListStore';
 // Hooks
 export { useBridgeAttach } from './useBridgeAttach';
 export { useBridgeInstances } from './useBridgeInstances';
@@ -14,7 +11,6 @@ export { useBridgeMachines } from './useBridgeMachines';
 export { useBridgeHarnesses } from './useBridgeHarnesses';
 export { useBridgePrefs } from './useBridgePrefs';
 export { useBridgeFolders } from './useBridgeFolders';
-export { useSessionContentSearch, sessionContentSearchHitsFromPayload, SESSION_CONTENT_SEARCH_DEBOUNCE_MS, } from './useSessionContentSearch';
 export { useBridgeTools } from './useBridgeTools';
 export { useKanban } from './useKanban';
 export { usePrincipals, pickablePrincipals, principalInitials, principalIsDisabled, indexPrincipalsByID, } from './usePrincipals';

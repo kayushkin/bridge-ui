@@ -43,15 +43,6 @@ export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context
 export type { BridgeConfig, BridgeRoutes } from './context'
 export { BridgeProvider } from './provider'
 
-// SSE
-export { connectSSE, connectSessionListSSE } from './bridgeSSE'
-export type { SessionListFrame, SessionListResume } from './bridgeSSE'
-export {
-  SESSION_LIST_BASE_RETRY_MS, SESSION_LIST_MAX_RETRY_MS, SessionListStore,
-  applySessionListFrame, sessionListMustReseed, sharedSessionList, useSharedSessionList,
-} from './sessionListStore'
-export type { SessionListSnapshot } from './sessionListStore'
-
 // Hooks
 export { useBridgeAttach } from './useBridgeAttach'
 export type {
@@ -68,11 +59,6 @@ export { useBridgeHarnesses } from './useBridgeHarnesses'
 export { useBridgePrefs } from './useBridgePrefs'
 export { useBridgeFolders } from './useBridgeFolders'
 export type { UseBridgeFoldersReturn } from './useBridgeFolders'
-export {
-  useSessionContentSearch, sessionContentSearchHitsFromPayload,
-  SESSION_CONTENT_SEARCH_DEBOUNCE_MS,
-} from './useSessionContentSearch'
-export type { SessionContentSearch, SessionContentSearchHits } from './useSessionContentSearch'
 export { useBridgeTools } from './useBridgeTools'
 export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools'
 export { useKanban } from './useKanban'
