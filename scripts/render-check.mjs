@@ -16,7 +16,7 @@ import { createElement as h } from 'react'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import {
-  BridgeOrchestrator, BudgetCeilingBanner, CostBreakdown, GitPanel, LinkedKanbanPanel,
+  BridgeOrchestrator, CostBreakdown, GitPanel, LinkedKanbanPanel,
   OrchestratorPanel,
 } from '../src/index.ts'
 import { ProducerTextWithReferenceLinks } from '../src/components/chat/producerReferences.tsx'
@@ -54,7 +54,7 @@ import {
   sessionContentSearchAfterFailure, sessionContentSearchAfterResponse,
   sessionContentSearchHitsFromPayload, sessionContentSearchReachOf,
 } from '../src/useSessionContentSearch.ts'
-import { groupSignalsByRequest } from '../src/components/chat/signalData.ts'
+import { groupSignalsByRequest } from '@kayushkin/chat-core'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -110,45 +110,6 @@ console.log('CostBreakdown')
 {
   const html = renderToStaticMarkup(h(CostBreakdown, { rows: [], fallbackTotalUSD: 1.25 }))
   check('no ceiling + fallback cost is unchanged', html.includes('$1.25') && !html.includes('bc-cost-ceiling'), html)
-}
-
-console.log('BudgetCeilingBanner')
-{
-  const html = renderToStaticMarkup(h(BudgetCeilingBanner, {
-    halt: null, session: null, onRaiseCeiling: async () => null,
-  }))
-  check('no halt renders nothing', html === '', JSON.stringify(html))
-}
-{
-  const html = renderToStaticMarkup(h(BudgetCeilingBanner, {
-    halt: { sessionId: 'br_1', message: 'session has spent $3.00 of its $2.50 ceiling; raise max_budget to continue', spendUSD: 3, maxBudgetUSD: 2.5 },
-    session: null,
-    onRaiseCeiling: async () => null,
-  }))
-  check('402 halt names both figures', html.includes('$3.00') && html.includes('$2.50'), html)
-  check('402 halt shows no raw JSON', !html.includes('{&quot;error') && !html.includes('budget_exceeded'), html)
-  check('402 halt offers the raise control', html.includes('Raise ceiling'), html)
-  check('402 halt seeds the input with the breached ceiling', html.includes('value="2.5"'), html)
-}
-{
-  // The mid-turn error event carries a sentence and no numbers. The banner
-  // must fall back to the server's words, not print "$0.00 of $0.00".
-  const html = renderToStaticMarkup(h(BudgetCeilingBanner, {
-    halt: { sessionId: 'br_1', message: 'session halted: spent $9.99 of its $5.00 ceiling. Raise max_budget to continue.' },
-    session: null,
-    onRaiseCeiling: async () => null,
-  }))
-  check('halt with no numbers quotes the server', html.includes('session halted: spent $9.99'), html)
-  check('halt with no numbers invents no $0.00', !html.includes('$0.00'), html)
-}
-{
-  // Numbers absent from the halt but present on the session row: use the row.
-  const html = renderToStaticMarkup(h(BudgetCeilingBanner, {
-    halt: { sessionId: 'br_1', message: 'halted' },
-    session: { session_id: 'br_1', spend_usd: 4, max_budget_usd: 3.5 },
-    onRaiseCeiling: async () => null,
-  }))
-  check('falls back to the session row for the pair', html.includes('$4.00') && html.includes('$3.50'), html)
 }
 console.log('\nkanbanPollWouldFetch')
 {
@@ -1570,8 +1531,8 @@ async function agentDispatchChecks() {
 // separator is what stops one pair colliding with a different pair whose halves
 // split at another point, and nothing here said so until this block.
 function signalGroupingChecks() {
-  const sig = (id, session_id, request_id) => ({
-    id, session_id, request_id, state: 'open', kind: 'question',
+  const sig = (id, sessionId, requestId) => ({
+    id, sessionId, requestId, state: 'open', kind: 'question',
   })
 
   {
@@ -1607,10 +1568,11 @@ function signalGroupingChecks() {
 // `-a`, and the `grep` every agent on this box runs -- reports ZERO matches in
 // it with no error and no warning. git cannot diff it either.
 //
-// `src/components/chat/signalData.ts` was in that state from 2026-07-31 until
-// 2026-08-15: it wrote its key separator as a literal NUL instead of the
-// escape. The two are the same string at runtime, so nothing is given up.
-// Found because the identical defect was found in chat-core the same night.
+// A signal-grouping module this package used to carry (deleted 2026-09-10,
+// chat-core's grouping being the one that survived) was in that state from
+// 2026-07-31 until 2026-08-15: it wrote its key separator as a literal NUL
+// instead of the escape. The two are the same string at runtime, so nothing
+// is given up. The identical defect was found in chat-core the same night.
 function nulByteChecks() {
   // ⚠️ THE ROOT IS cwd, AND IT IS VERIFIED BEFORE IT IS WALKED. This file is
   // bundled by esbuild into `node_modules/.cache/*.cjs` and run from there, so

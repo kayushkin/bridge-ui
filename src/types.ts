@@ -352,7 +352,7 @@ export interface UseBridgeSessionReturn {
   refreshSessions: () => void
 
   // budgetHalt is set while the active session is stopped at its spend
-  // ceiling, and null otherwise. Drives BudgetCeilingBanner. Null for every
+  // ceiling, and null otherwise. Drives the chat's BudgetBanner. Null for every
   // session with no ceiling, and for every server that predates the gate —
   // neither can produce the 402 nor the error code that sets it.
   budgetHalt: BudgetHalt | null

@@ -95,9 +95,7 @@ export { ToolsPanel } from './components/chat/ToolsPanel';
 export { SystemPromptModal } from './components/chat/SystemPromptModal';
 export { SessionPermissionMode } from './components/chat/SessionPermissionMode';
 export { CostBreakdown } from './components/chat/CostBreakdown';
-export { BudgetCeilingBanner } from './components/chat/BudgetCeilingBanner';
 export { UsageLine } from './components/chat/UsageLine';
-export { MessageStats } from './components/chat/MessageStats';
 export { EditableName } from './components/chat/EditableName';
 // The pinned "Orchestrator" sidebar entry. Self-fetching against the host's
 // producer proxy, so a standalone sidebar mounts it with the two paths its own
@@ -117,21 +115,10 @@ export { ProducerRow } from './components/chat/ProducerRow';
 export { GitPanel } from './components/GitPanel';
 export { LinkedKanbanPanel } from './components/chat/LinkedKanbanPanel';
 export { OrchestratorPanel } from './components/chat/OrchestratorPanel';
-// Session signals — one record for a question or a notification a session
-// raises, one card that renders it. SignalCard is the card itself;
-// SessionSignals and SignalsInbox are the self-fetching surfaces mounted in
-// chat, the sidebar inbox and the RefChip session panel.
-export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
-export { SessionSignals, SignalsInbox } from './components/chat/SessionSignals';
-export { fetchOpenChatSignals, groupSignalsByRequest, resolveSignalQuestions, declineSignalQuestions, useOpenChatSignals, 
-// The signal-level close verb: the two resolutions that deliver nothing to
-// the raising session. Everything that carries an answer closes through its
-// producer's own path instead.
-acknowledgeSignal, dismissSignal, 
-// Todo propagation: which todos have an open signal against them. The board
-// takes the whole map in one request; a view that already knows its one todo
-// narrows server-side instead.
-fetchOpenSignalsByTodo, fetchOpenSignalsForTodo, useOpenSignalsByTodo, useOpenSignalsForTodo, } from './components/chat/signalData';
+// Signals — the questions a session raises and the card that renders them — are
+// chat-core's (`SignalRequestCard`, `SessionSignals`, `useOpenSignals`, …). The
+// kanban's per-todo reads are the one piece that is this library's.
+export { useOpenSignalsByTodo, useOpenSignalsForTodo, fetchOpenSignalsByTodo, fetchOpenSignalsForTodo } from './kanbanSignals';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually.

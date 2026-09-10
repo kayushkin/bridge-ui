@@ -10,10 +10,9 @@ import { entityTarget, isLocalPathRef } from '../entityLinks';
 import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime';
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../agentPrompt';
 import { dispatchAgentOnCard } from '../agentDispatch';
-import { SignalKindQuestion } from '../types';
-import { groupSignalsByRequest, useOpenSignalsByTodo, useOpenSignalsForTodo } from './chat/signalData';
-import { SignalRequestCard } from './chat/SignalCard';
-import { fetchNoteboardItemRef } from './chat/refChips/refData';
+import { SIGNAL_KIND_QUESTION, groupSignalsByRequest, SignalRequestCard } from '@kayushkin/chat-core';
+import { useOpenSignalsByTodo, useOpenSignalsForTodo } from '../kanbanSignals';
+import { fetchNoteboardItemRef } from './noteboardItemRef';
 import { CARD_AXES, allCardsOf, axisUsage, filterIsActive, matchesFilter, parseEmailLocator, sortCards, withAxisValue, } from '../kanbanAxes';
 // latestSessionLink returns the most recently attached session, which is the one
 // that describes what is happening to the card now.
@@ -507,7 +506,7 @@ function NewCardForm({ onCreate, onCancel, }) {
 function SignalBadge({ signals }) {
     if (signals.length === 0)
         return null;
-    const questions = signals.filter(s => s.kind === SignalKindQuestion);
+    const questions = signals.filter(s => s.kind === SIGNAL_KIND_QUESTION);
     const leading = questions[0] ?? signals[0];
     const label = questions.length > 0
         ? (questions.length > 1 ? `❓ ${questions.length} open questions` : '❓ open question')
