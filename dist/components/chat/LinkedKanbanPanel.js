@@ -2,7 +2,7 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBridgeConfig } from '../../context';
-import { RefChip } from '@kayushkin/chat-core';
+import { RefChip } from './RefChip';
 import { preserveUnchangedKanbanPayload, useKanban } from '../../useKanban';
 const DO_NOT_TRACK_TAGS = ['kanban-do-not-track', 'kanban:do-not-track'];
 // How often an open pane re-reads its session's cards. kanban-store has no SSE

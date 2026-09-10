@@ -1,7 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { VList } from 'virtua';
-import { useTurns, selectTimeline, useLiveStatus, RefChip } from '@kayushkin/chat-core';
+import { useTurns, selectTimeline, useLiveStatus } from '@kayushkin/chat-core';
+import { RefChip } from './RefChip';
 import { formatHMS } from './bridgeAdapters';
 import { useSelectSession } from './useSelectSession';
 import { SubagentsChip } from './SessionStatusLine';

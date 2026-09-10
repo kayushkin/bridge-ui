@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useMemo, useState } from 'react';
-import { SIGNAL_KIND_QUESTION, SignalRequestCard, useOpenSignals, useSessionNames, } from '@kayushkin/chat-core';
+import { SIGNAL_KIND_QUESTION, useOpenSignals, useSessionNames } from '@kayushkin/chat-core';
+import { SignalRequestCard } from './SignalCard';
 import { loadInboxOpen, saveInboxOpen } from './sidebarPersistence';
 import styles from './Chat.module.css';
 /**

@@ -88,6 +88,12 @@ export type { LinkedKanbanPanelProps } from './components/chat/LinkedKanbanPanel
 export { OrchestratorPanel } from './components/chat/OrchestratorPanel';
 export type { OrchestratorPanelProps } from './components/chat/OrchestratorPanel';
 export { useOpenSignalsByTodo, useOpenSignalsForTodo, fetchOpenSignalsByTodo, fetchOpenSignalsForTodo } from './kanbanSignals';
+export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
+export type { SignalCardProps, SignalRequestCardProps } from './components/chat/SignalCard';
+export { SessionSignals, SignalRequestList } from './components/chat/SessionSignals';
+export type { SessionSignalsProps, SignalRequestListProps } from './components/chat/SessionSignals';
+export { RefChip } from './components/chat/RefChip';
+export type { RefChipProps } from './components/chat/RefChip';
 export { useMinimalChrome, useRegisterMinimalChrome, MinimalChromeProvider, MOBILE_BREAKPOINT } from './components/minimal/MinimalChromeContext';
 export type { ChromeOverride } from './components/minimal/MinimalChromeContext';
 export { MinimalTopBar } from './components/minimal/MinimalTopBar';

@@ -1,13 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import {
-  groupSignalsByRequest,
-  useOpenSignals,
-  usePendingPermissions,
-  HOOK_SOURCE_USER_INPUT,
-  SignalRequestList,
-  type HookResolveInput,
-  type PendingHook,
-} from '@kayushkin/chat-core'
+import { groupSignalsByRequest, useOpenSignals, usePendingPermissions, HOOK_SOURCE_USER_INPUT, type HookResolveInput, type PendingHook } from '@kayushkin/chat-core'
+import { SignalRequestList } from './SessionSignals'
 
 type ResolveFn = (input: HookResolveInput) => Promise<void>
 

@@ -5805,3 +5805,496 @@
   padding: 1px 4px;
   border-radius: 3px;
 }
+
+/* ===== Reference chips and signal cards =====
+ * `RefChip`, `SignalCard`, `SignalRequestCard`, `SessionSignals` emit stable,
+ * unhashed `ref-chip-*` / `signal-*` class names and are mounted by the chat,
+ * the kanban drawer and the orchestrator alike. Their rules therefore live
+ * here, in the one stylesheet every page loads — they were `:global()` rules
+ * inside the chat's CSS module until 2026-09-10, which worked only because the
+ * chat's module happened to be in every bundle. */
+
+/* On a timeline task row the chip sits after `.bc-tl-detail`, which takes
+   `flex: 1` and would otherwise squeeze it to nothing on a long description. */
+.bc-tl-item .refChip,
+.bc-tl-item .ref-chip-wrap {
+  flex: none;
+}
+
+/* The wrapper is the positioning context for the dropdown, and `inline-flex`
+   keeps the chip and its caret on the same text baseline as the prose. */
+.ref-chip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+}
+
+.ref-chip-label {
+  white-space: nowrap;
+}
+
+.ref-chip-glyph {
+  font-family: inherit;
+}
+
+/* Every chip body opens its panel and carries an inline caret glyph; session
+   chips additionally carry a ↗ button beside the body that opens the session
+   itself (chat-core renders it only when a navigation handler is wired). */
+.ref-chip-open-session {
+  margin-left: 2px;
+  padding: 0 3px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75em;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.ref-chip-open-session:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.ref-chip-caret-inline {
+  margin-left: 1px;
+  font-size: 0.7em;
+  opacity: 0.7;
+}
+
+/* The dropdown, PORTALED onto document.body and positioned from the chip's
+   measured rect (chat-core useAnchoredPanel supplies top/left inline).
+
+   `fixed`, not `absolute`, and a body-level portal, because virtua's list-item
+   wrapper sets `contain: layout style` — a stacking context. A panel nested
+   inside a turn has its z-index scoped to that item no matter how large it is,
+   and the next turn's prose paints over it; the buttons were visible and
+   unclickable. z-index 300 clears dash's own overlays (max 200). */
+.ref-chip-panel {
+  position: fixed;
+  z-index: 300;
+  min-width: 280px;
+  max-width: 460px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+  font-family: system-ui, sans-serif;
+  font-size: 0.78rem;
+  white-space: normal;
+  text-align: left;
+  cursor: default;
+}
+
+.ref-chip-panel-title {
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.ref-chip-panel-row {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+}
+
+.ref-chip-panel-label {
+  flex: 0 0 84px;
+  color: var(--text-dim);
+}
+
+.ref-chip-panel-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.ref-chip-panel-loading,
+.ref-chip-panel-error {
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ref-chip-panel-error {
+  color: var(--error);
+  font-style: normal;
+}
+
+.ref-chip-badge {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ref-chip-badge-question {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.ref-chip-badge-approval {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.ref-chip-badge-held {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.ref-chip-badge-deleted {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+/* Full-load controls: "Load last N turns" / "Show full body" / "Open session". */
+.ref-chip-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ref-chip-panel-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.ref-chip-panel-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Expanded transcript / note body. Both are pre-wrapped plain text: chat-core
+   renders no markdown (see TranscriptBody), so the whitespace IS the structure
+   and collapsing it would run the whole thing into one paragraph. */
+.ref-chip-transcript,
+.ref-chip-item-body {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ref-chip-transcript-note {
+  margin-bottom: 6px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.ref-chip-transcript-turn {
+  margin-bottom: 8px;
+  padding-left: 7px;
+  border-left: 2px solid var(--border);
+}
+
+.ref-chip-transcript-turn[data-role='user'] {
+  border-left-color: var(--accent);
+}
+
+.ref-chip-transcript-role {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.signal-request {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.signal-card {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--bc-radius-xs, 8px);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.signal-card-compact {
+  padding: 6px 8px;
+}
+
+.signal-card-header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.signal-kind {
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.signal-kind-question {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.signal-kind-notification {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.signal-severity {
+  color: var(--warning);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.signal-title {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.signal-body {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.signal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* The row is the frame; the controls inside it are the buttons. It stopped being
+   the <label> it used to be when a pick-one option became a button that submits —
+   a button cannot be nested in another control, and the pencil beside it cannot
+   sit inside the pick-many <label> either, or clicking it would tick the box. */
+.signal-option {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--bc-radius-xs, 8px);
+  color: var(--text);
+}
+
+.signal-option:hover {
+  border-color: var(--accent);
+}
+
+.signal-option-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.signal-option-editing {
+  border-color: var(--accent);
+}
+
+/* Shared by the pick-many <label> and the pick-one <button>, so the two forms are
+   the same shape and only their control differs. */
+.signal-option-choice {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--bc-radius-xs, 8px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.signal-option-edit {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.signal-option-edit:hover {
+  color: var(--accent);
+}
+
+/* The answer field: an option rewritten before it is sent. It fills the row it
+   replaced, so editing does not make the list jump. */
+.signal-option-edit-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.signal-option-edit-input:focus {
+  outline: none;
+}
+
+.signal-option-save {
+  flex: 0 0 auto;
+  margin: 3px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.signal-option-choice:disabled,
+.signal-option-edit:disabled,
+.signal-option-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The control that puts the question back on a card opened showing only its
+   answers. Caret plus the kind badge, and no title line — the transcript above
+   is where the question already is. */
+.signal-disclosure {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.signal-disclosure-caret {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+
+.signal-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.signal-option-label {
+  overflow-wrap: anywhere;
+}
+
+.signal-option-desc {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.signal-freeform {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--bc-radius-xs, 8px);
+  background: var(--bg-input, transparent);
+  color: var(--text);
+  font-family: inherit;
+  font-size: inherit;
+  resize: vertical;
+}
+
+.signal-freeform:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.signal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.signal-submit,
+.signal-decline,
+.signal-dismiss,
+.signal-ack {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.signal-submit {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.signal-decline,
+.signal-dismiss {
+  color: var(--text-muted);
+}
+
+.signal-submit:hover,
+.signal-ack:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.signal-decline:hover,
+.signal-dismiss:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* A disabled Submit is the card saying a question in this request is still
+   unanswered — it has to LOOK unavailable, or it reads as a broken button. */
+.signal-submit:disabled,
+.signal-decline:disabled,
+.signal-dismiss:disabled,
+.signal-ack:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.signal-error {
+  margin: 6px 0 0;
+  color: var(--error);
+  line-height: 1.4;
+}

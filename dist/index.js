@@ -115,10 +115,15 @@ export { ProducerRow } from './components/chat/ProducerRow';
 export { GitPanel } from './components/GitPanel';
 export { LinkedKanbanPanel } from './components/chat/LinkedKanbanPanel';
 export { OrchestratorPanel } from './components/chat/OrchestratorPanel';
-// Signals — the questions a session raises and the card that renders them — are
-// chat-core's (`SignalRequestCard`, `SessionSignals`, `useOpenSignals`, …). The
-// kanban's per-todo reads are the one piece that is this library's.
+// Signals — the questions a session raises. The reads are chat-core's
+// (`useOpenSignals`) except the kanban's per-todo pair, which is this library's.
 export { useOpenSignalsByTodo, useOpenSignalsForTodo, fetchOpenSignalsByTodo, fetchOpenSignalsForTodo } from './kanbanSignals';
+// The cards and chips themselves. On chat-core's store (they read its context),
+// styled by this package's `styles.css`; mounted by the chat, the kanban and
+// the orchestrator alike.
+export { SignalCard, SignalRequestCard } from './components/chat/SignalCard';
+export { SessionSignals, SignalRequestList } from './components/chat/SessionSignals';
+export { RefChip } from './components/chat/RefChip';
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
 // so consumers don't need to mount it manually.

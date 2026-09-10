@@ -3,7 +3,9 @@ import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useNavigate } from 'react-router-dom';
-import { RefChip, SignalRequestList, SIGNAL_KIND_QUESTION, parseRefChips, remarkRefChips, useOpenSignals, } from '@kayushkin/chat-core';
+import { SIGNAL_KIND_QUESTION, parseRefChips, remarkRefChips, useOpenSignals } from '@kayushkin/chat-core';
+import { RefChip } from './RefChip';
+import { SignalRequestList } from './SessionSignals';
 import { useBridgeConfig } from '../../context';
 // How producer (orchestrator) text gets its `[session:…]` / `[todo:…]` /
 // `[note:…]` / `[task:…]` references rendered.

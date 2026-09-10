@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { StatusDot } from './StatusDot'
-import { SignalRequestList, useOpenSignals } from '@kayushkin/chat-core'
+import { useOpenSignals } from '@kayushkin/chat-core'
+import { SignalRequestList } from './SessionSignals'
 import { useAnchoredDropdown } from './useAnchoredDropdown'
 import { humanAskedFor } from './sessionAwaitingHuman'
 import styles from './Chat.module.css'

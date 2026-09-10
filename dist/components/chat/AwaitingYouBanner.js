@@ -1,6 +1,7 @@
 import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
 import { useCallback, useMemo, useState } from 'react';
-import { groupSignalsByRequest, useOpenSignals, usePendingPermissions, HOOK_SOURCE_USER_INPUT, SignalRequestList, } from '@kayushkin/chat-core';
+import { groupSignalsByRequest, useOpenSignals, usePendingPermissions, HOOK_SOURCE_USER_INPUT } from '@kayushkin/chat-core';
+import { SignalRequestList } from './SessionSignals';
 /** Everything the open session is waiting on a human for, in one place.
  *
  *  Two things reach it, and they are genuinely different:

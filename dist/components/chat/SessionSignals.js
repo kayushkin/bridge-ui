@@ -1,33 +1,44 @@
 import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
 import { SignalRequestCard } from './SignalCard';
-import { groupSignalsByRequest, useOpenChatSignals } from './signalData';
-/** SessionSignals is the open chat signals raised by one session, answerable
- * in place. Renders nothing when the session has none, when the surrounding
- * surface already renders all of them, or when this bridge-server has no
- * signals route. */
-export function SessionSignals({ sessionId, excludeRequestIds, compact, title }) {
-    // The pending-hook set is the one thing a caller already knows that changes
-    // when a signal is minted or closed, so it doubles as the refresh trigger —
-    // there is no signal event on the SSE stream yet.
-    const excluded = excludeRequestIds ?? [];
-    const { signals, error, reload } = useOpenChatSignals(sessionId, excluded.join(','));
-    const shown = signals.filter(s => !s.request_id || !excluded.includes(s.request_id));
-    if (error)
-        return _jsxs("p", { className: "bc-signal-error", children: ["Couldn\u2019t load signals: ", error] });
-    if (shown.length === 0)
-        return null;
-    return (_jsxs("div", { className: "bc-signals", role: "region", "aria-label": "Session signals", children: [title && _jsx("div", { className: "bc-signals-title", children: title }), groupSignalsByRequest(shown).map(request => (_jsx(SignalRequestCard, { request: request, compact: compact, onResolved: reload }, request.requestId || request.signals[0].id)))] }));
+import { useOpenSignals } from '@kayushkin/chat-core';
+import { groupSignalsByRequest } from '@kayushkin/chat-core';
+/**
+ * SessionSignals is the open chat signals raised by ONE session, answerable in
+ * place. Renders nothing when the session has none, or when this bridge-server
+ * has no signals route.
+ *
+ * It used to take `excludeRequestIds`, so a host could drop the questions its
+ * own permission banner was already drawing from the live tool input. That prop
+ * was the last place a client still had to know which producer raised a
+ * question. It is gone because the duplication it worked around is: the record
+ * now carries `allowMultipleOptions`, which was the one thing the banner could
+ * render and the card could not, so a host has no reason left to draw a second
+ * form for a question that is already on this one.
+ *
+ * Ported from bridge-ui's `SessionSignals.tsx`.
+ */
+export function SessionSignals({ sessionId, compact, title, }) {
+    const { signals, error, reload } = useOpenSignals(sessionId);
+    if (error !== null)
+        return _jsxs("p", { className: "signal-error", children: ["Couldn\u2019t load signals: ", error] });
+    return (_jsx(SignalRequestList, { requests: groupSignalsByRequest(signals), compact: compact, title: title, onResolved: reload }));
 }
-/** SignalsInbox is every open chat signal across every session — the "Needs
- * you" list. Renders nothing when there are none or when this bridge-server
- * has no signals route. */
-export function SignalsInbox({ onSelectSession, getSessionName, refreshKey }) {
-    const { signals, error, reload } = useOpenChatSignals(undefined, refreshKey);
-    if (error)
-        return _jsxs("p", { className: "bc-signal-error", children: ["Couldn\u2019t load signals: ", error] });
-    if (signals.length === 0)
+/**
+ * The rendered list of request groups, with no fetching of its own.
+ *
+ * Split out from {@link SessionSignals} so a host with its own source of signals
+ * — a cross-session "Needs you" inbox, a kanban card drawer — renders the same
+ * cards without going through the per-session read. It also makes the empty case
+ * assertable: a bridge-server with no signals route yields zero requests, and
+ * this renders nothing at all rather than an empty box or an error.
+ */
+export function SignalRequestList({ requests, compact, title, onResolved, allowDismissWithoutAnswer, startCollapsedToAnswers, }) {
+    if (requests.length === 0)
         return null;
-    const requests = groupSignalsByRequest(signals);
-    return (_jsxs("div", { className: "bc-signals bc-signals-inbox", role: "region", "aria-label": "Signals needing you", children: [_jsxs("div", { className: "bc-signals-title", children: ["Needs you", _jsx("span", { className: "bc-signals-count", children: requests.length })] }), requests.map(request => (_jsx(SignalRequestCard, { request: request, onResolved: reload, header: _jsx("button", { type: "button", className: "bc-signals-session", disabled: !onSelectSession, onClick: () => onSelectSession?.(request.sessionId), title: "Open this session", children: getSessionName?.(request.sessionId) || request.sessionId }) }, request.requestId || request.signals[0].id)))] }));
+    return (_jsxs("div", { className: "signals", role: "region", "aria-label": "Session signals", children: [title !== undefined && title !== '' && _jsx("div", { className: "signals-title", children: title }), requests.map((request) => (_jsx(SignalRequestCard
+            // A derived group has no request id, so it is keyed by its one
+            // signal's id — never by the empty string, which every derived group
+            // would share.
+            , { request: request, compact: compact, onResolved: onResolved, allowDismissWithoutAnswer: allowDismissWithoutAnswer, startCollapsedToAnswers: startCollapsedToAnswers }, request.requestId || request.signals[0]?.id)))] }));
 }
 //# sourceMappingURL=SessionSignals.js.map

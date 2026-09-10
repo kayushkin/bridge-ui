@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useRef } from 'react'
 import { VList } from 'virtua'
-import { useTurns, selectTimeline, useLiveStatus, RefChip } from '@kayushkin/chat-core'
+import { useTurns, selectTimeline, useLiveStatus } from '@kayushkin/chat-core'
+import { RefChip } from './RefChip'
 import type { TurnModel, TimelineItem } from '@kayushkin/chat-core'
 import { formatHMS } from './bridgeAdapters'
 import { useSelectSession } from './useSelectSession'

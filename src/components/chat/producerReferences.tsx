@@ -3,15 +3,10 @@ import type { ComponentProps, JSX, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useNavigate } from 'react-router-dom'
-import {
-  RefChip,
-  SignalRequestList,
-  SIGNAL_KIND_QUESTION,
-  parseRefChips,
-  remarkRefChips,
-  useOpenSignals,
-} from '@kayushkin/chat-core'
-import type { RefChipProps } from '@kayushkin/chat-core'
+import { SIGNAL_KIND_QUESTION, parseRefChips, remarkRefChips, useOpenSignals } from '@kayushkin/chat-core'
+import { RefChip } from './RefChip'
+import { SignalRequestList } from './SessionSignals'
+import type { RefChipProps } from './RefChip'
 import { useBridgeConfig } from '../../context'
 import type { BridgeRoutes } from '../../context'
 

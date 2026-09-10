@@ -10,21 +10,15 @@ import { Fragment,
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import {
-  useTurns,
-  remarkRefChips,
-  RefChip,
-  useActiveSession,
-  usePendingSession,
-  toolIdOf,
-} from '@kayushkin/chat-core'
+import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf } from '@kayushkin/chat-core'
+import { RefChip } from './RefChip'
 import type { Entry, Turn } from '@kayushkin/chat-core'
 import { ToolContext, ToolItem } from '../tools'
 import { isToolRunning, toToolEvent } from './toolEvents'
 
 /** Shared, so the fallback below allocates nothing per row. */
 const EMPTY_TOOL_IDS: ReadonlySet<string> = new Set<string>()
-import type { RefChipProps } from '@kayushkin/chat-core'
+import type { RefChipProps } from './RefChip'
 import { useBridgeHarnesses } from '../../useBridgeHarnesses'
 import { UsageLine } from './UsageLine'
 import { toBridgeUsage, formatHMS } from './bridgeAdapters'

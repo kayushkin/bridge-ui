@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../../context'
-import { RefChip } from '@kayushkin/chat-core'
+import { RefChip } from './RefChip'
 import { preserveUnchangedKanbanPayload, useKanban } from '../../useKanban'
 import type { EntityCardView, EntityTag } from '../../types-kanban'
 

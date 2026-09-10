@@ -3,7 +3,8 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, } fr
 import { VList } from 'virtua';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useTurns, remarkRefChips, RefChip, useActiveSession, usePendingSession, toolIdOf, } from '@kayushkin/chat-core';
+import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf } from '@kayushkin/chat-core';
+import { RefChip } from './RefChip';
 import { ToolContext, ToolItem } from '../tools';
 import { isToolRunning, toToolEvent } from './toolEvents';
 /** Shared, so the fallback below allocates nothing per row. */
