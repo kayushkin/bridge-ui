@@ -20,6 +20,7 @@ export interface BridgeRoutes {
   conformance: string
   kanban: string
   principals: string
+  bundles: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
@@ -48,6 +49,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   conformance: '/conformance',
   kanban: '/kanban',
   principals: '/principals',
+  bundles: '/bundles',
   orchestrator: '/orchestrator',
   card: '/card',
   notes: '',
@@ -75,6 +77,13 @@ export interface BridgeConfig {
    * editor are hidden — the same convention as `kanbanStoreBasePath` hiding
    * the Kanban tab. */
   principalStoreBasePath: string
+  /** Base path for bundle-store API (e.g. "/api/bundle-store"). No trailing
+   * slash. If empty, the Bundles tab is hidden. */
+  bundleStoreBasePath: string
+  /** Base path for repo-store API (e.g. "/api/repo-store"). No trailing slash.
+   * The Bundles page reads its repos to preview a resolution for one. If
+   * empty, the page lists bundles and says there are no repos to preview. */
+  repoStoreBasePath: string
   /** Base path for the noteboard API (e.g. "/api/noteboard"). No trailing
    * slash. Used by chat reference chips to resolve a todo/item id to its
    * title/status. If empty, todo chips render but say lookup isn't configured. */

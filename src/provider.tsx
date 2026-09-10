@@ -20,6 +20,11 @@ export interface BridgeProviderProps {
   /** Base path for principal-store API. If omitted, kanban cards show no
    * assignee chips and the card drawer has no assignee editor. */
   principalStoreBasePath?: string
+  /** Base path for bundle-store API. If omitted, the Bundles tab is hidden. */
+  bundleStoreBasePath?: string
+  /** Base path for repo-store API. If omitted, the Bundles page lists bundles
+   * but has no repos to preview a resolution for. */
+  repoStoreBasePath?: string
   /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
    * an item's title/status and say so. */
   noteboardBasePath?: string
@@ -59,6 +64,8 @@ export function BridgeProvider({
   permissionStoreBasePath = '',
   kanbanStoreBasePath = '',
   principalStoreBasePath = '',
+  bundleStoreBasePath = '',
+  repoStoreBasePath = '',
   mailBasePath = '',
   mailPagePath = '',
   noteboardBasePath = '',
@@ -78,6 +85,8 @@ export function BridgeProvider({
     permissionStoreBasePath,
     kanbanStoreBasePath,
     principalStoreBasePath,
+    bundleStoreBasePath,
+    repoStoreBasePath,
     mailBasePath,
     mailPagePath,
     noteboardBasePath,
@@ -87,7 +96,7 @@ export function BridgeProvider({
     usageStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

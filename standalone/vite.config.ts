@@ -53,6 +53,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/principals/, '') || '/',
       },
+      '/api/bundle-store': {
+        target: 'http://localhost:8307',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/bundle-store/, '') || '/',
+      },
+      '/api/repo-store': {
+        target: 'http://localhost:8306',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/repo-store/, '') || '/',
+      },
     },
   },
   build: {

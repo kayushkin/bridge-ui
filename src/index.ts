@@ -135,6 +135,12 @@ export { BridgeKanban } from './components/BridgeKanban'
 // The principal-store editor. Renders nothing without `principalStoreBasePath`,
 // and BridgeLayout shows no tab for it then either.
 export { BridgePrincipals } from './components/BridgePrincipals'
+// bundle-store's curated session bundles and the resolve preview. Renders
+// nothing without `bundleStoreBasePath`, and BridgeLayout shows no tab then.
+export { BridgeBundles } from './components/BridgeBundles'
+export type {
+  Bundle, BundleMember, BundleMemberKind, BundleMemberRef, BundleRef, BundleResolution, RepoStoreRepo,
+} from './types-bundles'
 // One card as a page of its own, assembled from its four separately addressable
 // parts. `<Bridge>` routes it at `card/:cardId`.
 export { BridgeCardPage } from './components/BridgeCardPage'

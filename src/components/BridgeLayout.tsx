@@ -10,7 +10,7 @@ interface BridgeLayoutProps {
 export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
   const {
     routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath,
-    producerBasePath,
+    bundleStoreBasePath, producerBasePath,
   } = useBridgeConfig()
   // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
   // are the only navigation on every page here except the host's chat, and the
@@ -37,6 +37,7 @@ export function BridgeLayout({ showConformance = true }: BridgeLayoutProps) {
     // The directory the Kanban assignees resolve against. Same gate as the
     // assignee UI itself: a host that proxies no principal-store gets no tab.
     ...(principalStoreBasePath ? [{ to: routes.principals, label: 'Principals', end: false }] : []),
+    ...(bundleStoreBasePath ? [{ to: routes.bundles, label: 'Bundles', end: false }] : []),
     // The page exists on every host; the tab is drawn only where the producer is
     // proxied, since without it the page can say nothing but "not configured".
     ...(producerBasePath ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),

@@ -27,6 +27,7 @@ import {
   BridgePrincipals, MembershipsSection, PrincipalDetailView, PrincipalListView,
 } from '../src/components/BridgePrincipals.tsx'
 import { principalsSearchURL } from '../src/principalStoreClient.ts'
+import { BridgeBundles, BundleCard } from '../src/components/BridgeBundles.tsx'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePrefsStore.ts'
 import { harnessMapOf, harnessNameKey, harnessNamesFromKey, harnessesPoll } from '../src/useBridgeHarnesses.ts'
@@ -1153,6 +1154,50 @@ console.log('\nBridgePrincipals — the directory editor')
   check('BridgeLayout shows a Principals tab when principal-store is configured',
     layout('/api/principals').includes('>Principals<') && layout('/api/principals').includes('href="/principals"'))
   check('and none when it is not', !layout('').includes('Principals'))
+}
+
+// The Bundles page, moved here from dash on 2026-09-10. Static renders cannot
+// run its fetches, so these pin the gates and what a bundle card shows.
+console.log('\nBridgeBundles — bundle-store bundles and the resolve preview')
+{
+  const bundlesConfig = (bundleStoreBasePath, repoStoreBasePath = '') => ({
+    fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
+    basePath: '/api/bridge', bundleStoreBasePath, repoStoreBasePath, routes: DEFAULT_BRIDGE_ROUTES,
+  })
+  const mountPage = (bundleStoreBasePath, repoStoreBasePath) => renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/bundles'] },
+      h(BridgeContext.Provider, { value: bundlesConfig(bundleStoreBasePath, repoStoreBasePath) }, h(BridgeBundles))))
+
+  check('no bundle-store path renders nothing', mountPage('') === '', JSON.stringify(mountPage('')))
+  const withRepos = mountPage('/api/bundle-store', '/api/repo-store')
+  check('the page draws its three columns',
+    withRepos.includes('aria-label="Bundles"') && withRepos.includes('aria-label="Repos"') && withRepos.includes('aria-label="Resolve preview"'), withRepos)
+  const withoutRepos = mountPage('/api/bundle-store', '')
+  check('without repo-store the repos column says so and offers no task tags',
+    withoutRepos.includes('proxies no repo-store') && !withoutRepos.includes('Task tags'), withoutRepos)
+
+  const card = renderToStaticMarkup(h(BundleCard, { bundle: {
+    id: 2, name: 'react', display_name: 'React frontend', extends: 'base', match_tags: ['react'],
+    members: [
+      { kind: 'skill', id: 1446, name: 'browser-automation' },
+      { kind: 'tool', id: 14, name: 'chrome-devtools', condition: 'perf' },
+      { kind: 'skill', id: 7 },
+    ],
+    enabled: false, created_at: 1, updated_at: 1,
+  } }))
+  check('a member chip shows its id beside its name', card.includes('browser-automation') && card.includes('>#1446<'), card)
+  check('a member with no name still shows its id rather than a blank chip', card.includes('>#7<'), card)
+  check('a conditional member says its condition', /if (<!-- -->)?perf/.test(card), card)
+  check('a disabled bundle is marked', card.includes('>disabled<'), card)
+  check('the unique bundle name shows beside the display name', card.includes('React frontend') && card.includes('>react<'), card)
+
+  const layout = (bundleStoreBasePath) => renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/instances'] },
+      h(BridgeContext.Provider, { value: bundlesConfig(bundleStoreBasePath) },
+        h(MinimalChromeProvider, null, h(BridgeLayout)))))
+  check('BridgeLayout shows a Bundles tab when bundle-store is configured',
+    layout('/api/bundle-store').includes('>Bundles<') && layout('/api/bundle-store').includes('href="/bundles"'))
+  check('and none when it is not', !layout('').includes('Bundles'))
 }
 
 sidePanelChecks()

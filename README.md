@@ -1,6 +1,6 @@
 # @kayushkin/bridge-ui
 
-The whole bridge surface for an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend, as one React component. `<Bridge>` routes its own pages — the chat at `/` (on [`@kayushkin/chat-core`](https://github.com/kayushkin/chat-core)), instances, sessions, auth, usage, settings, agents, files, skills, tools, permissions, kanban, a card page, principals, the orchestrator and conformance — draws the tab row, and mounts both providers. A host wires auth and where it proxies each backend, mounts `<Bridge>` at the root of a router, and is done.
+The whole bridge surface for an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend, as one React component. `<Bridge>` routes its own pages — the chat at `/` (on [`@kayushkin/chat-core`](https://github.com/kayushkin/chat-core)), instances, sessions, auth, usage, settings, agents, files, skills, tools, permissions, kanban, a card page, principals, bundles, the orchestrator and conformance — draws the tab row, and mounts both providers. A host wires auth and where it proxies each backend, mounts `<Bridge>` at the root of a router, and is done.
 
 The simplest way to get a working UI on top of llm-bridge-server is to run the server directly — it embeds bridge-ui's built `dist/` and serves it at the root. Embed this package in your own React app if you want to customize the host (chrome, auth, routing).
 
@@ -78,6 +78,8 @@ components itself, passing its own `routes`.
 | `fetch` | `(url, init?) => Promise<Response>` | required | Auth'd fetch function. Add cookies / bearer tokens here. |
 | `basePath` | `string` | `/api/bridge` | Base path for the llm-bridge-server API (no trailing slash). |
 | `skillStoreBasePath` | `string` | `""` | Base path for skill-store API. If empty, the Skills tab is hidden. |
+| `bundleStoreBasePath` | `string` | `""` | Base path for bundle-store API. If empty, the Bundles tab is hidden. |
+| `repoStoreBasePath` | `string` | `""` | Base path for repo-store API, which gives the Bundles page repos to preview a resolution for. If empty, the page lists bundles only. |
 | `routes` | `Partial<BridgeRoutes>` | `DEFAULT_BRIDGE_ROUTES` | Override individual route paths used by inter-page navigation. `<Bridge>` sets only `notes`. |
 
 `DEFAULT_BRIDGE_ROUTES` is what `<Bridge>` renders:
@@ -87,7 +89,7 @@ components itself, passing its own `routes`.
   chat: '/', instances: '/instances', sessions: '/sessions', auth: '/auth', usage: '/usage',
   settings: '/settings', agents: '/agents', files: '/files', skills: '/skills', tools: '/tools',
   permissions: '/permissions', conformance: '/conformance', kanban: '/kanban',
-  principals: '/principals', orchestrator: '/orchestrator', card: '/card',
+  principals: '/principals', bundles: '/bundles', orchestrator: '/orchestrator', card: '/card',
   notes: '',   // the host's, if it has one
 }
 ```
