@@ -43,7 +43,7 @@ export type AssignmentOutcome = { ok: true } | { ok: false; error: string }
 /** The `error` field of a JSON error body, the raw body when it is not JSON,
  * and the status when there is no body at all — in that order, so the server's
  * wording survives whenever it gave any. */
-async function readErrorText(res: Response, verb: string): Promise<string> {
+export async function readErrorText(res: Response, verb: string): Promise<string> {
   const text = await res.text().catch(() => '')
   if (text) {
     try {

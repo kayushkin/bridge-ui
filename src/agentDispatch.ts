@@ -6,6 +6,7 @@
 // not obvious enough to reproduce correctly from memory.
 
 import type { FetchFn } from './types'
+import { readErrorText } from './useKanban'
 
 export type DispatchAgentArgs = {
   basePath: string
@@ -34,6 +35,13 @@ export type DispatchAgentArgs = {
    * spawn, offers only what the principal's grants name.
    */
   principalId?: string
+  /**
+   * The bundle the session is composed from: a bundle-store numeric id as a
+   * string (`"6"`), or undefined for none. The kanban page passes the board's
+   * `default_bundle_id`. The server checks it with bundle-store at creation
+   * (400 `unknown_bundle`) and provisions the bundle's tools at spawn.
+   */
+  bundleID?: string
 }
 
 /**
@@ -54,7 +62,7 @@ export type DispatchAgentArgs = {
  * quietly treat a failed dispatch as a started one.
  */
 export async function dispatchAgentOnCard(args: DispatchAgentArgs): Promise<string> {
-  const { basePath, fetchFn, title, prompt, addLink, instance, principalId } = args
+  const { basePath, fetchFn, title, prompt, addLink, instance, principalId, bundleID } = args
 
   const trimmed = prompt.trim()
   if (!trimmed) throw new Error('refusing to start an agent with an empty prompt')
@@ -71,9 +79,13 @@ export async function dispatchAgentOnCard(args: DispatchAgentArgs): Promise<stri
       purpose: 'dispatcher',
       origin: 'kanban-card',
       ...(principalId ? { principal_id: principalId } : {}),
+      ...(bundleID ? { bundle_id: bundleID } : {}),
     }),
   })
-  if (!created.ok) throw new Error(`create session: HTTP ${created.status}`)
+  // The server's refusal names what was wrong — an unknown bundle, a principal
+  // the grants do not allow here — so its words are the message; only a bodiless
+  // answer falls back to the status.
+  if (!created.ok) throw new Error(await readErrorText(created, 'create session'))
 
   const session = await created.json()
   const sessionID: string = session?.session_id

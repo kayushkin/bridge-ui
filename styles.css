@@ -5444,3 +5444,47 @@
   color: var(--error);
   line-height: 1.4;
 }
+
+/* Board settings (kanban/settings): one board's general fields, working week,
+   priority ladder, defaults and classifier, each section saved on its own. Same
+   family as the Principals page: surface panels, muted uppercase titles. */
+.bks-container { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.bks-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bks-title { margin: 0; font-size: 1.2em; color: var(--text); }
+.bks-back { font-size: 0.85em; color: var(--accent); text-decoration: none; }
+.bks-back:hover { text-decoration: underline; }
+.bks-sections { display: flex; flex-direction: column; gap: 16px; }
+.bks-section {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface);
+}
+.bks-section-title { margin: 0; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.bks-field { display: flex; flex-direction: column; gap: 3px; }
+.bks-field-label { font-size: 0.8em; color: var(--text-muted); }
+.bks-field :is(input:not([type="checkbox"]), textarea, select),
+.bks-id-input, .bks-id-select, .bks-ladder :is(input, select) {
+  box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 6px; font-size: 0.85em;
+}
+.bks-field :is(input:not([type="checkbox"]), textarea, select):focus,
+.bks-id-input:focus, .bks-id-select:focus, .bks-ladder :is(input, select):focus { outline: none; border-color: var(--accent); }
+.bks-help { font-size: 0.8em; color: var(--text-dim); }
+.bks-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.bks-row > .bks-field { flex: 1 1 160px; }
+.bks-check { display: flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text-muted); cursor: pointer; }
+.bks-days { display: flex; gap: 10px; flex-wrap: wrap; }
+.bks-default-principal, .bks-default-agent, .bks-default-instance, .bks-default-bundle { max-width: 640px; }
+.bks-id-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bks-id-select { min-width: 16em; flex: 1 1 16em; }
+.bks-id-input { flex: 1 1 12em; font-family: var(--mono, ui-monospace, monospace); }
+.bks-ladder { display: flex; flex-direction: column; gap: 6px; }
+.bks-ladder-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bks-ladder-value, .bks-ladder-amount { width: 6em; }
+.bks-ladder-budget { display: inline-flex; gap: 4px; align-items: center; }
+.bks-accounts { display: flex; flex-direction: column; gap: 4px; }
+.bks-account-detail { font-size: 0.8em; color: var(--text-dim); margin-left: 4px; }
+.bks-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bks-saved { font-size: 0.85em; color: #22c55e; }
+.bks-error { font-size: 0.85em; color: #ef4444; white-space: pre-wrap; }
+/* "⚙ Board settings" is a router Link wearing the add-button style. */
+.bk-board-settings-link { display: inline-block; text-decoration: none; }

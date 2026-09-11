@@ -12,12 +12,44 @@ export interface BusinessHours {
   end: string
 }
 
+/** How mail becomes cards on a board: what email-classifier runs with. The
+ * scheduler still owns WHEN it runs; the board owns WHAT it runs with. */
+export interface ClassifierConfig {
+  /** One of email-classifier's vocabularies ("personal", "work", …). The
+   * classifier owns the list — `email-classifier -list-vocabularies` prints
+   * it — and refuses a board naming one it lacks. Nothing serves it over HTTP. */
+  vocabulary: string
+  /** mailstack account ids, as `GET /api/accounts` lists them. Explicit, never
+   * "every account". */
+  mail_account_ids: string[]
+  /** Create every filed card parked, so no autoworker picks it up before the
+   * pipeline that owns it releases it. */
+  hold_new_cards: boolean
+}
+
 export interface Board {
   id: string
   name: string
   description: string
   archived: boolean
   business_hours?: BusinessHours
+  /** principal-store's id for whoever a card belongs to until someone says
+   * otherwise. Applied by kanban-store itself when a card arrives on the board
+   * with no assignee. Absent when unset. */
+  default_principal_id?: string
+  /** agent-store's NUMERIC id, as llm-bridge-server's `GET /agents` lists it —
+   * never the slug, which is renameable. Absent when unset. */
+  default_agent_id?: string
+  /** The llm-bridge-server harness instance a dispatcher starts this board's
+   * sessions on. Absent when unset. */
+  default_instance_id?: string
+  /** bundle-store's NUMERIC id, never the bundle's name. Applied at dispatch:
+   * a session started from one of this board's cards sends it as `bundle_id`
+   * on llm-bridge-server's `POST /sessions` (400 `unknown_bundle` if the store
+   * lacks it), and the spawn provisions the bundle's tools. Absent when unset. */
+  default_bundle_id?: string
+  /** Absent when no classifier files onto this board. */
+  classifier?: ClassifierConfig
   created_at: string
   updated_at: string
 }

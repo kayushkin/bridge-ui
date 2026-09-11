@@ -19,6 +19,10 @@ export interface BridgeRoutes {
   permissions: string
   conformance: string
   kanban: string
+  /** The per-board settings page (defaults, classifier, priority ladder,
+   *  business hours). `?board=<id>` picks the board; without it, the board the
+   *  kanban page last opened. */
+  kanbanSettings: string
   principals: string
   grants: string
   bundles: string
@@ -53,6 +57,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   permissions: '/permissions',
   conformance: '/conformance',
   kanban: '/kanban',
+  kanbanSettings: '/kanban/settings',
   principals: '/principals',
   grants: '/grants',
   bundles: '/bundles',

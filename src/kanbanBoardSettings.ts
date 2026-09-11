@@ -1,0 +1,305 @@
+// The pure rules behind the board settings page and the board-default chips on
+// a card: what a board's record becomes on the form, what a form becomes on the
+// wire, and which instance a dispatch picks when the card has no say.
+//
+// Everything here is a function of its arguments — no fetch, no React — so the
+// wire bodies the page sends are pinned by tests without a DOM. The wire
+// contract is kanban-store's `PATCH /api/boards/{id}` and
+// `PUT /api/boards/{id}/priority-levels` (README "Board settings", "Priority
+// ladders", "Business hours"): omit a field to leave it alone, `""` clears an
+// id, `{"classifier":{}}` clears the classifier, `{"business_hours":{}}`
+// clears the hours.
+
+import type { Instance } from '@kayushkin/llm-bridge-types'
+import type { Machine } from './types'
+import type { Bundle } from './types-bundles'
+import type { Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, PriorityLadder } from './types-kanban'
+import { machineLabel } from './grantResources'
+
+/** A `PATCH /api/boards/{id}` body. Every key is optional because an omitted
+ *  key is "leave it alone"; an empty object clears the two object-valued
+ *  settings and an empty string clears an id. */
+export interface BoardSettingsPatch {
+  name?: string
+  description?: string
+  archived?: boolean
+  business_hours?: BusinessHours | Record<string, never>
+  default_principal_id?: string
+  default_agent_id?: string
+  default_instance_id?: string
+  default_bundle_id?: string
+  classifier?: ClassifierConfig | Record<string, never>
+}
+
+export type BoardDefaultField = 'default_principal_id' | 'default_agent_id' | 'default_instance_id' | 'default_bundle_id'
+
+export const BOARD_DEFAULT_FIELDS: readonly BoardDefaultField[] = [
+  'default_principal_id', 'default_agent_id', 'default_instance_id', 'default_bundle_id',
+]
+
+// --- General -----------------------------------------------------------------
+
+export interface GeneralDraft {
+  name: string
+  description: string
+  archived: boolean
+}
+
+export function generalDraftOf(board: Board): GeneralDraft {
+  return { name: board.name, description: board.description, archived: board.archived }
+}
+
+/** Only what differs from the stored board, so a save never re-sends a field
+ *  the user did not touch — the store re-checks nothing it is not sent. */
+export function generalPatchOf(board: Board, draft: GeneralDraft): BoardSettingsPatch {
+  const patch: BoardSettingsPatch = {}
+  if (draft.name !== board.name) patch.name = draft.name
+  if (draft.description !== board.description) patch.description = draft.description
+  if (draft.archived !== board.archived) patch.archived = draft.archived
+  return patch
+}
+
+// --- Business hours ----------------------------------------------------------
+
+/** RFC 5545 weekday codes, in the order the checkboxes are drawn. */
+export const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const
+
+export interface BusinessHoursDraft {
+  tzid: string
+  days: string[]
+  start: string
+  end: string
+}
+
+export function businessHoursDraftOf(board: Board): BusinessHoursDraft {
+  const hours = board.business_hours
+  return hours
+    ? { tzid: hours.tzid, days: [...hours.days], start: hours.start, end: hours.end }
+    : { tzid: '', days: [], start: '', end: '' }
+}
+
+/** The whole object, every time: the store replaces the working week outright.
+ *  Days are sent in weekday order whatever order they were ticked in. */
+export function businessHoursPatchOf(draft: BusinessHoursDraft): BoardSettingsPatch {
+  const days = WEEKDAY_CODES.filter(code => draft.days.includes(code))
+  return { business_hours: { tzid: draft.tzid.trim(), days, start: draft.start.trim(), end: draft.end.trim() } }
+}
+
+export const CLEAR_BUSINESS_HOURS_PATCH: BoardSettingsPatch = { business_hours: {} }
+
+// --- Defaults ----------------------------------------------------------------
+
+/** The four id-valued defaults as the form holds them: the stored id, or ''
+ *  for unset — which is also what "clear" puts here, because '' is the wire's
+ *  own word for clearing. */
+export type DefaultsDraft = Record<BoardDefaultField, string>
+
+export function defaultsDraftOf(board: Pick<Board, BoardDefaultField>): DefaultsDraft {
+  return {
+    default_principal_id: board.default_principal_id ?? '',
+    default_agent_id: board.default_agent_id ?? '',
+    default_instance_id: board.default_instance_id ?? '',
+    default_bundle_id: board.default_bundle_id ?? '',
+  }
+}
+
+/** Only the defaults that differ from the stored board. A field cleared on the
+ *  form goes out as '' (the store's clear), one left alone is not sent at all —
+ *  the store re-checks every id it is sent with that id's owner, and an
+ *  untouched id should not be refused because its owner is down today. */
+export function defaultsPatchOf(board: Pick<Board, BoardDefaultField>, draft: DefaultsDraft): BoardSettingsPatch {
+  const stored = defaultsDraftOf(board)
+  const patch: BoardSettingsPatch = {}
+  for (const field of BOARD_DEFAULT_FIELDS) {
+    const value = draft[field].trim()
+    if (value !== stored[field]) patch[field] = value
+  }
+  return patch
+}
+
+// --- Priority ladder ---------------------------------------------------------
+
+export type BudgetUnit = 'hours' | 'days'
+
+export const SECONDS_PER_HOUR = 3600
+export const SECONDS_PER_DAY = 86400
+
+export interface LadderRowDraft {
+  label: string
+  /** Kept as text while editing so a half-typed number is not coerced to 0 —
+   *  0 is the one value the store refuses outright. */
+  priorityValue: string
+  /** Empty means a rung that is named but not timed. */
+  budgetAmount: string
+  budgetUnit: BudgetUnit
+}
+
+/** A stored budget as a human amount: whole days when it is a whole number of
+ *  days, hours otherwise (fractional hours allowed — 90 minutes is 1.5 h). */
+export function budgetDraftOfSeconds(seconds: number | null): { budgetAmount: string; budgetUnit: BudgetUnit } {
+  if (seconds === null) return { budgetAmount: '', budgetUnit: 'hours' }
+  if (seconds >= SECONDS_PER_DAY && seconds % SECONDS_PER_DAY === 0) {
+    return { budgetAmount: String(seconds / SECONDS_PER_DAY), budgetUnit: 'days' }
+  }
+  return { budgetAmount: String(seconds / SECONDS_PER_HOUR), budgetUnit: 'hours' }
+}
+
+export function ladderRowDraftOf(level: BoardPriorityLevel): LadderRowDraft {
+  return { label: level.label, priorityValue: String(level.priority_value), ...budgetDraftOfSeconds(level.budget_seconds) }
+}
+
+export function ladderDraftOf(ladder: PriorityLadder | null): LadderRowDraft[] {
+  return (ladder?.levels ?? []).map(ladderRowDraftOf)
+}
+
+/** A fresh rung one below the lowest on the form, or 1 for an empty ladder. */
+export function emptyLadderRow(rows: readonly LadderRowDraft[]): LadderRowDraft {
+  const values = rows.map(row => Number(row.priorityValue)).filter(value => Number.isInteger(value) && value > 0)
+  const lowest = values.length > 0 ? Math.min(...values) : 2
+  return { label: '', priorityValue: String(Math.max(1, lowest - 1)), budgetAmount: '', budgetUnit: 'hours' }
+}
+
+export interface LadderWireLevel {
+  priority_value: number
+  label: string
+  budget_seconds: number | null
+}
+
+export type LadderDraftResult = { ok: true; value: { levels: LadderWireLevel[] } } | { ok: false; error: string }
+
+/** The `PUT /priority-levels` body. Budgets are converted to seconds here and
+ *  nowhere else. Only what cannot be sent at all is refused on the client — a
+ *  number that is not one — and the store's own refusals (a zero rung, a
+ *  duplicate value or label) are left to the store, whose wording is the point. */
+export function ladderDraftToWire(rows: readonly LadderRowDraft[]): LadderDraftResult {
+  const levels: LadderWireLevel[] = []
+  for (const [index, row] of rows.entries()) {
+    const nth = `row ${index + 1}${row.label.trim() ? ` ("${row.label.trim()}")` : ''}`
+    const priorityValue = Number(row.priorityValue.trim())
+    if (row.priorityValue.trim() === '' || !Number.isInteger(priorityValue)) {
+      return { ok: false, error: `${nth}: priority_value must be a whole number, got "${row.priorityValue}"` }
+    }
+    let budgetSeconds: number | null = null
+    if (row.budgetAmount.trim() !== '') {
+      const amount = Number(row.budgetAmount.trim())
+      if (!Number.isFinite(amount)) {
+        return { ok: false, error: `${nth}: budget must be a number of ${row.budgetUnit}, got "${row.budgetAmount}"` }
+      }
+      budgetSeconds = Math.round(amount * (row.budgetUnit === 'days' ? SECONDS_PER_DAY : SECONDS_PER_HOUR))
+    }
+    levels.push({ priority_value: priorityValue, label: row.label.trim(), budget_seconds: budgetSeconds })
+  }
+  return { ok: true, value: { levels } }
+}
+
+// --- Classifier --------------------------------------------------------------
+
+export interface ClassifierDraft {
+  /** Off means the save clears the classifier (`{"classifier":{}}`). */
+  enabled: boolean
+  vocabulary: string
+  mailAccountIDs: string[]
+  holdNewCards: boolean
+}
+
+export function classifierDraftOf(board: Board): ClassifierDraft {
+  const classifier = board.classifier
+  return classifier
+    ? { enabled: true, vocabulary: classifier.vocabulary, mailAccountIDs: [...classifier.mail_account_ids], holdNewCards: classifier.hold_new_cards }
+    : { enabled: false, vocabulary: '', mailAccountIDs: [], holdNewCards: false }
+}
+
+/** A free-text account list: comma or whitespace separated, trimmed, deduped. */
+export function parseMailAccountIDs(text: string): string[] {
+  const seen = new Set<string>()
+  for (const part of text.split(/[\s,]+/)) {
+    const id = part.trim()
+    if (id) seen.add(id)
+  }
+  return [...seen]
+}
+
+export const CLEAR_CLASSIFIER_PATCH: BoardSettingsPatch = { classifier: {} }
+
+export function classifierPatchOf(draft: ClassifierDraft): BoardSettingsPatch {
+  if (!draft.enabled) return CLEAR_CLASSIFIER_PATCH
+  return {
+    classifier: {
+      vocabulary: draft.vocabulary.trim(),
+      mail_account_ids: draft.mailAccountIDs.map(id => id.trim()).filter(Boolean),
+      hold_new_cards: draft.holdNewCards,
+    },
+  }
+}
+
+// --- Board defaults on a card ------------------------------------------------
+
+/** How a bundle is named on a card or in a picker: the store's `name`, with its
+ *  `display_name` beside it when it has one — the Bundles page's own wording. */
+export function bundleLabel(bundle: Pick<Bundle, 'name' | 'display_name'>): string {
+  return bundle.display_name ? `${bundle.name} — ${bundle.display_name}` : bundle.name
+}
+
+/** The board's default bundle by id, or the raw id when the list lacks it —
+ *  never nothing: the board's record is true even when the name is missing. */
+export function boardBundleLabel(bundleID: string, bundles: readonly Bundle[] | null): string {
+  const bundle = bundles?.find(candidate => String(candidate.id) === bundleID)
+  return bundle ? bundleLabel(bundle) : bundleID
+}
+
+/** What the board's bundle does, said once so every surface says the same:
+ *  a dispatch sends it as `bundle_id` and the spawn provisions its tools. */
+export const BOARD_BUNDLE_HELP_TEXT =
+  'Sessions dispatched from this board are provisioned with this bundle’s tools.'
+
+export type DispatchTarget =
+  | { kind: 'last-session'; instance: Instance }
+  | { kind: 'board-default'; instance: Instance; lastSessionNote: string | null }
+  | { kind: 'none'; why: string | null }
+
+export interface DispatchTargetArgs {
+  /** Where the card's last session ran, or null for a card that has had none. */
+  lastSessionInstanceID: string | null
+  /** The board the card sits on, or null when it is on none / not loaded. */
+  board: Pick<Board, 'default_instance_id'> | null
+  instances: readonly Instance[]
+}
+
+function unusableInstanceNote(instanceID: string, instances: readonly Instance[]): string | null {
+  const instance = instances.find(candidate => candidate.id === instanceID)
+  if (!instance) return `instance ${instanceID}, which the bridge does not list`
+  if (!instance.enabled) return `${instance.name}, which is disabled`
+  return null
+}
+
+/**
+ * Where a dispatch runs when nobody chooses: the card's last session's
+ * instance, else the board's default instance, else nothing. Only an instance
+ * the bridge lists AND has enabled counts at either step — the server answers
+ * 503 for a disabled one, so choosing it would only defer the refusal.
+ *
+ * `why` on `none` names what was tried and found unusable, or is null when
+ * there was nothing to try; the caller opens the picker either way.
+ */
+export function dispatchTargetForCard({ lastSessionInstanceID, board, instances }: DispatchTargetArgs): DispatchTarget {
+  let lastSessionNote: string | null = null
+  if (lastSessionInstanceID) {
+    const last = instances.find(candidate => candidate.id === lastSessionInstanceID)
+    if (last?.enabled) return { kind: 'last-session', instance: last }
+    lastSessionNote = `this card’s last session ran on ${unusableInstanceNote(lastSessionInstanceID, instances)}`
+  }
+  const defaultInstanceID = board?.default_instance_id
+  if (defaultInstanceID) {
+    const preset = instances.find(candidate => candidate.id === defaultInstanceID)
+    if (preset?.enabled) return { kind: 'board-default', instance: preset, lastSessionNote }
+    const boardNote = `the board’s default instance is ${unusableInstanceNote(defaultInstanceID, instances)}`
+    return { kind: 'none', why: lastSessionNote ? `${lastSessionNote}; ${boardNote}` : boardNote }
+  }
+  return { kind: 'none', why: lastSessionNote }
+}
+
+/** One line naming where an instance runs, for a confirmation or a chip. */
+export function describeInstanceLocation(instance: Instance, machines: readonly Machine[]): string {
+  const machine = machines.find(candidate => candidate.id === instance.machine_id)
+  return `${instance.name} (${instance.harness_type}) in ${machine ? machineLabel(machine) : instance.machine_id}`
+}

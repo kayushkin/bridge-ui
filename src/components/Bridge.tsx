@@ -17,6 +17,7 @@ import { BridgeSkills } from './BridgeSkills'
 import { BridgeTools } from './BridgeTools'
 import { BridgePermissions } from './BridgePermissions'
 import { BridgeKanban } from './BridgeKanban'
+import { BridgeKanbanSettings } from './BridgeKanbanSettings'
 import { BridgePrincipals } from './BridgePrincipals'
 import { BridgeGrants } from './BridgeGrants'
 import { BridgeBundles } from './BridgeBundles'
@@ -69,6 +70,7 @@ export function Bridge({ notesPath = '', showConformance, showServiceInventory, 
             <Route path="tools" element={<BridgeTools />} />
             <Route path="permissions" element={<BridgePermissions />} />
             <Route path="kanban" element={<BridgeKanban />} />
+            <Route path="kanban/settings" element={<BridgeKanbanSettings />} />
             <Route path="card/:cardId" element={<BridgeCardPage />} />
             <Route path="principals" element={<BridgePrincipals />} />
             <Route path="grants" element={<BridgeGrants />} />

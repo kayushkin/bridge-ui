@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
+import { KANBAN_LAST_BOARD_STORAGE_KEY } from '../constants'
 import type { FetchFn } from '../types'
 import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban, type AssignmentOutcome } from '../useKanban'
@@ -20,6 +21,9 @@ import { fetchSessionRunsOn, useSessionRunsOn } from '../sessionRunsOn'
 import { dispatchInstanceChoices, machineLabel } from '../grantResources'
 import { useInstancesListedForPrincipals } from '../useResourceCatalogs'
 import { useBridgePrefs } from '../useBridgePrefs'
+import { useBoardRecord } from '../useBoardRecord'
+import { useBundles } from '../useBundles'
+import { BOARD_BUNDLE_HELP_TEXT, boardBundleLabel, describeInstanceLocation, dispatchTargetForCard } from '../kanbanBoardSettings'
 import { SIGNAL_KIND_QUESTION, groupSignalsByRequest, type Signal } from '@kayushkin/chat-core'
 import { SignalRequestCard } from './chat/SignalCard'
 import { useOpenSignalsByTodo, useOpenSignalsForTodo } from '../kanbanSignals'
@@ -64,7 +68,7 @@ function latestSessionLink(card: CardView): SessionLinkRef | null {
 }
 
 const LAYOUT_KEY = 'bk:layout'
-const LAST_BOARD_KEY = 'bk:lastBoardId'
+const LAST_BOARD_KEY = KANBAN_LAST_BOARD_STORAGE_KEY
 const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns'
 const DEFAULT_BOARD_NAME = 'Agent runs'
 
@@ -170,6 +174,8 @@ export function BridgeKanban() {
   // board reads the bridge's instance and machine lists (one shared poll each).
   const { instances: bridgeInstances } = useBridgeInstances()
   const { machines: bridgeMachines } = useBridgeMachines()
+  // ...and the bundle list, so the confirmation names the board's bundle.
+  const { bundles: bundlesOnBoard } = useBundles()
   // A card id IS a noteboard todo id here, so the signals a session raised
   // against its todo land on the card that todo already has. The map covers
   // every todo, so switching boards needs no refetch.
@@ -334,6 +340,13 @@ export function BridgeKanban() {
               ))}
             </select>
             <button className="bi-add-btn" onClick={() => setShowNewBoard(s => !s)}>+ New Board</button>
+            {selectedBoardID && (
+              <Link
+                className="bi-add-btn bk-board-settings-link"
+                to={`${routes.kanbanSettings}?board=${encodeURIComponent(selectedBoardID)}`}
+                title="This board's defaults, classifier, priority ladder and business hours"
+              >⚙ Board settings</Link>
+            )}
             {k.view?.board.description && (
               <p className="bk-board-desc">{k.view.board.description}</p>
             )}
@@ -467,24 +480,32 @@ export function BridgeKanban() {
                       setDrawerCardID(card.placement.card_id)
                       return false
                     }
-                    if (!existing) return openToChoose()
-                    let lastInstanceID: string
-                    try {
-                      lastInstanceID = (await fetchSessionRunsOn(fetchFn, bridgeBasePath, existing.ref)).instanceID
-                    } catch (e) {
-                      return openToChoose(`Could not tell where this card's last session ran (${e instanceof Error ? e.message : String(e)}).`)
+                    // A card with no session yet runs on the board's default
+                    // instance when the board names one the bridge lists
+                    // enabled; only a card with neither opens to choose.
+                    let lastInstanceID: string | null = null
+                    if (existing) {
+                      try {
+                        lastInstanceID = (await fetchSessionRunsOn(fetchFn, bridgeBasePath, existing.ref)).instanceID
+                      } catch (e) {
+                        return openToChoose(`Could not tell where this card's last session ran (${e instanceof Error ? e.message : String(e)}).`)
+                      }
                     }
-                    const instance = bridgeInstances.find(i => i.id === lastInstanceID)
-                    if (!instance) return openToChoose(`This card's last session ran on instance ${lastInstanceID}, which the bridge does not list.`)
-                    if (!instance.enabled) return openToChoose(`This card's last session ran on ${instance.name}, which is disabled.`)
-                    const machine = bridgeMachines.find(m => m.id === instance.machine_id)
+                    const board = k.view?.board ?? null
+                    const target = dispatchTargetForCard({ lastSessionInstanceID: lastInstanceID, board, instances: bridgeInstances })
+                    if (target.kind === 'none') return openToChoose(target.why ? `${target.why[0].toUpperCase()}${target.why.slice(1)}.` : undefined)
+                    const instance = target.instance
+                    const bundleID = board?.default_bundle_id
                     const lines = [
                       `Start an agent on "${title}"?`,
                       '',
-                      `Runs on ${instance.name} (${instance.harness_type}) in ${machine ? machineLabel(machine) : instance.machine_id}, where this card's last session ran.`,
+                      `Runs on ${describeInstanceLocation(instance, bridgeMachines)}, ${
+                        target.kind === 'last-session' ? "where this card's last session ran" : "the board's default instance"
+                      }.`,
+                      ...(target.kind === 'board-default' && target.lastSessionNote ? [`(${target.lastSessionNote}.)`] : []),
+                      ...(bundleID ? [`Provisioned with the board's bundle ${boardBundleLabel(bundleID, bundlesOnBoard)}.`] : []),
                       stored ? 'Using the prompt saved on this card.' : 'Using the suggested prompt (nothing saved on this card).',
-                      '',
-                      'This card already has a session. This adds a second one.',
+                      ...(existing ? ['', 'This card already has a session. This adds a second one.'] : []),
                     ]
                     lines.push('', '--- prompt ---', prompt.length > 600 ? prompt.slice(0, 600) + '…' : prompt)
                     if (!window.confirm(lines.join('\n'))) return false
@@ -498,6 +519,7 @@ export function BridgeKanban() {
                         addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
                         instance: { id: instance.id, harness_type: instance.harness_type },
                         principalId: bridgePrefs.default_principal_id,
+                        bundleID,
                       })
                       navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
                       return true
@@ -1204,6 +1226,11 @@ function CardTiming({
   const placement = card.placement
   const session = latestSessionLink(card)
   const { basePath } = useBridgeConfig()
+  // The board's defaults — where a dispatch would run, what it is provisioned
+  // with — live on the board's record, which a card view does not carry. Both
+  // mounts of this block, the drawer and the card page, read it here.
+  const { board } = useBoardRecord(placement.board_id || null)
+  const { bundles } = useBundles()
   const [lastActivity, setLastActivity] = useState<string | null>(null)
   const [state, setState] = useState<string | null>(null)
   // Distinguishes "we have not asked yet" from "we asked and the bridge could
@@ -1249,6 +1276,22 @@ function CardTiming({
         <dt>On this board</dt>
         <dd title={new Date(placement.created_at).toLocaleString()}>{boardAge ?? '—'}</dd>
       </div>
+      {board?.default_bundle_id && (
+        <div>
+          <dt>Board bundle</dt>
+          <dd>
+            <span className="bk-runs-on bk-board-bundle" data-bundle-id={board.default_bundle_id} title={BOARD_BUNDLE_HELP_TEXT}>
+              {boardBundleLabel(board.default_bundle_id, bundles)}
+            </span>
+          </dd>
+        </div>
+      )}
+      {!session && board?.default_instance_id && (
+        <div>
+          <dt>Would run on</dt>
+          <dd><BoardDefaultInstanceLabel instanceID={board.default_instance_id} /></dd>
+        </div>
+      )}
       {session && (
         <>
           <div>
@@ -1311,6 +1354,32 @@ function SessionRunsOnLabel({ sessionID }: { sessionID: string }) {
   )
 }
 
+/**
+ * The board's default instance, drawn as the same chip "Runs on" uses, for a
+ * card that has had no session yet: where a dispatch from this board would run.
+ * An instance the bridge does not list, or has disabled, says so — a dispatch
+ * would not pick it, so the chip must not read as though it would.
+ */
+function BoardDefaultInstanceLabel({ instanceID }: { instanceID: string }) {
+  const { instances } = useBridgeInstances()
+  const { machines } = useBridgeMachines()
+  const instance = instances.find(i => i.id === instanceID)
+  const machine = instance ? machines.find(m => m.id === instance.machine_id) : undefined
+  const unusable = !instance ? 'the bridge does not list it' : !instance.enabled ? 'disabled' : null
+  return (
+    <span
+      className={`bk-runs-on${unusable ? ' bk-runs-on-unknown' : ''}`}
+      data-instance-id={instanceID}
+      title={`the board’s default instance ${instanceID}${unusable ? ` — ${unusable}, so a dispatch will ask where to run` : ''}`}
+    >
+      <span className="bk-runs-on-instance">{instance ? instance.name : instanceID}</span>
+      {instance && <span className="bk-runs-on-harness">{instance.harness_type}</span>}
+      {instance && <span className="bk-runs-on-machine">{machine ? machineLabel(machine) : instance.machine_id}</span>}
+      {unusable && <span className="bk-runs-on-harness">{unusable}</span>}
+    </span>
+  )
+}
+
 // AgentPromptPanel is the card's "hand this to an agent" control: the prompt it
 // will be given, editable in place, where it runs, and the button that starts it.
 //
@@ -1326,6 +1395,7 @@ function AgentPromptPanel({
   prompt,
   onPromptChange,
   existingSession,
+  boardID,
   assignments,
   principals,
   onAddLink,
@@ -1339,6 +1409,9 @@ function AgentPromptPanel({
   prompt: string
   onPromptChange: (next: string) => void
   existingSession: SessionLinkRef | null
+  /** The board the card sits on, whose default instance and bundle a dispatch
+   *  uses. Null for a card on no board. */
+  boardID: string | null
   /** Who is on the card. The instances on their lists are offered first.
    *  Undefined on a view that did not load assignments. */
   assignments: CardAssignment[] | undefined
@@ -1353,29 +1426,41 @@ function AgentPromptPanel({
   const [error, setError] = useState<string | null>(null)
 
   // Where the agent runs. The select starts on the instance this card's last
-  // session ran on, read off that session's own record, and on nothing for a
-  // card that has had no session: a default the card never chose would be a
-  // guess about where paid, auto-allowed work runs.
+  // session ran on, read off that session's own record; for a card that has had
+  // none, on the board's default instance, which is the board's stated choice
+  // rather than a guess; and on nothing when neither is usable.
   const { instances, error: instancesError } = useBridgeInstances()
   const { machines } = useBridgeMachines()
   const assigneeIDs = useMemo(() => (assignments ?? []).map(a => a.principal_id), [assignments])
   const { listedBy, error: listsError } = useInstancesListedForPrincipals(assigneeIDs)
   const choices = useMemo(() => dispatchInstanceChoices(instances, machines, listedBy), [instances, machines, listedBy])
-  const { runsOn: lastRunsOn } = useSessionRunsOn(existingSession?.ref ?? null)
+  const { runsOn: lastRunsOn, error: lastRunsOnError } = useSessionRunsOn(existingSession?.ref ?? null)
+  const { board, error: boardError } = useBoardRecord(boardID)
+  const { bundles } = useBundles()
   const [chosenInstanceID, setChosenInstanceID] = useState<string | null>(null)
   useEffect(() => { setChosenInstanceID(null) }, [cardID])
-  const lastInstance = lastRunsOn ? instances.find(i => i.id === lastRunsOn.instanceID) : undefined
-  const selectedInstanceID = chosenInstanceID ?? (lastInstance?.enabled ? lastInstance.id : '')
+  // Nothing is preselected until both reads that decide it have answered: the
+  // card's last session and the board. Preselecting the board's default while
+  // the last session is still loading would let a quick click start paid work
+  // somewhere this card never ran.
+  const boardPending = !!boardID && !board && !boardError
+  const lastSessionPending = !!existingSession && !lastRunsOn && !lastRunsOnError
+  const target = boardPending || lastSessionPending || lastRunsOnError
+    ? null
+    : dispatchTargetForCard({ lastSessionInstanceID: lastRunsOn?.instanceID ?? null, board, instances })
+  const selectedInstanceID = chosenInstanceID ?? (target && target.kind !== 'none' ? target.instance.id : '')
   const selectedInstance = instances.find(i => i.id === selectedInstanceID && i.enabled)
   const targetNote = chosenInstanceID !== null
     ? ''
-    : lastRunsOn
-      ? lastInstance?.enabled
-        ? 'where this card’s last session ran'
-        : `this card’s last session ran on ${lastInstance ? `${lastInstance.name}, which is disabled` : `${lastRunsOn.instanceID}, which the bridge does not list`}`
-      : existingSession
+    : lastRunsOnError
+      ? `could not tell where this card’s last session ran (${lastRunsOnError})`
+      : !target
         ? ''
-        : 'this card has had no session yet'
+        : target.kind === 'last-session'
+          ? 'where this card’s last session ran'
+          : target.kind === 'board-default'
+            ? `the board’s default instance${target.lastSessionNote ? ` — ${target.lastSessionNote}` : ''}`
+            : target.why ?? 'this card has had no session yet'
   const principalName = (id: string) => principals.byId.get(id)?.display_name ?? id
 
   const suggestion = useMemo(
@@ -1393,6 +1478,13 @@ function AgentPromptPanel({
       setError('Choose where the agent runs first.')
       return
     }
+    // The board says which bundle a dispatch is provisioned with. Starting
+    // before its record has answered would start without the bundle, which is
+    // not what the board asks for.
+    if (boardID && !board) {
+      setError(boardError ? `Could not read this card's board, so its bundle is unknown: ${boardError}` : 'Still reading this card’s board.')
+      return
+    }
     setStarting(true)
     setError(null)
     try {
@@ -1400,6 +1492,7 @@ function AgentPromptPanel({
         basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
         instance: { id: selectedInstance.id, harness_type: selectedInstance.harness_type },
         principalId: bridgePrefs.default_principal_id,
+        bundleID: board?.default_bundle_id,
       })
       onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })
     } catch (e) {
@@ -1451,13 +1544,23 @@ function AgentPromptPanel({
         </select>
         {targetNote && <span className="bk-agent-target-note">{targetNote}</span>}
       </div>
+      {board?.default_bundle_id && (
+        <div className="bk-agent-target">
+          <span className="bk-drawer-label">Bundle</span>
+          <span className="bk-runs-on bk-board-bundle" data-bundle-id={board.default_bundle_id} title={BOARD_BUNDLE_HELP_TEXT}>
+            {boardBundleLabel(board.default_bundle_id, bundles)}
+          </span>
+          <span className="bk-agent-target-note">the board’s bundle — {BOARD_BUNDLE_HELP_TEXT}</span>
+        </div>
+      )}
+      {boardError && <div className="bridge-error">Could not read this card’s board: {boardError}</div>}
       {instancesError && <div className="bridge-error">Could not list harness instances: {instancesError}</div>}
       {listsError && <div className="bridge-error">Could not read an assignee’s list: {listsError}</div>}
       <div className="bk-agent-prompt-actions">
         <button
           type="button"
           className="bi-add-btn"
-          disabled={starting || !effective.trim() || !selectedInstance}
+          disabled={starting || !effective.trim() || !selectedInstance || (!!boardID && !board)}
           title={selectedInstance ? undefined : 'Choose where the agent runs first'}
           onClick={start}
         >{starting ? 'Starting…' : '▶ Start an agent on this'}</button>
@@ -1666,6 +1769,7 @@ export function CardDetail({
             prompt={agentPrompt}
             onPromptChange={next => { setAgentPrompt(next); setDirty(true) }}
             existingSession={latestSessionLink(card)}
+            boardID={card.placement.board_id || null}
             assignments={card.assignments}
             principals={principals}
             onAddLink={onAddLink}
