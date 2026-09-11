@@ -6,6 +6,7 @@ import { useKanban } from '../useKanban'
 import { getBoard, getPriorityLadder, patchBoard, putPriorityLadder, type KanbanStoreResult } from '../kanbanStoreClient'
 import { listMailAccounts, type MailAccount } from '../mailstackClient'
 import { useBundles } from '../useBundles'
+import { BoardMessageTriggersSection } from './BoardMessageTriggersSection'
 import { pickablePrincipals, usePrincipals } from '../usePrincipals'
 import { useAgentCatalog } from '../useResourceCatalogs'
 import { useBridgeInstances } from '../useBridgeInstances'
@@ -25,8 +26,8 @@ import type { Board, PriorityLadder } from '../types-kanban'
  * Board settings page: everything kanban-store keeps on a board besides its
  * columns — name and description, the working week, the priority ladder, the
  * defaults a dispatcher or classifier used to take as flags on a cron job
- * (principal, agent, instance, bundle), and the classifier that files mail
- * onto it. The board owns what a job runs with; the scheduler owns when.
+ * (principal, agent, instance, bundle), the classifier that files mail
+ * onto it, and the message triggers that text someone when a card changes. The board owns what a job runs with; the scheduler owns when.
  *
  * The board is `?board=<id>`; without one, the board the kanban page last
  * opened. Each section saves on its own and sends only what it changed, so an
@@ -162,6 +163,7 @@ function KanbanSettingsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string 
             fetchFn={fetchFn}
             mailBasePath={mailBasePath}
           />
+          <BoardMessageTriggersSection key={`message-triggers:${board.id}`} board={board} />
         </div>
       )}
     </div>
