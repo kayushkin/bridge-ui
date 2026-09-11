@@ -20,6 +20,7 @@ import type {
 import { useBridgeHarnesses } from '../../useBridgeHarnesses'
 import { useBridgeInstances } from '../../useBridgeInstances'
 import { useBridgeMachines } from '../../useBridgeMachines'
+import { usePrincipals } from '../../usePrincipals'
 import { useInstanceReachable } from '../../useInstanceReachable'
 import { formatCost } from '../../utils'
 import { CostBreakdown } from './CostBreakdown'
@@ -285,10 +286,11 @@ export default function SessionHeader({
               {detailsOpen && (
                 <div className={styles.detailsPanel} role="dialog" aria-label="Session details">
                   <SessionSettingsPanel settings={settings} controls={controls} />
-                  {pendingMachine && (
+                  {(pendingMachine || pending?.principalId) && (
                     <div className={styles.detailsSection}>
                       <span className={styles.detailsSectionLabel}>Target</span>
-                      <MachineChip machine={pendingMachine} reachable={machineReachable} />
+                      {pendingMachine && <MachineChip machine={pendingMachine} reachable={machineReachable} />}
+                      {pending?.principalId && <StartedAsChip principalId={pending.principalId} pending />}
                     </div>
                   )}
                 </div>
@@ -398,6 +400,7 @@ export default function SessionHeader({
                     </button>
                   </div>
                   {machine && <MachineChip machine={machine} reachable={machineReachable} />}
+                  {summary.principalId && <StartedAsChip principalId={summary.principalId} />}
                 </div>
 
                 {managed?.harnessConfig?.permissionMode !== undefined && (
@@ -530,6 +533,31 @@ function MachineMark({ machine, reachable }: { machine: Machine; reachable: bool
 }
 
 /** The full machine chip — emoji, NAME, dot — as shown inside the details dropdown. */
+/**
+ * Who the session was (or, on a pending pane, will be) started as. The
+ * session carries only the principal-store id; the name is resolved live from
+ * the shared directory so a rename shows without a copy going stale. A host
+ * that proxies no principal-store, or an id the directory does not know,
+ * shows the id itself — the chip is a true record either way.
+ */
+function StartedAsChip({ principalId, pending = false }: { principalId: string; pending?: boolean }) {
+  const principals = usePrincipals()
+  const principal = principals.byId.get(principalId)
+  const name = principal?.display_name ?? principalId
+  const detail = principal
+    ? `${principal.kind === 'group' ? 'group' : 'person'}${principal.disabled_at ? ', disabled' : ''}`
+    : principals.enabled && !principals.loading ? 'not in the directory' : ''
+  return (
+    <span
+      className="bc-started-as"
+      data-principal-id={principalId}
+      title={`${pending ? 'Will be started as' : 'Started as'} ${name} (${principalId})${detail ? ` — ${detail}` : ''}. Its grants decide what the session is offered.`}
+    >
+      <span className="bc-started-as-label">{pending ? 'starts as' : 'as'}</span> {name}
+    </span>
+  )
+}
+
 function MachineChip({ machine, reachable }: { machine: Machine; reachable: boolean | null }) {
   return (
     <span className="bc-machine-chip" title={machineTitle(machine, reachable)}>

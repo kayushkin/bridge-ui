@@ -4584,6 +4584,10 @@
 
 /* Grants on a principal: one block per relation, its lists inside. */
 .bp-grants { gap: 12px; }
+
+/* The chat header's "started as" chip: who the session runs as. */
+.bc-started-as { display: inline-flex; align-items: baseline; gap: 4px; font-size: 0.8em; color: var(--text); padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; }
+.bc-started-as-label { color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.4px; }
 .bp-relation { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .bp-relation-title { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 0.9em; font-weight: 600; color: var(--text); }
 .bp-badge-enforced { color: var(--accent); border-color: var(--accent); }
