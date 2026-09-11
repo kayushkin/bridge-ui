@@ -532,7 +532,7 @@ function ToolPicker({ exclude, onPick }: { exclude: ReadonlySet<string>; onPick:
       <span className={styles.fieldLabel}>add tool</span>
       <input className={styles.input} value={query} onChange={e => setQuery(e.target.value)} placeholder="filter tool-store…" aria-label="Filter tools" />
       {error && <span className={styles.error}>{error}</span>}
-      {options && <PickerResults kind="tool" options={options} onPick={option => onPick({ kind: 'tool', id: option.id, name: option.label, condition: '' })} />}
+      {options && <PickerResults kind="tool" options={options} onPick={option => { onPick({ kind: 'tool', id: option.id, name: option.label, condition: '' }); setQuery('') }} />}
     </div>
   )
 }
