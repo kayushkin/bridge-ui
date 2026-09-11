@@ -74,11 +74,12 @@ export interface SkillRecord {
   enabled: boolean
 }
 
-/** The part of tool-store's record a row needs. */
+/** The part of tool-store's record a row needs. tool-store omits
+ *  `display_name` when it is empty (`omitempty`), and most tools have none. */
 export interface ToolRecord {
   id: number
   name: string
-  display_name: string
+  display_name?: string
   kind: string
   enabled: boolean
 }
@@ -113,8 +114,11 @@ export function skillOption(skill: SkillRecord): ResourceOption {
   return { id: String(skill.id), label: skill.name, detail: skill.source_name, disabled: !skill.enabled }
 }
 
+/** Labelled by `name`, which every tool has, with `display_name` beside the
+ *  kind when there is one — the Bundles composer's wording. */
 export function toolOption(tool: ToolRecord): ResourceOption {
-  return { id: String(tool.id), label: tool.display_name, detail: `${tool.name} · ${tool.kind}`, disabled: !tool.enabled }
+  const detail = tool.display_name && tool.display_name !== tool.name ? `${tool.kind} · ${tool.display_name}` : tool.kind
+  return { id: String(tool.id), label: tool.name, detail, disabled: !tool.enabled }
 }
 
 export function compareOptionsByLabel(a: ResourceOption, b: ResourceOption): number {
