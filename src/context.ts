@@ -20,6 +20,7 @@ export interface BridgeRoutes {
   conformance: string
   kanban: string
   principals: string
+  grants: string
   bundles: string
   /** The host's services, their databases, and a read-only look inside.
    *  Not `/services`: dash owns that path for its topology page and matches
@@ -53,6 +54,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   conformance: '/conformance',
   kanban: '/kanban',
   principals: '/principals',
+  grants: '/grants',
   bundles: '/bundles',
   serviceInventory: '/service-inventory',
   orchestrator: '/orchestrator',
@@ -82,6 +84,10 @@ export interface BridgeConfig {
    * editor are hidden — the same convention as `kanbanStoreBasePath` hiding
    * the Kanban tab. */
   principalStoreBasePath: string
+  /** Base path for grant-store API (e.g. "/api/grants"). No trailing slash.
+   * If empty, the Grants tab is hidden, a principal shows no grants section,
+   * and the kanban "Runs on" picker has no assignee lists to put first. */
+  grantStoreBasePath: string
   /** Base path for bundle-store API (e.g. "/api/bundle-store"). No trailing
    * slash. If empty, the Bundles tab is hidden. */
   bundleStoreBasePath: string

@@ -26,9 +26,10 @@ import { CardDetail } from '../src/components/BridgeKanban.tsx'
 import {
   BridgePrincipals, MembershipsSection, PrincipalDetailView, PrincipalListView,
 } from '../src/components/BridgePrincipals.tsx'
-import { principalResourcesURL, principalsSearchURL } from '../src/principalStoreClient.ts'
-import { dispatchInstanceChoices, partitionResourceRows, resourceTypeWording } from '../src/principalResources.ts'
-import { ResourceGroup } from '../src/components/PrincipalResources.tsx'
+import { principalsSearchURL } from '../src/principalStoreClient.ts'
+import { effectiveGrantsURL } from '../src/grantStoreClient.ts'
+import { dispatchInstanceChoices, partitionGrantRows, relationWording, resourceTypeWording } from '../src/grantResources.ts'
+import { ResourceGroup } from '../src/components/PrincipalGrants.tsx'
 import { BridgeBundles, BundleCard } from '../src/components/BridgeBundles.tsx'
 import { SharedPoll, loadJSONList, sharedPoll } from '../src/sharedPoll.ts'
 import { bridgePrefsStoreFor, mergePrefs, reconcilePrefs } from '../src/bridgePrefsStore.ts'
@@ -1408,27 +1409,34 @@ console.log('\nagentPrompt — the suggestion')
   check('a stored prompt does not leak into the suggestion', !clean.includes('STALE INSTRUCTION'), clean)
 }
 
-// What a principal works with, and the card's "runs on" choices built from it.
-// principal-store keeps ids; these pin how rows are split into own and
-// inherited, what the select offers, and that a row always renders something.
-console.log('\nprincipal resources — a list, not a lock')
+// A principal's grants, and the card's "runs on" choices built from the
+// works_with ones. grant-store keeps ids; these pin how rows are split into own
+// and inherited, what the select offers, and that a row always renders something.
+console.log('\nprincipal grants')
 {
   const PERSON = 'principal_000004'
   const TEAM = 'principal_000003'
+  const grant = (id, principal_id, relation, resource_type, resource_id) =>
+    ({ id, seq: 1, principal_id, relation, resource_type, resource_id, note: '', granted_at: 1, revoked_at: 0 })
   const rows = [
-    { resource_type: 'instance', resource_id: 'inst-cc-local', assigned_to: PERSON, created_at: 1 },
-    { resource_type: 'instance', resource_id: 'inst-codex-local', assigned_to: TEAM, created_at: 1 },
-    { resource_type: 'skill', resource_id: '12', assigned_to: PERSON, created_at: 1 },
+    grant('grant_000001', PERSON, 'works_with', 'instance', 'inst-cc-local'),
+    grant('grant_000002', TEAM, 'works_with', 'instance', 'inst-codex-local'),
+    grant('grant_000003', PERSON, 'can_use', 'skill', '12'),
+    grant('grant_000004', PERSON, 'can_dispatch_on', 'instance', 'inst-cc-local'),
   ]
-  const { direct, inherited } = partitionResourceRows(rows, PERSON, 'instance')
-  check('a row assigned to the principal is its own', direct.map(r => r.resource_id).join() === 'inst-cc-local')
-  check('a row assigned to a group is inherited', inherited.map(r => r.resource_id).join() === 'inst-codex-local')
-  check('rows of other types are left out', [...direct, ...inherited].every(r => r.resource_type === 'instance'))
-  check('the list URL names one type when asked for one',
-    principalResourcesURL('/api/principals', PERSON, 'instance') === `/api/principals/principals/${PERSON}/resources?resource_type=instance`,
-    principalResourcesURL('/api/principals', PERSON, 'instance'))
+  const { direct, inherited } = partitionGrantRows(rows, PERSON, 'works_with', 'instance')
+  check('a grant held by the principal is its own', direct.map(r => r.resource_id).join() === 'inst-cc-local')
+  check('a grant held by a group is inherited', inherited.map(r => r.resource_id).join() === 'inst-codex-local')
+  check('rows of other relations and types are left out',
+    [...direct, ...inherited].every(r => r.resource_type === 'instance' && r.relation === 'works_with'))
+  check('the effective URL names the relation and type when asked for them',
+    effectiveGrantsURL('/api/grants', PERSON, { relation: 'works_with', resourceType: 'instance' })
+      === `/api/grants/principals/${PERSON}/effective?relation=works_with&resource_type=instance`,
+    effectiveGrantsURL('/api/grants', PERSON, { relation: 'works_with', resourceType: 'instance' }))
   check('machines are worded as environments, and an unknown type keeps its own name',
     resourceTypeWording('machine').plural === 'Environments' && resourceTypeWording('widget').plural === 'widget')
+  check('relations are worded, and an unknown one keeps its own name',
+    relationWording('can_use') === 'May use' && relationWording('may_fly') === 'may_fly')
 
   const machines = [{ id: 'm_localhost', name: 'Linode', emoji: '☁️' }, { id: 'm_ssdawn', name: 'SSDawn' }]
   const inst = (id, name, harness_type, machine_id, enabled = true) => ({ id, name, harness_type, machine_id, enabled })
@@ -1459,19 +1467,19 @@ console.log('\nprincipal resources — a list, not a lock')
   const jipitee = { id: 'inst-codex-local', label: 'Jipitee', detail: 'codex · ☁️ Linode', disabled: false }
   const ssdawn = { id: 'inst-ss', label: 'SSDawn', detail: 'claude_code · SSDawn', disabled: true }
   const group = (props) => renderToStaticMarkup(h(ResourceGroup, {
-    type: 'instance', principalID: PERSON, rows, groupNames: new Map([[TEAM, 'Platform Team']]),
+    relation: 'works_with', type: 'instance', principalID: PERSON, rows, groupNames: new Map([[TEAM, 'Platform Team']]),
     catalog: catalog([clawd, jipitee, ssdawn]), query: '', onQueryChange: () => {},
-    add: async () => ({ ok: true }), remove: async () => ({ ok: true }), onChanged: async () => {}, onOpen: () => {},
+    grant: async () => ({ ok: true }), revoke: async () => ({ ok: true }), onChanged: async () => {}, onOpen: () => {},
     ...props,
   }))
 
   const open = group({ initialPickerOpen: true })
   check('the heading is the type\'s wording with its count', open.includes('Harness instances') && open.includes('<span class="bp-count">2</span>'), open.slice(0, 300))
-  check('an own row can be removed', open.includes('aria-label="Remove Clawd"'))
+  check('an own row can be revoked', open.includes('aria-label="Revoke Clawd"'))
   check('an inherited row names its group and cannot be removed here',
-    open.includes('via Platform Team') && !open.includes('aria-label="Remove Jipitee"'))
+    open.includes('via Platform Team') && !open.includes('aria-label="Revoke Jipitee"'))
   check('the picker leaves out what is already on the own list',
-    !open.includes('title="Add Clawd"') && open.includes('title="Add Jipitee"') && open.includes('title="Add SSDawn"'))
+    !open.includes('title="Grant Clawd"') && open.includes('title="Grant Jipitee"') && open.includes('title="Grant SSDawn"'))
   check('a disabled option is flagged, not hidden', open.includes('bp-badge-disabled'))
 
   const unresolved = group({ catalog: catalog([], { settled: () => true }) })

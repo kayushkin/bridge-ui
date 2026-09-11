@@ -1,20 +1,21 @@
-// What a principal works with — the agents, harness instances, environments,
-// skills and tools principal-store lists against a person or a group — and the
+// The resources a grant names — the agents, harness instances, environments,
+// skills and tools grant-store holds against a person or a group — and the
 // pure helpers that turn those id rows into something a person can read.
 //
-// ⚠️ A list, not a lock. Nothing on this box refuses work outside it. The one
-// reader today is a card's agent picker, which offers the instances on an
-// assignee's list first. Permission grants belong to permission-store.
-//
-// principal-store keeps ids only, each the id its owner assigned: agent-store's
+// grant-store keeps ids only, each the id its owner assigned: agent-store's
 // numeric `agents.id` (not the slug, which agent-store lets you rename),
 // skill-store's and tool-store's numeric ids, and harness-store's instance and
 // machine ids. Names are resolved here, live, from those owners, so a rename
 // shows everywhere at once and no copied name can go stale.
+//
+// Whether a grant is a lock depends on its relation: `GET /relations` says
+// which ones llm-bridge-server enforces at session start. `works_with` is not
+// one of them — it is the list the card's "runs on" picker reads to offer an
+// assignee's instances first.
 
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import type { Machine } from './types'
-import type { PrincipalResource, PrincipalResourceType } from './types-principals'
+import type { Grant, GrantResourceType } from './types-grants'
 
 export interface ResourceTypeWording {
   /** Section heading: "Harness instances". */
@@ -25,7 +26,7 @@ export interface ResourceTypeWording {
   owner: string
 }
 
-const WORDING: Record<PrincipalResourceType, ResourceTypeWording> = {
+const WORDING: Record<GrantResourceType, ResourceTypeWording> = {
   agent: { plural: 'Agents', singular: 'agent', owner: 'agent-store' },
   instance: { plural: 'Harness instances', singular: 'harness instance', owner: 'harness-store' },
   // harness-store calls these machines; the operator calls them environments.
@@ -131,20 +132,34 @@ export function filterResourceOptions(
     && (!needle || `${option.label} ${option.detail} ${option.id}`.toLowerCase().includes(needle)))
 }
 
-/** One type's rows for one principal, split into the ones on its own list and
- *  the ones it inherits from a group. principal-store marks the difference with
- *  `assigned_to`: the principal asked about, or the group the row belongs to. */
-export function partitionResourceRows(
-  rows: readonly PrincipalResource[], principalID: string, resourceType: string,
-): { direct: PrincipalResource[]; inherited: PrincipalResource[] } {
-  const direct: PrincipalResource[] = []
-  const inherited: PrincipalResource[] = []
+/** One relation's rows of one type for one principal, split into the ones the
+ *  principal holds itself and the ones it inherits from a group. grant-store
+ *  marks the difference with the row's `principal_id`: the principal asked
+ *  about, or the group the grant belongs to. */
+export function partitionGrantRows(
+  rows: readonly Grant[], principalID: string, relation: string, resourceType: string,
+): { direct: Grant[]; inherited: Grant[] } {
+  const direct: Grant[] = []
+  const inherited: Grant[] = []
   for (const row of rows) {
-    if (row.resource_type !== resourceType) continue
-    if (row.assigned_to === principalID) direct.push(row)
+    if (row.relation !== relation || row.resource_type !== resourceType) continue
+    if (row.principal_id === principalID) direct.push(row)
     else inherited.push(row)
   }
   return { direct, inherited }
+}
+
+/** The words for a relation, as a section heading. The vocabulary itself comes
+ *  from `GET /relations`; only the wording lives here, and a relation this
+ *  library has no words for is shown under its own name rather than dropped. */
+export function relationWording(relation: string): string {
+  const known: Record<string, string> = {
+    can_use: 'May use',
+    can_run_as: 'May run as',
+    can_dispatch_on: 'May dispatch on',
+    works_with: 'Works with',
+  }
+  return known[relation] ?? relation
 }
 
 // --- the card's "runs on" picker -------------------------------------------

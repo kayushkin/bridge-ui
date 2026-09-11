@@ -78,15 +78,17 @@ export {
 export type {
   PrincipalStoreResult, PrincipalsSearch, CreatePrincipalRequest, PatchPrincipalRequest,
 } from './principalStoreClient'
-// What a principal works with — a list, not a lock — and where a session runs.
+// Grants — who may use what — and where a session runs.
 export {
-  listResourceTypes, principalResourcesURL, listPrincipalResources, addResourceToPrincipal, removeResourceFromPrincipal,
-} from './principalStoreClient'
-export type { PrincipalResource, PrincipalResourceType } from './types-principals'
+  grantStoreErrorText, grantsListURL, effectiveGrantsURL, listGrantRelations, listGrantResourceTypes, listGrants,
+  listEffectiveGrants, createGrant, revokeGrant,
+} from './grantStoreClient'
+export type { GrantStoreResult, GrantsFilter } from './grantStoreClient'
+export type { Grant, GrantRelation, GrantResourceType, CreateGrantRequest } from './types-grants'
 export {
-  resourceTypeWording, partitionResourceRows, filterResourceOptions, dispatchInstanceChoices, machineLabel,
-} from './principalResources'
-export type { ResourceOption, DispatchInstanceChoice, DispatchInstanceChoices } from './principalResources'
+  resourceTypeWording, relationWording, partitionGrantRows, filterResourceOptions, dispatchInstanceChoices, machineLabel,
+} from './grantResources'
+export type { ResourceOption, DispatchInstanceChoice, DispatchInstanceChoices } from './grantResources'
 export { fetchSessionRunsOn, useSessionRunsOn } from './sessionRunsOn'
 export type { SessionRunsOn } from './sessionRunsOn'
 export type {

@@ -1,6 +1,6 @@
 import type { FetchFn } from './types'
 import type {
-  GroupMembership, Principal, PrincipalDetail, PrincipalKind, PrincipalResource, PrincipalResourceType,
+  GroupMembership, Principal, PrincipalDetail, PrincipalKind,
 } from './types-principals'
 import type { PrincipalKindFilter } from './usePrincipals'
 
@@ -143,48 +143,4 @@ export function removeGroupMember(fetchFn: FetchFn, base: string, groupID: strin
     `${base}/principals/${encodeURIComponent(groupID)}/members/${encodeURIComponent(memberID)}`,
     { method: 'DELETE' },
   )
-}
-
-// --- what a principal works with --------------------------------------------
-//
-// A list, not a lock: the agents, harness instances, environments, skills and
-// tools a person or group works with. Nothing enforces it.
-
-export function listResourceTypes(fetchFn: FetchFn, base: string): Promise<PrincipalStoreResult<PrincipalResourceType[]>> {
-  return request<PrincipalResourceType[]>(fetchFn, 'list resource types', `${base}/resource-types`)
-}
-
-/** A principal's rows. For a person the store answers their own rows and the
- *  rows of every active group they are in, each marked with `assigned_to`. */
-export function principalResourcesURL(base: string, principalID: string, resourceType?: PrincipalResourceType): string {
-  const url = `${base}/principals/${encodeURIComponent(principalID)}/resources`
-  return resourceType ? `${url}?resource_type=${encodeURIComponent(resourceType)}` : url
-}
-
-export async function listPrincipalResources(
-  fetchFn: FetchFn, base: string, principalID: string, resourceType?: PrincipalResourceType,
-): Promise<PrincipalStoreResult<PrincipalResource[]>> {
-  const result = await request<PrincipalResource[] | null>(fetchFn, 'list resources', principalResourcesURL(base, principalID, resourceType))
-  return result.ok ? { ok: true, value: result.value ?? [] } : result
-}
-
-function principalResourceURL(base: string, principalID: string, resourceType: PrincipalResourceType, resourceID: string): string {
-  return `${base}/principals/${encodeURIComponent(principalID)}/resources/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceID)}`
-}
-
-/** `PUT` — 201 the first time, 200 after. The store checks the id with its
- *  owner first: an id the owner does not know is a 400 in the store's words, an
- *  owner that did not answer a 502. */
-export function addResourceToPrincipal(
-  fetchFn: FetchFn, base: string, principalID: string, resourceType: PrincipalResourceType, resourceID: string,
-): Promise<PrincipalStoreResult<PrincipalResource>> {
-  return request<PrincipalResource>(fetchFn, 'add resource', principalResourceURL(base, principalID, resourceType, resourceID), { method: 'PUT' })
-}
-
-/** `DELETE` — no owner check, so a row whose resource is gone upstream can
- *  still be taken off the list. */
-export function removeResourceFromPrincipal(
-  fetchFn: FetchFn, base: string, principalID: string, resourceType: PrincipalResourceType, resourceID: string,
-): Promise<PrincipalStoreResult<void>> {
-  return request<void>(fetchFn, 'remove resource', principalResourceURL(base, principalID, resourceType, resourceID), { method: 'DELETE' })
 }

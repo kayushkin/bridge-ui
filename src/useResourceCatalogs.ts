@@ -1,6 +1,6 @@
-// The live lookups behind a principal's "Works with" lists — for each resource
-// type, the owner's current names and a search for the picker — and the card's
-// read of which harness instances its assignees' lists carry.
+// The live lookups behind a principal's grants lists and the Grants page — for
+// each resource type, the owner's current names and a search for the picker —
+// and the card's read of which harness instances its assignees work with.
 //
 // One hook per type rather than one hook with a switch, because each owner is
 // asked differently: instances and environments come from the bridge's shared
@@ -12,11 +12,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { useBridgeInstances } from './useBridgeInstances'
 import { useBridgeMachines } from './useBridgeMachines'
-import { listPrincipalResources } from './principalStoreClient'
+import { listEffectiveGrants } from './grantStoreClient'
 import {
   agentOption, compareOptionsByLabel, filterResourceOptions, instanceOption, machineOption, skillOption, toolOption,
   type AgentRecord, type ResourceOption, type SkillRecord, type ToolRecord,
-} from './principalResources'
+} from './grantResources'
 
 export interface ResourceCatalog {
   /** Set when this host has no route to the owner, saying so. Names cannot be
@@ -184,16 +184,16 @@ export function useSkillCatalog(query: string, resolveIDs: readonly string[]): R
 }
 
 /**
- * For a card: which harness instances its assignees' lists carry, as instance
- * id → the assignees whose list has it (a person's list includes their groups').
- * Empty, with no error, when the host has no principal-store route or the card
- * has nobody on it.
+ * For a card: which harness instances its assignees work with, as instance id
+ * → the assignees who do — grant-store's `works_with` relation, a person's
+ * effective set including their groups'. Empty, with no error, when the host
+ * has no grant-store route or the card has nobody on it.
  */
 export function useInstancesListedForPrincipals(principalIDs: readonly string[]): {
   listedBy: ReadonlyMap<string, string[]>
   error: string | null
 } {
-  const { fetch: fetchFn, principalStoreBasePath: base } = useBridgeConfig()
+  const { fetch: fetchFn, grantStoreBasePath: base } = useBridgeConfig()
   const key = principalIDs.join(',')
   const [state, setState] = useState<{ listedBy: ReadonlyMap<string, string[]>; error: string | null }>(
     { listedBy: new Map(), error: null },
@@ -205,7 +205,7 @@ export function useInstancesListedForPrincipals(principalIDs: readonly string[])
     }
     let cancelled = false
     const ids = key.split(',')
-    Promise.all(ids.map(id => listPrincipalResources(fetchFn, base, id, 'instance').then(result => ({ id, result }))))
+    Promise.all(ids.map(id => listEffectiveGrants(fetchFn, base, id, { relation: 'works_with', resourceType: 'instance' }).then(result => ({ id, result }))))
       .then(answers => {
         if (cancelled) return
         const listedBy = new Map<string, string[]>()

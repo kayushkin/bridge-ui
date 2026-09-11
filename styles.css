@@ -4581,6 +4581,34 @@
 }
 .bp-resource-via:hover { color: var(--accent); border-color: var(--accent); }
 .bp-resource .bp-membership-remove { margin-left: auto; }
+
+/* Grants on a principal: one block per relation, its lists inside. */
+.bp-grants { gap: 12px; }
+.bp-relation { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.bp-relation-title { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 0.9em; font-weight: 600; color: var(--text); }
+.bp-badge-enforced { color: var(--accent); border-color: var(--accent); }
+.bp-badge-advisory { color: var(--text-muted); border-color: var(--border); }
+
+/* The Grants page: the whole ledger, and the form that writes one. */
+.bg-head { display: flex; flex-direction: column; gap: 4px; }
+.bg-title { margin: 0; font-size: 1.1em; }
+.bg-form, .bg-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+.bg-form { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.bg-filter { display: flex; flex-direction: column; gap: 3px; font-size: 0.8em; color: var(--text-muted); min-width: 140px; }
+.bg-filter select, .bg-filter input[type="text"], .bg-filter .bp-picker-query { font-size: 0.95rem; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+.bg-filter-check { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.bg-resource-picker { min-width: 260px; position: relative; }
+.bg-chosen { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+.bg-note-field { flex: 1 1 220px; }
+.bg-form-error, .bg-form-outcome { flex-basis: 100%; }
+.bg-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.bg-table th { text-align: left; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.bg-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.bg-row-revoked td { opacity: 0.6; }
+.bg-resource { display: flex; flex-direction: column; gap: 2px; }
+.bg-resource-unresolved { font-family: var(--mono, ui-monospace, monospace); opacity: 0.7; }
+.bg-holder .bp-badge, .bg-when .bp-badge { margin-left: 6px; }
+.bg-actions { text-align: right; white-space: nowrap; }
 .bp-resource-match { display: flex; align-items: center; gap: 8px; }
 
 .bp-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; max-width: 480px; }

@@ -20,6 +20,10 @@ export interface BridgeProviderProps {
   /** Base path for principal-store API. If omitted, kanban cards show no
    * assignee chips and the card drawer has no assignee editor. */
   principalStoreBasePath?: string
+  /** Base path for grant-store API. If omitted, the Grants tab is hidden, a
+   * principal shows no grants section, and the kanban "Runs on" picker has no
+   * assignee lists to put first. */
+  grantStoreBasePath?: string
   /** Base path for bundle-store API. If omitted, the Bundles tab is hidden. */
   bundleStoreBasePath?: string
   /** Base path for repo-store API. If omitted, the Bundles page lists bundles
@@ -64,6 +68,7 @@ export function BridgeProvider({
   permissionStoreBasePath = '',
   kanbanStoreBasePath = '',
   principalStoreBasePath = '',
+  grantStoreBasePath = '',
   bundleStoreBasePath = '',
   repoStoreBasePath = '',
   mailBasePath = '',
@@ -85,6 +90,7 @@ export function BridgeProvider({
     permissionStoreBasePath,
     kanbanStoreBasePath,
     principalStoreBasePath,
+    grantStoreBasePath,
     bundleStoreBasePath,
     repoStoreBasePath,
     mailBasePath,
@@ -96,7 +102,7 @@ export function BridgeProvider({
     usageStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

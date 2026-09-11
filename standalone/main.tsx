@@ -27,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
         toolStoreBasePath="/api/tool-store"
         kanbanStoreBasePath="/api/kanban"
         principalStoreBasePath="/api/principals"
+        grantStoreBasePath="/api/grants"
         bundleStoreBasePath="/api/bundle-store"
         repoStoreBasePath="/api/repo-store"
       />
