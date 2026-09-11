@@ -5483,7 +5483,9 @@
 .bks-ladder th { text-align: left; font-size: 0.8em; font-weight: 400; color: var(--text-muted); padding: 0 2px; }
 .bks-ladder td { vertical-align: middle; }
 .bks-ladder-value, .bks-ladder-amount { width: 6em; }
-.bks-ladder-budget { display: inline-flex; gap: 4px; align-items: center; }
+/* A <td>: display must stay table-cell, so the amount and unit sit inline. */
+.bks-ladder-budget { white-space: nowrap; }
+.bks-ladder-budget > * + * { margin-left: 4px; }
 .bks-accounts { display: flex; flex-direction: column; gap: 4px; }
 .bks-account-detail { font-size: 0.8em; color: var(--text-dim); margin-left: 4px; }
 .bks-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
