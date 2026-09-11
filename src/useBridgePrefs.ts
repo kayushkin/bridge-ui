@@ -64,6 +64,12 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     updatePrefs({ last_instance: { [harness]: instanceId } })
   }, [updatePrefs])
 
+  // Who new sessions are started as. '' clears: the server and `mergePrefs`
+  // both key this field on presence, so an empty string is a real instruction.
+  const setDefaultPrincipalId = useCallback((principalId: string) => {
+    updatePrefs({ default_principal_id: principalId })
+  }, [updatePrefs])
+
   // The three getters read the store's live snapshot rather than this render's
   // copy, so a caller that reads-modifies-writes — every writer of `defaults`
   // does, because `PUT /bridge-prefs` replaces a harness's record whole — merges
@@ -101,6 +107,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     setLastInstanceId,
     setLastSession,
     setLastInstance,
+    setDefaultPrincipalId,
     setHarnessDefaults,
     getDefaults,
     getLastInstance,
@@ -113,6 +120,7 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     setLastInstanceId,
     setLastSession,
     setLastInstance,
+    setDefaultPrincipalId,
     setHarnessDefaults,
     getDefaults,
     getLastInstance,

@@ -50,6 +50,12 @@ export function mergePrefs(prev: BridgePrefs, partial: BridgePrefs): BridgePrefs
   if (partial.last_session) next.last_session = { ...next.last_session, ...partial.last_session }
   if (partial.last_instance) next.last_instance = { ...next.last_instance, ...partial.last_instance }
   if (partial.defaults) next.defaults = { ...next.defaults, ...partial.defaults }
+  // Keyed on presence, not truth: '' is how the Settings page clears it, and the
+  // server merges this one field the same way.
+  if ('default_principal_id' in partial) {
+    if (partial.default_principal_id) next.default_principal_id = partial.default_principal_id
+    else delete next.default_principal_id
+  }
   return next
 }
 

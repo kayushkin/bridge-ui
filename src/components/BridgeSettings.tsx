@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
+import { pickablePrincipals, principalIsDisabled, usePrincipals } from '../usePrincipals'
 import { useBridgeHarnesses, harnessNameKey, harnessNamesFromKey } from '../useBridgeHarnesses'
 import {
   PermissionModeAsk,
@@ -94,6 +95,12 @@ export function BridgeSettings() {
         prefs={bridgePrefs.prefs}
         loaded={bridgePrefs.loaded}
         refreshPrefs={bridgePrefs.refreshPrefs}
+      />
+
+      <DefaultPrincipalSelector
+        value={bridgePrefs.prefs.default_principal_id ?? ''}
+        loaded={bridgePrefs.loaded}
+        onChange={bridgePrefs.setDefaultPrincipalId}
       />
 
       <h2 className="bset-title">Harness Defaults</h2>
@@ -271,6 +278,68 @@ function PermissionsModeSelector({ apiFetch, basePath, prefs, loaded, refreshPre
         This is the global default. Each new session snapshots it at creation and can be overridden per-session via the mode selector in the chat controls bar.
       </p>
       {error && <p className="bset-error">{error}</p>}
+    </div>
+  )
+}
+
+/**
+ * Who new sessions are started as. The chat's pending pane and the kanban
+ * dispatcher both send this principal on the create; the server then offers
+ * the session only what the principal's grants (grant-store) name. None means
+ * sessions are created with no principal, which is how every session behaved
+ * before the setting existed.
+ *
+ * Offered from principal-store's directory, so a host that proxies none gets
+ * the explanation rather than a text box to paste an id into.
+ */
+function DefaultPrincipalSelector({ value, loaded, onChange }: {
+  value: string
+  loaded: boolean
+  onChange: (principalId: string) => void
+}) {
+  const principals = usePrincipals()
+  if (!loaded) return null
+  const options = pickablePrincipals(principals.list, { query: '', kind: 'all', excludeIDs: new Set() })
+  const current = principals.byId.get(value)
+  const offered = options.some(principal => principal.id === value)
+  return (
+    <div className="bset-bypass-card" data-testid="default-principal">
+      <h2 className="bset-title">Session identity</h2>
+      {!principals.enabled ? (
+        <p className="bset-subtitle">This host proxies no principal-store, so sessions are created with no principal.</p>
+      ) : (
+        <>
+          <div className="bset-bypass-row">
+            <label className="bset-mode-row">
+              <strong>New sessions start as:</strong>
+              <select
+                className="bset-mode-select"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                aria-label="Default principal"
+              >
+                <option value="">Nobody — no principal, no grant filtering</option>
+                {options.map(principal => (
+                  <option key={principal.id} value={principal.id}>
+                    {principal.display_name}{principal.kind === 'group' ? ' (group)' : ''}
+                  </option>
+                ))}
+                {value && !offered && (
+                  <option value={value}>
+                    {current ? `${current.display_name}${principalIsDisabled(current) ? ' (disabled)' : ''}` : `${value} (not in the directory)`}
+                  </option>
+                )}
+              </select>
+            </label>
+          </div>
+          <p className="bset-subtitle">
+            The chat and the kanban dispatcher send this principal when they create a session. The server checks it with
+            principal-store and, at spawn, offers the session only the tools the principal's grants name — the Grants tab
+            holds those. A principal with no tool grants at all gets the instance's own opt-ins, unchanged.
+          </p>
+          {principals.error && <p className="bset-error">Could not read principal-store: {principals.error}</p>}
+        </>
+      )}
     </div>
   )
 }

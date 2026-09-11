@@ -27,6 +27,13 @@ export type DispatchAgentArgs = {
    * them separately would only invite a 400.
    */
   instance: { id: string; harness_type: string }
+  /**
+   * Who the session is started as: a principal-store id, or undefined for
+   * none. The bridge's Settings page keeps the default in bridge-prefs; the
+   * kanban page reads it and passes it here. The server checks it and, at
+   * spawn, offers only what the principal's grants name.
+   */
+  principalId?: string
 }
 
 /**
@@ -47,7 +54,7 @@ export type DispatchAgentArgs = {
  * quietly treat a failed dispatch as a started one.
  */
 export async function dispatchAgentOnCard(args: DispatchAgentArgs): Promise<string> {
-  const { basePath, fetchFn, title, prompt, addLink, instance } = args
+  const { basePath, fetchFn, title, prompt, addLink, instance, principalId } = args
 
   const trimmed = prompt.trim()
   if (!trimmed) throw new Error('refusing to start an agent with an empty prompt')
@@ -63,6 +70,7 @@ export async function dispatchAgentOnCard(args: DispatchAgentArgs): Promise<stri
       type: 'autonomous',
       purpose: 'dispatcher',
       origin: 'kanban-card',
+      ...(principalId ? { principal_id: principalId } : {}),
     }),
   })
   if (!created.ok) throw new Error(`create session: HTTP ${created.status}`)

@@ -19,6 +19,7 @@ import { useBridgeMachines } from '../useBridgeMachines'
 import { fetchSessionRunsOn, useSessionRunsOn } from '../sessionRunsOn'
 import { dispatchInstanceChoices, machineLabel } from '../grantResources'
 import { useInstancesListedForPrincipals } from '../useResourceCatalogs'
+import { useBridgePrefs } from '../useBridgePrefs'
 import { SIGNAL_KIND_QUESTION, groupSignalsByRequest, type Signal } from '@kayushkin/chat-core'
 import { SignalRequestCard } from './chat/SignalCard'
 import { useOpenSignalsByTodo, useOpenSignalsForTodo } from '../kanbanSignals'
@@ -151,6 +152,8 @@ export function BridgeKanban() {
     // board is a one-off request that hook has no verb for.
     kanbanStoreBasePath,
   } = useBridgeConfig()
+  // Who a dispatched session is started as: the Settings page's default.
+  const { prefs: bridgePrefs } = useBridgePrefs({ fetch: fetchFn, endpoint: `${bridgeBasePath}/bridge-prefs` })
   const navigate = useNavigate()
   const openSessionLink = (link: SessionLinkRef) => {
     navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
@@ -494,6 +497,7 @@ export function BridgeKanban() {
                         prompt,
                         addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
                         instance: { id: instance.id, harness_type: instance.harness_type },
+                        principalId: bridgePrefs.default_principal_id,
                       })
                       navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
                       return true
@@ -1344,6 +1348,7 @@ function AgentPromptPanel({
   fetchFn: FetchFn
 }) {
   const { basePath } = useBridgeConfig()
+  const { prefs: bridgePrefs } = useBridgePrefs({ fetch: fetchFn, endpoint: `${basePath}/bridge-prefs` })
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -1394,6 +1399,7 @@ function AgentPromptPanel({
       const sessionID = await dispatchAgentOnCard({
         basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
         instance: { id: selectedInstance.id, harness_type: selectedInstance.harness_type },
+        principalId: bridgePrefs.default_principal_id,
       })
       onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })
     } catch (e) {

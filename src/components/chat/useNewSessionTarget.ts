@@ -71,6 +71,7 @@ export function useNewSessionTarget(): NewSessionTarget {
     endpoint: `${basePath}/bridge-prefs`,
   })
   const { instances, instanceMap, loading } = useBridgeInstances()
+  const defaultPrincipalId = prefs.default_principal_id
 
   const optsFor = useCallback(
     (instanceId: string, harness: string): NewChatOpts => {
@@ -89,6 +90,9 @@ export function useNewSessionTarget(): NewSessionTarget {
       return {
         instanceId,
         harness,
+        // Who the session is started as: the Settings page's default, if one is
+        // set. Absent means the session is created with no principal.
+        ...(defaultPrincipalId ? { principalId: defaultPrincipalId } : {}),
         ...(defaults.model ? { model: defaults.model } : {}),
         ...(defaults.effort ? { effort: defaults.effort } : {}),
         ...(defaults.max_budget !== undefined ? { maxBudget: defaults.max_budget } : {}),
@@ -97,7 +101,7 @@ export function useNewSessionTarget(): NewSessionTarget {
           : {}),
       }
     },
-    [getDefaults],
+    [getDefaults, defaultPrincipalId],
   )
 
   const opts = useMemo((): NewChatOpts | undefined => {
