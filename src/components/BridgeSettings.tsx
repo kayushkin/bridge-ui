@@ -313,7 +313,7 @@ function DefaultPrincipalSelector({ value, loaded, onChange }: {
             <label className="bset-mode-row">
               <strong>New sessions start as:</strong>
               <select
-                className="bset-mode-select"
+                className="bset-principal-select"
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 aria-label="Default principal"
