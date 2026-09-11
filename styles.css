@@ -5477,8 +5477,11 @@
 .bks-id-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .bks-id-select { min-width: 16em; flex: 1 1 16em; }
 .bks-id-input { flex: 1 1 12em; font-family: var(--mono, ui-monospace, monospace); }
-.bks-ladder { display: flex; flex-direction: column; gap: 6px; }
-.bks-ladder-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* The ladder is a real table, so its rules must not make it a flex box: that
+   collapses the header cells into one cramped line. */
+.bks-ladder { border-collapse: separate; border-spacing: 6px 4px; margin: 0 -6px; }
+.bks-ladder th { text-align: left; font-size: 0.8em; font-weight: 400; color: var(--text-muted); padding: 0 2px; }
+.bks-ladder td { vertical-align: middle; }
 .bks-ladder-value, .bks-ladder-amount { width: 6em; }
 .bks-ladder-budget { display: inline-flex; gap: 4px; align-items: center; }
 .bks-accounts { display: flex; flex-direction: column; gap: 4px; }
@@ -5486,5 +5489,22 @@
 .bks-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .bks-saved { font-size: 0.85em; color: #22c55e; }
 .bks-error { font-size: 0.85em; color: #ef4444; white-space: pre-wrap; }
+.bks-notice { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; background: rgba(234, 179, 8, 0.12); color: #eab308; }
+.bks-triggers { display: flex; flex-direction: column; gap: 6px; }
+.bks-trigger { display: flex; flex-direction: column; gap: 6px; }
+.bks-trigger-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.bks-trigger-row.is-disabled { opacity: 0.6; }
+.bks-trigger-name { font-weight: 600; color: var(--text); }
+.bks-trigger-summary { flex: 1 1 20em; font-size: 0.85em; color: var(--text-muted); overflow-wrap: anywhere; }
+.bks-trigger-editor { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px dashed var(--border); border-radius: 6px; }
+.bks-trigger-template { min-height: 4.5em; font-family: var(--mono, ui-monospace, monospace); }
+.bks-deliveries { display: flex; flex-direction: column; gap: 6px; font-size: 0.85em; }
+.bks-delivery { display: grid; grid-template-columns: 11em 8em 1fr; gap: 8px; align-items: baseline; }
+.bks-delivery-time { color: var(--text-dim); }
+.bks-delivery-status[data-status="sent"] { color: #22c55e; }
+.bks-delivery-status[data-status="failed"] { color: #ef4444; }
+.bks-delivery-status[data-status="not_configured"] { color: #eab308; }
+.bks-delivery-status[data-status="pending"] { color: var(--text-muted); }
+.bks-delivery-message { white-space: pre-wrap; color: var(--text); }
 /* "⚙ Board settings" is a router Link wearing the add-button style. */
 .bk-board-settings-link { display: inline-block; text-decoration: none; }
