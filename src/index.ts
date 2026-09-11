@@ -148,12 +148,17 @@ export { BridgeKanban } from './components/BridgeKanban'
 // The principal-store editor. Renders nothing without `principalStoreBasePath`,
 // and BridgeLayout shows no tab for it then either.
 export { BridgePrincipals } from './components/BridgePrincipals'
-// bundle-store's curated session bundles and the resolve preview. Renders
-// nothing without `bundleStoreBasePath`, and BridgeLayout shows no tab then.
+// bundle-store's curated session bundles, a composer that writes them, and
+// the resolve preview. Renders nothing without `bundleStoreBasePath`, and
+// BridgeLayout shows no tab then.
 export { BridgeBundles } from './components/BridgeBundles'
 export type {
   Bundle, BundleMember, BundleMemberKind, BundleMemberRef, BundleRef, BundleResolution, RepoStoreRepo,
 } from './types-bundles'
+export { bundleDraftOf, bundleDraftToWire, emptyBundleDraft, parseTagList } from './bundleDraft'
+export type { BundleDraft, BundleDraftMember, BundleDraftResult, BundleWrite } from './bundleDraft'
+export { deleteBundle, listBundles, resolveBundles, setBundleEnabled, upsertBundle } from './bundleStoreClient'
+export type { BundleStoreResult } from './bundleStoreClient'
 // The host's services (healthcheck's list), the SQLite files each holds open,
 // their schemas and newest rows — read-only, through the bridge server's
 // `/services` routes on `basePath`.

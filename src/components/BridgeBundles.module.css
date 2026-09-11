@@ -62,3 +62,53 @@
 
 .previewRow { display: flex; gap: 4px; flex-wrap: wrap; align-items: baseline; }
 .previewLabel { font-size: 0.7em; text-transform: uppercase; color: var(--text-dim); width: 60px; flex: none; }
+
+/* Writing bundles: the column head with its New button, the card actions, and
+   the composer form with its member pickers. */
+.columnHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cardActions { display: inline-flex; gap: 4px; margin-left: auto; }
+.smallButton {
+  font: inherit; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+  background: var(--bg); color: var(--text-muted); border: 1px solid var(--border);
+}
+.smallButton:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.smallButton:disabled { opacity: 0.6; cursor: default; }
+.dangerButton:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
+.primaryButton {
+  font: inherit; font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+  background: var(--accent); color: var(--accent-on, #fff); border: 1px solid var(--accent);
+}
+.primaryButton:hover:not(:disabled) { background: var(--accent-hover, var(--accent)); }
+.primaryButton:disabled { opacity: 0.6; cursor: default; }
+
+.composer {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg);
+}
+.composerTitle { font-weight: 600; font-size: 0.9em; color: var(--text); }
+.composerActions { display: flex; gap: 6px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.fieldRow { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.checkField { flex-direction: row; align-items: center; gap: 6px; flex: none; padding-bottom: 6px; }
+.fieldLabel { font-size: 0.7em; text-transform: uppercase; color: var(--text-dim); }
+.fieldHint { font-size: 0.75em; color: var(--text-muted); }
+.fieldWarning { font-size: 0.75em; color: var(--warning); }
+.input {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 0.85em;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 8px; border-radius: 6px;
+}
+.input:focus { outline: none; border-color: var(--accent); }
+.memberRow { display: flex; gap: 6px; align-items: center; }
+.conditionInput { flex: 1; font-size: 0.78em; padding: 3px 6px; }
+
+.picker { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 200px; }
+.pickerList {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
+  max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;
+}
+.pickerRow {
+  display: flex; gap: 6px; align-items: center; width: 100%; text-align: left;
+  padding: 4px 6px; border: 0; background: transparent; color: var(--text); cursor: pointer; font: inherit;
+}
+.pickerRow:hover { background: var(--accent-soft, rgba(99, 102, 241, 0.12)); }

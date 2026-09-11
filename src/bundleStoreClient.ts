@@ -1,5 +1,6 @@
 import type { FetchFn } from './types'
 import type { Bundle, BundleResolution, RepoStoreRepo } from './types-bundles'
+import type { BundleWrite } from './bundleDraft'
 
 // The bundle-store and repo-store reads the Bundles page makes, as typed
 // functions over the host's authenticated fetch.
@@ -57,4 +58,30 @@ export function resolveBundles(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_tags: repoTags, task_tags: taskTags }),
   })
+}
+
+// Writes. Each answers what the store answered, so the page can show the
+// stored row (an upsert hands back the bundle with its id and the parent's
+// name settled) or the refusal in the store's words — a duplicate member, a
+// parent that does not exist, a delete refused because children extend it.
+
+/** `POST /bundles` — an upsert on `name`: the whole member set is replaced. */
+export function upsertBundle(fetchFn: FetchFn, bundleStoreBasePath: string, body: BundleWrite): Promise<BundleStoreResult<Bundle>> {
+  return request(fetchFn, `save bundle ${body.name}`, `${bundleStoreBasePath}/bundles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function setBundleEnabled(
+  fetchFn: FetchFn, bundleStoreBasePath: string, id: number, enabled: boolean,
+): Promise<BundleStoreResult<{ id: number; enabled: boolean }>> {
+  const verb = enabled ? 'enable' : 'disable'
+  return request(fetchFn, `${verb} bundle ${id}`, `${bundleStoreBasePath}/bundles/${id}/${verb}`, { method: 'POST' })
+}
+
+/** Refused with 409 when other bundles extend this one; the message names them. */
+export function deleteBundle(fetchFn: FetchFn, bundleStoreBasePath: string, id: number): Promise<BundleStoreResult<{ status: string }>> {
+  return request(fetchFn, `delete bundle ${id}`, `${bundleStoreBasePath}/bundles/${id}`, { method: 'DELETE' })
 }
