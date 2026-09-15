@@ -4159,7 +4159,6 @@
 .bk-runs-on-harness { font-family: var(--mono, ui-monospace, monospace); font-size: 0.85em; opacity: 0.75; }
 .bk-runs-on-machine { opacity: 0.85; }
 .bk-runs-on-unknown { color: #d97706; }
-.bk-default-source { font-size: 0.8em; color: var(--text-dim); margin-left: 6px; }
 .bk-link-list .bk-runs-on { margin-left: 6px; font-size: 0.85em; }
 
 /* The drawer's timing summary. A row per question so the three ages line up and
@@ -5532,3 +5531,47 @@
 .bks-preview-table .bks-default-source { color: var(--text-dim); }
 /* "⚙ Board settings" is a router Link wearing the add-button style. */
 .bk-board-settings-link { display: inline-block; text-decoration: none; }
+
+/* --- Principals: availability --------------------------------------------- */
+/* A human's declared working week, the absences beside it, and the answer
+   principal-store reduces them to. Groups never render this section. */
+
+.bp-availability-week { display: flex; flex-direction: column; gap: 10px; }
+.bp-week-current { margin: 0; font-size: 0.9em; color: var(--text); }
+/* No declared week is not a blank — it means unavailable, so it is coloured
+   like the warning it is rather than like missing text. */
+.bp-week-none { color: #d97757; }
+
+.bp-weekdays { display: flex; flex-wrap: wrap; gap: 6px; }
+.bp-weekday {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 9px; font-size: 0.85em; color: var(--text-muted); cursor: pointer;
+}
+.bp-weekday:hover { color: var(--text); }
+.bp-weekday-on { border-color: #22c55e; color: var(--text); background: rgba(34,197,94,0.10); }
+
+.bp-hours-row { flex-direction: row; gap: 14px; }
+.bp-hours-row > div { display: flex; flex-direction: column; gap: 3px; }
+.bp-time-input { max-width: 130px; }
+
+.bp-actions { display: flex; align-items: center; gap: 10px; }
+.bp-subsection-title {
+  margin: 0; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+}
+
+.bp-availability-timeoff { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.bp-timeoff-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.bp-timeoff-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 0.85em;
+}
+.bp-timeoff-range { color: var(--text); }
+.bp-timeoff-note { color: var(--text-muted); font-style: italic; }
+.bp-timeoff-add { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+
+.bp-availability-probe { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.bp-probe-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bp-availability-answer { margin: 0; font-size: 0.9em; }
+.bp-available { color: #22c55e; }
+.bp-unavailable { color: #d97757; }

@@ -7,6 +7,7 @@ import {
 } from '../principalStoreClient'
 import { createGrant, listEffectiveGrants, listGrantRelations, revokeGrant } from '../grantStoreClient'
 import { PrincipalGrantsSection, type PrincipalGrantsAccess } from './PrincipalGrants'
+import { PrincipalAvailabilitySection } from './PrincipalAvailabilitySection'
 import type { PatchPrincipalRequest, PrincipalStoreResult, PrincipalsSearch } from '../principalStoreClient'
 import { pickablePrincipals, principalInitials, principalIsDisabled } from '../usePrincipals'
 import type { PrincipalKindFilter } from '../usePrincipals'
@@ -221,6 +222,8 @@ function PrincipalsPage({ fetchFn, base, grantStoreBase }: { fetchFn: FetchFn; b
           ) : (
             <PrincipalDetailView
               detail={detail}
+              fetchFn={fetchFn}
+              base={base}
               loading={detailLoading}
               readError={detailError}
               save={patch => patchPrincipal(fetchFn, base, detail.id, patch)}
@@ -397,6 +400,12 @@ function PrincipalCreateForm({ kinds, kindsError, create, onCreated }: Principal
 
 export interface PrincipalDetailViewProps {
   detail: PrincipalDetail
+  /** The host's authenticated fetch and principal-store's base path. The
+   *  Availability section reads and writes several routes of its own — the day
+   *  codes, the reasons, the absences, the reduced answer — and threading a
+   *  callback per route through here would say less than the two it needs. */
+  fetchFn: FetchFn
+  base: string
   /** A re-read is in flight. The old detail stays on screen meanwhile. */
   loading: boolean
   /** The last re-read's failure, if the detail on screen may be stale. */
@@ -416,8 +425,8 @@ export interface PrincipalDetailViewProps {
 }
 
 export function PrincipalDetailView({
-  detail, loading, readError, save, setDisabled, addMembership, removeMembership, searchCandidates, onChanged, onOpen,
-  grants,
+  detail, fetchFn, base, loading, readError, save, setDisabled, addMembership, removeMembership, searchCandidates,
+  onChanged, onOpen, grants,
 }: PrincipalDetailViewProps) {
   const disabled = principalIsDisabled(detail)
   const [statusBusy, setStatusBusy] = useState(false)
@@ -479,6 +488,17 @@ export function PrincipalDetailView({
         </p>
         {statusError && <div className="bridge-error bp-error">{statusError}</div>}
       </section>
+
+      {!isGroup && (
+        <PrincipalAvailabilitySection
+          key={`availability:${detail.id}`}
+          detail={detail}
+          fetchFn={fetchFn}
+          base={base}
+          save={save}
+          onSaved={onChanged}
+        />
+      )}
 
       {isGroup ? (
         <MembershipsSection

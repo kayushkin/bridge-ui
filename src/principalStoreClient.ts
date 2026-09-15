@@ -1,6 +1,6 @@
 import type { FetchFn } from './types'
 import type {
-  GroupMembership, Principal, PrincipalDetail, PrincipalKind,
+  Availability, AvailabilityAnswer, GroupMembership, Principal, PrincipalDetail, PrincipalKind, TimeOff,
 } from './types-principals'
 import type { PrincipalKindFilter } from './usePrincipals'
 
@@ -116,6 +116,11 @@ export function createPrincipal(fetchFn: FetchFn, base: string, body: CreatePrin
 export interface PatchPrincipalRequest {
   display_name?: string
   email?: string
+  /** The working week: an `Availability` to replace it, `{}` to clear it,
+   *  absent to leave it alone. principal-store refuses this on a group, and
+   *  refuses `kind` and `disabled_at` on anyone — those move through
+   *  `/disable` and `/enable`. */
+  availability?: Availability | Record<string, never>
 }
 
 export function patchPrincipal(fetchFn: FetchFn, base: string, id: string, patch: PatchPrincipalRequest): Promise<PrincipalStoreResult<Principal>> {
@@ -141,6 +146,82 @@ export function removeGroupMember(fetchFn: FetchFn, base: string, groupID: strin
   return request<void>(
     fetchFn, 'remove member',
     `${base}/principals/${encodeURIComponent(groupID)}/members/${encodeURIComponent(memberID)}`,
+    { method: 'DELETE' },
+  )
+}
+
+// --- Availability ------------------------------------------------------------
+//
+// The week itself is written through `patchPrincipal` — it is a field on the
+// principal, not a sub-resource — so there is no setter here. What follows is
+// everything that is not: the two served vocabularies, the reduced answer, and
+// the absences.
+
+/** `GET /weekday-codes` — the day codes a week may name, in week order. Read,
+ *  never hardcoded: the store owns the vocabulary and the form offers exactly
+ *  what it serves. */
+export function listWeekdayCodes(fetchFn: FetchFn, base: string): Promise<PrincipalStoreResult<string[]>> {
+  return request<string[]>(fetchFn, 'list weekday codes', `${base}/weekday-codes`)
+}
+
+/** `GET /availability-reasons` — every reason the store can give, in the order
+ *  it checks them. Read so the page can say plainly when it meets one it has no
+ *  wording for, instead of showing a reason it invented. */
+export function listAvailabilityReasons(fetchFn: FetchFn, base: string): Promise<PrincipalStoreResult<string[]>> {
+  return request<string[]>(fetchFn, 'list availability reasons', `${base}/availability-reasons`)
+}
+
+/**
+ * `GET /principals/{id}/availability?at=` — the week and the absences reduced
+ * to one answer for one instant. `at` is Unix seconds; omitted means now.
+ *
+ * A group is a 400 here by design, pointing at `/members?available_at=`: a
+ * group has no hours of its own, only its members'.
+ */
+export function getAvailability(
+  fetchFn: FetchFn, base: string, id: string, at?: number,
+): Promise<PrincipalStoreResult<AvailabilityAnswer>> {
+  const query = at === undefined ? '' : `?at=${encodeURIComponent(String(at))}`
+  return request<AvailabilityAnswer>(
+    fetchFn, 'read availability', `${base}/principals/${encodeURIComponent(id)}/availability${query}`,
+  )
+}
+
+/** `GET /principals/{id}/time-off` — soonest first. A Go handler encodes an
+ *  empty slice it never allocated as JSON `null`; that means no absences, not
+ *  an unknown list. */
+export async function listTimeOff(fetchFn: FetchFn, base: string, id: string): Promise<PrincipalStoreResult<TimeOff[]>> {
+  const result = await request<TimeOff[] | null>(
+    fetchFn, 'list time off', `${base}/principals/${encodeURIComponent(id)}/time-off`,
+  )
+  return result.ok ? { ok: true, value: result.value ?? [] } : result
+}
+
+export interface AddTimeOffRequest {
+  /** Unix seconds, inclusive. */
+  starts_at: number
+  /** Unix seconds, exclusive, after `starts_at`. */
+  ends_at: number
+  note?: string
+}
+
+export function addTimeOff(
+  fetchFn: FetchFn, base: string, id: string, body: AddTimeOffRequest,
+): Promise<PrincipalStoreResult<TimeOff>> {
+  return request<TimeOff>(
+    fetchFn, 'add time off', `${base}/principals/${encodeURIComponent(id)}/time-off`, jsonInit('POST', body),
+  )
+}
+
+/** `DELETE /principals/{id}/time-off/{timeOffID}` — 204. The principal is in
+ *  the path on purpose: the store answers 404 for a row that is not theirs, so
+ *  one person's absence can never be removed through another's page. */
+export function removeTimeOff(
+  fetchFn: FetchFn, base: string, id: string, timeOffID: string,
+): Promise<PrincipalStoreResult<void>> {
+  return request<void>(
+    fetchFn, 'remove time off',
+    `${base}/principals/${encodeURIComponent(id)}/time-off/${encodeURIComponent(timeOffID)}`,
     { method: 'DELETE' },
   )
 }
