@@ -5,16 +5,12 @@ import { KANBAN_LAST_BOARD_STORAGE_KEY } from '../constants'
 import { useKanban } from '../useKanban'
 import { getBoard, getPriorityLadder, patchBoard, putPriorityLadder, type KanbanStoreResult } from '../kanbanStoreClient'
 import { listMailAccounts, type MailAccount } from '../mailstackClient'
-import { useBundles } from '../useBundles'
 import { BoardMessageTriggersSection } from './BoardMessageTriggersSection'
-import { pickablePrincipals, usePrincipals } from '../usePrincipals'
-import { useAgentCatalog } from '../useResourceCatalogs'
-import { useBridgeInstances } from '../useBridgeInstances'
-import { useBridgeMachines } from '../useBridgeMachines'
-import { machineLabel } from '../grantResources'
+import { BoardTagRulesSection } from './BoardTagRulesSection'
+import { IdField, useDefaultPickers } from './BoardDefaultIdFields'
 import {
   BOARD_BUNDLE_HELP_TEXT, CLEAR_BUSINESS_HOURS_PATCH, WEEKDAY_CODES,
-  bundleLabel, businessHoursDraftOf, businessHoursPatchOf, classifierDraftOf, classifierPatchOf,
+  businessHoursDraftOf, businessHoursPatchOf, classifierDraftOf, classifierPatchOf,
   defaultsDraftOf, defaultsPatchOf, emptyLadderRow, generalDraftOf, generalPatchOf, ladderDraftOf,
   ladderDraftToWire, parseMailAccountIDs,
   type BoardSettingsPatch, type BudgetUnit, type LadderRowDraft, type LadderWireLevel,
@@ -156,6 +152,7 @@ function KanbanSettingsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string 
           <BusinessHoursSection key={`hours:${board.id}:${JSON.stringify(board.business_hours ?? null)}`} board={board} onSave={savePatch} />
           <PriorityLadderSection key={`ladder:${board.id}:${JSON.stringify(ladder?.levels ?? null)}`} ladder={ladder} onSave={saveLadder} />
           <DefaultsSection key={`defaults:${board.id}:${JSON.stringify(defaultsDraftOf(board))}`} board={board} onSave={savePatch} />
+          <BoardTagRulesSection key={`tag-rules:${board.id}`} board={board} />
           <ClassifierSection
             key={`classifier:${board.id}:${JSON.stringify(board.classifier ?? null)}`}
             board={board}
@@ -357,97 +354,13 @@ function PriorityLadderSection({ ladder, onSave }: { ladder: PriorityLadder | nu
 
 // --- Defaults ----------------------------------------------------------------
 
-interface PickerOption {
-  value: string
-  label: string
-}
-
-/**
- * One id-valued setting: a select over what the owner offers, or a plain text
- * input when this host has no route to the owner. The stored value is always
- * shown, even when the owner no longer offers it — the board's record is true
- * whatever the list says — and "clear" puts '' on the form, which is the wire's
- * own word for unsetting it.
- */
-function IdField({ id, label, help, value, onChange, options, optionsError, unavailable }: {
-  id: string
-  label: string
-  help: string
-  value: string
-  onChange: (next: string) => void
-  /** Null while the owner has not answered. */
-  options: PickerOption[] | null
-  optionsError: string | null
-  /** Set when there is no owner to ask on this host: a text input is drawn
-   *  and this says why. */
-  unavailable: string | null
-}) {
-  const offered = options ?? []
-  const shownOptions = value && !offered.some(option => option.value === value)
-    ? [...offered, { value, label: `${value} (not offered here)` }]
-    : offered
-  return (
-    <div className="bks-field" data-field={id}>
-      <label className="bks-field-label" htmlFor={id}>{label}</label>
-      <div className="bks-id-row">
-        {unavailable ? (
-          <input id={id} className="bks-id-input" value={value} onChange={e => onChange(e.target.value)} />
-        ) : (
-          <select id={id} className="bks-id-select" value={value} onChange={e => onChange(e.target.value)} disabled={options === null && !value}>
-            <option value="">{options === null ? 'loading…' : '— none —'}</option>
-            {shownOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        )}
-        {value && (
-          <button type="button" className="bp-cancel" onClick={() => onChange('')} title={`Unset the ${label.toLowerCase()} on save`}>clear</button>
-        )}
-      </div>
-      <p className="bks-help">{help}{unavailable ? ` ${unavailable}` : ''}</p>
-      {optionsError && <div className="bridge-error bks-error">{optionsError}</div>}
-    </div>
-  )
-}
-
 function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: BoardSettingsPatch) => Promise<KanbanStoreResult<Board>> }) {
-  const { bundleStoreBasePath } = useBridgeConfig()
   const [draft, setDraft] = useState(() => defaultsDraftOf(board))
   const patch = useMemo(() => defaultsPatchOf(board, draft), [board, draft])
   const dirty = Object.keys(patch).length > 0
   const save = useSectionSave()
 
-  const principals = usePrincipals()
-  const principalOptions = useMemo<PickerOption[] | null>(() => {
-    if (!principals.enabled) return null
-    if (principals.loading && principals.list.length === 0) return null
-    return pickablePrincipals(principals.list, { query: '', kind: 'all', excludeIDs: [] })
-      .map(principal => ({ value: principal.id, label: `${principal.display_name} (${principal.kind}, ${principal.id})` }))
-  }, [principals])
-
-  const agents = useAgentCatalog('')
-  const agentOptions = useMemo<PickerOption[] | null>(
-    () => agents.matches
-      ? agents.matches.filter(option => !option.disabled).map(option => ({ value: option.id, label: `${option.label} (${option.detail}, id ${option.id})` }))
-      : null,
-    [agents.matches],
-  )
-
-  const { instances, loading: instancesLoading, error: instancesError } = useBridgeInstances()
-  const { machines } = useBridgeMachines()
-  const instanceOptions = useMemo<PickerOption[] | null>(() => {
-    if (instancesLoading && instances.length === 0) return null
-    return instances.filter(instance => instance.enabled).map(instance => {
-      const machine = machines.find(candidate => candidate.id === instance.machine_id)
-      return { value: instance.id, label: `${instance.name} — ${instance.harness_type} · ${machine ? machineLabel(machine) : instance.machine_id}` }
-    })
-  }, [instances, instancesLoading, machines])
-
-  const bundles = useBundles()
-  const bundleOptions = useMemo<PickerOption[] | null>(
-    () => bundles.bundles
-      ? bundles.bundles.filter(bundle => bundle.enabled).map(bundle => ({ value: String(bundle.id), label: `${bundleLabel(bundle)} (id ${bundle.id})` }))
-      : null,
-    [bundles.bundles],
-  )
+  const pickers = useDefaultPickers()
 
   return (
     <section className="bks-section" data-section="defaults">
@@ -462,9 +375,7 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
         help="Applied by kanban-store itself: a card created on or attached to this board with no assignee is assigned to this principal. A card that already has someone on it is left alone. Disabled principals are not offered."
         value={draft.default_principal_id}
         onChange={next => setDraft({ ...draft, default_principal_id: next })}
-        options={principalOptions}
-        optionsError={principals.error}
-        unavailable={principals.enabled ? null : 'This host has no route to principal-store, so the id is typed here.'}
+        {...pickers.default_principal_id}
       />
       <IdField
         id="bks-default-agent"
@@ -472,9 +383,7 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
         help="The agent a dispatcher runs this board's cards as — agent-store's numeric id, never the slug, which is renameable."
         value={draft.default_agent_id}
         onChange={next => setDraft({ ...draft, default_agent_id: next })}
-        options={agentOptions}
-        optionsError={agents.error}
-        unavailable={agents.unavailable}
+        {...pickers.default_agent_id}
       />
       <IdField
         id="bks-default-instance"
@@ -482,9 +391,7 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
         help="Where a session dispatched from this board runs when the card has had no session yet; a card's last session's instance wins when there is one. Only enabled instances are offered."
         value={draft.default_instance_id}
         onChange={next => setDraft({ ...draft, default_instance_id: next })}
-        options={instanceOptions}
-        optionsError={instancesError}
-        unavailable={null}
+        {...pickers.default_instance_id}
       />
       <IdField
         id="bks-default-bundle"
@@ -492,9 +399,7 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
         help={`${BOARD_BUNDLE_HELP_TEXT} bundle-store's numeric id, never the bundle's name. Only enabled bundles are offered.`}
         value={draft.default_bundle_id}
         onChange={next => setDraft({ ...draft, default_bundle_id: next })}
-        options={bundleOptions}
-        optionsError={bundles.error}
-        unavailable={bundleStoreBasePath ? null : 'This host has no route to bundle-store, so the id is typed here.'}
+        {...pickers.default_bundle_id}
       />
       <div className="bks-actions">
         <button type="button" className="bi-save-btn" disabled={!dirty || save.saving} onClick={() => save.run(() => onSave(patch))}>

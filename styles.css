@@ -4159,6 +4159,7 @@
 .bk-runs-on-harness { font-family: var(--mono, ui-monospace, monospace); font-size: 0.85em; opacity: 0.75; }
 .bk-runs-on-machine { opacity: 0.85; }
 .bk-runs-on-unknown { color: #d97706; }
+.bk-default-source { font-size: 0.8em; color: var(--text-dim); margin-left: 6px; }
 .bk-link-list .bk-runs-on { margin-left: 6px; font-size: 0.85em; }
 
 /* The drawer's timing summary. A row per question so the three ages line up and
@@ -5508,5 +5509,26 @@
 .bks-delivery-status[data-status="not_configured"] { color: #eab308; }
 .bks-delivery-status[data-status="pending"] { color: var(--text-muted); }
 .bks-delivery-message { white-space: pre-wrap; color: var(--text); }
+.bks-precedence { border-left: 2px solid var(--border); padding-left: 8px; }
+.bks-tag-rules { display: flex; flex-direction: column; gap: 8px; }
+.bks-tag-rule { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.bks-tag-rule-head { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.bks-tag-rule-position {
+  min-width: 1.8em; height: 1.8em; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--border); color: var(--text); font-size: 0.8em; font-weight: 600;
+}
+.bks-tag-rule-tags { flex: 1 1 18em; }
+.bks-tag-rule-buttons { display: flex; gap: 6px; }
+.bks-tag-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.bks-tag-chip {
+  font-size: 0.8em; padding: 1px 8px; border-radius: 10px; background: rgba(99, 102, 241, 0.15); color: var(--text);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.bks-tag-rule-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(16em, 1fr)); gap: 6px 12px; }
+.bks-preview { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--border); border-radius: 6px; }
+.bks-preview-table { border-collapse: collapse; font-size: 0.85em; }
+.bks-preview-table th { text-align: left; font-weight: 400; color: var(--text-muted); padding: 2px 12px 2px 0; }
+.bks-preview-table td { padding: 2px 12px 2px 0; color: var(--text); overflow-wrap: anywhere; }
+.bks-preview-table .bks-default-source { color: var(--text-dim); }
 /* "⚙ Board settings" is a router Link wearing the add-button style. */
 .bk-board-settings-link { display: inline-block; text-decoration: none; }

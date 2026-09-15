@@ -54,6 +54,74 @@ export interface Board {
   updated_at: string
 }
 
+/** One of a board's tag rules: for cards carrying ALL of `tags`, any of the four
+ * defaults it sets overrides the board's. Rules are ordered by `position`, 0
+ * first. How rules combine is kanban-store's to decide — ask it for a card's
+ * effective defaults rather than resolving rules here. A default the rule does
+ * not set is absent on the wire, never an empty string. */
+export interface BoardTagRule {
+  id: string
+  board_id: string
+  position: number
+  tags: string[]
+  default_principal_id?: string
+  default_agent_id?: string
+  default_instance_id?: string
+  default_bundle_id?: string
+  created_at: string
+  updated_at: string
+}
+
+/** `GET`/`PUT /api/boards/{id}/tag-rules`: the board's rules, in order. */
+export interface BoardTagRules {
+  board_id: string
+  rules: BoardTagRule[]
+}
+
+/** One rule as `PUT /api/boards/{id}/tag-rules` takes it. Send `id` back to
+ * keep a stored rule; omit it to create one. Omit a default to leave it unset. */
+export interface BoardTagRuleInput {
+  id?: string
+  tags: string[]
+  default_principal_id?: string
+  default_agent_id?: string
+  default_instance_id?: string
+  default_bundle_id?: string
+}
+
+/** Which setting a resolved default was read from. kanban-store's kinds are
+ * `board` and `tag_rule`; a `tag_rule` source carries the rule's id, and its
+ * tags and position for display. Typed as a string because the store owns the
+ * vocabulary — a reader must say so when it meets a kind it does not know. */
+export interface DefaultSource {
+  kind: string
+  rule_id?: string
+  rule_tags?: string[]
+  rule_position?: number
+}
+
+export interface EffectiveDefault {
+  value: string
+  source: DefaultSource
+}
+
+/** What a card (or a tag list) gets on a board, each default with its source.
+ * A default absent from `defaults` has no value anywhere: no matching rule sets
+ * it and the board does not either. */
+export interface EffectiveDefaults {
+  board_id: string
+  /** Present on the per-card read, absent on the tag-list read. */
+  card_id?: string
+  tags: string[]
+  matched_rule_ids: string[]
+  defaults: {
+    default_principal_id?: EffectiveDefault
+    default_agent_id?: EffectiveDefault
+    default_instance_id?: EffectiveDefault
+    default_bundle_id?: EffectiveDefault
+  }
+}
+
 /** What a stretch of time did to a card's limit. `running` counts against it,
  * `paused` elapses without counting, `stopped` means the work is over and
  * nothing accrues at all. */

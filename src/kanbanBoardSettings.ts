@@ -13,7 +13,9 @@
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import type { Machine } from './types'
 import type { Bundle } from './types-bundles'
-import type { Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, PriorityLadder } from './types-kanban'
+import type {
+  Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, DefaultSource, EffectiveDefault, PriorityLadder,
+} from './types-kanban'
 import { machineLabel } from './grantResources'
 
 /** A `PATCH /api/boards/{id}` body. Every key is optional because an omitted
@@ -232,7 +234,12 @@ export function classifierPatchOf(draft: ClassifierDraft): BoardSettingsPatch {
   }
 }
 
-// --- Board defaults on a card ------------------------------------------------
+// --- Effective defaults on a card --------------------------------------------
+//
+// A card's defaults are not the board's: kanban-store resolves the board's tag
+// rules against the card's tags (`GET …/cards/{id}/effective-defaults`) and
+// says where each value came from. These helpers only word and apply what the
+// store answered; none of them decides which rule wins.
 
 /** How a bundle is named on a card or in a picker: the store's `name`, with its
  *  `display_name` beside it when it has one — the Bundles page's own wording. */
@@ -240,28 +247,49 @@ export function bundleLabel(bundle: Pick<Bundle, 'name' | 'display_name'>): stri
   return bundle.display_name ? `${bundle.name} — ${bundle.display_name}` : bundle.name
 }
 
-/** The board's default bundle by id, or the raw id when the list lacks it —
- *  never nothing: the board's record is true even when the name is missing. */
-export function boardBundleLabel(bundleID: string, bundles: readonly Bundle[] | null): string {
+/** A bundle by bundle-store id, or the raw id when the list lacks it — never
+ *  nothing: the stored id is true even when the name is missing. */
+export function bundleLabelForID(bundleID: string, bundles: readonly Bundle[] | null): string {
   const bundle = bundles?.find(candidate => String(candidate.id) === bundleID)
   return bundle ? bundleLabel(bundle) : bundleID
 }
 
-/** What the board's bundle does, said once so every surface says the same:
- *  a dispatch sends it as `bundle_id` and the spawn provisions its tools. */
+/** What the board's own bundle does, for the settings page: a dispatch sends
+ *  it as `bundle_id` and the spawn provisions its tools. */
 export const BOARD_BUNDLE_HELP_TEXT =
   'Sessions dispatched from this board are provisioned with this bundle’s tools.'
 
+/** What a card's effective bundle does, for the card: the same, from wherever
+ *  the store resolved it (a tag rule or the board). */
+export const CARD_BUNDLE_HELP_TEXT =
+  'A session dispatched from this card is provisioned with this bundle’s tools.'
+
+/**
+ * Where a resolved default came from, in words: "from tag rule cat:product +
+ * urgency:high" or "board default". A source kind kanban-store adds later is
+ * named as unknown rather than passed off as one of these.
+ */
+export function defaultSourceLabel(source: DefaultSource): string {
+  if (source.kind === 'board') return 'board default'
+  if (source.kind === 'tag_rule') {
+    const tags = source.rule_tags ?? []
+    return tags.length > 0 ? `from tag rule ${tags.join(' + ')}` : `from tag rule ${source.rule_id ?? '(the store named no rule)'}`
+  }
+  return `from unknown source kind "${source.kind}"`
+}
+
 export type DispatchTarget =
   | { kind: 'last-session'; instance: Instance }
-  | { kind: 'board-default'; instance: Instance; lastSessionNote: string | null }
+  | { kind: 'default-instance'; instance: Instance; source: DefaultSource; lastSessionNote: string | null }
   | { kind: 'none'; why: string | null }
 
 export interface DispatchTargetArgs {
   /** Where the card's last session ran, or null for a card that has had none. */
   lastSessionInstanceID: string | null
-  /** The board the card sits on, or null when it is on none / not loaded. */
-  board: Pick<Board, 'default_instance_id'> | null
+  /** The card's effective `default_instance_id` exactly as kanban-store
+   *  resolved it, source included, or null when nothing sets one (or the card
+   *  is on no board). */
+  defaultInstance: EffectiveDefault | null
   instances: readonly Instance[]
 }
 
@@ -272,30 +300,49 @@ function unusableInstanceNote(instanceID: string, instances: readonly Instance[]
   return null
 }
 
+/** "default instance (from tag rule cat:product)" / "default instance (board default)". */
+export function defaultInstanceLabel(source: DefaultSource): string {
+  return `default instance (${defaultSourceLabel(source)})`
+}
+
 /**
  * Where a dispatch runs when nobody chooses: the card's last session's
- * instance, else the board's default instance, else nothing. Only an instance
- * the bridge lists AND has enabled counts at either step — the server answers
- * 503 for a disabled one, so choosing it would only defer the refusal.
+ * instance, else the card's effective default instance, else nothing. Only an
+ * instance the bridge lists AND has enabled counts at either step — the server
+ * answers 503 for a disabled one, so choosing it would only defer the refusal.
  *
  * `why` on `none` names what was tried and found unusable, or is null when
  * there was nothing to try; the caller opens the picker either way.
  */
-export function dispatchTargetForCard({ lastSessionInstanceID, board, instances }: DispatchTargetArgs): DispatchTarget {
+export function dispatchTargetForCard({ lastSessionInstanceID, defaultInstance, instances }: DispatchTargetArgs): DispatchTarget {
   let lastSessionNote: string | null = null
   if (lastSessionInstanceID) {
     const last = instances.find(candidate => candidate.id === lastSessionInstanceID)
     if (last?.enabled) return { kind: 'last-session', instance: last }
     lastSessionNote = `this card’s last session ran on ${unusableInstanceNote(lastSessionInstanceID, instances)}`
   }
-  const defaultInstanceID = board?.default_instance_id
-  if (defaultInstanceID) {
-    const preset = instances.find(candidate => candidate.id === defaultInstanceID)
-    if (preset?.enabled) return { kind: 'board-default', instance: preset, lastSessionNote }
-    const boardNote = `the board’s default instance is ${unusableInstanceNote(defaultInstanceID, instances)}`
-    return { kind: 'none', why: lastSessionNote ? `${lastSessionNote}; ${boardNote}` : boardNote }
+  if (defaultInstance) {
+    const preset = instances.find(candidate => candidate.id === defaultInstance.value)
+    if (preset?.enabled) return { kind: 'default-instance', instance: preset, source: defaultInstance.source, lastSessionNote }
+    const defaultNote = `the ${defaultInstanceLabel(defaultInstance.source)} is ${unusableInstanceNote(defaultInstance.value, instances)}`
+    return { kind: 'none', why: lastSessionNote ? `${lastSessionNote}; ${defaultNote}` : defaultNote }
   }
   return { kind: 'none', why: lastSessionNote }
+}
+
+/**
+ * Why a dispatch target was chosen, in the words both the drawer and the
+ * tile's confirmation use: "where this card’s last session ran", or "the
+ * default instance (from tag rule …)" with the reason the last session's
+ * instance was passed over, or the `none` explanation. Null for a `none` with
+ * nothing to explain.
+ */
+export function dispatchTargetNote(target: DispatchTarget): string | null {
+  if (target.kind === 'last-session') return 'where this card’s last session ran'
+  if (target.kind === 'default-instance') {
+    return `the ${defaultInstanceLabel(target.source)}${target.lastSessionNote ? ` — ${target.lastSessionNote}` : ''}`
+  }
+  return target.why
 }
 
 /** One line naming where an instance runs, for a confirmation or a chip. */

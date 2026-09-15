@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import {
-  CLEAR_BUSINESS_HOURS_PATCH, CLEAR_CLASSIFIER_PATCH, boardBundleLabel, budgetDraftOfSeconds, businessHoursPatchOf,
-  classifierDraftOf, classifierPatchOf, defaultsDraftOf, defaultsPatchOf, dispatchTargetForCard, generalDraftOf,
+  CLEAR_BUSINESS_HOURS_PATCH, CLEAR_CLASSIFIER_PATCH, budgetDraftOfSeconds, bundleLabelForID, businessHoursPatchOf,
+  classifierDraftOf, classifierPatchOf, defaultSourceLabel, defaultsDraftOf, defaultsPatchOf, dispatchTargetForCard,
+  dispatchTargetNote, generalDraftOf,
   generalPatchOf, ladderDraftOf, ladderDraftToWire, parseMailAccountIDs,
 } from '../src/kanbanBoardSettings'
 import type { Board, PriorityLadder } from '../src/types-kanban'
@@ -102,45 +103,91 @@ describe('priority ladder', () => {
 
 describe('where a dispatch runs when nobody chooses', () => {
   const instances = [instance('inst-a'), instance('inst-b'), instance('inst-off', false)]
+  // What kanban-store answers for the card: the resolved value and which rule
+  // or board set it. This module never decides that — it only words it.
+  const fromBoard = (value: string) => ({ value, source: { kind: 'board' } })
+  const fromRule = (value: string) => ({
+    value,
+    source: { kind: 'tag_rule', rule_id: 'rule_1', rule_tags: ['cat:product', 'urgency:high'] },
+  })
 
-  it('prefers the card’s last session’s instance over the board’s default', () => {
-    const target = dispatchTargetForCard({ lastSessionInstanceID: 'inst-a', board: { default_instance_id: 'inst-b' }, instances })
+  it('prefers the card’s last session’s instance over the effective default', () => {
+    const target = dispatchTargetForCard({ lastSessionInstanceID: 'inst-a', defaultInstance: fromBoard('inst-b'), instances })
     expect(target.kind).toBe('last-session')
     if (target.kind === 'last-session') expect(target.instance.id).toBe('inst-a')
   })
 
-  it('uses the board’s default instance for a card with no session', () => {
-    const target = dispatchTargetForCard({ lastSessionInstanceID: null, board: { default_instance_id: 'inst-b' }, instances })
-    expect(target).toMatchObject({ kind: 'board-default', lastSessionNote: null })
-    if (target.kind === 'board-default') expect(target.instance.id).toBe('inst-b')
+  it('uses the effective default instance for a card with no session, keeping its source', () => {
+    const target = dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: fromBoard('inst-b'), instances })
+    expect(target).toMatchObject({ kind: 'default-instance', lastSessionNote: null })
+    if (target.kind === 'default-instance') {
+      expect(target.instance.id).toBe('inst-b')
+      expect(target.source.kind).toBe('board')
+    }
   })
 
-  it('falls to the board’s default when the last session’s instance is gone, and says why', () => {
-    const target = dispatchTargetForCard({ lastSessionInstanceID: 'inst-gone', board: { default_instance_id: 'inst-b' }, instances })
-    expect(target.kind).toBe('board-default')
-    if (target.kind === 'board-default') expect(target.lastSessionNote).toMatch(/does not list/)
+  it('carries a tag rule’s source through, so the confirmation can name the rule', () => {
+    const target = dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: fromRule('inst-b'), instances })
+    expect(target.kind).toBe('default-instance')
+    if (target.kind === 'default-instance') expect(target.source.rule_tags).toEqual(['cat:product', 'urgency:high'])
   })
 
-  it('picks nothing when the board’s default is disabled, and says so', () => {
-    const target = dispatchTargetForCard({ lastSessionInstanceID: null, board: { default_instance_id: 'inst-off' }, instances })
+  it('falls to the effective default when the last session’s instance is gone, and says why', () => {
+    const target = dispatchTargetForCard({ lastSessionInstanceID: 'inst-gone', defaultInstance: fromBoard('inst-b'), instances })
+    expect(target.kind).toBe('default-instance')
+    if (target.kind === 'default-instance') expect(target.lastSessionNote).toMatch(/does not list/)
+  })
+
+  it('picks nothing when the effective default is disabled, and says so', () => {
+    const target = dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: fromBoard('inst-off'), instances })
     expect(target.kind).toBe('none')
     if (target.kind === 'none') expect(target.why).toMatch(/disabled/)
   })
 
+  it('names the rule in the refusal when a tag rule chose the unusable instance', () => {
+    const target = dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: fromRule('inst-off'), instances })
+    expect(target.kind).toBe('none')
+    if (target.kind === 'none') expect(target.why).toMatch(/from tag rule cat:product \+ urgency:high/)
+  })
+
   it('picks nothing, with nothing to explain, when there is neither', () => {
-    expect(dispatchTargetForCard({ lastSessionInstanceID: null, board: board(), instances })).toEqual({ kind: 'none', why: null })
+    expect(dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: null, instances }))
+      .toEqual({ kind: 'none', why: null })
+  })
+
+  it('notes where the target came from in the words both surfaces use', () => {
+    expect(dispatchTargetNote(dispatchTargetForCard({ lastSessionInstanceID: 'inst-a', defaultInstance: null, instances })))
+      .toBe('where this card\u2019s last session ran')
+    expect(dispatchTargetNote(dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: fromRule('inst-b'), instances })))
+      .toBe('the default instance (from tag rule cat:product + urgency:high)')
+    expect(dispatchTargetNote(dispatchTargetForCard({ lastSessionInstanceID: null, defaultInstance: null, instances }))).toBeNull()
   })
 })
 
-describe('the board’s bundle on a card', () => {
+describe('where a resolved default came from, in words', () => {
+  it('names the board and the rule that set it', () => {
+    expect(defaultSourceLabel({ kind: 'board' })).toBe('board default')
+    expect(defaultSourceLabel({ kind: 'tag_rule', rule_id: 'r1', rule_tags: ['a', 'b'] })).toBe('from tag rule a + b')
+  })
+
+  it('falls back to the rule id when the store named no tags', () => {
+    expect(defaultSourceLabel({ kind: 'tag_rule', rule_id: 'r1' })).toBe('from tag rule r1')
+  })
+
+  it('says a source kind it does not know is unknown, rather than passing it off as a board default', () => {
+    expect(defaultSourceLabel({ kind: 'column_rule' })).toBe('from unknown source kind "column_rule"')
+  })
+})
+
+describe('a bundle named by its bundle-store id', () => {
   const bundles = [{ id: 6, name: 'docker', display_name: 'Docker', enabled: true }] as unknown as Bundle[]
 
   it('is named from the bundle list, joined on the id', () => {
-    expect(boardBundleLabel('6', bundles)).toBe('docker — Docker')
+    expect(bundleLabelForID('6', bundles)).toBe('docker — Docker')
   })
 
   it('shows the raw id, never nothing, when the list lacks it or has not loaded', () => {
-    expect(boardBundleLabel('9', bundles)).toBe('9')
-    expect(boardBundleLabel('6', null)).toBe('6')
+    expect(bundleLabelForID('9', bundles)).toBe('9')
+    expect(bundleLabelForID('6', null)).toBe('6')
   })
 })

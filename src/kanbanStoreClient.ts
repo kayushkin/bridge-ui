@@ -1,5 +1,5 @@
 import type { FetchFn } from './types'
-import type { Board, PriorityLadder } from './types-kanban'
+import type { Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, PriorityLadder } from './types-kanban'
 import type { BoardSettingsPatch, LadderWireLevel } from './kanbanBoardSettings'
 import { readErrorText } from './useKanban'
 
@@ -66,4 +66,47 @@ export function putPriorityLadder(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+}
+
+/** `GET /api/boards/{id}/tag-rules` — the board's tag rules, in order. */
+export function getTagRules(fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string): Promise<KanbanStoreResult<BoardTagRules>> {
+  return request(fetchFn, 'read tag rules', `${boardURL(kanbanStoreBasePath, boardID)}/tag-rules`)
+}
+
+/** `PUT /api/boards/{id}/tag-rules` — the whole list, replaced in the order
+ *  sent; a rule sent with its `id` is kept, `[]` removes every rule. The store
+ *  refuses the whole list (400 naming `rules[i]` and its tags, 502 when an
+ *  owner cannot answer) and writes nothing on any refusal. */
+export function putTagRules(
+  fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string, body: { rules: BoardTagRuleInput[] },
+): Promise<KanbanStoreResult<BoardTagRules>> {
+  return request(fetchFn, 'save tag rules', `${boardURL(kanbanStoreBasePath, boardID)}/tag-rules`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+/** `GET /api/boards/{id}/cards/{card_id}/effective-defaults` — what this card
+ *  gets on this board, with the card's tags read from noteboard by the store.
+ *  The precedence lives in kanban-store and nowhere else. */
+export function getCardEffectiveDefaults(
+  fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string, cardID: string,
+): Promise<KanbanStoreResult<EffectiveDefaults>> {
+  return request(
+    fetchFn, 'read card effective defaults',
+    `${boardURL(kanbanStoreBasePath, boardID)}/cards/${encodeURIComponent(cardID)}/effective-defaults`,
+  )
+}
+
+/** `GET /api/boards/{id}/effective-defaults?tag=…&tag=…` — what a card carrying
+ *  exactly these tags would get on this board. No tags asks for the board's own. */
+export function getEffectiveDefaultsForTags(
+  fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string, tags: readonly string[],
+): Promise<KanbanStoreResult<EffectiveDefaults>> {
+  const query = new URLSearchParams(tags.map(tag => ['tag', tag])).toString()
+  return request(
+    fetchFn, 'read effective defaults',
+    `${boardURL(kanbanStoreBasePath, boardID)}/effective-defaults${query ? `?${query}` : ''}`,
+  )
 }
