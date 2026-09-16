@@ -1,4 +1,5 @@
 import type { ToolRendererProps } from './types'
+import CappedText from './CappedText'
 
 function formatDetail(input?: Record<string, unknown>): string {
   if (!input) return ''
@@ -23,7 +24,7 @@ export default function DefaultRenderer({ tool, running }: ToolRendererProps) {
       {tool.output && (
         <div className="bc-tool-output">
           <span className="bc-tool-output-label">→</span>
-          <span className="bc-tool-output-text">{tool.output}</span>
+          <CappedText as="span" className="bc-tool-output-text" text={tool.output} />
         </div>
       )}
     </div>

@@ -67,6 +67,7 @@ export function toToolEvent(entry: Entry): ToolEvent {
     input: asRecord(entry.toolInput),
     output: asOutputText(entry.toolResult),
     error: readIsError(entry),
+    ...(entry.toolInputTruncated ? { input_truncated: true } : {}),
   }
 }
 

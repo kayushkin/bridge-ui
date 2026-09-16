@@ -29,12 +29,17 @@ function EditRenderer({ tool, running }: ToolRendererProps) {
   const isEdit = tool.tool === 'Edit'
   const isWrite = tool.tool === 'Write'
 
-  const fastBefore = isEdit ? (input.old_string as string | undefined) : undefined
-  const fastAfter = isEdit
-    ? (input.new_string as string | undefined)
-    : isWrite
-      ? (input.content as string | undefined)
-      : undefined
+  // A shortened input is not the edit: its strings stop at 2 KB. Leave the fast path to
+  // a full input, so the diff comes from the snapshots or waits for the whole entry.
+  const inputComplete = !tool.input_truncated
+  const fastBefore = isEdit && inputComplete ? (input.old_string as string | undefined) : undefined
+  const fastAfter = !inputComplete
+    ? undefined
+    : isEdit
+      ? (input.new_string as string | undefined)
+      : isWrite
+        ? (input.content as string | undefined)
+        : undefined
   const haveFastPath = typeof fastBefore === 'string' && typeof fastAfter === 'string'
   // For Write, before-state only exists in snapshots — the tool input has
   // no old content field. Same for MultiEdit which doesn't expose its diff.

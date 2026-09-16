@@ -118,6 +118,10 @@ export interface ToolEvent {
   input?: Record<string, unknown>
   output?: string
   error?: boolean
+  /** The input's strings were shortened for the page (chat-core `toolInputTruncated`).
+   *  A renderer must not treat them as the whole input — a diff of shortened
+   *  `old_string`/`new_string` would show an edit that never happened. */
+  input_truncated?: boolean
 }
 
 // MessageMeta extends the canonical ResultEvent with client-side enrichments.

@@ -10,10 +10,10 @@ import { Fragment,
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf } from '@kayushkin/chat-core'
+import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import type { Entry, Turn } from '@kayushkin/chat-core'
-import { ToolContext, ToolItem } from '../tools'
+import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
 import { isToolRunning, toToolEvent } from './toolEvents'
 
 /** Shared, so the fallback below allocates nothing per row. */
@@ -288,9 +288,16 @@ export default function TurnList({
   // item deep-link — so note and todo chips open their detail panel instead. This
   // used to be a `kind === 'session'` guard on a handler wired to EVERY chip, which
   // gave todo chips `role="button"` and a click that did nothing.
+  //
+  // Held through a ref so its identity never changes. `select` is rebuilt on every
+  // change to the session list, which churns on every poll; handed down directly it
+  // changed every `ProseBody`'s props on every poll, so each one re-parsed its markdown
+  // and remounted its reference chips. Timeline.tsx does the same, for the same reason.
+  const selectRef = useRef(select)
+  selectRef.current = select
   const onActivateSessionRef = useCallback(
-    (_kind: string, refId: string) => select(refId),
-    [select],
+    (_kind: string, refId: string) => selectRef.current(refId),
+    [],
   )
 
   // Recomputed when the model (turns/entries), the view or the markdown/streaming
@@ -1184,7 +1191,7 @@ function NotificationChip({ text, ts }: { text: string; ts: string }) {
         <span className={styles.notificationChipLabel}>{taskNotificationLabel(text)}</span>
         <span className="bc-turns-ts">{formatHMS(ts)}</span>
       </summary>
-      <pre className={styles.entryPre}>{text}</pre>
+      <CappedText className={styles.entryPre} text={text} />
     </details>
   )
 }
@@ -1332,7 +1339,14 @@ function SpanRow({
  *  text when the markdown toggle is off. Shared by the `text` and sole-source `result`
  *  cases so an all-`result` agent transcript renders with the same markdown treatment as
  *  a streamed one (headings, lists, links) rather than a flat block. */
-function ProseBody({
+//
+// Memoized, and its markdown `components` map is built once per activation handler.
+// Parsing is the cost here (gfm, ref chips and vibes over the whole text), and it used
+// to run for every mounted row on every render of the list — every streamed event and
+// every session-list poll — for text that had not changed. The inline `components`
+// object was also a new `ref-chip` component TYPE each render, so React unmounted and
+// remounted every reference chip, closing any chip panel that was open.
+const ProseBody = memo(function ProseBody({
   text,
   markdown,
   onActivateSessionRef,
@@ -1341,27 +1355,27 @@ function ProseBody({
   markdown: boolean
   onActivateSessionRef: (kind: string, refId: string) => void
 }) {
+  const components = useMemo(
+    () =>
+      ({
+        'ref-chip': (props: RefChipProps) => (
+          <RefChip {...props} className={styles.refChip} onActivate={onActivateSessionRef} />
+        ),
+      }) as unknown as MdComponents,
+    [onActivateSessionRef],
+  )
   // The plain-text toggle wins, and it takes the vibes with it: TXT is the "show me
   // exactly what the model sent" mode, and a rail drawn beside unparsed source would be
   // claiming a structure the user just asked not to have interpreted.
   if (!markdown) return <div className="bc-turns-text">{text}</div>
   return (
     <div className={`bc-turns-text bc-turns-md ${styles.vibeProse}`}>
-      <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        components={
-          {
-            'ref-chip': (props: RefChipProps) => (
-              <RefChip {...props} className={styles.refChip} onActivate={onActivateSessionRef} />
-            ),
-          } as unknown as MdComponents
-        }
-      >
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
         {text}
       </ReactMarkdown>
     </div>
   )
-}
+})
 
 /** Renders one entry by kind, respecting the view. Assistant/user prose as markdown (or
  *  plain text when the markdown toggle is off); thinking/narration as collapsed asides;
@@ -1434,12 +1448,7 @@ function EntryBody({
       // the turn. Raw's row is the ENTRY, so the unit here is one card. Each starts
       // collapsed, which also keeps this from making Raw's per-turn virtualized children
       // much taller than they already are.
-      return (
-        <ToolItem
-          tool={toToolEvent(entry)}
-          running={isToolRunning(entry, resultedToolIds ?? EMPTY_TOOL_IDS)}
-        />
-      )
+      return <EntryToolCall entry={entry} resultedToolIds={resultedToolIds ?? EMPTY_TOOL_IDS} />
     case 'tool_result':
       // ⚠️ A result is NOT a second tool card, and making it one was a real fault before
       // it was a failing test. A cold-loaded model keeps the call and the result as two
@@ -1451,21 +1460,7 @@ function EntryBody({
       //
       // The row stays, because Raw is the audit surface and one row per event is its
       // whole contract. It just renders as what it is: the output.
-      return (
-        <div className={styles.entryTool}>
-          <span className={styles.entryToolName}>{entry.toolName ?? 'result'}</span>
-          {entry.toolResult !== undefined && (
-            // A string passes through as text. `stringify` would wrap it in quotes and
-            // turn its newlines into `\n`, which is what made a Bash result unreadable —
-            // and tool output is mostly strings that are already meant to be read.
-            <pre className={styles.entryPre}>
-              {typeof entry.toolResult === 'string'
-                ? entry.toolResult
-                : stringify(entry.toolResult)}
-            </pre>
-          )}
-        </div>
-      )
+      return <EntryToolResult entry={entry} />
     case 'result':
       // Collapsed Turns view: a sole-source result (an all-`result` agent transcript)
       // renders its prose; every other result is redundant metadata and shows nothing —
@@ -1480,7 +1475,7 @@ function EntryBody({
           {entry.text ? (
             <ProseBody text={entry.text} markdown={markdown} onActivateSessionRef={onActivateSessionRef} />
           ) : null}
-          {entry.raw !== undefined && <pre className={styles.entryPre}>{stringify(entry.raw)}</pre>}
+          {entry.raw !== undefined && <CappedText className={styles.entryPre} text={stringify(entry.raw)} />}
         </>
       )
     case 'system':
@@ -1496,9 +1491,58 @@ function EntryBody({
       // dropped these); the Raw audit view shows the text or the raw JSON.
       if (view !== 'raw') return null
       if (entry.text) return <div className="bc-turns-text">{entry.text}</div>
-      if (entry.raw !== undefined) return <pre className={styles.entryPre}>{stringify(entry.raw)}</pre>
+      if (entry.raw !== undefined) return <CappedText className={styles.entryPre} text={stringify(entry.raw)} />
       return null
   }
+}
+
+/** A tool call in the Raw view. A reading page carries its input shortened; the card
+ *  shows the preview and loads the whole entry when asked. */
+function EntryToolCall({ entry, resultedToolIds }: { entry: Entry; resultedToolIds: ReadonlySet<string> }) {
+  const { sessionId } = useToolContext()
+  const full = useFullEntry(sessionId || null, entry)
+  return (
+    <>
+      <ToolItem tool={toToolEvent(full.entry)} running={isToolRunning(full.entry, resultedToolIds)} />
+      <ShortenedPayloadBar
+        entry={entry}
+        shortened={full.shortened}
+        loading={full.loading}
+        error={full.error}
+        loadFull={full.loadFull}
+      />
+    </>
+  )
+}
+
+/** A tool result in the Raw view. The row stays one row per event — see the
+ *  `tool_result` case above — and its output is drawn capped, with the server's
+ *  shortening loadable. */
+function EntryToolResult({ entry }: { entry: Entry }) {
+  const { sessionId } = useToolContext()
+  const full = useFullEntry(sessionId || null, entry)
+  const result = full.entry.toolResult
+  return (
+    <div className={styles.entryTool}>
+      <span className={styles.entryToolName}>{entry.toolName ?? 'result'}</span>
+      {result !== undefined && (
+        // A string passes through as text. `stringify` would wrap it in quotes and
+        // turn its newlines into `\n`, which is what made a Bash result unreadable —
+        // and tool output is mostly strings that are already meant to be read.
+        <CappedText
+          className={styles.entryPre}
+          text={typeof result === 'string' ? result : stringify(result)}
+        />
+      )}
+      <ShortenedPayloadBar
+        entry={entry}
+        shortened={full.shortened}
+        loading={full.loading}
+        error={full.error}
+        loadFull={full.loadFull}
+      />
+    </div>
+  )
 }
 
 function stringify(value: unknown): string {

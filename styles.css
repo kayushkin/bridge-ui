@@ -1142,6 +1142,31 @@
   word-break: break-all;
   line-height: 1.4;
 }
+/* A tool text the page holds back (CappedText) or the server shortened
+   (ShortenedPayloadBar): the reader asks for the rest. */
+.bc-tool-show-all {
+  display: inline-block;
+  margin: 2px 0 4px;
+  padding: 2px 8px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.bc-tool-show-all:hover { color: var(--text); border-color: var(--text-dim); }
+.bc-tool-show-all:disabled { cursor: progress; opacity: 0.7; }
+.bc-tool-shortened {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 4px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.bc-tool-shortened-error { color: var(--error, #e5534b); }
 .bc-tool-output-code {
   margin: 4px 0 2px;
   padding: 6px 8px;

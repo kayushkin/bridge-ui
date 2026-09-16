@@ -197,7 +197,7 @@ const TimelineItemRow = memo(function TimelineItemRow({
   return (
     <div
       className={`bc-tl-item bc-tl-row ${rowClass} bc-tl-${item.tone}`}
-      title={item.fullText || item.detail || item.label}
+      title={hoverText(item.fullText || item.detail || item.label)}
     >
       <span className="bc-tl-ts">{formatHMS(item.ts)}</span>
       <span className="bc-tl-icon">{item.icon}</span>
@@ -218,3 +218,12 @@ const TimelineItemRow = memo(function TimelineItemRow({
     </div>
   )
 })
+
+/** How much of a row's text its hover title carries. `fullText` is the tool's whole
+ *  input and output, and a title attribute holding a 586 KB grep result is still 586 KB
+ *  in the DOM for every mounted row. The Raw view shows the rest. */
+const HOVER_TEXT_LIMIT = 2000
+
+function hoverText(text: string): string {
+  return text.length > HOVER_TEXT_LIMIT ? `${text.slice(0, HOVER_TEXT_LIMIT)}…` : text
+}
