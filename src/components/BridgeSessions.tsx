@@ -137,8 +137,11 @@ export function BridgeSessions() {
     return () => { cancelled = true }
   }, [sessions, apiFetch, basePath])
 
+  // The chat opens a session from its `?session=` deep link. This used to pass the id
+  // as navigation state, which nothing reads, so a click landed on the chat with the
+  // previous session still open.
   const handleClick = (session: SessionSummary) => {
-    navigate(routes.chat, { state: { selectSession: session.sessionId } })
+    navigate(`${routes.chat}?session=${encodeURIComponent(session.sessionId)}`)
   }
 
   return (

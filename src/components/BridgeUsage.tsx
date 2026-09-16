@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { formatTokens, formatDuration } from '../utils'
-import type { BridgeSession } from '../types'
+import { listSessionSummariesUpdatedSince, type SessionSummaryRow } from '../sessionSummaryPages'
 
 interface SessionUsage {
   sessionId: string
@@ -228,7 +228,7 @@ function periodCutoff(period: Period): string {
 
 export function BridgeUsage() {
   const { fetch: apiFetch, basePath, usageStoreBasePath } = useBridgeConfig()
-  const [sessions, setSessions] = useState<BridgeSession[]>([])
+  const [sessions, setSessions] = useState<SessionSummaryRow[]>([])
   const [aggregates, setAggregates] = useState<Map<string, SessionAggregate>>(new Map())
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
   const [spend, setSpend] = useState<SpendKeysResponse | null>(null)
@@ -241,11 +241,16 @@ export function BridgeUsage() {
   const [period, setPeriod] = useState<Period>('day')
   const inst = useBridgeInstances()
 
+  // The longest period shown is a month, so only sessions updated in the last month
+  // can hold a session created in one. This used to fetch GET /sessions — the whole
+  // session table with info blobs, 64 MB — to keep that month.
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await apiFetch(`${basePath}/sessions`)
-      if (res.ok) setSessions(await res.json() ?? [])
-    } catch { /* ignore */ }
+      const since = new Date(periodCutoff('month'))
+      setSessions(await listSessionSummariesUpdatedSince(apiFetch, basePath, since))
+    } catch (err) {
+      console.error('usage: loading sessions failed', err)
+    }
     finally { setLoading(false) }
   }, [apiFetch, basePath])
 
@@ -352,7 +357,7 @@ export function BridgeUsage() {
 
   const periodSessions = useMemo(() => {
     const cutoff = periodCutoff(period)
-    return sessions.filter(s => s.created_at >= cutoff)
+    return sessions.filter(s => s.createdAt >= cutoff)
   }, [sessions, period])
 
   type Totals = { input: number; output: number; cost: number; duration: number; turns: number }
@@ -368,12 +373,12 @@ export function BridgeUsage() {
   const harnessGroups = useMemo(() => {
     const groups = new Map<string, HarnessGroup>()
     for (const s of periodSessions) {
-      const agg = aggregates.get(s.session_id)
+      const agg = aggregates.get(s.sessionId)
       if (!agg) continue
       const usage: SessionUsage = {
-        sessionId: s.session_id,
+        sessionId: s.sessionId,
         harness: s.harness,
-        instanceId: s.instance_id ?? '',
+        instanceId: s.instanceId,
         inputTokens: agg.input_tokens,
         outputTokens: agg.output_tokens,
         cost: agg.cost_usd,
@@ -383,7 +388,7 @@ export function BridgeUsage() {
       }
       let h = groups.get(s.harness)
       if (!h) { h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(s.harness, h) }
-      const srcKey = s.purpose ?? ''
+      const srcKey = s.purpose
       let src = h.sources.get(srcKey)
       if (!src) { src = { source: srcKey, sessions: [], totals: emptyTotals() }; h.sources.set(srcKey, src) }
       src.sessions.push(usage)
