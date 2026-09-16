@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { listSessionSummariesUpdatedSince, type SessionSummaryRow } from '../src/sessionSummaryPages'
 
 function row(id: string, updatedAt: string): SessionSummaryRow {
-  return { sessionId: id, harness: 'claude_code', instanceId: 'i', purpose: '', createdAt: updatedAt, updatedAt }
+  return { sessionId: id, harness: 'claude_code', instanceId: 'i', purpose: '', createdAt: updatedAt, updatedAt, spendUsd: 0 }
 }
 
 describe('listSessionSummariesUpdatedSince', () => {

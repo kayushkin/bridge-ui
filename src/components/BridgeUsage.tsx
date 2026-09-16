@@ -16,15 +16,14 @@ interface SessionUsage {
   turns: number
 }
 
-// Server-side per-session aggregate from GET /sessions/aggregates.
-// Mirrors msg.SessionAggregate. Computed by SUMming result events in
-// log-store, replacing the per-session message-fetch fan-out.
+// Server-side per-session token totals from GET /sessions/aggregates.
+// Mirrors msg.SessionAggregate. Summed from result events in log-store.
+// It carries no cost: a session's cost is the summary row's spendUsd.
 interface SessionAggregate {
   session_id: string
   turns: number
   input_tokens: number
   output_tokens: number
-  cost_usd: number
   duration_ms: number
   model?: string
 }
@@ -402,18 +401,21 @@ export function BridgeUsage() {
   const harnessGroups = useMemo(() => {
     const groups = new Map<string, HarnessGroup>()
     for (const s of periodSessions) {
+      // Cost is the bridge's estimate on the summary row; tokens, duration and
+      // turns are log-store's sums. A session counts if it has either — one that
+      // spent money without a token total (an interrupted turn) still cost it.
       const agg = aggregates.get(s.sessionId)
-      if (!agg) continue
+      if (!agg && s.spendUsd <= 0) continue
       const usage: SessionUsage = {
         sessionId: s.sessionId,
         harness: s.harness,
         instanceId: s.instanceId,
-        inputTokens: agg.input_tokens,
-        outputTokens: agg.output_tokens,
-        cost: agg.cost_usd,
-        durationMs: agg.duration_ms,
-        model: agg.model ?? '',
-        turns: agg.turns,
+        inputTokens: agg?.input_tokens ?? 0,
+        outputTokens: agg?.output_tokens ?? 0,
+        cost: s.spendUsd,
+        durationMs: agg?.duration_ms ?? 0,
+        model: agg?.model ?? '',
+        turns: agg?.turns ?? 0,
       }
       let h = groups.get(s.harness)
       if (!h) { h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(s.harness, h) }

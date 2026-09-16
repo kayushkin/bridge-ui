@@ -15,6 +15,9 @@ export interface SessionSummaryRow {
   purpose: string
   createdAt: string
   updatedAt: string
+  /** The session's cost estimate so far, in US dollars (llm-bridge-server's
+   *  spend_usd: per-call spend and per-turn result costs combined). */
+  spendUsd: number
 }
 
 interface SummaryPage {
