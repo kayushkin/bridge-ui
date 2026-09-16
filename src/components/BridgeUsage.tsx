@@ -342,12 +342,41 @@ export function BridgeUsage() {
 
   useEffect(() => { fetchSessions() }, [fetchSessions])
   useEffect(() => { fetchAggregates() }, [fetchAggregates])
+  // usage-store reads limits rarely unless told this page is being looked at.
+  // While the tab is visible, say so once a minute; usage-store then reads every
+  // couple of minutes. A hidden tab sends nothing, so polling slows down again.
   useEffect(() => {
     if (!usageStoreBasePath) return
-    fetchLimits()
-    const t = setInterval(fetchLimits, 60000)
-    return () => clearInterval(t)
-  }, [fetchLimits, usageStoreBasePath])
+    const markWatched = async () => {
+      try {
+        const res = await apiFetch(`${usageStoreBasePath}/limits/watch`, { method: 'POST' })
+        if (!res.ok) console.error(`usage-store limits/watch answered ${res.status}`)
+      } catch (err) {
+        console.error('usage-store limits/watch failed', err)
+      }
+    }
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return
+      markWatched()
+      fetchLimits()
+    }
+    let refetchAfterWake: ReturnType<typeof setTimeout> | undefined
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      tick()
+      // The mark triggers a fresh read on the server; pick it up shortly after.
+      clearTimeout(refetchAfterWake)
+      refetchAfterWake = setTimeout(fetchLimits, 5000)
+    }
+    onVisibilityChange()
+    const interval = setInterval(tick, 60000)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      clearInterval(interval)
+      clearTimeout(refetchAfterWake)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [apiFetch, fetchLimits, usageStoreBasePath])
   useEffect(() => {
     if (!usageStoreBasePath) return
     fetchSpend()
