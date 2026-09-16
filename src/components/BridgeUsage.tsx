@@ -183,9 +183,7 @@ const SPEND_PROVIDER_LABELS: Record<keyof SpendKeysResponse, string> = {
   openai: 'OpenAI / Codex API',
 }
 
-function formatTimeUntil(unixSec: number): string {
-  const diffMs = unixSec * 1000 - Date.now()
-  if (diffMs <= 0) return 'now'
+function formatSpan(diffMs: number): string {
   const mins = Math.floor(diffMs / 60000)
   if (mins < 60) return `${mins}m`
   const hrs = Math.floor(mins / 60)
@@ -198,18 +196,26 @@ function formatTimeUntil(unixSec: number): string {
 
 function LimitBar({ label, win }: { label: string; win: LimitWindow }) {
   const pct = Math.min(win.used_percent, 100)
-  const color = pct >= 80 ? '#ef5350' : pct >= 50 ? '#ffa726' : '#66bb6a'
+  const untilResetMs = win.resets_at != null ? win.resets_at * 1000 - Date.now() : null
+  // The snapshot predates the window's reset, so its percentage describes a window
+  // that is over. Nothing tells us the usage of the current one; say so.
+  const windowEnded = untilResetMs != null && untilResetMs <= 0
+  const color = windowEnded ? '#9e9e9e' : pct >= 80 ? '#ef5350' : pct >= 50 ? '#ffa726' : '#66bb6a'
   return (
     <div className="bu-limit-item">
       <div className="bu-limit-header">
         <span className="bu-limit-label">{label}</span>
-        <span className="bu-limit-pct" style={{ color }}>{pct.toFixed(0)}%</span>
+        <span className="bu-limit-pct" style={{ color }}>{windowEnded ? '?' : `${pct.toFixed(0)}%`}</span>
       </div>
       <div className="bu-limit-track">
-        <div className="bu-limit-fill" style={{ width: `${pct}%`, background: color }} />
+        <div className="bu-limit-fill" style={{ width: windowEnded ? '0%' : `${pct}%`, background: color }} />
       </div>
-      {win.resets_at != null && (
-        <span className="bu-limit-reset">resets in {formatTimeUntil(win.resets_at)}</span>
+      {untilResetMs != null && (
+        <span className="bu-limit-reset">
+          {windowEnded
+            ? `reset ${formatSpan(-untilResetMs)} ago (was ${pct.toFixed(0)}%); no snapshot since`
+            : `resets in ${formatSpan(untilResetMs)}`}
+        </span>
       )}
     </div>
   )
