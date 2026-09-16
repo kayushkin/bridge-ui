@@ -190,6 +190,11 @@ export interface BoardPriorityLevel {
   label: string
   /** Null for a rung that is named but not timed. */
   budget_seconds: number | null
+  /** The auto-hold spend ceiling, in dollars, a card starts with when it takes
+   *  this priority — a default kanban-store writes onto the card, editable per
+   *  card afterwards. Null for no default. Absent from a kanban-store that
+   *  predates the field. */
+  default_auto_hold_at_usd?: number | null
 }
 
 /** A board's rungs, top rung first. An empty `levels` means this board ignores

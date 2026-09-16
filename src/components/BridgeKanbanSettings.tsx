@@ -314,12 +314,14 @@ function PriorityLadderSection({ ladder, onSave }: { ladder: PriorityLadder | nu
         Each rung names a stored noteboard priority and how long work at that rung should take.
         The top rung is the HIGHEST priority value — noteboard sorts priority descending — so P0 is a label on the
         highest number, not the number itself. Value 0 is reserved for unranked cards and refused. A board with no rungs
-        ignores priorities entirely: its cards carry no limit. The whole ladder is replaced on save.
+        ignores priorities entirely: its cards carry no limit. Default cost is the auto-hold dollar ceiling a card starts
+        with when it is created, attached or re-prioritised at that rung; it stays editable on each card, a ceiling set by
+        hand is never overwritten, and existing cards keep theirs when the ladder changes. The whole ladder is replaced on save.
       </p>
       {rows.length > 0 && (
         <table className="bks-ladder">
           <thead>
-            <tr><th>Label</th><th>Priority value</th><th>Budget</th><th></th></tr>
+            <tr><th>Label</th><th>Priority value</th><th>Budget</th><th>Default cost</th><th></th></tr>
           </thead>
           <tbody>
             {rows.map((row, index) => (
@@ -332,6 +334,9 @@ function PriorityLadderSection({ ladder, onSave }: { ladder: PriorityLadder | nu
                     <option value="hours">hours</option>
                     <option value="days">days</option>
                   </select>
+                </td>
+                <td className="bks-ladder-default-cost">
+                  $<input aria-label={`Rung ${index + 1} default cost`} className="bks-ladder-amount" inputMode="decimal" value={row.defaultAutoHoldAtUSD} placeholder="none" title="Auto-hold ceiling a card starts with at this priority" onChange={e => setRow(index, { defaultAutoHoldAtUSD: e.target.value })} />
                 </td>
                 <td>
                   <button type="button" className="bp-cancel" title="Remove this rung" onClick={() => setRows(rows.filter((_, at) => at !== index))}>remove</button>

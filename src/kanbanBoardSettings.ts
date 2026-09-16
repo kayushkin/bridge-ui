@@ -134,6 +134,9 @@ export interface LadderRowDraft {
   /** Empty means a rung that is named but not timed. */
   budgetAmount: string
   budgetUnit: BudgetUnit
+  /** Dollars a card starts with as its auto-hold ceiling at this rung. Empty
+   *  means no default; "0" is a real default. */
+  defaultAutoHoldAtUSD: string
 }
 
 /** A stored budget as a human amount: whole days when it is a whole number of
@@ -147,7 +150,12 @@ export function budgetDraftOfSeconds(seconds: number | null): { budgetAmount: st
 }
 
 export function ladderRowDraftOf(level: BoardPriorityLevel): LadderRowDraft {
-  return { label: level.label, priorityValue: String(level.priority_value), ...budgetDraftOfSeconds(level.budget_seconds) }
+  return {
+    label: level.label,
+    priorityValue: String(level.priority_value),
+    ...budgetDraftOfSeconds(level.budget_seconds),
+    defaultAutoHoldAtUSD: level.default_auto_hold_at_usd === null || level.default_auto_hold_at_usd === undefined ? '' : String(level.default_auto_hold_at_usd),
+  }
 }
 
 export function ladderDraftOf(ladder: PriorityLadder | null): LadderRowDraft[] {
@@ -158,13 +166,14 @@ export function ladderDraftOf(ladder: PriorityLadder | null): LadderRowDraft[] {
 export function emptyLadderRow(rows: readonly LadderRowDraft[]): LadderRowDraft {
   const values = rows.map(row => Number(row.priorityValue)).filter(value => Number.isInteger(value) && value > 0)
   const lowest = values.length > 0 ? Math.min(...values) : 2
-  return { label: '', priorityValue: String(Math.max(1, lowest - 1)), budgetAmount: '', budgetUnit: 'hours' }
+  return { label: '', priorityValue: String(Math.max(1, lowest - 1)), budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '' }
 }
 
 export interface LadderWireLevel {
   priority_value: number
   label: string
   budget_seconds: number | null
+  default_auto_hold_at_usd: number | null
 }
 
 export type LadderDraftResult = { ok: true; value: { levels: LadderWireLevel[] } } | { ok: false; error: string }
@@ -189,7 +198,15 @@ export function ladderDraftToWire(rows: readonly LadderRowDraft[]): LadderDraftR
       }
       budgetSeconds = Math.round(amount * (row.budgetUnit === 'days' ? SECONDS_PER_DAY : SECONDS_PER_HOUR))
     }
-    levels.push({ priority_value: priorityValue, label: row.label.trim(), budget_seconds: budgetSeconds })
+    let defaultAutoHoldAtUSD: number | null = null
+    if (row.defaultAutoHoldAtUSD.trim() !== '') {
+      const amount = Number(row.defaultAutoHoldAtUSD.trim())
+      if (!Number.isFinite(amount)) {
+        return { ok: false, error: `${nth}: default cost must be a number of dollars, got "${row.defaultAutoHoldAtUSD}"` }
+      }
+      defaultAutoHoldAtUSD = amount
+    }
+    levels.push({ priority_value: priorityValue, label: row.label.trim(), budget_seconds: budgetSeconds, default_auto_hold_at_usd: defaultAutoHoldAtUSD })
   }
   return { ok: true, value: { levels } }
 }

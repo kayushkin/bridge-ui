@@ -66,14 +66,14 @@ describe('classifier and business hours', () => {
 describe('priority ladder', () => {
   it('converts hours and days to budget_seconds, and an empty budget to null', () => {
     const result = ladderDraftToWire([
-      { label: 'P0', priorityValue: '5', budgetAmount: '2', budgetUnit: 'hours' },
-      { label: 'P3', priorityValue: '2', budgetAmount: '7', budgetUnit: 'days' },
-      { label: 'P4', priorityValue: '1', budgetAmount: '', budgetUnit: 'hours' },
+      { label: 'P0', priorityValue: '5', budgetAmount: '2', budgetUnit: 'hours', defaultAutoHoldAtUSD: '' },
+      { label: 'P3', priorityValue: '2', budgetAmount: '7', budgetUnit: 'days', defaultAutoHoldAtUSD: '' },
+      { label: 'P4', priorityValue: '1', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '' },
     ])
     expect(result).toEqual({ ok: true, value: { levels: [
-      { priority_value: 5, label: 'P0', budget_seconds: 7200 },
-      { priority_value: 2, label: 'P3', budget_seconds: 604800 },
-      { priority_value: 1, label: 'P4', budget_seconds: null },
+      { priority_value: 5, label: 'P0', budget_seconds: 7200, default_auto_hold_at_usd: null },
+      { priority_value: 2, label: 'P3', budget_seconds: 604800, default_auto_hold_at_usd: null },
+      { priority_value: 1, label: 'P4', budget_seconds: null, default_auto_hold_at_usd: null },
     ] } })
   })
 
@@ -85,19 +85,31 @@ describe('priority ladder', () => {
 
   it('round-trips the live ladder unchanged', () => {
     const ladder: PriorityLadder = { board_id: 'b1', levels: [
-      { board_id: 'b1', priority_value: 5, label: 'P0', budget_seconds: 7200 },
-      { board_id: 'b1', priority_value: 4, label: 'P1', budget_seconds: 28800 },
-      { board_id: 'b1', priority_value: 1, label: 'P4', budget_seconds: 2592000 },
+      { board_id: 'b1', priority_value: 5, label: 'P0', budget_seconds: 7200, default_auto_hold_at_usd: 20 },
+      { board_id: 'b1', priority_value: 4, label: 'P1', budget_seconds: 28800, default_auto_hold_at_usd: 0 },
+      { board_id: 'b1', priority_value: 1, label: 'P4', budget_seconds: 2592000, default_auto_hold_at_usd: null },
     ] }
     const result = ladderDraftToWire(ladderDraftOf(ladder))
     expect(result.ok && result.value.levels).toEqual(ladder.levels.map(({ board_id: _board, ...level }) => level))
   })
 
+  it('sends a default cost in dollars, keeps zero as a real default and an empty box as none', () => {
+    const result = ladderDraftToWire([
+      { label: 'P0', priorityValue: '5', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '12.5' },
+      { label: 'P1', priorityValue: '4', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '0' },
+      { label: 'P4', priorityValue: '1', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: ' ' },
+    ])
+    expect(result.ok && result.value.levels.map(level => level.default_auto_hold_at_usd)).toEqual([12.5, 0, null])
+    const bad = ladderDraftToWire([{ label: 'P0', priorityValue: '5', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: 'lots' }])
+    expect(bad.ok).toBe(false)
+    if (!bad.ok) expect(bad.error).toMatch(/default cost/)
+  })
+
   it('refuses a priority that is not a whole number, naming the row, and leaves a zero rung to the store', () => {
-    const bad = ladderDraftToWire([{ label: 'P0', priorityValue: 'high', budgetAmount: '', budgetUnit: 'hours' }])
+    const bad = ladderDraftToWire([{ label: 'P0', priorityValue: 'high', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '' }])
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(bad.error).toMatch(/row 1 \("P0"\)/)
-    expect(ladderDraftToWire([{ label: 'P0', priorityValue: '0', budgetAmount: '', budgetUnit: 'hours' }]).ok).toBe(true)
+    expect(ladderDraftToWire([{ label: 'P0', priorityValue: '0', budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '' }]).ok).toBe(true)
   })
 })
 
