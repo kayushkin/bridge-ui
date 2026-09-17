@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
-import type {
-  Board,
-  BoardView,
-  CardLink,
-  ColumnView,
-  EntityCardView,
-  EntityTypeInfo,
-  EntityTag,
-} from './types-kanban'
+import type { Board, BoardView, CardLink, ColumnView, EntityCardView, EntityTypeInfo, EntityTag } from '@kayushkin/kanban-store-types'
 
 // kanbanPollWouldFetch reports whether the 15-second refresh has anything to
 // ask for. It mirrors the guards at the top of fetchBoards and fetchView, which

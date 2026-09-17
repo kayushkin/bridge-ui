@@ -3,7 +3,7 @@ import {
   emptyTagRuleDraft, moveTagRuleDown, moveTagRuleUp, parseRuleTags, removeTagRule, tagRulesDirty, tagRulesDraftOf,
   tagRulesDraftToWire, type TagRuleDraft,
 } from '../src/kanbanTagRules'
-import type { BoardTagRule } from '../src/types-kanban'
+import type { BoardTagRule } from '@kayushkin/kanban-store-types'
 
 const storedRule = (id: string, position: number, tags: string[], over: Partial<BoardTagRule> = {}): BoardTagRule => ({
   id, board_id: 'b1', position, tags, created_at: '', updated_at: '', ...over,

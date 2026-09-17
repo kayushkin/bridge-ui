@@ -7,7 +7,7 @@ import {
   patchBodyOfMessageTriggerDraft, patchMessageTrigger,
   type MessageDelivery, type MessageTrigger, type MessageTriggerDraft, type MessageTriggerOptions,
 } from '../messageTriggers'
-import type { Board, Column, PriorityLadder } from '../types-kanban'
+import type { Board, Column, PriorityLadder } from '@kayushkin/kanban-store-types'
 
 const DELIVERIES_SHOWN = 20
 const NEW_TRIGGER = 'new'

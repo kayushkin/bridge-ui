@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { getCardEffectiveDefaults } from './kanbanStoreClient'
-import type { EffectiveDefaults } from './types-kanban'
+import type { EffectiveDefaults } from '@kayushkin/kanban-store-types'
 
 export interface CardEffectiveDefaultsRead {
   /** What kanban-store resolved for the card, each default with its source.

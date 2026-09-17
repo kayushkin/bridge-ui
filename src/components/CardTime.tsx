@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
-import type { CardEvent, CardNote, CardTimeSummary, CardTimeline, ClockState, TimelineEntry } from '../types-kanban'
+import type { CardEvent, CardNote, CardTimeSummary, CardTimeline, ClockState, TimelineEntry } from '@kayushkin/kanban-store-types'
 import { entityTarget } from '../entityLinks'
 import { formatDurationCompact, formatDurationProse } from '../utils'
 

@@ -4,7 +4,7 @@ import {
   emptyMessageTriggerDraft, patchBodyOfMessageTriggerDraft, type MessageTrigger,
 } from '../src/messageTriggers'
 import type { FetchFn } from '../src/types'
-import type { Column } from '../src/types-kanban'
+import type { Column } from '@kayushkin/kanban-store-types'
 
 const COLUMN_FILTER_KINDS = ['card_moved']
 

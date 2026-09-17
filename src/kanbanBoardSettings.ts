@@ -13,23 +13,14 @@
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import type { Machine } from './types'
 import type { Bundle } from './types-bundles'
-import type {
-  Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, DefaultSource, EffectiveDefault, PriorityLadder,
-} from './types-kanban'
+import type { Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, DefaultSource, EffectiveDefault, PriorityLadder, UpdateBoardRequest } from '@kayushkin/kanban-store-types'
 import { machineLabel } from './grantResources'
 
 /** A `PATCH /api/boards/{id}` body. Every key is optional because an omitted
  *  key is "leave it alone"; an empty object clears the two object-valued
  *  settings and an empty string clears an id. */
-export interface BoardSettingsPatch {
-  name?: string
-  description?: string
-  archived?: boolean
+export type BoardSettingsPatch = Omit<UpdateBoardRequest, 'business_hours' | 'classifier'> & {
   business_hours?: BusinessHours | Record<string, never>
-  default_principal_id?: string
-  default_agent_id?: string
-  default_instance_id?: string
-  default_bundle_id?: string
   classifier?: ClassifierConfig | Record<string, never>
 }
 
@@ -169,12 +160,9 @@ export function emptyLadderRow(rows: readonly LadderRowDraft[]): LadderRowDraft 
   return { label: '', priorityValue: String(Math.max(1, lowest - 1)), budgetAmount: '', budgetUnit: 'hours', defaultAutoHoldAtUSD: '' }
 }
 
-export interface LadderWireLevel {
-  priority_value: number
-  label: string
-  budget_seconds: number | null
-  default_auto_hold_at_usd: number | null
-}
+/** One rung as `PUT /api/boards/{id}/priority-ladder` takes it: kanban-store's
+ *  BoardPriorityLevel without `board_id`, which the route supplies. */
+export type LadderWireLevel = Omit<BoardPriorityLevel, 'board_id'>
 
 export type LadderDraftResult = { ok: true; value: { levels: LadderWireLevel[] } } | { ok: false; error: string }
 

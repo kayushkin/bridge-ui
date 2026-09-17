@@ -6,73 +6,20 @@
 // bodies are pinned by tests without a DOM.
 
 import type { FetchFn } from './types'
-import type { Column } from './types-kanban'
+import type { Column, MessageTrigger, MessageDelivery, MessageTriggerOptions, UpsertMessageTriggerRequest } from '@kayushkin/kanban-store-types'
+// Re-exported so callers that took these from here keep working; the
+// definitions are kanban-store's, rendered from its Go types.
+export type { MessageTrigger, MessageDelivery, MessageDeliveryStatus, MessageTriggerOptions, UpsertMessageTriggerRequest } from '@kayushkin/kanban-store-types'
 import type { KanbanStoreResult } from './kanbanStoreClient'
 import { readErrorText } from './useKanban'
 
-export interface MessageTrigger {
-  id: string
-  board_id: string
-  name: string
-  /** One of `MessageTriggerOptions.event_kinds`. */
-  event_kind: string
-  /** A column of this board; only on a kind in `column_filter_event_kinds`. Absent means any column. */
-  to_column_id?: string
-  /** The rung's value on the board's ladder — its id; the label is renameable. Absent means any priority. */
-  priority_value?: number
-  /** The rung's current label, for display. Absent when the value is no longer a rung. */
-  priority_label?: string
-  /** multichat's id for the person: the bridge puppet id, e.g. `@whatsapp_15551234567:chat.example.com`. */
-  recipient_user_id: string
-  /** For display only; never read back to find the person. */
-  recipient_display_name?: string
-  /** A Go text/template over `MessageTriggerOptions.template_fields`. */
-  message_template: string
-  enabled: boolean
-  created_at: string
-  updated_at: string
-}
-
 /** `pending`: handed to multichat, no answer recorded. `not_configured`: kanban-store has no MULTICHAT_URL. */
-export type MessageDeliveryStatus = 'pending' | 'sent' | 'failed' | 'not_configured'
-
-export interface MessageDelivery {
-  id: string
-  trigger_id: string
-  board_id: string
-  event_id: string
-  card_id: string
-  recipient_user_id: string
-  rendered_message: string
-  status: MessageDeliveryStatus
-  error?: string
-  room_id?: string
-  matrix_event_id?: string
-  created_at: string
-}
 
 /** `GET /api/message-trigger-options` — everything the form offers, served rather than hardcoded. */
-export interface MessageTriggerOptions {
-  event_kinds: string[]
-  column_filter_event_kinds: string[]
-  template_fields: string[]
-  delivery_configured: boolean
-}
 
 /** The body of `POST /api/boards/{id}/message-triggers` and `PATCH /api/message-triggers/{id}`.
  *  On PATCH an omitted key is left alone, `""` clears a string, and
  *  `clear_priority` drops the priority filter. */
-export interface MessageTriggerWireBody {
-  name?: string
-  event_kind?: string
-  to_column_id?: string
-  priority_value?: number
-  clear_priority?: boolean
-  recipient_user_id?: string
-  recipient_display_name?: string
-  message_template?: string
-  enabled?: boolean
-}
 
 // --- calls -------------------------------------------------------------------
 
@@ -108,13 +55,13 @@ export function listMessageTriggers(fetchFn: FetchFn, kanbanStoreBasePath: strin
 }
 
 export function createMessageTrigger(
-  fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string, body: MessageTriggerWireBody,
+  fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string, body: UpsertMessageTriggerRequest,
 ): Promise<KanbanStoreResult<MessageTrigger>> {
   return send(fetchFn, 'create message trigger', `${boardURL(kanbanStoreBasePath, boardID)}/message-triggers`, jsonInit('POST', body))
 }
 
 export function patchMessageTrigger(
-  fetchFn: FetchFn, kanbanStoreBasePath: string, triggerID: string, body: MessageTriggerWireBody,
+  fetchFn: FetchFn, kanbanStoreBasePath: string, triggerID: string, body: UpsertMessageTriggerRequest,
 ): Promise<KanbanStoreResult<MessageTrigger>> {
   return send(fetchFn, 'save message trigger', `${kanbanStoreBasePath}/api/message-triggers/${encodeURIComponent(triggerID)}`, jsonInit('PATCH', body))
 }
@@ -169,8 +116,8 @@ export function draftOfMessageTrigger(trigger: MessageTrigger): MessageTriggerDr
 
 /** The POST body. A column is sent only for a kind that takes one, so switching
  *  a draft away from `card_moved` cannot leave a column the store would refuse. */
-export function createBodyOfMessageTriggerDraft(draft: MessageTriggerDraft, columnFilterEventKinds: readonly string[]): MessageTriggerWireBody {
-  const body: MessageTriggerWireBody = {
+export function createBodyOfMessageTriggerDraft(draft: MessageTriggerDraft, columnFilterEventKinds: readonly string[]): UpsertMessageTriggerRequest {
+  const body: UpsertMessageTriggerRequest = {
     name: draft.name,
     event_kind: draft.eventKind,
     recipient_user_id: draft.recipientUserID.trim(),
@@ -186,9 +133,9 @@ export function createBodyOfMessageTriggerDraft(draft: MessageTriggerDraft, colu
 /** The PATCH body: only what differs from the stored trigger. */
 export function patchBodyOfMessageTriggerDraft(
   trigger: MessageTrigger, draft: MessageTriggerDraft, columnFilterEventKinds: readonly string[],
-): MessageTriggerWireBody {
+): UpsertMessageTriggerRequest {
   const next = createBodyOfMessageTriggerDraft(draft, columnFilterEventKinds)
-  const patch: MessageTriggerWireBody = {}
+  const patch: UpsertMessageTriggerRequest = {}
   if (next.name !== trigger.name) patch.name = next.name
   if (next.event_kind !== trigger.event_kind) patch.event_kind = next.event_kind
   if ((next.to_column_id ?? '') !== (trigger.to_column_id ?? '')) patch.to_column_id = next.to_column_id ?? ''

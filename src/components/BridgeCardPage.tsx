@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { CardDetail } from './BridgeKanban'
 import { useBridgeConfig } from '../context'
 import { useKanban, type AssignmentOutcome } from '../useKanban'
-import type { CardAssignment, CardLink, CardView, NoteboardItem, Placement } from '../types-kanban'
+import type { CardAssignment, CardLink, CardView, Placement } from '@kayushkin/kanban-store-types'
+import type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
 
 /**
  * One card, as a page of its own.

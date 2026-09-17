@@ -1,5 +1,5 @@
 import type { FetchFn } from './types'
-import type { Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, PriorityLadder } from './types-kanban'
+import type { Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, PriorityLadder } from '@kayushkin/kanban-store-types'
 import type { BoardSettingsPatch, LadderWireLevel } from './kanbanBoardSettings'
 import { readErrorText } from './useKanban'
 

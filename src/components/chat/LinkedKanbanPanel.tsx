@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../../context'
 import { RefChip } from './RefChip'
 import { preserveUnchangedKanbanPayload, useKanban } from '../../useKanban'
-import type { EntityCardView, EntityTag } from '../../types-kanban'
+import type { EntityCardView, EntityTag } from '@kayushkin/kanban-store-types'
 
 const DO_NOT_TRACK_TAGS = ['kanban-do-not-track', 'kanban:do-not-track'] as const
 

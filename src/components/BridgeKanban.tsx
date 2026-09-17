@@ -9,9 +9,9 @@ import {
   pickablePrincipals, principalInitials, principalIsDisabled, usePrincipals,
   type PrincipalKindFilter, type PrincipalsDirectory,
 } from '../usePrincipals'
-import type {
-  CardAssignment, CardLink, CardView, ColumnView, DefaultSource, MailMessage, NoteboardItem, Placement,
-} from '../types-kanban'
+import type { CardAssignment, CardLink, CardView, ColumnView, DefaultSource, Placement } from '@kayushkin/kanban-store-types'
+import type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
+import type { MailMessage } from '../types-mailstack'
 import { formatAgeCompact } from '../utils'
 import { entityTarget, isLocalPathRef } from '../entityLinks'
 import { CardBudgetBadge, CardTimelinePanel, hasClockData } from './CardTime'

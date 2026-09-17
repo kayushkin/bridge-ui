@@ -6,7 +6,7 @@ import {
   dispatchTargetNote, generalDraftOf,
   generalPatchOf, ladderDraftOf, ladderDraftToWire, parseMailAccountIDs,
 } from '../src/kanbanBoardSettings'
-import type { Board, PriorityLadder } from '../src/types-kanban'
+import type { Board, PriorityLadder } from '@kayushkin/kanban-store-types'
 import type { Bundle } from '../src/types-bundles'
 
 const board = (over: Partial<Board> = {}): Board => ({

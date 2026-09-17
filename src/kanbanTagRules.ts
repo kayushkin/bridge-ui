@@ -10,7 +10,7 @@
 // here. kanban-store resolves it (`GET …/effective-defaults`) and every surface
 // asks it; a client copy of the precedence would drift from the store's.
 
-import type { BoardTagRule, BoardTagRuleInput } from './types-kanban'
+import type { BoardTagRule, BoardTagRuleInput } from '@kayushkin/kanban-store-types'
 import { BOARD_DEFAULT_FIELDS, defaultsDraftOf, type DefaultsDraft } from './kanbanBoardSettings'
 
 export interface TagRuleDraft {

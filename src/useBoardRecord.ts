@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { getBoard } from './kanbanStoreClient'
-import type { Board } from './types-kanban'
+import type { Board } from '@kayushkin/kanban-store-types'
 
 export interface BoardRecord {
   /** The board, or null while loading, when there is no board id, or after a

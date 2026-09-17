@@ -7,7 +7,7 @@ import {
   tagRulesDirty, tagRulesDraftOf, tagRulesDraftToWire, type TagRuleDraft,
 } from '../kanbanTagRules'
 import { DEFAULT_FIELD_LABELS, IdField, pickerValueLabel, useDefaultPickers, type DefaultPickers } from './BoardDefaultIdFields'
-import type { Board, BoardTagRule, EffectiveDefaults } from '../types-kanban'
+import type { Board, BoardTagRule, EffectiveDefaults } from '@kayushkin/kanban-store-types'
 
 /** How long the preview waits after the last keystroke before asking the store. */
 const PREVIEW_DELAY_MS = 250

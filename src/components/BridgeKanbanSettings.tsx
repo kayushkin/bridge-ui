@@ -16,7 +16,7 @@ import {
   type BoardSettingsPatch, type BudgetUnit, type LadderRowDraft, type LadderWireLevel,
 } from '../kanbanBoardSettings'
 import type { FetchFn } from '../types'
-import type { Board, PriorityLadder } from '../types-kanban'
+import type { Board, PriorityLadder } from '@kayushkin/kanban-store-types'
 
 /**
  * Board settings page: everything kanban-store keeps on a board besides its

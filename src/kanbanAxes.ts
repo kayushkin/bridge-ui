@@ -1,4 +1,5 @@
-import type { CardView, NoteboardItem } from './types-kanban'
+import type { CardView } from '@kayushkin/kanban-store-types'
+import type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
 
 /**
  * Card axes — the classification a card carries in its noteboard tags.
