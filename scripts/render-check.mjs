@@ -1003,13 +1003,13 @@ console.log('BridgeLayout — a narrow viewport is not permission to hide the na
 // work to them, and kanban-store would 400 the attempt anyway).
 console.log('\nprincipals — disabled resolves but is not pickable')
 {
-  const vlad = { id: 'principal_000001', kind: 'human', display_name: 'Vlad Kayushkin', email: 'v@example.com', disabled_at: 0, created_at: 1, updated_at: 1 }
+  const slava = { id: 'principal_000001', kind: 'human', display_name: 'Slava Kayushkin', email: 'v@example.com', disabled_at: 0, created_at: 1, updated_at: 1 }
   const gone = { id: 'principal_000002', kind: 'human', display_name: 'Gone Person', email: '', disabled_at: 1_700_000_000, created_at: 1, updated_at: 1 }
   const team = { id: 'principal_000003', kind: 'group', display_name: 'Platform Team', email: '', disabled_at: 0, created_at: 1, updated_at: 1 }
-  const list = [vlad, gone, team]
+  const list = [slava, gone, team]
   const byId = indexPrincipalsByID(list)
   check('a disabled principal still resolves by id', byId.get('principal_000002') === gone)
-  check('and is reported disabled', principalIsDisabled(gone) && !principalIsDisabled(vlad))
+  check('and is reported disabled', principalIsDisabled(gone) && !principalIsDisabled(slava))
   const all = pickablePrincipals(list, { query: '', kind: 'all', excludeIDs: [] })
   check('the picker never offers a disabled principal', !all.includes(gone) && all.length === 2, JSON.stringify(all.map(p => p.id)))
   check('the query is a case-insensitive substring of display_name',
@@ -1018,7 +1018,7 @@ console.log('\nprincipals — disabled resolves but is not pickable')
     pickablePrincipals(list, { query: '', kind: 'all', excludeIDs: ['principal_000001'] }).map(p => p.id).join() === 'principal_000003')
   check('the kind toggle narrows to people', pickablePrincipals(list, { query: '', kind: 'human', excludeIDs: [] }).map(p => p.id).join() === 'principal_000001')
   check('the kind toggle narrows to groups', pickablePrincipals(list, { query: '', kind: 'group', excludeIDs: [] }).map(p => p.id).join() === 'principal_000003')
-  check('initials are the first letters of the first two words', principalInitials('Vlad Kayushkin') === 'VK' && principalInitials('priya') === 'P' && principalInitials('  ') === '?')
+  check('initials are the first letters of the first two words', principalInitials('Slava Kayushkin') === 'VK' && principalInitials('priya') === 'P' && principalInitials('  ') === '?')
 }
 
 // The drawer's "Assigned" section, rendered with no directory answer yet. A
@@ -1103,14 +1103,14 @@ console.log('\nBridgePrincipals — the directory editor')
   check('an empty query sends no q', !url({ query: '' }).includes('q='), url({}))
 
   const TS = 1_700_000_000
-  const vlad = { id: 'principal_000001', kind: 'human', display_name: 'Vlad Kayushkin', email: 'v@example.com', disabled_at: 0, created_at: TS, updated_at: TS }
+  const slava = { id: 'principal_000001', kind: 'human', display_name: 'Slava Kayushkin', email: 'v@example.com', disabled_at: 0, created_at: TS, updated_at: TS }
   const gone = { id: 'principal_000002', kind: 'human', display_name: 'Gone Person', email: '', disabled_at: TS, created_at: TS, updated_at: TS }
   const team = { id: 'principal_000003', kind: 'group', display_name: 'Platform Team', email: '', disabled_at: 0, created_at: TS, updated_at: TS }
 
   // The roster renders what the server sent and flags the disabled row; it
   // never drops one on its own, or the toggle would lie.
   const roster = renderToStaticMarkup(h(PrincipalListView, {
-    principals: [vlad, gone, team], selectedID: 'principal_000003', onSelect: () => {}, loading: false, error: null,
+    principals: [slava, gone, team], selectedID: 'principal_000003', onSelect: () => {}, loading: false, error: null,
   }))
   check('every row the server sent is listed', ['principal_000001', 'principal_000002', 'principal_000003'].every(id => roster.includes(`data-principal-id="${id}"`)), roster.slice(0, 400))
   check('a disabled row carries the badge, an active one does not',
@@ -1119,25 +1119,25 @@ console.log('\nBridgePrincipals — the directory editor')
   check('a person is an initials avatar, a group the group glyph', roster.includes('>VK<') && roster.includes('👥'), roster.slice(0, 400))
   check('the selected row is marked', roster.includes('bp-row-selected') && roster.includes('aria-pressed="true"'))
   const failed = renderToStaticMarkup(h(PrincipalListView, {
-    principals: [vlad], selectedID: null, onSelect: () => {}, loading: false, error: 'HTTP 502',
+    principals: [slava], selectedID: null, onSelect: () => {}, loading: false, error: 'HTTP 502',
   }))
   check('a failed listing shows the failure and keeps the last rows', failed.includes('HTTP 502') && failed.includes('principal_000001'), failed)
 
   // The detail view: the id in monospace for pasting, and the state said plainly.
-  const outcome = async () => ({ ok: true, value: vlad })
+  const outcome = async () => ({ ok: true, value: slava })
   const never = () => new Promise(() => {})
   const detail = (row) => renderToStaticMarkup(h(PrincipalDetailView, {
     detail: row, loading: false, readError: null,
     save: outcome, setDisabled: outcome, addMembership: outcome, removeMembership: outcome,
     searchCandidates: never, onChanged: async () => {}, onOpen: () => {},
   }))
-  const human = detail({ ...vlad, groups: [team] })
+  const human = detail({ ...slava, groups: [team] })
   check('the id is shown as monospace text', human.includes('<code class="bp-id"') && human.includes('>principal_000001</code>'), human.slice(0, 500))
   check('an active principal offers Disable, and says Active', human.includes('>Disable<') && human.includes('>Active<') && !human.includes('>Enable<'))
   check('a person has an email field', human.includes('>Email<'))
   check('a human lists its groups with a remove control', human.includes('>Groups <') && human.includes('Platform Team') && human.includes('Remove Platform Team'))
   check('and its picker offers groups', human.includes('data-picker-kind="group"') && human.includes('Add to a group'))
-  const group = detail({ ...team, members: [vlad, gone] })
+  const group = detail({ ...team, members: [slava, gone] })
   check('a group has no email field', !group.includes('>Email<'), group.slice(0, 800))
   check('a group lists its members, a disabled one flagged', group.includes('>Members <') && group.includes('Gone Person')
     && group.split('data-principal-id="principal_000002"')[1].split('</li>')[0].includes('bp-badge-disabled'))
@@ -1149,7 +1149,7 @@ console.log('\nBridgePrincipals — the directory editor')
   // this page is most likely to meet.
   const refusal = "nested groups are not supported in v1: add the group's humans directly"
   const refused = renderToStaticMarkup(h(MembershipsSection, {
-    title: 'Members', emptyText: 'No members yet.', entries: [vlad], pickerKind: 'human', pickerPlaceholder: 'Add a person…',
+    title: 'Members', emptyText: 'No members yet.', entries: [slava], pickerKind: 'human', pickerPlaceholder: 'Add a person…',
     selfID: 'principal_000003', add: outcome, remove: outcome, searchCandidates: never, onChanged: async () => {}, onOpen: () => {},
     initialError: refusal,
   }))

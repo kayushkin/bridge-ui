@@ -38,7 +38,7 @@ export function indexPrincipalsByID(list: Principal[]): Map<string, Principal> {
 }
 
 /** The initials an avatar chip shows for a human: the first letter of the first
- *  two words of the display name. "Vlad Kayushkin" → "VK", "Priya" → "P". */
+ *  two words of the display name. "Slava Kayushkin" → "VK", "Priya" → "P". */
 export function principalInitials(displayName: string): string {
   const words = displayName.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return '?'
