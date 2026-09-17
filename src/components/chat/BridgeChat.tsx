@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, useMemo } from 'rea
 import { useSearchParams } from 'react-router-dom'
 import {
   useActiveSession,
-  useActivity,
+  useSessionStatus,
   useComposer,
   useSessionActions,
   useSessionControls,
@@ -28,7 +28,7 @@ import {
   useSessionSettings,
 } from './SessionSettings'
 import AwaitingYouBanner from './AwaitingYouBanner'
-import SessionStatusLine, { useSessionStatus } from './SessionStatusLine'
+import SessionStatusLine, { useStatusSlotContent } from './SessionStatusLine'
 import BudgetBanner from './BudgetBanner'
 import SessionHeader from './SessionHeader'
 import { useNewSessionTarget, type NewSessionTarget } from './useNewSessionTarget'
@@ -382,18 +382,16 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
     setMarkdownState(next)
   }, [])
 
-  // Two independent witnesses that the session is busy, OR'd:
-  //  - the summary's state — the server's word, but it rides the session-LIST
-  //    stream and for a seconds-old session the record can lag the entire first
-  //    turn (measured live 2026-08-25, br_1787617143776318105: the narration
-  //    aside never saw live=true because this flag stayed false for the whole
-  //    12.6s turn);
-  //  - the live activity — derived from the transcript stream itself, so it is
-  //    true the instant an event arrives and idles on result/terminal/
-  //    session_state. chat-core's own useActivity doc warns against gating on
-  //    the session state alone; this was exactly that trap.
-  const activity = useActivity(id)
-  const streaming = (!!summary && STREAMING_STATES.has(summary.state)) || activity.kind !== 'idle'
+  // Whether the session is producing output: the server's state, and nothing else.
+  //
+  // This used to be two witnesses OR'd — the list row's state, and an activity folded
+  // off the open session's own frames — because the row rides the session-LIST stream
+  // and could lag a seconds-old session's whole first turn (measured 2026-08-25,
+  // br_1787617143776318105: 12.6s). The state now arrives on the session's own stream
+  // too, as a `session_status` event, and chat-core keeps whichever copy is newer, so
+  // the row is as fresh as the frames were and there is one witness.
+  const status = useSessionStatus(id)
+  const streaming = !!status && STREAMING_STATES.has(status.state)
 
   // Observability, deliberately permanent: the streaming chain has broken twice in
   // ways only visible on a live session (a summary that lags a fresh session; two
@@ -404,10 +402,10 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
     ;(window as unknown as { __chatStreaming?: object }).__chatStreaming = {
       id,
       streaming,
-      activityKind: activity.kind,
+      statusAsOf: status?.as_of ?? null,
       summaryState: summary?.state ?? null,
     }
-  }, [id, streaming, activity, summary])
+  }, [id, streaming, status, summary])
 
   // The repo list behind the Git pane, and the selection it reads.
   //
@@ -502,7 +500,7 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
   // The SAME derivation the Turns pane runs. Not local state — every input is a store
   // read or a prop — so computing it twice cannot disagree with itself, unlike the
   // compacting flag, which is hook-local and has to be threaded down from one instance.
-  const sessionStatus = useSessionStatus(id, streaming, controls.compacting, composerStatus)
+  const sessionStatus = useStatusSlotContent(id, controls.compacting, composerStatus)
   // The status slot lives at the foot of the transcript (`e0753eb`: one fixed-height
   // slot whose content swaps in place, rather than four strips popping between the
   // transcript and the composer). That home is right, and it has a hole: the Turns pane

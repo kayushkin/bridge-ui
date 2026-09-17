@@ -8,7 +8,7 @@ import {
   useSessionInfo,
   useManagedSession,
   usePendingSession,
-  useActivity,
+  useSessionStatus,
   type useSessionControls,
 } from '@kayushkin/chat-core'
 import type {
@@ -26,6 +26,7 @@ import { formatCost } from '../../utils'
 import { CostBreakdown } from './CostBreakdown'
 import { EditableName } from './EditableName'
 import { StatusDot } from './StatusDot'
+import { statusActivityWord } from './sessionStatusWords'
 import { SystemPromptModal } from './SystemPromptModal'
 import { ToolsPanel } from './ToolsPanel'
 import type { Machine } from '../../types'
@@ -129,7 +130,7 @@ export default function SessionHeader({
   // through the same `id === null` as "nothing selected". Without the pending record the
   // two draw identically and a freshly opened chat looks like an empty pane.
   const pending = usePendingSession()
-  const { groups, effectiveState } = useSessionList()
+  const { groups } = useSessionList()
   const { rename, archive, unarchive } = useSessionActions()
   const { instanceMap } = useBridgeInstances()
   const { machineMap } = useBridgeMachines()
@@ -158,10 +159,9 @@ export default function SessionHeader({
     ? { spendUSD: managed?.spendUsd ?? 0, maxBudgetUSD: maxBudgetUsd }
     : undefined
 
-  // What the session is doing right now, as opposed to what phase the server thinks it is
-  // in. The two answer different questions: a state is a row the server writes and can
-  // strand, an activity is read off the event that just arrived.
-  const activity = useActivity(id)
+  // What the session is doing right now, as the server decided it. The row carries
+  // it for every session, so this is right in the same commit as a switch.
+  const status = useSessionStatus(id)
 
   // Reachability for the machine dot. Resolved before the pending-pane early return
   // below, because a hook cannot be called conditionally — and because a pending chat
@@ -304,21 +304,12 @@ export default function SessionHeader({
 
   const instance = summary.instanceId ? instanceMap.get(summary.instanceId) : undefined
   const machine = instance?.machine ?? (instance ? machineMap.get(instance.machine_id) : undefined)
-  const state = effectiveState(id)
+  const state = summary.state
   // The status dot is the only thing on this header that says what the session is doing,
   // and on its own it cannot tell a turn that has been on one tool for four minutes from
-  // one that has just started. The activity rides in the dot's own label.
-  //
-  // NOT gated on `state`: bridge-ui gates its suffix on four session states of which three
-  // are emitted zero times, which is why its own suffix has never rendered. An activity
-  // that is not idle is itself the evidence that work is happening.
-  const activityLabel =
-    activity.kind === 'idle'
-      ? ''
-      : activity.kind === 'tool'
-        ? activity.name || 'tool'
-        : activity.kind
-  const stateTitle = activityLabel ? `${state} · ${activityLabel}` : state
+  // one that has just started. What it is doing rides in the dot's own label.
+  const activityLabel = statusActivityWord(status)
+  const stateTitle = activityLabel && activityLabel !== state ? `${state} · ${activityLabel}` : state
   const isArchived = isArchivedFolder(summary.folderName)
 
   // Server-registered harness metadata drives the header's logo image and its warm

@@ -90,7 +90,7 @@ type ContextMenuTarget =
  *  bc-new-session, bc-session-search, bc-inst-filter / bc-class-filter-row chips,
  *  bc-session-item, bc-folder-header) so it inherits the shared stylesheet. A
  *  new-session split control, content search, a collapsible multi-axis chip filter
- *  with live counts, per-row status dot fed effectiveState, inline rename (bridge-ui's
+ *  with live counts, per-row status dot fed the row's own state, inline rename (bridge-ui's
  *  exported EditableName), and folder groups with collapse. Virtualized. All
  *  filtering/sorting/grouping is chat-core's — no transcript re-derivation here.
  *
@@ -120,7 +120,6 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
   const {
     groups,
     loading,
-    effectiveState,
     facets,
     moreSessions,
     loadingOlderSessions,
@@ -471,7 +470,7 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
       const waitingCount = isArchivedFolder(folder)
         ? 0
         : sessions.reduce(
-            (n, s) => (waitingOnHuman(s.sessionId, effectiveState(s.sessionId)) ? n + 1 : n),
+            (n, s) => (waitingOnHuman(s.sessionId, s.state) ? n + 1 : n),
             0,
           )
       out.push(
@@ -511,7 +510,7 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
             session={s}
             harnessInfo={harnessMap.get(s.harness)}
             basePath={basePath}
-            displayState={effectiveState(s.sessionId)}
+            displayState={s.state}
             hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
             active={s.sessionId === activeId}
             subagentCount={subagentsOf(s.sessionId).length}
@@ -572,18 +571,10 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
                 session={child}
                 harnessInfo={harnessMap.get(child.harness)}
                 basePath={basePath}
-                // ⚠️ `effectiveState` answers '' for a session the STORE has never
-                // loaded, and a fetched child is exactly that — being outside the
-                // loaded window is why it had to be fetched. Left at that, every child
-                // drew with no status dot and no running mark, i.e. the one thing this
-                // list is opened to see.
-                //
-                // This is not a fallback across unrelated sources: `effectiveState`
-                // reconciles the store's row against its warm tail, and where there is
-                // no row there is no tail either, so the child's OWN state — the same
-                // field, from the same server, by a different read — is the whole
-                // answer rather than a guess at one.
-                displayState={effectiveState(child.sessionId) || child.state}
+                // The child's own state. `useSubagents` already hands back the
+                // store's copy of a child where the store holds one, so this is the
+                // row the list stream keeps current, not the point-in-time fetch.
+                displayState={child.state}
                 hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
                 active={child.sessionId === activeId}
                 // A child's own children are not drawn — see the note above on depth.
@@ -620,7 +611,6 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
     archive,
     unarchive,
     rename,
-    effectiveState,
     waitingOnHuman,
     sessionsWithOpenQuestion,
     openFolderMenu,

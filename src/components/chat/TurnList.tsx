@@ -26,7 +26,7 @@ import { remarkVibes } from './vibes'
 import VibeLegend from './VibeLegend'
 import SessionStatusLine, {
   STATUS_SPACER_CLASSNAME,
-  useSessionStatus,
+  useStatusSlotContent,
   type ComposerStatus,
 } from './SessionStatusLine'
 import styles from './Chat.module.css'
@@ -134,7 +134,7 @@ export default function TurnList({
   // empties. The transcript sits flush against the slot, so the slot vanishing at
   // end of turn used to shift every line the user was reading — instead the space
   // stays reserved until they scroll (wheel/touch below), or a new status fills it.
-  const status = useSessionStatus(sessionId, streaming, compacting, composerStatus)
+  const status = useStatusSlotContent(sessionId, compacting, composerStatus)
   const statusVisible = status !== null
   const [lingerSpacer, setLingerSpacer] = useState(false)
   // The kind on screen last render. Only a departing RUNNING kind (live/compacting)

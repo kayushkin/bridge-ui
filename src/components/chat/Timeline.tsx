@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useRef } from 'react'
 import { VList } from 'virtua'
-import { useTurns, selectTimeline, useLiveStatus } from '@kayushkin/chat-core'
+import { useTurns, selectTimeline, useSessionStatus } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import type { TurnModel, TimelineItem } from '@kayushkin/chat-core'
 import { formatHMS } from './bridgeAdapters'
@@ -176,8 +176,8 @@ function TimelineSubagents({
   sessionId: string | null
   onOpenSession: (sessionId: string) => void
 }) {
-  const live = useLiveStatus(sessionId)
-  return <SubagentsChip subagents={live.subagents} onOpenSession={onOpenSession} />
+  const status = useSessionStatus(sessionId)
+  return <SubagentsChip subagents={status?.subagents ?? []} onOpenSession={onOpenSession} />
 }
 
 interface TimelineItemRowProps {

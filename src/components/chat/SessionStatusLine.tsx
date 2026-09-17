@@ -1,27 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  isRunningState,
   useConnState,
-  useLiveStatus,
-  type LiveStatus,
-  type LiveSubagent,
+  useInProgressTodo,
+  useSessionStatus,
+  type InProgressTodo,
+  type SessionStatus,
+  type SessionStatusSubagent,
 } from '@kayushkin/chat-core'
 import { formatHMS } from './bridgeAdapters'
+import { statusActivitySince, statusActivityText, statusRateLimitText } from './sessionStatusWords'
 import styles from './Chat.module.css'
 
 // The turns pane's ONE status slot: a fixed-height line under the scroller that
-// renders whichever session status is current. Before this existed, four separate
-// things popped in and out of the layout between the transcript and the composer —
-// the live-activity strip (which also grew a row per subagent), the compacting
-// strip, the composer's paused/stopped row, and its error row — and every toggle
-// shifted the text the user was reading. Now there is one slot, one height, one
-// visual language; only its content swaps.
+// renders whichever status is current. One slot, one height; only its content swaps.
 //
-// Subagent detail did not fit a fixed line, so it moved into a popover behind an
-// inline "⑂ N agents" chip — one row per subagent, with its promoted-session link.
+// What it shows comes from two places and no more:
 //
-// The slot's visibility is decided by `useSessionStatus` and rendered by the parent
-// (TurnList), which also holds the empty spacer that keeps the transcript from
-// shifting when the slot empties at end of turn.
+//  1. Facts only this browser knows — the connection is down, a Stop or Resume the
+//     user just clicked was refused, a Compact was just asked for. These outrank
+//     everything, because nothing below them can be trusted (or has caught up) yet.
+//  2. The session's `SessionStatus`, which llm-bridge-server decides and chat-core
+//     keeps newest-`as_of`-first. State, tool in flight, thinking or text, running
+//     subagents, since when. It rides the session row, so it is right for a session
+//     in the same commit as switching to it.
+//
+// Until 2026-09-17 tier 2 was rebuilt here from the transcript and a live activity
+// fold, and a ladder of six kinds papered over the two disagreeing. There is nothing
+// left to disagree.
+//
+// The subagents chip sits at a fixed place at the right of the slot whatever the slot
+// is saying, so it neither slides as the activity text changes width nor vanishes
+// (closing its popover) when the line briefly says "compacting" or "disconnected".
 
 /** The slice of Chat's one `useComposer` instance the status slot renders.
  *  `error` is hook-local state, which is why this arrives as a prop rather than
@@ -34,32 +44,47 @@ export interface ComposerStatus {
   failedAction: 'stop' | 'resume' | null
 }
 
-/** What the slot shows, in priority order — each kind replaces everything below it.
- *  null = nothing to say (the slot disappears, its spacer may linger). */
-export type SessionStatus =
-  | { kind: 'error'; text: string }
-  | { kind: 'disconnected'; text: string }
-  | { kind: 'stopped' }
-  | { kind: 'paused' }
-  | { kind: 'compacting' }
-  | { kind: 'live'; live: LiveStatus }
+/** What the slot says. null = nothing to say (the slot disappears, its spacer may
+ *  linger). `status` rides along on every kind so the subagents chip can be drawn
+ *  beside any of them. */
+export type StatusSlotContent =
+  | ({ status: SessionStatus | null; todo?: InProgressTodo } & (
+      | { kind: 'error'; text: string }
+      | { kind: 'disconnected'; text: string }
+      | { kind: 'stopped' }
+      | { kind: 'paused' }
+      | { kind: 'compacting' }
+      | { kind: 'live' }
+      | { kind: 'rate_limited'; text: string }
+      /** Not running, but tasks it started still are — a backgrounded shell outlives
+       *  its turn. The chip is the whole content. */
+      | { kind: 'tasks' }
+    ))
   | null
 
+/** States in which the session is working and the live row is what to draw.
+ *  `awaiting_permission` is not one of chat-core's RUNNING states — the turn is
+ *  parked on a person — but it is mid-turn, and saying so beats going blank. */
+function isLiveState(state: string): boolean {
+  return isRunningState(state) || state === 'awaiting_permission'
+}
+
 /**
- * Decide the slot's current content. Priority: an action failure outranks
- * everything (the user just clicked something that refused); a dead stream
- * outranks session facts (nothing below it can be trusted live); stopped/paused
- * outrank compacting/live because they are mutually exclusive with a running
- * turn; live activity keeps the chat-core rule — never gated on session state
- * alone, a non-idle activity is itself evidence of work.
+ * Decide the slot's content. Browser-local facts first (see the header), then the
+ * server's status read straight through.
+ *
+ * `compactRequested` is chat-core's hook-local flag, true from the Compact click until
+ * the boundary event. It stays because a click should answer at once; the server's own
+ * `compacting` state — which also covers a compaction the harness started by itself —
+ * draws the same row.
  */
-export function useSessionStatus(
+export function useStatusSlotContent(
   sessionId: string | null,
-  streaming: boolean,
-  compacting: boolean,
+  compactRequested: boolean,
   composerStatus: ComposerStatus,
-): SessionStatus {
-  const live = useLiveStatus(sessionId)
+): StatusSlotContent {
+  const status = useSessionStatus(sessionId)
+  const todo = useInProgressTodo(sessionId)
   const connState = useConnState()
   if (composerStatus.error) {
     const prefix =
@@ -68,7 +93,7 @@ export function useSessionStatus(
         : composerStatus.failedAction === 'resume'
           ? "couldn't resume — still stopped: "
           : ''
-    return { kind: 'error', text: `${prefix}${composerStatus.error}` }
+    return { kind: 'error', text: `${prefix}${composerStatus.error}`, status }
   }
   // 'open' is the only state in which updates are actually flowing (the Composer's
   // own send gate uses the same test).
@@ -79,12 +104,20 @@ export function useSessionStatus(
         connState === 'closed'
           ? 'disconnected — nothing can be sent'
           : 'connecting — nothing can be sent yet',
+      status,
     }
   }
-  if (composerStatus.resumable) return { kind: 'stopped' }
-  if (composerStatus.paused) return { kind: 'paused' }
-  if (compacting) return { kind: 'compacting' }
-  if (streaming || live.activity.kind !== 'idle') return { kind: 'live', live }
+  if (compactRequested) return { kind: 'compacting', status }
+  if (!status) return null
+  if (composerStatus.resumable) return { kind: 'stopped', status }
+  if (status.state === 'paused') return { kind: 'paused', status }
+  if (status.state === 'compacting') return { kind: 'compacting', status }
+  if (isLiveState(status.state)) return { kind: 'live', status, todo }
+  const rateLimit = statusRateLimitText(status, (unixSeconds) =>
+    formatHMS(new Date(unixSeconds * 1000).toISOString()),
+  )
+  if (rateLimit) return { kind: 'rate_limited', text: rateLimit, status }
+  if ((status.subagents?.length ?? 0) > 0) return { kind: 'tasks', status }
   return null
 }
 
@@ -101,76 +134,76 @@ function formatElapsed(sinceTs: string, nowMs: number): string {
   return `${seconds}s`
 }
 
-/** The live row's text: the newest in-flight call when the model has one (name +
- *  input summary, with a count when calls run in parallel), else the activity word.
- *  "responding" rather than chat-core's "streaming" — the reader is a person
- *  watching a chat, not the SSE plumbing. */
-function mainActivityText(live: LiveStatus): string {
-  const newest = live.toolCalls[live.toolCalls.length - 1]
-  if (newest) {
-    const name = newest.name || 'tool'
-    const extra = live.toolCalls.length > 1 ? `  (+${live.toolCalls.length - 1} more)` : ''
-    return `${name}${newest.summary ? ` — ${newest.summary}` : ''}${extra}`
-  }
-  switch (live.activity.kind) {
-    case 'thinking':
-      return 'thinking'
-    case 'streaming':
-      return 'responding'
-    case 'tool':
-      // The activity names a tool but the model has no pairable in-flight entry
-      // (an OTel-derived stand-in, or the entry not folded yet) — the name is
-      // still the truest thing on hand.
-      return live.activity.name || 'tool'
-    default:
-      // Busy per the server state, nothing heard on the stream yet.
-      return 'working'
-  }
-}
-
 /** What kind of worker a task row is: the agent role when reported, else an honest
  *  generic — a backgrounded shell is not an agent and must not read as one. */
-function subagentKindLabel(task: LiveSubagent): string {
-  if (task.subagentType) return task.subagentType
-  return task.taskType === 'local_bash' ? 'background shell' : 'subagent'
+function subagentKindLabel(task: SessionStatusSubagent): string {
+  if (task.subagent_type) return task.subagent_type
+  return task.task_type === 'local_bash' ? 'background shell' : 'subagent'
 }
 
-interface SessionStatusLineProps {
-  /** The decided status. Never null — the parent renders nothing (or the spacer)
-   *  instead of this component when there is nothing to say. */
-  status: NonNullable<SessionStatus>
-  /** Opens a subagent's promoted session — TurnList's `select`. */
-  onOpenSession: (sessionId: string) => void
+/** One row of the popover: a task still running, or one that finished while the
+ *  popover was open. */
+interface SubagentRow {
+  task: SessionStatusSubagent
+  /** Set when the task left the status while the popover was open (RFC3339-less:
+   *  the ms clock reading it was last seen running at). */
+  finishedAtMs?: number
 }
 
 /**
- * The `⑂ N agents` chip and the popover behind it: one row per running subagent,
- * with its kind, description, last tool, elapsed, and a link to its own promoted
- * session.
+ * The popover's rows: every task running now, plus every task that was running at
+ * some point since the popover opened, in the order first seen.
  *
- * Extracted from the status line because the status line is mounted inside the
- * TURNS pane alone (`TurnList.tsx`), so hiding that pane took the only view of a
- * session's running subagents with it. The Timeline pane mounts this too.
+ * A finished task's row used to be removed the instant it finished, and every row
+ * below it jumped up a line under the reader's eyes. It now stays where it is,
+ * marked done with its clock stopped, until the popover closes — the list only ever
+ * grows while it is being read.
+ */
+function useStableSubagentRows(
+  running: readonly SessionStatusSubagent[],
+  open: boolean,
+): SubagentRow[] {
+  const seen = useRef(new Map<string, SubagentRow>())
+  if (!open) {
+    seen.current = new Map()
+    return running.map((task) => ({ task }))
+  }
+  const runningIds = new Set<string>()
+  for (const task of running) {
+    runningIds.add(task.task_id)
+    seen.current.set(task.task_id, { task })
+  }
+  for (const [taskId, row] of seen.current) {
+    if (!runningIds.has(taskId) && row.finishedAtMs === undefined) {
+      seen.current.set(taskId, { ...row, finishedAtMs: Date.now() })
+    }
+  }
+  return [...seen.current.values()]
+}
+
+/**
+ * The `⑂ N agents` chip and the popover behind it: one row per subagent, with its
+ * kind, description, last tool, elapsed, and a link to its own promoted session.
  *
- * ⚠️ Pure — it takes the subagents rather than subscribing for them. `useLiveStatus`
- * subscribes to `s.sessions` as well as the turn model, so a component that calls it
- * re-renders on every sidebar poll; keeping that subscription in a thin leaf beside
- * this chip is what stops a whole pane from doing so.
+ * Mounted by the status line and by the Timeline pane — the status line lives in the
+ * Turns pane alone, so hiding that pane would otherwise take the only view of a
+ * session's running subagents with it.
+ *
+ * Pure: it takes the subagents rather than subscribing for them.
  */
 export function SubagentsChip({
   subagents,
   onOpenSession,
 }: {
-  subagents: readonly LiveSubagent[]
+  subagents: readonly SessionStatusSubagent[]
   onOpenSession: (sessionId: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const rows = useStableSubagentRows(subagents, open)
 
-  // The clock ticks only while the popover is OPEN, not merely while the turn is
-  // live. The elapsed readouts it drives are inside the popover and are the only
-  // thing on screen that changes per second; a closed popover re-rendering once a
-  // second is a whole component tree's worth of work to update nothing visible.
+  // The clock ticks only while the popover is OPEN: the elapsed readouts it drives
+  // are inside the popover and are the only thing here that changes per second.
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
     if (!open) return
@@ -195,13 +228,10 @@ export function SubagentsChip({
     }
   }, [open])
 
-  // A popover left open for a fleet that has since finished would show stale rows.
+  // Nothing running and nothing being read: no chip. While the popover is open the
+  // chip stays even at zero, so the rows the reader is looking at are not pulled away.
   const count = subagents.length
-  useEffect(() => {
-    if (count === 0) setOpen(false)
-  }, [count])
-
-  if (count === 0) return null
+  if (count === 0 && !open) return null
 
   return (
     <div ref={rootRef} className={styles.subagentsAnchor}>
@@ -215,28 +245,33 @@ export function SubagentsChip({
       </button>
       {open && (
         <div className={styles.statusPopover}>
-          {subagents.map((task) => (
-            <div key={task.taskId} className={styles.statusAgentRow}>
-              <span className={styles.statusAgentKind}>{subagentKindLabel(task)}</span>
-              {task.description && (
-                <span className={styles.statusText} title={task.description}>
-                  — {task.description}
-                </span>
-              )}
-              {task.lastToolName && (
-                <span className={styles.statusAgentTool}>· {task.lastToolName}</span>
-              )}
-              <span className={styles.statusTime}>
-                {formatHMS(task.startedAt)} · {formatElapsed(task.startedAt, nowMs)}
+          {rows.map(({ task, finishedAtMs }) => (
+            <div
+              key={task.task_id}
+              className={`${styles.statusAgentRow} ${finishedAtMs !== undefined ? styles.statusAgentRowDone : ''}`}
+            >
+              <span className={styles.statusAgentKind} title={subagentKindLabel(task)}>
+                {subagentKindLabel(task)}
               </span>
-              {task.sessionId && (
+              <span className={styles.statusAgentDescription} title={task.description}>
+                {task.description ?? ''}
+              </span>
+              <span className={styles.statusAgentTool} title={task.last_tool_name}>
+                {finishedAtMs !== undefined ? 'done' : (task.last_tool_name ?? '')}
+              </span>
+              <span className={styles.statusAgentElapsed}>
+                {formatElapsed(task.started_at, finishedAtMs ?? nowMs)}
+              </span>
+              {task.session_id ? (
                 <button
                   className={styles.statusOpen}
-                  onClick={() => onOpenSession(task.sessionId!)}
-                  title={`Open subagent session ${task.sessionId}`}
+                  onClick={() => onOpenSession(task.session_id!)}
+                  title={`Open subagent session ${task.session_id}`}
                 >
                   open ↗
                 </button>
+              ) : (
+                <span aria-hidden />
               )}
             </div>
           ))}
@@ -246,10 +281,18 @@ export function SubagentsChip({
   )
 }
 
-export default function SessionStatusLine({ status, onOpenSession }: SessionStatusLineProps) {
-  // One shared 1s clock for the elapsed readouts, ticking only while the live row
-  // is what's shown — no other kind renders a clock.
-  const isLive = status.kind === 'live'
+interface SessionStatusLineProps {
+  /** The decided content. Never null — the parent renders nothing (or the spacer)
+   *  instead of this component when there is nothing to say. */
+  status: NonNullable<StatusSlotContent>
+  /** Opens a subagent's promoted session — TurnList's `select`. */
+  onOpenSession: (sessionId: string) => void
+}
+
+export default function SessionStatusLine({ status: content, onOpenSession }: SessionStatusLineProps) {
+  // One 1s clock for the elapsed readout, ticking only while the live row is shown —
+  // no other kind draws a clock.
+  const isLive = content.kind === 'live'
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
     if (!isLive) return
@@ -258,56 +301,69 @@ export default function SessionStatusLine({ status, onOpenSession }: SessionStat
     return () => clearInterval(timer)
   }, [isLive])
 
-  // The subagent chip and its popover own their own open state and clock now;
-  // see SubagentsChip above, which the Timeline pane mounts as well.
+  const activityText = isLive ? statusActivityText(content.status) : ''
+  const since = isLive ? statusActivitySince(content.status) : undefined
 
   return (
     <div className={styles.statusSlot} role="status" aria-live="polite">
-      {status.kind === 'error' && (
-        <span className={`${styles.statusText} ${styles.statusError}`} title={status.text}>
-          ✗ {status.text}
-        </span>
-      )}
-      {status.kind === 'disconnected' && (
-        <span className={`${styles.statusText} ${styles.statusWarn}`}>{status.text}</span>
-      )}
-      {status.kind === 'stopped' && (
-        <span className={styles.statusText}>⏸ stopped — its harness process is gone</span>
-      )}
-      {status.kind === 'paused' && <span className={styles.statusText}>⏸ paused</span>}
-      {status.kind === 'compacting' && (
-        <>
-          <span className={`${styles.statusPulse} ${styles.statusPulseViolet}`} aria-hidden />
-          <span className={styles.statusCompacting}>Compacting context…</span>
-        </>
-      )}
-      {status.kind === 'live' && (
-        <>
-          <span className={styles.statusPulse} aria-hidden />
-          {status.live.todo && (
-            <>
-              <span className={styles.statusTodo} title={status.live.todo.text}>
-                {status.live.todo.text}
-              </span>
-              <span className={styles.statusSep} aria-hidden>
-                ·
-              </span>
-            </>
-          )}
-          <span className={styles.statusText} title={mainActivityText(status.live)}>
-            {mainActivityText(status.live)}
+      {/* LEFT: whatever the slot is saying. The one part that may shrink. */}
+      <div className={styles.statusMain}>
+        {content.kind === 'error' && (
+          <span className={`${styles.statusText} ${styles.statusError}`} title={content.text}>
+            ✗ {content.text}
           </span>
-          <SubagentsChip subagents={status.live.subagents} onOpenSession={onOpenSession} />
-          {status.live.startedAt && (
-            <span className={styles.statusTime}>
-              {formatHMS(status.live.startedAt)} · {formatElapsed(status.live.startedAt, nowMs)}
+        )}
+        {content.kind === 'disconnected' && (
+          <span className={`${styles.statusText} ${styles.statusWarn}`}>{content.text}</span>
+        )}
+        {content.kind === 'rate_limited' && (
+          <span className={`${styles.statusText} ${styles.statusWarn}`} title={content.text}>
+            {content.text}
+          </span>
+        )}
+        {content.kind === 'stopped' && (
+          <span className={styles.statusText}>⏸ stopped — its harness process is gone</span>
+        )}
+        {content.kind === 'paused' && <span className={styles.statusText}>⏸ paused</span>}
+        {content.kind === 'tasks' && (
+          <span className={styles.statusText}>idle — background tasks still running</span>
+        )}
+        {content.kind === 'compacting' && (
+          <>
+            <span className={`${styles.statusPulse} ${styles.statusPulseViolet}`} aria-hidden />
+            <span className={styles.statusCompacting}>Compacting context…</span>
+          </>
+        )}
+        {content.kind === 'live' && (
+          <>
+            <span className={styles.statusPulse} aria-hidden />
+            {content.todo && (
+              <>
+                <span className={styles.statusTodo} title={content.todo.text}>
+                  {content.todo.text}
+                </span>
+                <span className={styles.statusSep} aria-hidden>
+                  ·
+                </span>
+              </>
+            )}
+            <span className={styles.statusText} title={activityText}>
+              {activityText}
             </span>
-          )}
-        </>
-      )}
+          </>
+        )}
+      </div>
+      {/* RIGHT: fixed places. The chip is drawn beside EVERY kind, from the same spot
+          in the tree, so its popover survives the slot changing what it says. */}
+      <SubagentsChip subagents={content.status?.subagents ?? NO_SUBAGENTS} onOpenSession={onOpenSession} />
+      <span className={styles.statusTime}>
+        {since ? `${formatHMS(since)} · ${formatElapsed(since, nowMs)}` : ''}
+      </span>
     </div>
   )
 }
+
+const NO_SUBAGENTS: readonly SessionStatusSubagent[] = []
 
 /** The empty spacer TurnList renders while lingering after the slot empties: the
  *  same box as the slot with no content and a transparent border, so the transcript

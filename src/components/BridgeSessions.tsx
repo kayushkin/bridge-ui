@@ -72,7 +72,7 @@ export function applySessionAggregates(
  *  `machine` is the instance axis (it matches `SessionSummary.instanceId`). */
 export function BridgeSessions() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
-  const { groups, loading, effectiveState, facets, moreSessions, loadingOlderSessions, loadOlderSessions } = useSessionList()
+  const { groups, loading, facets, moreSessions, loadingOlderSessions, loadOlderSessions } = useSessionList()
   const { filter, set, contentSearchReach, searching, searchError } = useFilters()
   const [tokensMap, setTokensMap] = useState<Map<string, SessionTokens>>(new Map())
   const inst = useBridgeInstances()
@@ -209,7 +209,7 @@ export function BridgeSessions() {
             const hinfo = harnessMap.get(s.harness)
             const tokens = tokensMap.get(s.sessionId)
             const totalTokens = tokens ? tokens.input + tokens.output : undefined
-            const state = effectiveState(s.sessionId)
+            const state = s.state
             return (
               <li key={s.sessionId}>
                 <button className="bs-row" onClick={() => handleClick(s)}>
