@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
+import { PromptSourcePanel } from './PromptSourcePanel'
 
 interface TrackedFile {
   id: number
@@ -13,20 +14,7 @@ interface TrackedFile {
   mtime: number
   last_scanned_at: number
   status: string
-}
-
-interface ResolvedContextEntry {
-  path: string
-  scope: string
-  bytes: number
-}
-
-interface ResolvedContext {
-  harness: string
-  work_dir?: string
-  skip_reason?: string
-  content: string
-  manifest: ResolvedContextEntry[]
+  ignored_by_rule_id?: number
 }
 
 interface FileVersion {
@@ -56,46 +44,6 @@ interface MachineSeedStateRow {
   last_pushed_at?: number
 }
 
-interface PromptSection {
-  id: number
-  collection_id: number
-  title: string
-  heading?: string
-  body: string
-  applies_to: string
-  priority: number
-  enabled: boolean
-  source_path?: string
-  created_at: number
-  updated_at: number
-}
-
-interface PromptCollection {
-  id: number
-  slug: string
-  title: string
-  scope: string
-  root_path: string
-  description?: string
-  created_at: number
-  updated_at: number
-}
-
-interface PromptOutput {
-  target: string
-  path: string
-  tracked_file_id?: number
-  exists: boolean
-  content: string
-  current_sha256?: string
-}
-
-interface PromptCollectionView {
-  collection: PromptCollection
-  sections: PromptSection[]
-  outputs: PromptOutput[]
-}
-
 const SCOPE_META: Record<string, { label: string; emoji: string; description: string }> = {
   global:   { label: 'Global',    emoji: '\u{1F310}', description: '~/.claude and $HOME — applies to every session' },
   project:  { label: 'Project',   emoji: '\u{1F4C1}', description: 'Project-root files — applies when the session runs in that project' },
@@ -106,29 +54,16 @@ const SCOPE_META: Record<string, { label: string; emoji: string; description: st
 
 const SCOPE_ORDER = ['global', 'project', 'subagent', 'memory', 'command']
 
-const INJECTION_HARNESSES: { slug: string; label: string }[] = [
-  { slug: 'codex',  label: 'Codex' },
-  { slug: 'hermes', label: 'Hermes' },
-  { slug: 'gemini', label: 'Gemini' },
-  { slug: 'aider',  label: 'Aider' },
-  { slug: 'goose',  label: 'Goose' },
-]
-
+// What a tracked file is, said without claiming which harness reads it: that
+// is a row in agent-store's prompt_harness_deliveries, shown by the delivery
+// panel, and a filename table here went stale the moment it was written. The
+// three ~/.claude scopes are the exception — those folders belong to one tool.
 function usedBy(f: TrackedFile): { label: string; mode: string } {
-  const base = f.path.split('/').pop() || ''
-  if (base === 'CLAUDE.md') return { label: 'Claude Code (native)', mode: 'native' }
-  if (base === 'AGENTS.md') return { label: 'All non-Claude harnesses (injected)', mode: 'injected' }
-  if (base === 'GEMINI.md') return { label: 'Gemini (native)', mode: 'native' }
-  if (base === 'copilot-instructions.md') return { label: 'GitHub Copilot (native)', mode: 'native' }
-  if (base === '.cursorrules') return { label: 'Cursor (native)', mode: 'native' }
-  if (base === '.clinerules') return { label: 'Cline (native)', mode: 'native' }
-  if (base === '.windsurfrules') return { label: 'Windsurf (native)', mode: 'native' }
-  if (base === '.continuerules') return { label: 'Continue (native)', mode: 'native' }
-  if (base === '.aider.conf.yml') return { label: 'Aider (native config)', mode: 'native' }
   if (f.scope === 'subagent') return { label: 'Claude Code subagent', mode: 'subagent' }
   if (f.scope === 'memory') return { label: 'Claude Code memory', mode: 'memory' }
   if (f.scope === 'command') return { label: 'Claude Code commands', mode: 'native' }
-  return { label: f.scope, mode: 'unknown' }
+  if (f.scope === 'inber') return { label: 'inber agent', mode: 'inber' }
+  return { label: 'prompt file', mode: 'native' }
 }
 
 export function BridgeFiles() {
@@ -141,14 +76,13 @@ export function BridgeFiles() {
   const [scanMsg, setScanMsg] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [openId, setOpenId] = useState<number | null>(null)
-  const [previewHarness, setPreviewHarness] = useState<string | null>(null)
-  const [preview, setPreview] = useState<ResolvedContext | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [showIgnored, setShowIgnored] = useState(false)
+  const [showMissing, setShowMissing] = useState(false)
+  const [promptSourceReloadSignal, setPromptSourceReloadSignal] = useState(0)
 
   const fetchFiles = async () => {
     try {
-      const res = await apiFetch(`${basePath}/files`)
+      const res = await apiFetch(`${basePath}/files${showIgnored ? '?include_ignored=true' : ''}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setFiles(Array.isArray(data) ? data : [])
@@ -160,21 +94,7 @@ export function BridgeFiles() {
     }
   }
 
-  useEffect(() => { fetchFiles() }, [])
-
-  useEffect(() => {
-    if (!previewHarness) { setPreview(null); return }
-    setPreviewLoading(true)
-    setPreviewError(null)
-    apiFetch(`${basePath}/context/resolve?harness=${encodeURIComponent(previewHarness)}`)
-      .then(async r => {
-        if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`)
-        return r.json() as Promise<ResolvedContext>
-      })
-      .then(setPreview)
-      .catch(e => setPreviewError(e instanceof Error ? e.message : 'Resolve failed'))
-      .finally(() => setPreviewLoading(false))
-  }, [previewHarness, apiFetch, basePath])
+  useEffect(() => { fetchFiles() }, [showIgnored])
 
   const runScan = async () => {
     setScanning(true)
@@ -206,7 +126,18 @@ export function BridgeFiles() {
           .join(' · ')
         msg += ` — ${r.errors.length} unaccounted for, so scanned is an undercount: ${named}`
       }
+      if (typeof r.ignored === 'number' && r.ignored > 0) msg += ` · ${r.ignored} ignored (copies and third-party files)`
+      const reconciliation = r.prompt_drift_reconciliation
+      if (reconciliation && Array.isArray(reconciliation.detected) && reconciliation.detected.length > 0) {
+        const applied = reconciliation.detected.filter((d: { status: string }) => d.status === 'applied').length
+        const held = reconciliation.detected.length - applied
+        msg += ` — ${reconciliation.detected.length} prompt file${reconciliation.detected.length === 1 ? '' : 's'} edited on disk: ${applied} carried into the sections, ${held} waiting for you`
+      }
+      if (reconciliation && Array.isArray(reconciliation.refused) && reconciliation.refused.length > 0) {
+        msg += ` — ${reconciliation.refused.join(' · ')}`
+      }
       setScanMsg(msg)
+      setPromptSourceReloadSignal(n => n + 1)
       await fetchFiles()
     } catch (e) {
       setScanMsg(e instanceof Error ? e.message : 'Scan failed')
@@ -228,14 +159,15 @@ export function BridgeFiles() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return files
-    return files.filter(f =>
+    const shown = showMissing ? files : files.filter(f => f.status !== 'missing')
+    if (!q) return shown
+    return shown.filter(f =>
       f.path.toLowerCase().includes(q) ||
       (f.agent_slug || '').toLowerCase().includes(q) ||
       f.scope.toLowerCase().includes(q) ||
       usedBy(f).label.toLowerCase().includes(q)
     )
-  }, [files, query])
+  }, [files, query, showMissing])
 
   const byScope = useMemo(() => {
     const m: Record<string, TrackedFile[]> = {}
@@ -267,7 +199,7 @@ export function BridgeFiles() {
   return (
     <div className="bfiles-container">
       <div className="bfiles-header">
-        <h2>Agent files <span className="bfiles-count">{files.length}</span></h2>
+        <h2>Prompt and agent files <span className="bfiles-count">{files.length}</span></h2>
         <div className="bfiles-header-right">
           <input
             type="text"
@@ -283,72 +215,24 @@ export function BridgeFiles() {
         </div>
       </div>
 
-      <PromptCollectionsPanel apiFetch={apiFetch} basePath={basePath} />
+      {scanMsg && <p className="bfiles-scan-msg">{scanMsg}</p>}
 
-      <div className="bfiles-explainer">
-        <strong>How these files reach agents:</strong> the prompt collections above are the editable source. They compile
-        into host-level and project-level <code>CLAUDE.md</code> and <code>AGENTS.md</code>, which stay versioned here as
-        tracked files. Claude Code reads <code>CLAUDE.md</code> directly from disk; non-Claude harnesses receive
-        <code> AGENTS.md</code> through bridge injection. Remote runners pull the same compiled files through
-        <code> /seed/manifest</code> and reconcile non-destructively.
-      </div>
+      <PromptSourcePanel apiFetch={apiFetch} basePath={basePath} reloadSignal={promptSourceReloadSignal} />
 
       <MachinesSeedPanel apiFetch={apiFetch} basePath={basePath} />
 
-      <div className="bfiles-preview-section">
-        <div className="bfiles-preview-header">
-          <strong>Resolved injection preview</strong>
-          <span className="bfiles-preview-hint">What does each non-Claude harness receive?</span>
-        </div>
-        <div className="bfiles-preview-tabs">
-          {INJECTION_HARNESSES.map(h => (
-            <button
-              key={h.slug}
-              className={`bfiles-preview-tab ${previewHarness === h.slug ? 'bfiles-preview-tab-active' : ''}`}
-              onClick={() => setPreviewHarness(previewHarness === h.slug ? null : h.slug)}
-            >
-              {h.label}
-            </button>
-          ))}
-        </div>
-        {previewHarness && (
-          <div className="bfiles-preview-body">
-            {previewLoading && <p>Resolving…</p>}
-            {previewError && <p className="bridge-error">{previewError}</p>}
-            {preview && !previewLoading && (
-              <>
-                {preview.skip_reason && (
-                  <p className="bfiles-preview-skip">Skipped: {preview.skip_reason}</p>
-                )}
-                {!preview.skip_reason && preview.manifest.length === 0 && (
-                  <p className="bfiles-preview-skip">No AGENTS.md files matched. Add one in <code>$HOME/AGENTS.md</code> for global scope, or in a project root.</p>
-                )}
-                {preview.manifest.length > 0 && (
-                  <>
-                    <ul className="bfiles-manifest-list">
-                      {preview.manifest.map((m, i) => (
-                        <li key={i}>
-                          <span className="bfiles-manifest-scope">{m.scope}</span>
-                          <code>{m.path}</code>
-                          <span className="bfiles-manifest-bytes">{m.bytes} B</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <pre className="bfiles-preview-content">{preview.content}</pre>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {scanMsg && <p className="bfiles-scan-msg">{scanMsg}</p>}
 
       <div className="bfiles-preview-section">
         <div className="bfiles-preview-header">
-          <strong>Materialized files</strong>
-          <span className="bfiles-preview-hint">Compiled prompt outputs, native tool files, seed state, and history.</span>
+          <strong>Files on disk</strong>
+          <span className="bfiles-preview-hint">
+            Everything the scan tracks: rendered prompt files, subagents, memory, commands — each with its full history.
+            Editing a rendered prompt file here is an edit on disk: the next scan carries it into the sections.
+          </span>
+        </div>
+        <div className="bfiles-actions">
+          <label className="bfiles-meta"><input type="checkbox" checked={showMissing} onChange={e => setShowMissing(e.target.checked)} /> show files no longer on disk ({files.filter(f => f.status === 'missing').length})</label>
+          <label className="bfiles-meta"><input type="checkbox" checked={showIgnored} onChange={e => setShowIgnored(e.target.checked)} /> show ignored copies and third-party files</label>
         </div>
       </div>
 
@@ -391,370 +275,6 @@ export function BridgeFiles() {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-function PromptCollectionsPanel({ apiFetch, basePath }: { apiFetch: FetchFn; basePath: string }) {
-  const [collections, setCollections] = useState<PromptCollectionView[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [openId, setOpenId] = useState<number | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [createPath, setCreatePath] = useState('')
-  const [createTitle, setCreateTitle] = useState('')
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const res = await apiFetch(`${basePath}/prompt-collections`)
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`)
-      const data = await res.json()
-      setCollections(Array.isArray(data) ? data : [])
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load prompt collections')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load() }, [])
-
-  const global = collections.filter(c => c.collection.scope === 'global')
-  const projects = collections.filter(c => c.collection.scope === 'project')
-
-  const createProject = async () => {
-    setCreating(true)
-    try {
-      const res = await apiFetch(`${basePath}/prompt-collections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scope: 'project',
-          root_path: createPath.trim(),
-          title: createTitle.trim(),
-          description: 'Shared prompt source for this project.',
-        }),
-      })
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`)
-      setCreatePath('')
-      setCreateTitle('')
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create failed')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="bfiles-preview-section">
-      <div className="bfiles-preview-header">
-        <strong>Main prompt</strong>
-        <span className="bfiles-preview-hint">Structured source for the compiled prompt files.</span>
-      </div>
-      {loading && <p>Loading prompt collections…</p>}
-      {error && <p className="bridge-error">{error}</p>}
-      {!loading && global.map(view => (
-        <PromptCollectionCard
-          key={view.collection.id}
-          view={view}
-          apiFetch={apiFetch}
-          basePath={basePath}
-          open={openId === view.collection.id}
-          onToggle={() => setOpenId(openId === view.collection.id ? null : view.collection.id)}
-          onChanged={load}
-        />
-      ))}
-      <div className="bfiles-preview-header" style={{ marginTop: 18 }}>
-        <strong>Project prompts</strong>
-        <span className="bfiles-preview-hint">One collection per repo root. Create one even if the repo has no prompt files yet.</span>
-      </div>
-      <div className="bfiles-actions" style={{ marginBottom: 12 }}>
-        <input
-          className="bfiles-search"
-          placeholder="/home/kayushkincom/repos/my-repo"
-          value={createPath}
-          onChange={e => setCreatePath(e.target.value)}
-        />
-        <input
-          className="bfiles-search"
-          placeholder="Optional title"
-          value={createTitle}
-          onChange={e => setCreateTitle(e.target.value)}
-        />
-        <button className="bfiles-btn-primary" onClick={createProject} disabled={creating || !createPath.trim()}>
-          {creating ? 'Creating…' : 'Add project prompt'}
-        </button>
-      </div>
-      {!loading && projects.length === 0 && (
-        <p className="bfiles-empty">No project prompt collections yet.</p>
-      )}
-      {!loading && projects.map(view => (
-        <PromptCollectionCard
-          key={view.collection.id}
-          view={view}
-          apiFetch={apiFetch}
-          basePath={basePath}
-          open={openId === view.collection.id}
-          onToggle={() => setOpenId(openId === view.collection.id ? null : view.collection.id)}
-          onChanged={load}
-        />
-      ))}
-    </div>
-  )
-}
-
-function PromptCollectionCard({
-  view, apiFetch, basePath, open, onToggle, onChanged,
-}: {
-  view: PromptCollectionView
-  apiFetch: FetchFn
-  basePath: string
-  open: boolean
-  onToggle: () => void
-  onChanged: () => Promise<void>
-}) {
-  const [busy, setBusy] = useState(false)
-
-  const compile = async () => {
-    setBusy(true)
-    try {
-      const res = await apiFetch(`${basePath}/prompt-collections/${view.collection.id}/compile`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`)
-      await onChanged()
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="bfiles-machine-card" style={{ marginBottom: 12 }}>
-      <div className="bfiles-file-header">
-        <button className="bfiles-caret" onClick={onToggle}>{open ? '▾' : '▸'}</button>
-        <button className="bfiles-file-title" onClick={onToggle}>
-          <span className="bfiles-file-basename">{view.collection.title}</span>
-          <span className="bfiles-file-parent">{view.collection.root_path}</span>
-        </button>
-        <span className="bfiles-usedby-tag bfiles-mode-injected">{view.collection.scope}</span>
-        <button className="bfiles-btn" onClick={compile} disabled={busy}>
-          {busy ? 'Compiling…' : 'Compile now'}
-        </button>
-      </div>
-      {open && (
-        <div className="bfiles-file-body">
-          <p className="bfiles-machines-hint">
-            Edit sections here. Saving a section recompiles the target files and nudges connected runners to reconcile.
-          </p>
-          {view.outputs.map(output => (
-            <div key={output.target} className="bfiles-version-preview" style={{ marginBottom: 12 }}>
-              <div className="bfiles-version-preview-header">
-                <strong>{output.target === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}</strong>
-                <span className="bfiles-meta">{output.path}</span>
-              </div>
-              <pre className="bfiles-version-content">{output.content || '(no sections for this target yet)'}</pre>
-            </div>
-          ))}
-          <div className="bfiles-history-body">
-            {view.sections.map(section => (
-              <PromptSectionEditor
-                key={section.id}
-                section={section}
-                apiFetch={apiFetch}
-                basePath={basePath}
-                onChanged={onChanged}
-              />
-            ))}
-          </div>
-          <AddPromptSectionForm
-            collectionID={view.collection.id}
-            apiFetch={apiFetch}
-            basePath={basePath}
-            onChanged={onChanged}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PromptSectionEditor({
-  section, apiFetch, basePath, onChanged,
-}: {
-  section: PromptSection
-  apiFetch: FetchFn
-  basePath: string
-  onChanged: () => Promise<void>
-}) {
-  const [draft, setDraft] = useState(section)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const dirty = JSON.stringify(draft) !== JSON.stringify(section)
-
-  useEffect(() => { setDraft(section) }, [section])
-
-  const save = async () => {
-    setSaving(true)
-    setErr(null)
-    try {
-      const res = await apiFetch(`${basePath}/prompt-sections/${section.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`)
-      await onChanged()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Save failed')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const remove = async () => {
-    setSaving(true)
-    setErr(null)
-    try {
-      const res = await apiFetch(`${basePath}/prompt-sections/${section.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`)
-      await onChanged()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Delete failed')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="bfiles-version-preview" style={{ marginBottom: 12 }}>
-      <div className="bfiles-actions" style={{ marginBottom: 8 }}>
-        <input
-          className="bfiles-search"
-          value={draft.title}
-          onChange={e => setDraft({ ...draft, title: e.target.value })}
-          placeholder="Section title"
-        />
-        <select
-          className="bfiles-search"
-          value={draft.applies_to}
-          onChange={e => setDraft({ ...draft, applies_to: e.target.value })}
-        >
-          <option value="all">All harnesses</option>
-          <option value="claude">Claude only</option>
-          <option value="agents">Non-Claude only</option>
-        </select>
-        <input
-          className="bfiles-search"
-          type="number"
-          value={draft.priority}
-          onChange={e => setDraft({ ...draft, priority: Number(e.target.value) })}
-          placeholder="Priority"
-        />
-        <label className="bfiles-meta">
-          <input
-            type="checkbox"
-            checked={draft.enabled}
-            onChange={e => setDraft({ ...draft, enabled: e.target.checked })}
-          /> enabled
-        </label>
-      </div>
-      <input
-        className="bfiles-search"
-        style={{ width: '100%', marginBottom: 8 }}
-        value={draft.heading || ''}
-        onChange={e => setDraft({ ...draft, heading: e.target.value })}
-        placeholder="Heading line, e.g. # Directives"
-      />
-      <textarea
-        className="bfiles-editor"
-        value={draft.body}
-        onChange={e => setDraft({ ...draft, body: e.target.value })}
-        spellCheck={false}
-      />
-      <div className="bfiles-actions">
-        <button className="bfiles-btn-primary" onClick={save} disabled={!dirty || saving}>
-          {saving ? 'Saving…' : dirty ? 'Save section' : 'Saved'}
-        </button>
-        <button className="bfiles-btn" onClick={() => setDraft(section)} disabled={!dirty || saving}>
-          Revert
-        </button>
-        <button className="bfiles-btn" onClick={remove} disabled={saving}>
-          Delete
-        </button>
-      </div>
-      {err && <p className="bridge-error">{err}</p>}
-    </div>
-  )
-}
-
-function AddPromptSectionForm({
-  collectionID, apiFetch, basePath, onChanged,
-}: {
-  collectionID: number
-  apiFetch: FetchFn
-  basePath: string
-  onChanged: () => Promise<void>
-}) {
-  const [open, setOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [title, setTitle] = useState('')
-  const [heading, setHeading] = useState('')
-  const [body, setBody] = useState('')
-  const [appliesTo, setAppliesTo] = useState('all')
-  const [priority, setPriority] = useState(1000)
-  const [err, setErr] = useState<string | null>(null)
-
-  const submit = async () => {
-    setSaving(true)
-    setErr(null)
-    try {
-      const res = await apiFetch(`${basePath}/prompt-collections/${collectionID}/sections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title, heading, body, applies_to: appliesTo, priority, enabled: true,
-        }),
-      })
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`)
-      setTitle('')
-      setHeading('')
-      setBody('')
-      setAppliesTo('all')
-      setPriority(1000)
-      setOpen(false)
-      await onChanged()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Create failed')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (!open) {
-    return <button className="bfiles-btn-primary" onClick={() => setOpen(true)}>Add section</button>
-  }
-
-  return (
-    <div className="bfiles-version-preview">
-      <div className="bfiles-actions" style={{ marginBottom: 8 }}>
-        <input className="bfiles-search" value={title} onChange={e => setTitle(e.target.value)} placeholder="Section title" />
-        <select className="bfiles-search" value={appliesTo} onChange={e => setAppliesTo(e.target.value)}>
-          <option value="all">All harnesses</option>
-          <option value="claude">Claude only</option>
-          <option value="agents">Non-Claude only</option>
-        </select>
-        <input className="bfiles-search" type="number" value={priority} onChange={e => setPriority(Number(e.target.value))} />
-      </div>
-      <input className="bfiles-search" style={{ width: '100%', marginBottom: 8 }} value={heading} onChange={e => setHeading(e.target.value)} placeholder="Heading line" />
-      <textarea className="bfiles-editor" value={body} onChange={e => setBody(e.target.value)} spellCheck={false} />
-      <div className="bfiles-actions">
-        <button className="bfiles-btn-primary" onClick={submit} disabled={saving || !title.trim()}>
-          {saving ? 'Creating…' : 'Create section'}
-        </button>
-        <button className="bfiles-btn" onClick={() => setOpen(false)} disabled={saving}>Cancel</button>
-      </div>
-      {err && <p className="bridge-error">{err}</p>}
     </div>
   )
 }
@@ -829,6 +349,7 @@ function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled
         </span>
         {file.agent_slug && <span className="bfiles-slug-tag">{file.agent_slug}</span>}
         {file.status === 'missing' && <span className="bfiles-missing-tag">missing</span>}
+        {file.ignored_by_rule_id ? <span className="bfiles-missing-tag" title={`ignore rule ${file.ignored_by_rule_id}`}>ignored</span> : null}
         <button
           className={`bfiles-toggle-btn ${file.enabled ? 'bfiles-toggle-on' : 'bfiles-toggle-off'}`}
           onClick={onToggleEnabled}

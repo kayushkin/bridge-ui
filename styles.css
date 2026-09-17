@@ -3520,12 +3520,6 @@
 .bfiles-btn-primary { background: var(--accent); color: var(--accent-on); border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
 .bfiles-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.bfiles-explainer {
-  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px;
-  padding: 12px 16px; margin-bottom: 12px; font-size: 0.82em; color: var(--text-muted); line-height: 1.5;
-}
-.bfiles-explainer code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 0.92em; color: var(--text); }
-
 .bfiles-machines-panel {
   border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;
   margin-bottom: 12px; background: var(--bg-surface);
@@ -5600,3 +5594,27 @@
 .bp-availability-answer { margin: 0; font-size: 0.9em; }
 .bp-available { color: #22c55e; }
 .bp-unavailable { color: #d97757; }
+
+/* Prompt source panel (src/components/PromptSourcePanel.tsx) */
+.bprompt-drift-inbox { border-color: var(--warning, #d29922); }
+.bprompt-drift-card { margin-top: 10px; }
+.bprompt-drift-operation { flex-wrap: wrap; align-items: center; gap: 8px; }
+.bprompt-operation-body { flex-basis: 100%; margin-top: 6px; }
+.bprompt-operation-insert { color: var(--success, #3fb950); }
+.bprompt-operation-delete { color: var(--danger, #f85149); }
+.bprompt-operation-update { color: var(--accent); }
+.bprompt-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; }
+.bprompt-link:disabled { opacity: 0.5; cursor: not-allowed; }
+.bprompt-harness { min-width: 110px; display: inline-block; }
+.bprompt-tag-input { max-width: 240px; }
+.bprompt-outputs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; }
+.bprompt-output { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-surface); }
+.bprompt-state { font-size: 0.75em; padding: 1px 6px; border-radius: 8px; border: 1px solid var(--border); margin-left: 6px; }
+.bprompt-state-in_sync { color: var(--success, #3fb950); }
+.bprompt-state-behind, .bprompt-state-not_written { color: var(--accent); }
+.bprompt-state-edited_on_disk { color: var(--warning, #d29922); border-color: var(--warning, #d29922); }
+.bprompt-state-disabled { opacity: 0.6; }
+.bprompt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.bprompt-tag { font-size: 0.75em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: inherit; cursor: pointer; }
+.bprompt-tag-active { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.bprompt-tag-static { cursor: default; margin-left: 4px; }
