@@ -337,7 +337,7 @@
  * Wraps as a single unit so the close button never gets orphaned off-screen
  * when the header is narrow (e.g. multiple workspaces open side-by-side). */
 .bc-header-right { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
-/* Unified status dot — keyed on the canonical msg.SessionState (13 values
+/* Unified status dot — keyed on the canonical msg.SessionState (14 values
    plus 'empty' / 'placeholder' UI-only). Outer bounding box is always
    14×14 so row text aligns regardless of state. Visible content varies:
    small disc states (idle, empty) paint an 8px circle inside the box via
@@ -393,6 +393,16 @@
 .bc-status-dot-model_generating .bc-status-dot-blip:nth-child(1) { animation-delay: 0s; }
 .bc-status-dot-model_generating .bc-status-dot-blip:nth-child(2) { animation-delay: 0.2s; }
 .bc-status-dot-model_generating .bc-status-dot-blip:nth-child(3) { animation-delay: 0.4s; }
+
+/* background_tasks_running: the turn is over but subagents or backgrounded
+   commands are still going. Active green, drawn as a ring around a small core
+   — work orbiting a quiet session — so it reads apart from tool_running's
+   solid gear without looking idle. */
+.bc-status-dot-background_tasks_running {
+  background: radial-gradient(circle 2px at center, #22c55e 100%, transparent 100%);
+  border: 2px solid #22c55e;
+  animation: bc-pulse-anim 1.8s ease-in-out infinite;
+}
 
 /* compacting: vertical violet bar that squishes — visualizes context
    compression. Uses an inner ::before so the outer bounding box stays
@@ -2887,6 +2897,7 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 22%, transparent),
               0 0 12px color-mix(in srgb, #22c55e 70%, transparent);
 }
+.bc-status-dot-background_tasks_running { box-shadow: 0 0 10px color-mix(in srgb, #22c55e 60%, transparent); }
 .bc-status-dot-idle  { box-shadow: 0 0 10px color-mix(in srgb, #60a5fa 60%, transparent); }
 .bc-status-dot-paused,
 .bc-status-dot-awaiting_user { box-shadow: 0 0 10px color-mix(in srgb, #f59e0b 60%, transparent); }
