@@ -5603,7 +5603,9 @@
 .bprompt-operation-insert { color: var(--success, #3fb950); }
 .bprompt-operation-delete { color: var(--danger, #f85149); }
 .bprompt-operation-update { color: var(--accent); }
-.bprompt-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; }
+.bprompt-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: inherit; text-align: left; }
+.bprompt-output .bprompt-link { font-size: 0.8em; }
+.bfiles-preview-tab .bfiles-section-count { margin-left: 6px; }
 .bprompt-link:disabled { opacity: 0.5; cursor: not-allowed; }
 .bprompt-harness { min-width: 110px; display: inline-block; }
 .bprompt-tag-input { max-width: 240px; }

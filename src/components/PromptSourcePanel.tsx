@@ -416,6 +416,7 @@ function SectionEditor({ section, collectionId, afterSectionId, initialLevel, op
   const [err, setErr] = useState<string | null>(null)
   const [revisions, setRevisions] = useState<PromptSectionRevision[] | null>(null)
   const [openRevision, setOpenRevision] = useState<number | null>(null)
+  const [groupTextOpen, setGroupTextOpen] = useState(false)
   const dirty = JSON.stringify({ ...draft, note: '' }) !== JSON.stringify({ ...initial, note: '' })
 
   const send = async (method: 'POST' | 'PUT' | 'DELETE') => {
@@ -462,10 +463,14 @@ function SectionEditor({ section, collectionId, afterSectionId, initialLevel, op
         </select>
         <input className="bfiles-search" placeholder="Title" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} />
       </div>
-      {draft.level === 1 && !draft.body.trim() && (
-        <p className="bfiles-preview-hint">A group needs no text of its own: it holds the sections under it.</p>
+      {draft.level === 1 && !draft.body && !groupTextOpen ? (
+        <p className="bfiles-preview-hint">
+          A group needs no text of its own: it holds the sections under it.{' '}
+          <button className="bprompt-link" onClick={() => setGroupTextOpen(true)}>Add an introduction anyway</button>
+        </p>
+      ) : (
+        <textarea className="bfiles-editor" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} spellCheck={false} />
       )}
-      <textarea className="bfiles-editor" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} spellCheck={false} />
       <div className="bfiles-actions">
         <input className="bfiles-search" placeholder="tags, comma separated" value={draft.tagInput} onChange={e => setDraft({ ...draft, tagInput: e.target.value })} />
         <input className="bfiles-search" placeholder="Why this change (kept in history)" value={draft.note} onChange={e => setDraft({ ...draft, note: e.target.value })} />
