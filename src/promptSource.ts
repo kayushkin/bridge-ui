@@ -21,7 +21,10 @@ export interface PromptCollection {
 export interface PromptSection {
   id: number
   collection_id: number
+  /** 0 = text with no heading, 1 = a group, 2 = a section in the group above it. */
+  level: number
   title: string
+  /** The markdown line agent-store composed from level and title. Read-only. */
   heading: string
   body: string
   tags: string[]
@@ -76,7 +79,6 @@ export interface PromptDriftOperation {
 
 export interface PromptDriftInsertedSectionLabel {
   operation_index: number
-  title?: string
   tags: string[]
 }
 
@@ -238,21 +240,69 @@ export function annotationFromLabelDrafts(
     const typed = tagInputByOperationIndex[index]
     inserted.push({
       operation_index: index,
-      title: stored?.title,
       tags: typed !== undefined ? parseTagInput(typed) : stored?.tags ?? [],
     })
   })
   return { note: note.trim() || drift.annotation?.note, inserted_sections: inserted, annotated_by: drift.annotation?.annotated_by }
 }
 
-/** The body a section write sends. `position` 0 tells agent-store to keep (update) or append (create). */
-export function sectionWriteBody(draft: { title: string; heading: string; body: string; tagInput: string; enabled: boolean; note: string }) {
+/** The body a section write sends. There is no heading: agent-store composes it from level and title. */
+export function sectionWriteBody(draft: { level: number; title: string; body: string; tagInput: string; enabled: boolean; note: string }) {
   return {
+    level: draft.level,
     title: draft.title.trim(),
-    heading: draft.heading.trim(),
     body: draft.body,
     tags: parseTagInput(draft.tagInput),
     enabled: draft.enabled,
     note: draft.note.trim(),
   }
+}
+
+/**
+ * One row of the section tree. A level-1 section is a group and owns the
+ * level-2 sections that follow it, up to the next level-1 section — the same
+ * nesting the rendered markdown has. `group` is null for sections that come
+ * before any group (a preamble, or level-2 sections at the very top).
+ */
+export interface PromptSectionGroup {
+  group: PromptSection | null
+  children: PromptSection[]
+  /** Characters of the group's own text plus all of its children's. */
+  characters: number
+}
+
+const sectionCharacters = (section: PromptSection) => section.heading.length + section.body.length
+
+export function groupSections(sections: PromptSection[]): PromptSectionGroup[] {
+  const out: PromptSectionGroup[] = []
+  for (const section of sections) {
+    if (section.level === 1) {
+      out.push({ group: section, children: [], characters: sectionCharacters(section) })
+      continue
+    }
+    let current = out[out.length - 1]
+    if (!current) {
+      current = { group: null, children: [], characters: 0 }
+      out.push(current)
+    }
+    current.children.push(section)
+    current.characters += sectionCharacters(section)
+  }
+  return out
+}
+
+/**
+ * The tree after a filter: a group stays when it matches or any child does,
+ * and a group that matches by itself keeps all its children, so filtering by a
+ * group's name shows the group, not an empty header.
+ */
+export function filterSectionGroups(groups: PromptSectionGroup[], tag: string | null, query: string): PromptSectionGroup[] {
+  if (!tag && !query.trim()) return groups
+  const out: PromptSectionGroup[] = []
+  for (const entry of groups) {
+    const groupMatches = entry.group ? sectionMatchesFilter(entry.group, tag, query) : false
+    const children = groupMatches ? entry.children : entry.children.filter(child => sectionMatchesFilter(child, tag, query))
+    if (groupMatches || children.length > 0) out.push({ ...entry, children })
+  }
+  return out
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type React from 'react'
 import type { FetchFn } from '../types'
 import {
   PROMPT_OUTPUT_STATE_LABEL, allTags, annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation,
-  promptOutputState, sectionMatchesFilter, sectionWriteBody,
+  filterSectionGroups, groupSections, promptOutputState, sectionWriteBody,
   type PromptCollectionView, type PromptDeliveryOptions, type PromptDrift, type PromptHarnessDelivery,
   type PromptRenderResult, type PromptSection, type PromptSectionRevision, type ResolvedContext,
 } from '../promptSource'
@@ -230,7 +231,8 @@ function CollectionEditor({ view, options, apiFetch, basePath, onChanged }: Api 
   const [newOutput, setNewOutput] = useState('')
 
   const tags = useMemo(() => allTags(view.sections), [view.sections])
-  const visible = view.sections.filter(section => sectionMatchesFilter(section, tag, query))
+  const tree = useMemo(() => filterSectionGroups(groupSections(view.sections), tag, query), [view.sections, tag, query])
+  const [addingAfterId, setAddingAfterId] = useState<number | null>(null)
   const enabledBytes = view.rendered.length
 
   const post = async (path: string, body?: unknown): Promise<Response> => apiFetch(`${basePath}${path}`, {
@@ -328,40 +330,85 @@ function CollectionEditor({ view, options, apiFetch, basePath, onChanged }: Api 
         </div>
       )}
 
-      <ul className="bfiles-file-list">
-        {visible.map(section => (
-          <li key={section.id} className={`bfiles-file ${section.enabled ? '' : 'bfiles-file-disabled'}`}>
-            <div className="bfiles-file-header" onClick={() => setOpenSectionId(openSectionId === section.id ? null : section.id)}>
-              <span className="bfiles-caret">{openSectionId === section.id ? '▾' : '▸'}</span>
-              <span className="bfiles-file-title"><span className="bfiles-file-basename">{section.title}</span></span>
-              {section.tags.map(each => <span key={each} className="bprompt-tag bprompt-tag-static">{each}</span>)}
-              {!section.enabled && <span className="bfiles-missing-tag">off</span>}
-              <span className="bfiles-version-size">{(section.heading.length + section.body.length).toLocaleString()} ch</span>
-            </div>
-            {openSectionId === section.id && (
-              <SectionEditor section={section} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={onChanged} onRefused={setMessage} />
+      {tree.map((entry, index) => {
+        const lastInGroup = entry.children[entry.children.length - 1] ?? entry.group
+        return (
+          <div key={entry.group?.id ?? `ungrouped-${index}`} className="bprompt-group">
+            {entry.group && (
+              <SectionRow
+                section={entry.group}
+                summary={`${entry.children.length} section${entry.children.length === 1 ? '' : 's'} · ${entry.characters.toLocaleString()} ch`}
+                isGroup
+                open={openSectionId === entry.group.id}
+                onToggle={() => setOpenSectionId(openSectionId === entry.group!.id ? null : entry.group!.id)}
+              >
+                <SectionEditor section={entry.group} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={onChanged} onRefused={setMessage} />
+              </SectionRow>
             )}
-          </li>
-        ))}
-      </ul>
-      {visible.length === 0 && <p className="bfiles-empty">No section matches.</p>}
+            <ul className={`bfiles-file-list ${entry.group ? 'bprompt-group-children' : ''}`}>
+              {entry.children.map(section => (
+                <SectionRow
+                  key={section.id}
+                  section={section}
+                  summary={`${(section.heading.length + section.body.length).toLocaleString()} ch`}
+                  open={openSectionId === section.id}
+                  onToggle={() => setOpenSectionId(openSectionId === section.id ? null : section.id)}
+                >
+                  <SectionEditor section={section} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={onChanged} onRefused={setMessage} />
+                </SectionRow>
+              ))}
+            </ul>
+            {lastInGroup && (addingAfterId === lastInGroup.id
+              ? <SectionEditor collectionId={view.collection.id} afterSectionId={lastInGroup.id} initialLevel={2} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={async () => { setAddingAfterId(null); await onChanged() }} onRefused={setMessage} />
+              : <button className="bprompt-link bprompt-add-in-group" onClick={() => setAddingAfterId(lastInGroup.id)}>+ section{entry.group ? ` in ${entry.group.title}` : ''}</button>)}
+          </div>
+        )
+      })}
+      {tree.length === 0 && <p className="bfiles-empty">No section matches.</p>}
 
       {adding
-        ? <SectionEditor collectionId={view.collection.id} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={async () => { setAdding(false); await onChanged() }} onRefused={setMessage} />
-        : <button className="bfiles-btn" onClick={() => setAdding(true)}>+ Add a section</button>}
+        ? <SectionEditor collectionId={view.collection.id} initialLevel={1} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={async () => { setAdding(false); await onChanged() }} onRefused={setMessage} />
+        : <button className="bfiles-btn" onClick={() => setAdding(true)}>+ Add a group at the end</button>}
     </div>
   )
 }
 
-function SectionEditor({ section, collectionId, options, apiFetch, basePath, onChanged, onRefused }: Api & {
+function SectionRow({ section, summary, isGroup, open, onToggle, children }: {
+  section: PromptSection
+  summary: string
+  isGroup?: boolean
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  const row = (
+    <>
+      <div className={`bfiles-file-header ${isGroup ? 'bprompt-group-header' : ''}`} onClick={onToggle}>
+        <span className="bfiles-caret">{open ? '▾' : '▸'}</span>
+        <span className="bfiles-file-title"><span className="bfiles-file-basename">{section.title}</span></span>
+        {section.tags.map(each => <span key={each} className="bprompt-tag bprompt-tag-static">{each}</span>)}
+        {!section.enabled && <span className="bfiles-missing-tag">off</span>}
+        <span className="bfiles-version-size">{summary}</span>
+      </div>
+      {open && children}
+    </>
+  )
+  return isGroup
+    ? <div className={`bfiles-file ${section.enabled ? '' : 'bfiles-file-disabled'}`}>{row}</div>
+    : <li className={`bfiles-file ${section.enabled ? '' : 'bfiles-file-disabled'}`}>{row}</li>
+}
+
+function SectionEditor({ section, collectionId, afterSectionId, initialLevel, options, apiFetch, basePath, onChanged, onRefused }: Api & {
   section?: PromptSection
   collectionId?: number
+  afterSectionId?: number
+  initialLevel?: number
   options: PromptDeliveryOptions
   onChanged: () => Promise<void>
   onRefused: (reason: string | null) => void
 }) {
   const initial = {
-    title: section?.title ?? '', heading: section?.heading ?? '## ', body: section?.body ?? '',
+    level: section?.level ?? initialLevel ?? 2, title: section?.title ?? '', body: section?.body ?? '',
     tagInput: (section?.tags ?? []).join(', '), enabled: section?.enabled ?? true, note: '',
   }
   const [draft, setDraft] = useState(initial)
@@ -383,7 +430,7 @@ function SectionEditor({ section, collectionId, options, apiFetch, basePath, onC
       const res = await apiFetch(url, {
         method,
         headers: method === 'DELETE' ? undefined : { 'Content-Type': 'application/json' },
-        body: method === 'DELETE' ? undefined : JSON.stringify(sectionWriteBody(draft)),
+        body: method === 'DELETE' ? undefined : JSON.stringify({ ...sectionWriteBody(draft), ...(method === 'POST' && afterSectionId ? { after_section_id: afterSectionId } : {}) }),
       })
       if (!res.ok) throw new Error(await readError(res))
       const result: PromptRenderResult = await res.json()
@@ -408,9 +455,16 @@ function SectionEditor({ section, collectionId, options, apiFetch, basePath, onC
   return (
     <div className="bfiles-file-body">
       <div className="bfiles-actions">
-        <input className="bfiles-search" placeholder={`Heading line (level 1–${options.deepest_section_heading_level}), e.g. ## Scheduler`} value={draft.heading} onChange={e => setDraft({ ...draft, heading: e.target.value })} />
-        <input className="bfiles-search" placeholder="Title (defaults to the heading)" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} />
+        <select className="bfiles-search bprompt-tag-input" value={draft.level} onChange={e => setDraft({ ...draft, level: Number(e.target.value) })}>
+          {Array.from({ length: options.deepest_section_heading_level + 1 }, (_, level) => (
+            <option key={level} value={level}>{level === 0 ? 'no heading' : level === 1 ? 'group' : 'section in a group'}</option>
+          ))}
+        </select>
+        <input className="bfiles-search" placeholder="Title" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} />
       </div>
+      {draft.level === 1 && !draft.body.trim() && (
+        <p className="bfiles-preview-hint">A group needs no text of its own: it holds the sections under it.</p>
+      )}
       <textarea className="bfiles-editor" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} spellCheck={false} />
       <div className="bfiles-actions">
         <input className="bfiles-search" placeholder="tags, comma separated" value={draft.tagInput} onChange={e => setDraft({ ...draft, tagInput: e.target.value })} />
@@ -437,7 +491,7 @@ function SectionEditor({ section, collectionId, options, apiFetch, basePath, onC
                 <div className="bfiles-version-preview">
                   <div className="bfiles-version-preview-header">
                     <code>{revision.heading || '(preamble)'}</code>
-                    <button className="bfiles-btn" onClick={() => setDraft({ ...draft, heading: revision.heading, body: revision.body, tagInput: revision.tags.join(', '), note: `restored from revision ${revision.id}` })}>Load into the editor</button>
+                    <button className="bfiles-btn" onClick={() => setDraft({ ...draft, body: revision.body, tagInput: revision.tags.join(', '), note: `restored from revision ${revision.id}` })}>Load into the editor</button>
                   </div>
                   <pre className="bfiles-version-content">{revision.body}</pre>
                 </div>

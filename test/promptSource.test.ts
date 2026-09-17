@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation, parseTagInput,
+  annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation, filterSectionGroups, groupSections, parseTagInput,
   promptOutputState, sectionMatchesFilter,
   type PromptCollectionOutput, type PromptDrift, type PromptSection,
 } from '../src/promptSource'
@@ -11,7 +11,7 @@ const output = (over: Partial<PromptCollectionOutput>): PromptCollectionOutput =
 })
 
 const section = (over: Partial<PromptSection>): PromptSection => ({
-  id: 1, collection_id: 1, title: 'Scheduler', heading: '## Scheduler', body: 'cron jobs', tags: ['scheduler'],
+  id: 1, collection_id: 1, level: 2, title: 'Scheduler', heading: '## Scheduler', body: 'cron jobs', tags: ['scheduler'],
   position: 100, enabled: true, created_at: 0, updated_at: 0, ...over,
 })
 
@@ -53,7 +53,7 @@ describe('drift inbox', () => {
       { kind: 'insert', after_section_id: 1, heading: '## Reminders', body: 'one coordinator' },
       { kind: 'delete', section_id: 9, heading: '## Gone' },
     ],
-    annotation: { note: 'from the tagger', annotated_by: 'tagger', inserted_sections: [{ operation_index: 1, title: 'Reminders', tags: ['reminders'] }] },
+    annotation: { note: 'from the tagger', annotated_by: 'tagger', inserted_sections: [{ operation_index: 1, tags: ['reminders'] }] },
     created_at: 0,
   }
   const byId = new Map([[1, section({})]])
@@ -65,9 +65,34 @@ describe('drift inbox', () => {
     expect(describeDriftOperation({ kind: 'update', section_id: 1, heading: '## Cron' }, byId)).toBe('edits ## Scheduler and renames it to ## Cron')
   })
   it('keeps the tagger labels unless the operator typed over them, and labels inserts only', () => {
-    expect(annotationFromLabelDrafts(drift, {}, '').inserted_sections).toEqual([{ operation_index: 1, title: 'Reminders', tags: ['reminders'] }])
+    expect(annotationFromLabelDrafts(drift, {}, '').inserted_sections).toEqual([{ operation_index: 1, tags: ['reminders'] }])
     const typed = annotationFromLabelDrafts(drift, { 1: 'Scheduler nudges' }, 'mine')
-    expect(typed.inserted_sections).toEqual([{ operation_index: 1, title: 'Reminders', tags: ['nudges', 'scheduler'] }])
+    expect(typed.inserted_sections).toEqual([{ operation_index: 1, tags: ['nudges', 'scheduler'] }])
     expect(typed.note).toBe('mine')
+  })
+})
+
+describe('section tree', () => {
+  const sections = [
+    section({ id: 1, level: 0, title: 'Preamble', heading: '', body: 'hello', tags: [] }),
+    section({ id: 2, level: 1, title: 'Services', heading: '# Services', body: '', tags: ['services'] }),
+    section({ id: 3, level: 2, title: 'Scheduler', heading: '## Scheduler', body: 'cron jobs', tags: ['scheduler'] }),
+    section({ id: 4, level: 2, title: 'Noteboard', heading: '## Noteboard', body: 'todos', tags: ['notes'] }),
+    section({ id: 5, level: 1, title: 'Rules', heading: '# Rules', body: 'be plain', tags: [] }),
+  ]
+  it('nests level-2 sections under the group above them', () => {
+    const tree = groupSections(sections)
+    expect(tree.map(entry => [entry.group?.id ?? null, entry.children.map(child => child.id)])).toEqual([[null, [1]], [2, [3, 4]], [5, []]])
+  })
+  it('counts a group with no text of its own by what it holds', () => {
+    const services = groupSections(sections)[1]
+    expect(services.group?.body).toBe('')
+    expect(services.characters).toBe('# Services'.length + '## Scheduler'.length + 'cron jobs'.length + '## Noteboard'.length + 'todos'.length)
+  })
+  it('keeps a group when a child matches, and all children when the group itself matches', () => {
+    const tree = groupSections(sections)
+    expect(filterSectionGroups(tree, null, 'cron').map(entry => [entry.group?.id ?? null, entry.children.map(child => child.id)])).toEqual([[2, [3]]])
+    expect(filterSectionGroups(tree, 'services', '').map(entry => entry.children.length)).toEqual([2])
+    expect(filterSectionGroups(tree, null, '')).toBe(tree)
   })
 })

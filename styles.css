@@ -5618,3 +5618,7 @@
 .bprompt-tag { font-size: 0.75em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: inherit; cursor: pointer; }
 .bprompt-tag-active { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
 .bprompt-tag-static { cursor: default; margin-left: 4px; }
+.bprompt-group { margin: 10px 0 14px; }
+.bprompt-group-header { font-weight: 600; border-bottom: 1px solid var(--border); }
+.bprompt-group-children { margin-left: 18px; border-left: 2px solid var(--border); padding-left: 8px; }
+.bprompt-add-in-group { margin: 4px 0 0 28px; font-size: 0.85em; opacity: 0.8; }
