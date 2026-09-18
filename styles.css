@@ -54,9 +54,26 @@
 }
 .bridge-tab:hover { color: var(--text); }
 .bridge-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
-.bridge-nav-groups { border-bottom: none; }
-.bridge-group-tab { font-weight: 600; font-size: 0.9em; }
+/* The top bar: the host's brand, the groups, the host's controls — one bar, so a
+   host draws no header of its own. The groups scroll when they do not fit; the
+   two slots never shrink. */
+.bridge-shell-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 16px;
+  min-height: 46px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.bridge-shell-slot { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.bridge-shell-start { padding-right: 14px; margin-right: 6px; border-right: 1px solid var(--border); }
+.bridge-shell-end { margin-left: auto; padding-left: 10px; }
+.bridge-nav-groups { flex: 1; min-width: 0; padding: 0; border-bottom: none; background: transparent; }
+.bridge-group-tab { display: flex; align-items: center; font-weight: 600; font-size: 0.9em; margin-bottom: -1px; }
 .bridge-nav-pages { background: var(--bg); }
+.bridge-nav-pages .bridge-tab { padding: 8px 14px; }
 .bridge-content { flex: 1; overflow-y: auto; padding: 20px; }
 .bridge-content:has(> .bc-container) { padding: 0; overflow: hidden; }
 

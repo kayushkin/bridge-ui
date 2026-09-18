@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { PAGE_GROUPS, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
@@ -10,6 +11,12 @@ interface BridgeLayoutProps {
   showServiceInventory?: boolean
   /** Pages the host brings into this navigation. */
   hostPages?: readonly HostPage[]
+  /** What the host puts at the start of the top bar: its brand. */
+  navStart?: ReactNode
+  /** What the host puts at the end of the top bar: its own controls (theme,
+   *  logout). With both slots a host needs no header of its own, so the page
+   *  has one bar rather than an empty one over a full one. */
+  navEnd?: ReactNode
 }
 
 /** The shell: two navigation rows and the page. The first row is the groups
@@ -23,7 +30,7 @@ interface BridgeLayoutProps {
  *  second row, and a tab removed mid-drag never gets its `dragend` (measured:
  *  `dragstart`, then nothing). While the browser believes a drag is on, the
  *  cursor is pinned and the page takes no clicks. A tab has no use for a drag. */
-export function BridgeLayout({ showConformance = true, showServiceInventory = true, hostPages = [] }: BridgeLayoutProps) {
+export function BridgeLayout({ showConformance = true, showServiceInventory = true, hostPages = [], navStart, navEnd }: BridgeLayoutProps) {
   const config = useBridgeConfig()
   const { pathname } = useLocation()
   // Gated on the chrome being DRAWN, not on the viewport being narrow. These rows
@@ -43,6 +50,8 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
   return (
     <div className={`bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`}>
       {!chromeTakenOver && <>
+        <header className="bridge-shell-bar">
+        {navStart && <div className="bridge-shell-slot bridge-shell-start">{navStart}</div>}
         <nav className="bridge-nav bridge-nav-groups" aria-label="Sections">
           {groups.map(g => {
             const first = entries.find(e => e.group === g.key)!
@@ -59,6 +68,8 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
             )
           })}
         </nav>
+        {navEnd && <div className="bridge-shell-slot bridge-shell-end">{navEnd}</div>}
+        </header>
         <nav className="bridge-nav bridge-nav-pages" aria-label={`${groups.find(g => g.key === activeGroup)?.label ?? ''} pages`}>
           {pages.map(t => (
             <NavLink

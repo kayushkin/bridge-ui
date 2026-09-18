@@ -20,6 +20,11 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
    *  and listed in the group each names. Paths are absolute from the root this
    *  component is mounted at. */
   hostPages?: readonly HostPage[]
+  /** The host's brand, drawn at the start of the top bar, before the groups. */
+  navStart?: React.ReactNode
+  /** The host's own controls (theme, logout), drawn at the end of the top bar.
+   *  A host that fills both slots needs no header of its own. */
+  navEnd?: React.ReactNode
 }
 
 /** The bridge, whole: every page this library ships (`BRIDGE_PAGES`), the
@@ -37,13 +42,13 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
  *  store and sync engine, and holding it here rather than inside the chat page
  *  means the store survives a switch to Instances or Kanban and back — and that
  *  every page can render a reference chip, which throws without it. */
-export function Bridge({ notesPath = '', showConformance, showServiceInventory, hostPages = [], ...provider }: BridgeProps): JSX.Element {
+export function Bridge({ notesPath = '', showConformance, showServiceInventory, hostPages = [], navStart, navEnd, ...provider }: BridgeProps): JSX.Element {
   const routes = useMemo(() => ({ notes: notesPath }), [notesPath])
   return (
     <BridgeProvider {...provider} routes={routes}>
       <ChatStore>
         <Routes>
-          <Route element={<BridgeLayout showConformance={showConformance} showServiceInventory={showServiceInventory} hostPages={hostPages} />}>
+          <Route element={<BridgeLayout showConformance={showConformance} showServiceInventory={showServiceInventory} hostPages={hostPages} navStart={navStart} navEnd={navEnd} />}>
             {BRIDGE_PAGES.map(p => {
               const path = p.route === 'chat' ? '' : DEFAULT_BRIDGE_ROUTES[p.route].replace(/^\//, '') + (p.routeSuffix ?? '')
               return p.route === 'chat'
