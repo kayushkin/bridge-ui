@@ -970,8 +970,13 @@ console.log('BridgeLayout — a narrow viewport is not permission to hide the na
 
   check('a 600px viewport with no minimal chrome drawn keeps the tab nav',
     narrow.includes('bridge-nav'), narrow.slice(0, 300))
-  check('every tab is still reachable, not just the element',
-    ['Instances', 'Sessions', 'Auth', 'Usage', 'Settings', 'Agents', 'Files'].every(t => narrow.includes(t)),
+  // Two rows since 2026-09-18: the groups, then the pages of the group the path
+  // belongs to. /instances is in Agents, so its row is Instances, Agents, Files.
+  check('every group and the current group\'s tabs are still reachable, not just the element',
+    ['Work', 'Agents', 'Access', 'System', 'Instances', 'Files'].every(t => narrow.includes(t)),
+    narrow.slice(0, 300))
+  check('the other groups\' pages are one click away, not on this row',
+    !narrow.includes('>Sessions<') && narrow.includes('href="/"'),
     narrow.slice(0, 300))
   // The class strips the content padding and takes the full height for a chat
   // that has taken the screen over. Applying it to a page that did not is the
@@ -1156,8 +1161,10 @@ console.log('\nBridgePrincipals — the directory editor')
   check('a group-as-member refusal is shown verbatim', refused.includes('bp-membership-error') && refused.includes('nested groups are not supported in v1: add the group&#x27;s humans directly'), refused)
 
   // The tab follows the base path, exactly as the Kanban tab does.
+  // Principals sits in the Access group, so the row that would show it is the
+  // one drawn at its own path.
   const layout = (principalStoreBasePath) => renderToStaticMarkup(
-    h(MemoryRouter, { initialEntries: ['/bridge/instances'] },
+    h(MemoryRouter, { initialEntries: ['/principals'] },
       h(BridgeContext.Provider, { value: bridgeConfig(principalStoreBasePath) },
         h(MinimalChromeProvider, null, h(BridgeLayout)))))
   check('BridgeLayout shows a Principals tab when principal-store is configured',
@@ -1201,7 +1208,7 @@ console.log('\nBridgeBundles — bundle-store bundles and the resolve preview')
   check('the unique bundle name shows beside the display name', card.includes('React frontend') && card.includes('>react<'), card)
 
   const layout = (bundleStoreBasePath) => renderToStaticMarkup(
-    h(MemoryRouter, { initialEntries: ['/instances'] },
+    h(MemoryRouter, { initialEntries: ['/bundles'] },
       h(BridgeContext.Provider, { value: bundlesConfig(bundleStoreBasePath) },
         h(MinimalChromeProvider, null, h(BridgeLayout)))))
   check('BridgeLayout shows a Bundles tab when bundle-store is configured',

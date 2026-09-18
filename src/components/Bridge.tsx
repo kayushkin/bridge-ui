@@ -1,30 +1,11 @@
-import { useMemo, type JSX } from 'react'
+import { createElement, useMemo, type JSX } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { ChatProvider } from '@kayushkin/chat-core'
 import { BridgeProvider, type BridgeProviderProps } from '../provider'
-import { useBridgeConfig } from '../context'
+import { DEFAULT_BRIDGE_ROUTES, useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
 import { BridgeLayout } from './BridgeLayout'
-import { BridgeChat } from './chat/BridgeChat'
-import { BridgeInstances } from './BridgeInstances'
-import { BridgeSessions } from './BridgeSessions'
-import { BridgeAuth } from './BridgeAuth'
-import { BridgeUsage } from './BridgeUsage'
-import { BridgeSettings } from './BridgeSettings'
-import { BridgeAgents } from './BridgeAgents'
-import { BridgeFiles } from './BridgeFiles'
-import { BridgeSkills } from './BridgeSkills'
-import { BridgeTools } from './BridgeTools'
-import { BridgePermissions } from './BridgePermissions'
-import { BridgeKanban } from './BridgeKanban'
-import { BridgeKanbanSettings } from './BridgeKanbanSettings'
-import { BridgePrincipals } from './BridgePrincipals'
-import { BridgeGrants } from './BridgeGrants'
-import { BridgeBundles } from './BridgeBundles'
-import { BridgeServiceInventory } from './BridgeServiceInventory'
-import { BridgeConformance } from './BridgeConformance'
-import { BridgeCardPage } from './BridgeCardPage'
-import { BridgeOrchestrator } from './BridgeOrchestrator'
+import { BRIDGE_PAGES, type HostPage } from '../pages'
 
 export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'routes'> {
   /** The host's notes page, for `[todo:<id>]` references. Empty means the host has
@@ -35,9 +16,14 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
   /** Draw the Service inventory tab. Default true. Its page reads `GET /services` on
    *  `basePath`, so a host whose bridge server predates that route hides it. */
   showServiceInventory?: boolean
+  /** Pages the host brings into the same shell: routed beside this library's own
+   *  and listed in the group each names. Paths are absolute from the root this
+   *  component is mounted at. */
+  hostPages?: readonly HostPage[]
 }
 
-/** The bridge, whole: every page this library ships, its tab row, and the two
+/** The bridge, whole: every page this library ships (`BRIDGE_PAGES`), the
+ *  host's own pages if it brings any, the grouped navigation, and the two
  *  providers they read — mounted by a host as ONE thing at the root of a router.
  *
  *  dash mounts it under a splat route and puts its own pages beside it; the
@@ -51,33 +37,22 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
  *  store and sync engine, and holding it here rather than inside the chat page
  *  means the store survives a switch to Instances or Kanban and back — and that
  *  every page can render a reference chip, which throws without it. */
-export function Bridge({ notesPath = '', showConformance, showServiceInventory, ...provider }: BridgeProps): JSX.Element {
+export function Bridge({ notesPath = '', showConformance, showServiceInventory, hostPages = [], ...provider }: BridgeProps): JSX.Element {
   const routes = useMemo(() => ({ notes: notesPath }), [notesPath])
   return (
     <BridgeProvider {...provider} routes={routes}>
       <ChatStore>
         <Routes>
-          <Route element={<BridgeLayout showConformance={showConformance} showServiceInventory={showServiceInventory} />}>
-            <Route index element={<BridgeChat />} />
-            <Route path="instances" element={<BridgeInstances />} />
-            <Route path="sessions" element={<BridgeSessions />} />
-            <Route path="auth" element={<BridgeAuth />} />
-            <Route path="usage" element={<BridgeUsage />} />
-            <Route path="settings" element={<BridgeSettings />} />
-            <Route path="agents" element={<BridgeAgents />} />
-            <Route path="files" element={<BridgeFiles />} />
-            <Route path="skills" element={<BridgeSkills />} />
-            <Route path="tools" element={<BridgeTools />} />
-            <Route path="permissions" element={<BridgePermissions />} />
-            <Route path="kanban" element={<BridgeKanban />} />
-            <Route path="kanban/settings" element={<BridgeKanbanSettings />} />
-            <Route path="card/:cardId" element={<BridgeCardPage />} />
-            <Route path="principals" element={<BridgePrincipals />} />
-            <Route path="grants" element={<BridgeGrants />} />
-            <Route path="bundles" element={<BridgeBundles />} />
-            <Route path="service-inventory" element={<BridgeServiceInventory />} />
-            <Route path="orchestrator" element={<BridgeOrchestrator />} />
-            <Route path="conformance" element={<BridgeConformance />} />
+          <Route element={<BridgeLayout showConformance={showConformance} showServiceInventory={showServiceInventory} hostPages={hostPages} />}>
+            {BRIDGE_PAGES.map(p => {
+              const path = p.route === 'chat' ? '' : DEFAULT_BRIDGE_ROUTES[p.route].replace(/^\//, '') + (p.routeSuffix ?? '')
+              return p.route === 'chat'
+                ? <Route key={p.route} index element={createElement(p.component)} />
+                : <Route key={p.route} path={path} element={createElement(p.component)} />
+            })}
+            {hostPages.map(p => (
+              <Route key={p.path} path={p.path.replace(/^\//, '')} element={p.element} />
+            ))}
           </Route>
         </Routes>
       </ChatStore>

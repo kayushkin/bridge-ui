@@ -1,73 +1,70 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
+import { PAGE_GROUPS, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
 import { useMinimalChrome } from './minimal/MinimalChromeContext'
 
 interface BridgeLayoutProps {
-  /** If true, include the Conformance tab. Default: true. */
+  /** If true, include the Conformance page. Default: true. */
   showConformance?: boolean
-  /** If true, include the Service inventory tab. Default: true. */
+  /** If true, include the Service inventory page. Default: true. */
   showServiceInventory?: boolean
+  /** Pages the host brings into this navigation. */
+  hostPages?: readonly HostPage[]
 }
 
-export function BridgeLayout({ showConformance = true, showServiceInventory = true }: BridgeLayoutProps) {
-  const {
-    routes, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath,
-    grantStoreBasePath, bundleStoreBasePath, producerBasePath,
-  } = useBridgeConfig()
-  // Gated on the chrome being DRAWN, not on the viewport being narrow. These tabs
+/** The shell: two navigation rows and the page. The first row is the groups
+ *  (Work, Agents, Access, System, Personal); the second is the pages of the
+ *  group the current path belongs to. Both rows come from `navEntriesFor`, so a
+ *  host that proxies no store for a page sees no tab for it, exactly as before —
+ *  what changed on 2026-09-18 is that twenty-odd tabs became five groups. */
+export function BridgeLayout({ showConformance = true, showServiceInventory = true, hostPages = [] }: BridgeLayoutProps) {
+  const config = useBridgeConfig()
+  const { pathname } = useLocation()
+  // Gated on the chrome being DRAWN, not on the viewport being narrow. These rows
   // are the only navigation on every page here except the host's chat, and the
   // routed child that replaces them exists on that chat alone — so dropping them
-  // for a narrow window used to strand the user on Instances, Sessions, Auth,
-  // Usage, Settings, Agents, Files, Skills, Tools, Permissions, Kanban,
-  // Principals and Conformance, with the host's own header hidden by the same
-  // mistaken signal.
+  // for a narrow window used to strand the user on every other page, with the
+  // host's own header hidden by the same mistaken signal.
   const { minimal, minimalChromeMounted } = useMinimalChrome()
   const chromeTakenOver = minimal && minimalChromeMounted
-  const tabs = [
-    { to: routes.chat, label: 'Chat', end: true },
-    { to: routes.instances, label: 'Instances', end: false },
-    { to: routes.sessions, label: 'Sessions', end: false },
-    { to: routes.auth, label: 'Auth', end: false },
-    { to: routes.usage, label: 'Usage', end: false },
-    { to: routes.settings, label: 'Settings', end: false },
-    { to: routes.agents, label: 'Agents', end: false },
-    { to: routes.files, label: 'Files', end: false },
-    ...(skillStoreBasePath ? [{ to: routes.skills, label: 'Skills', end: false }] : []),
-    ...(toolStoreBasePath ? [{ to: routes.tools, label: 'Tools', end: false }] : []),
-    ...(permissionStoreBasePath ? [{ to: routes.permissions, label: 'Permissions', end: false }] : []),
-    ...(kanbanStoreBasePath ? [{ to: routes.kanban, label: 'Kanban', end: false }] : []),
-    // The directory the Kanban assignees resolve against. Same gate as the
-    // assignee UI itself: a host that proxies no principal-store gets no tab.
-    ...(principalStoreBasePath ? [{ to: routes.principals, label: 'Principals', end: false }] : []),
-    // Who may use what. Its own tab, because "who holds a grant on this tool"
-    // is a question about a resource, not a principal.
-    ...(grantStoreBasePath ? [{ to: routes.grants, label: 'Grants', end: false }] : []),
-    ...(bundleStoreBasePath ? [{ to: routes.bundles, label: 'Bundles', end: false }] : []),
-    // The page exists on every host; the tab is drawn only where the producer is
-    // proxied, since without it the page can say nothing but "not configured".
-    ...(producerBasePath ? [{ to: routes.orchestrator, label: 'Orchestrator', end: false }] : []),
-    ...(showConformance ? [{ to: routes.conformance, label: 'Conformance', end: false }] : []),
-    // Reads the bridge server itself (`GET /services` on basePath), so no
-    // store base path gates it; a host whose server lacks the route turns it off.
-    ...(showServiceInventory ? [{ to: routes.serviceInventory, label: 'Service inventory', end: false }] : []),
-  ]
+
+  const entries = navEntriesFor(config, { showConformance, showServiceInventory }, hostPages)
+  const groups = PAGE_GROUPS.filter(g => entries.some(e => e.group === g.key))
+  const matched = groupForPath(pathname, config.routes, hostPages)
+  const activeGroup: PageGroupKey | null = matched && groups.some(g => g.key === matched) ? matched : (groups[0]?.key ?? null)
+  const pages: NavEntry[] = entries.filter(e => e.group === activeGroup)
 
   return (
     <div className={`bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`}>
-      {!chromeTakenOver && <nav className="bridge-nav">
-        {tabs.map(t => (
-          <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.end}
-            className={({ isActive }) =>
-              `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`
-            }
-          >
-            {t.label}
-          </NavLink>
-        ))}
-      </nav>}
+      {!chromeTakenOver && <>
+        <nav className="bridge-nav bridge-nav-groups" aria-label="Sections">
+          {groups.map(g => {
+            const first = entries.find(e => e.group === g.key)!
+            return (
+              <Link
+                key={g.key}
+                to={first.to}
+                className={`bridge-tab bridge-group-tab ${g.key === activeGroup ? 'bridge-tab-active' : ''}`}
+                aria-current={g.key === activeGroup ? 'true' : undefined}
+              >
+                {g.label}
+              </Link>
+            )
+          })}
+        </nav>
+        <nav className="bridge-nav bridge-nav-pages" aria-label={`${groups.find(g => g.key === activeGroup)?.label ?? ''} pages`}>
+          {pages.map(t => (
+            <NavLink
+              key={t.to}
+              to={t.to}
+              end={t.end}
+              className={({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`}
+            >
+              {t.label}
+            </NavLink>
+          ))}
+        </nav>
+      </>}
       <div className="bridge-content">
         <Outlet />
       </div>

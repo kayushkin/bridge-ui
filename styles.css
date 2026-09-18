@@ -51,6 +51,9 @@
 }
 .bridge-tab:hover { color: var(--text); }
 .bridge-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+.bridge-nav-groups { border-bottom: none; }
+.bridge-group-tab { font-weight: 600; font-size: 0.9em; }
+.bridge-nav-pages { background: var(--bg); }
 .bridge-content { flex: 1; overflow-y: auto; padding: 20px; }
 .bridge-content:has(> .bc-container) { padding: 0; overflow: hidden; }
 

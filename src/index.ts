@@ -113,6 +113,8 @@ export type { BridgeProps } from './components/Bridge'
 
 // Page components — for a host that composes them by hand instead.
 export { BridgeLayout } from './components/BridgeLayout'
+export { PAGE_GROUPS, BRIDGE_PAGES, navEntriesFor, groupForPath } from './pages'
+export type { PageGroupKey, PageGroup, BridgePage, HostPage, NavEntry, ShellFlags } from './pages'
 export { BridgeChat } from './components/chat/BridgeChat'
 export { BridgeSessions } from './components/BridgeSessions'
 export { BridgeInstances } from './components/BridgeInstances'
