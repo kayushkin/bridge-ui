@@ -1,4 +1,7 @@
+# Both forms: the trailing-slash rule matches only a directory, and a node_modules
+# SYMLINK (a worktree pointing at the main clone's) slipped past it into 2a366e3.
 node_modules/
+node_modules
 *.tsbuildinfo
 
 # Build output. Not committed: `npm install` builds it (the prepare script) and
