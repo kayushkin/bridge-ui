@@ -98,15 +98,15 @@ export function SourceFoldersEditor() {
       scope="global"
       storedBy="llm-bridge-server · source_folders"
       help={<>Auto-file new sessions into a sidebar folder based on their <code>purpose</code> tag
-        (set by the caller when creating the session). Rows marked <em>default</em>
+        (set by the caller when creating the session). Rows marked <em>default</em>{' '}
         come from LLMBRIDGE_SOURCE_FOLDERS; saving over them creates a runtime override.</>}
       precedence="A session's folder can still be moved by hand; a manual move is kept when a mapping is applied to existing sessions."
       status={{ busy: busy !== null, error: status && /failed:/.test(status) ? status : null, note: status && !/failed:/.test(status) ? <span className="bss-help">{status}</span> : null }}
     >
 
-      <label className="bset-field" style={{ marginBottom: '0.5rem' }}>
+      <label className="bks-check">
         <input type="checkbox" checked={applyToExisting} onChange={e => setApplyToExisting(e.target.checked)} />
-        {' '}Apply to existing sessions (preserves manual moves)
+        Apply to existing sessions (preserves manual moves)
       </label>
 
       <table className="bset-sf-table">

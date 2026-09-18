@@ -63,8 +63,9 @@ export interface SettingsSectionProps {
   id: string
   title: string
   scope: SettingsScope
-  /** The service and record that hold the value, e.g. "kanban-store · board". */
-  storedBy: string
+  /** The service and record that hold the value, e.g. "kanban-store · board".
+   *  Absent for a section that stores nothing, such as the scope index. */
+  storedBy?: string
   /** What this setting outranks or is outranked by, in one sentence. */
   precedence?: ReactNode
   help?: ReactNode
@@ -103,7 +104,7 @@ export function SettingsSection({ id, title, scope, storedBy, precedence, help, 
       </span>
       <span className="bss-meta">
         <span className={`bss-scope bss-scope-${scope}`} title="Where this setting applies">{SETTINGS_SCOPE_LABEL[scope]}</span>
-        <span className="bss-stored-by" title="Which service stores it">{storedBy}</span>
+        {storedBy && <span className="bss-stored-by" title="Which service stores it">{storedBy}</span>}
         {collapsible && <span className="bss-expand" aria-hidden="true">{expanded ? '−' : '+'}</span>}
       </span>
     </>

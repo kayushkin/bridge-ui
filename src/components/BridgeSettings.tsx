@@ -57,7 +57,7 @@ export function BridgeSettings() {
 
   return (
     <div className="bset-container bss-sections">
-      <SettingsSection id="scope-index" title="Where settings live" scope="global" storedBy="—"
+      <SettingsSection id="scope-index" title="Where settings live" scope="global"
         help="A setting is edited on the page of the thing it applies to. A narrower scope overrides a wider one when a setting exists at both: session over board over instance over harness over global.">
         <table className="bss-index">
           <tbody>
