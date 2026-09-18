@@ -56,8 +56,9 @@ export type StatusSlotContent =
       | { kind: 'compacting' }
       | { kind: 'live' }
       | { kind: 'rate_limited'; text: string }
-      /** Not running, but tasks it started still are — a backgrounded shell outlives
-       *  its turn. The chip is the whole content. */
+      /** The turn is over but tasks it started still run — the server's
+       *  `background_tasks_running`, or a status that still lists subagents. The
+       *  chip is most of the content. */
       | { kind: 'tasks' }
     ))
   | null
@@ -117,7 +118,9 @@ export function useStatusSlotContent(
     formatHMS(new Date(unixSeconds * 1000).toISOString()),
   )
   if (rateLimit) return { kind: 'rate_limited', text: rateLimit, status }
-  if ((status.subagents?.length ?? 0) > 0) return { kind: 'tasks', status }
+  if (status.state === 'background_tasks_running' || (status.subagents?.length ?? 0) > 0) {
+    return { kind: 'tasks', status }
+  }
   return null
 }
 
@@ -326,7 +329,10 @@ export default function SessionStatusLine({ status: content, onOpenSession }: Se
         )}
         {content.kind === 'paused' && <span className={styles.statusText}>⏸ paused</span>}
         {content.kind === 'tasks' && (
-          <span className={styles.statusText}>idle — background tasks still running</span>
+          <>
+            <span className={styles.statusPulse} aria-hidden />
+            <span className={styles.statusText}>turn over — background tasks still running</span>
+          </>
         )}
         {content.kind === 'compacting' && (
           <>

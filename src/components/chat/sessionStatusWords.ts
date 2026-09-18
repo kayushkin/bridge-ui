@@ -39,6 +39,8 @@ export function statusActivityText(status: SessionStatus | null): string {
       return 'starting'
     case 'rate_limited':
       return 'rate limited'
+    case 'background_tasks_running':
+      return 'background tasks running'
     default:
       return isRunningState(status.state) ? 'working' : ''
   }
