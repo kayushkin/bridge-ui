@@ -7,7 +7,7 @@ import {
   generalPatchOf, ladderDraftOf, ladderDraftToWire, parseMailAccountIDs,
 } from '../src/kanbanBoardSettings'
 import type { Board, PriorityLadder } from '@kayushkin/kanban-store-types'
-import type { Bundle } from '../src/types-bundles'
+import type { Bundle } from '@kayushkin/bundle-store-types'
 
 const board = (over: Partial<Board> = {}): Board => ({
   id: 'b1', name: 'Email', description: '', archived: false, created_at: '', updated_at: '', ...over,

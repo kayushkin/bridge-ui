@@ -10,7 +10,8 @@ import {
   useAgentCatalog, useInstanceCatalog, useMachineCatalog, useSkillCatalog, useToolCatalog, type ResourceCatalog,
 } from '../useResourceCatalogs'
 import type { FetchFn } from '../types'
-import type { Grant, GrantRelation, GrantResourceType } from '../types-grants'
+import type { Grant, RelationDefinition as GrantRelation } from '@kayushkin/grant-store-types'
+import type { GrantResourceType } from '../grantStoreClient'
 
 /**
  * Top-level Grants page: grant-store's ledger of who may use what, whole —

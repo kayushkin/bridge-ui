@@ -7,7 +7,8 @@ import type { BundleDraft, BundleDraftMember } from '../bundleDraft'
 import { filterResourceOptions, type ResourceOption, type ToolRecord } from '../grantResources'
 import { useSkillCatalog } from '../useResourceCatalogs'
 import type { FetchFn } from '../types'
-import type { Bundle, BundleMemberKind, BundleResolution, RepoStoreRepo } from '../types-bundles'
+import type { Bundle, MemberKind as BundleMemberKind, ResolveResponse as BundleResolution } from '@kayushkin/bundle-store-types'
+import type { Repo as RepoStoreRepo } from '@kayushkin/repo-store-types'
 import styles from './BridgeBundles.module.css'
 
 /**

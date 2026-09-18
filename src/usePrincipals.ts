@@ -2,7 +2,8 @@ import { useCallback, useMemo } from 'react'
 import { useBridgeConfig } from './context'
 import { SharedPoll, loadJSONList, sharedPoll, useSharedPoll } from './sharedPoll'
 import type { FetchFn } from './types'
-import type { Principal, PrincipalKind } from './types-principals'
+import type { Principal } from '@kayushkin/principal-store-types'
+import type { PrincipalKind } from './principalStoreClient'
 
 // The principal directory: every principal principal-store knows, indexed by
 // id, shared by every component on the page that needs to turn a

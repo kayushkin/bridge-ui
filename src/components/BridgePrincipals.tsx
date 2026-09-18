@@ -12,7 +12,8 @@ import type { PatchPrincipalRequest, PrincipalStoreResult, PrincipalsSearch } fr
 import { pickablePrincipals, principalInitials, principalIsDisabled } from '../usePrincipals'
 import type { PrincipalKindFilter } from '../usePrincipals'
 import type { FetchFn } from '../types'
-import type { Principal, PrincipalDetail, PrincipalKind } from '../types-principals'
+import type { Principal, Principal as PrincipalDetail } from '@kayushkin/principal-store-types'
+import type { PrincipalKind } from '../principalStoreClient'
 
 /**
  * Top-level Principals page: the editor for principal-store's directory of the
@@ -150,7 +151,7 @@ function PrincipalsPage({ fetchFn, base, grantStoreBase }: { fetchFn: FetchFn; b
     listRelations: () => listGrantRelations(fetchFn, grantStoreBase),
     listEffective: principalID => listEffectiveGrants(fetchFn, grantStoreBase, principalID),
     grant: (principalID, relation, resourceType, resourceID) =>
-      createGrant(fetchFn, grantStoreBase, { principal_id: principalID, relation, resource_type: resourceType, resource_id: resourceID }),
+      createGrant(fetchFn, grantStoreBase, { principal_id: principalID, relation, resource_type: resourceType, resource_id: resourceID, note: '' }),
     revoke: grantID => revokeGrant(fetchFn, grantStoreBase, grantID),
   } : undefined, [fetchFn, grantStoreBase])
 

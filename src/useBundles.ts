@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useBridgeConfig } from './context'
 import { listBundles } from './bundleStoreClient'
-import type { Bundle } from './types-bundles'
+import type { Bundle } from '@kayushkin/bundle-store-types'
 
 export interface BundlesList {
   /** False when the host passed no `bundleStoreBasePath`: nothing was fetched,

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GrantStoreResult } from '../grantStoreClient'
-import type { PrincipalDetail } from '../types-principals'
-import type { Grant, GrantRelation, GrantResourceType } from '../types-grants'
+import type { Principal as PrincipalDetail } from '@kayushkin/principal-store-types'
+import type { Grant, RelationDefinition as GrantRelation } from '@kayushkin/grant-store-types'
+import type { GrantResourceType } from '../grantStoreClient'
 import {
   filterResourceOptions, partitionGrantRows, relationWording, resourceTypeWording, type ResourceTypeWording,
 } from '../grantResources'

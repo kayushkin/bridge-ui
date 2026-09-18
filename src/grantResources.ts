@@ -15,7 +15,8 @@
 
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import type { Machine } from './types'
-import type { Grant, GrantResourceType } from './types-grants'
+import type { Grant } from '@kayushkin/grant-store-types'
+import type { GrantResourceType } from './grantStoreClient'
 
 export interface ResourceTypeWording {
   /** Section heading: "Harness instances". */

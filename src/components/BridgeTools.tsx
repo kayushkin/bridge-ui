@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeTools } from '../useBridgeTools'
-import type { Tool } from '../types-tools'
+import type { Tool } from '@kayushkin/tool-store-types'
 
 /**
  * Top-level Tools page. Lists every tool registered in tool-store with

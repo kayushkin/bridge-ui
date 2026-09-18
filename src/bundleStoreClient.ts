@@ -1,5 +1,6 @@
 import type { FetchFn } from './types'
-import type { Bundle, BundleResolution, RepoStoreRepo } from './types-bundles'
+import type { Bundle, ResolveResponse as BundleResolution } from '@kayushkin/bundle-store-types'
+import type { Repo as RepoStoreRepo } from '@kayushkin/repo-store-types'
 import type { BundleWrite } from './bundleDraft'
 
 // The bundle-store and repo-store reads the Bundles page makes, as typed

@@ -60,14 +60,15 @@ export { useBridgePrefs } from './useBridgePrefs'
 export { useBridgeFolders } from './useBridgeFolders'
 export type { UseBridgeFoldersReturn } from './useBridgeFolders'
 export { useBridgeTools } from './useBridgeTools'
-export type { Tool, ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from './types-tools'
+export type { Tool, Kind as ToolKind, MCPSpec, CLISpec, LocalSpec, LocalDescriptor } from '@kayushkin/tool-store-types'
 export { useKanban } from './useKanban'
 export type { AssignmentOutcome } from './useKanban'
 export {
   usePrincipals, pickablePrincipals, principalInitials, principalIsDisabled, indexPrincipalsByID,
 } from './usePrincipals'
 export type { PrincipalsDirectory, PrincipalKindFilter, PickablePrincipalsFilter } from './usePrincipals'
-export type { Principal, PrincipalKind, PrincipalDetail, GroupMembership } from './types-principals'
+export type { Principal, Principal as PrincipalDetail, GroupMembership } from '@kayushkin/principal-store-types'
+export type { PrincipalKind } from './principalStoreClient'
 // The principal-store write client behind the Principals page, for a host that
 // wants a principal picker or an inline rename of its own without a second
 // copy of the error-text rule. `principalsSearchURL` is the one URL builder.
@@ -84,7 +85,8 @@ export {
   listEffectiveGrants, createGrant, revokeGrant,
 } from './grantStoreClient'
 export type { GrantStoreResult, GrantsFilter } from './grantStoreClient'
-export type { Grant, GrantRelation, GrantResourceType, CreateGrantRequest } from './types-grants'
+export type { Grant, RelationDefinition as GrantRelation, GrantRequest as CreateGrantRequest } from '@kayushkin/grant-store-types'
+export type { GrantResourceType } from './grantStoreClient'
 export {
   resourceTypeWording, relationWording, partitionGrantRows, filterResourceOptions, dispatchInstanceChoices, machineLabel,
 } from './grantResources'
@@ -131,9 +133,8 @@ export { BridgePrincipals } from './components/BridgePrincipals'
 // the resolve preview. Renders nothing without `bundleStoreBasePath`, and
 // BridgeLayout shows no tab then.
 export { BridgeBundles } from './components/BridgeBundles'
-export type {
-  Bundle, BundleMember, BundleMemberKind, BundleMemberRef, BundleRef, BundleResolution, RepoStoreRepo,
-} from './types-bundles'
+export type { Bundle, Member as BundleMember, MemberKind as BundleMemberKind, MemberRef as BundleMemberRef, BundleRef, ResolveResponse as BundleResolution } from '@kayushkin/bundle-store-types'
+export type { Repo as RepoStoreRepo } from '@kayushkin/repo-store-types'
 export { bundleDraftOf, bundleDraftToWire, emptyBundleDraft, parseTagList } from './bundleDraft'
 export type { BundleDraft, BundleDraftMember, BundleDraftResult, BundleWrite } from './bundleDraft'
 export { deleteBundle, listBundles, resolveBundles, setBundleEnabled, upsertBundle } from './bundleStoreClient'

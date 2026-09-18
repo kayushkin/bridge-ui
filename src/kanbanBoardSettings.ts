@@ -12,7 +12,7 @@
 
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import type { Machine } from './types'
-import type { Bundle } from './types-bundles'
+import type { Bundle } from '@kayushkin/bundle-store-types'
 import type { Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, DefaultSource, EffectiveDefault, PriorityLadder, UpdateBoardRequest } from '@kayushkin/kanban-store-types'
 import { machineLabel } from './grantResources'
 

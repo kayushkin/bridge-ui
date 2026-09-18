@@ -8,7 +8,7 @@
 // guesses: a member without a positive id would be a name join, and
 // bundle-store rejects one at the write anyway.
 
-import type { Bundle, BundleMember, BundleMemberKind } from './types-bundles'
+import type { Bundle, Member as BundleMember, MemberKind as BundleMemberKind } from '@kayushkin/bundle-store-types'
 
 export interface BundleDraftMember {
   kind: BundleMemberKind

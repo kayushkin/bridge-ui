@@ -14,7 +14,7 @@
 // the one thing the store refuses to invent — a zone for someone who has
 // declared none.
 
-import type { Availability, Principal, TimeOff } from './types-principals'
+import type { Availability, Principal, TimeOff } from '@kayushkin/principal-store-types'
 
 /** The working week as the form holds it. `tzid` is '' until a zone is chosen;
  *  it is never filled in from the browser, because a guessed zone makes someone

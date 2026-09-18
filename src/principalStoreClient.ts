@@ -1,7 +1,9 @@
 import type { FetchFn } from './types'
-import type {
-  Availability, AvailabilityAnswer, GroupMembership, Principal, PrincipalDetail, PrincipalKind, TimeOff,
-} from './types-principals'
+import type { Availability, AvailabilityAnswer, GroupMembership, Principal, Principal as PrincipalDetail, TimeOff } from '@kayushkin/principal-store-types'
+
+/** principal-store serves the kind vocabulary at GET /kinds; the wire spells it
+ *  as a string, so this is the field's type, not a list. */
+export type PrincipalKind = Principal['kind']
 import type { PrincipalKindFilter } from './usePrincipals'
 
 // The principal-store routes the Principals page writes through, as typed

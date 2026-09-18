@@ -8,7 +8,7 @@ import {
   addTimeOff, getAvailability, listAvailabilityReasons, listTimeOff, listWeekdayCodes, removeTimeOff,
   type PatchPrincipalRequest, type PrincipalStoreResult,
 } from '../principalStoreClient'
-import type { AvailabilityAnswer, Principal, PrincipalDetail, TimeOff } from '../types-principals'
+import type { AvailabilityAnswer, Principal, Principal as PrincipalDetail, TimeOff } from '@kayushkin/principal-store-types'
 import type { FetchFn } from '../types'
 
 /**

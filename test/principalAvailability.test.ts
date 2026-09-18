@@ -4,7 +4,7 @@ import {
   localInputToEpochSeconds, timeOffDraftToWire, toggleWeekday, unwordedReasons, weekDirty, weekDraftIsEmpty,
   weekDraftOf, weekDraftToWire,
 } from '../src/principalAvailability'
-import type { Availability } from '../src/types-principals'
+import type { Availability } from '@kayushkin/principal-store-types'
 
 // The codes as principal-store serves them, week order. The form only ever
 // offers what the store served, so every test passes this rather than a literal.

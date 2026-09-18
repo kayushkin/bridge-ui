@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
-import type { Tool, LocalDescriptor } from './types-tools'
+import type { Tool, LocalDescriptor } from '@kayushkin/tool-store-types'
 
 /**
  * useBridgeTools — fetches the global tool list, the in-process registry of

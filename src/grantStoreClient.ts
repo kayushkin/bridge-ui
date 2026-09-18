@@ -1,5 +1,9 @@
 import type { FetchFn } from './types'
-import type { CreateGrantRequest, Grant, GrantRelation, GrantResourceType } from './types-grants'
+import type { GrantRequest as CreateGrantRequest, Grant, RelationDefinition as GrantRelation } from '@kayushkin/grant-store-types'
+
+/** grant-store serves the resource-type vocabulary at GET /resource-types; the
+ *  wire spells it as a string, so this is the field's type, not a list. */
+export type GrantResourceType = Grant['resource_type']
 
 // The grant-store routes the Grants page and a principal's grants section
 // write through, as typed functions over the host's authenticated fetch.

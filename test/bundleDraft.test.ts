@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { bundleDraftOf, bundleDraftToWire, emptyBundleDraft, parseTagList } from '../src/bundleDraft'
-import type { Bundle } from '../src/types-bundles'
+import type { Bundle } from '@kayushkin/bundle-store-types'
 
 describe('parseTagList', () => {
   it('splits on commas, trims, drops empties and repeats', () => {
