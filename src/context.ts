@@ -40,6 +40,10 @@ export interface BridgeRoutes {
    *  each — for a stored session (`?session=`) or a dry run (`?harness=…`,
    *  `?board_id=…`). Backed by llm-bridge-server's effective-config routes. */
   effectiveConfig: string
+  /** Every backend the host proxies, describing its own configuration: what
+   *  each setting is, the value in force and what decided it. Backed by each
+   *  service's `GET /settings`. */
+  serviceSettings: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
@@ -73,6 +77,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   bundles: '/bundles',
   serviceInventory: '/service-inventory',
   effectiveConfig: '/effective-config',
+  serviceSettings: '/service-settings',
   hooks: '/hooks',
   inboundRules: '/inbound-rules',
   orchestrator: '/orchestrator',
