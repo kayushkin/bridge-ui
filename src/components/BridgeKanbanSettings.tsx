@@ -139,6 +139,11 @@ function KanbanSettingsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string 
         </select>
         <Link className="bks-back" to={routes.kanban} title="Back to the board">← Back to board</Link>
         {board && <span className="bp-id">{board.id}</span>}
+        {board && routes.effectiveConfig && (
+          <Link className="bks-back" to={`${routes.effectiveConfig}?board_id=${encodeURIComponent(board.id)}`} title="What a session dispatched from this board would be given, and which of these settings decides each">
+            Effective config for this board →
+          </Link>
+        )}
       </header>
       {k.error && <div className="bridge-error">{k.error}</div>}
       {loadError && <div className="bridge-error">{loadError}</div>}

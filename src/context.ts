@@ -30,6 +30,10 @@ export interface BridgeRoutes {
    *  Not `/services`: dash owns that path for its topology page and matches
    *  it before the bridge's splat, so the bridge page there was unreachable. */
   serviceInventory: string
+  /** What a session is given, setting by setting, with the layer that decided
+   *  each — for a stored session (`?session=`) or a dry run (`?harness=…`,
+   *  `?board_id=…`). Backed by llm-bridge-server's effective-config routes. */
+  effectiveConfig: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
@@ -62,6 +66,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   grants: '/grants',
   bundles: '/bundles',
   serviceInventory: '/service-inventory',
+  effectiveConfig: '/effective-config',
   orchestrator: '/orchestrator',
   card: '/card',
   notes: '',

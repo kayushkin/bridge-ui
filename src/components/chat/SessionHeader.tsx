@@ -1,3 +1,5 @@
+import { useBridgeConfig } from '../../context'
+import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useActiveSession,
@@ -634,8 +636,15 @@ function SessionDetailsPanel({
     ['updated', date(summary.updatedAt)],
   ]
 
+  const { routes } = useBridgeConfig()
   return (
     <dl className="bc-details-list">
+      {routes.effectiveConfig && (
+        <div className="bc-details-row" key="effective-config">
+          <dt>settings</dt>
+          <dd><Link to={`${routes.effectiveConfig}?session=${encodeURIComponent(summary.sessionId)}`} title="What this session was given, setting by setting, and which layer decided each">effective config →</Link></dd>
+        </div>
+      )}
       {rows.map(([label, value, mono]) => (
         <div className="bc-details-row" key={label}>
           <dt>{label}</dt>

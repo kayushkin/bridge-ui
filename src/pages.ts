@@ -20,6 +20,7 @@ import { BridgeBundles } from './components/BridgeBundles'
 import { BridgeServiceInventory } from './components/BridgeServiceInventory'
 import { BridgeOrchestrator } from './components/BridgeOrchestrator'
 import { BridgeConformance } from './components/BridgeConformance'
+import { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
@@ -101,6 +102,7 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // System
   { route: 'settings', label: 'Settings', group: 'system', listed: true, component: BridgeSettings },
   { route: 'usage', label: 'Usage', group: 'system', listed: true, component: BridgeUsage },
+  { route: 'effectiveConfig', label: 'Effective config', group: 'system', listed: true, component: BridgeEffectiveConfig },
   // Reads the bridge server itself (`GET /services` on basePath), so no store
   // base path gates it; a host whose server lacks the route turns it off.
   { route: 'serviceInventory', label: 'Service inventory', group: 'system', listed: true, available: (_, f) => f.showServiceInventory, component: BridgeServiceInventory },
