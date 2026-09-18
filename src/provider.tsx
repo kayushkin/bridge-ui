@@ -45,6 +45,9 @@ export interface BridgeProviderProps {
   /** Base path for the mailstack API as the host proxies it (dash: "/api/mail").
    * If omitted, the kanban card drawer hides its email preview and deep link. */
   mailBasePath?: string
+  /** Base path for multichat's API as the host proxies it (dash:
+   * "/api/multichat"). If omitted, the Inbound rules tab is hidden. */
+  multichatBasePath?: string
   /** Path to the host's own mail page (dash: "/mail"). Empty hides the deep link. */
   mailPagePath?: string
   /** Base path for usage-store API. If omitted, spend/limits sections of the
@@ -72,6 +75,7 @@ export function BridgeProvider({
   bundleStoreBasePath = '',
   repoStoreBasePath = '',
   mailBasePath = '',
+  multichatBasePath = '',
   mailPagePath = '',
   noteboardBasePath = '',
   resolveEndpoint = '',
@@ -94,6 +98,7 @@ export function BridgeProvider({
     bundleStoreBasePath,
     repoStoreBasePath,
     mailBasePath,
+    multichatBasePath,
     mailPagePath,
     noteboardBasePath,
     resolveEndpoint,
@@ -102,7 +107,7 @@ export function BridgeProvider({
     usageStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

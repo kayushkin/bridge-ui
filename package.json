@@ -32,6 +32,7 @@
     "@kayushkin/grant-store-types": "file:../grant-store/ts",
     "@kayushkin/kanban-store-types": "file:../kanban-store/ts",
     "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts",
+    "@kayushkin/multichat-types": "file:../multichat/ts",
     "@kayushkin/noteboard-types": "file:../noteboard/ts",
     "@kayushkin/principal-store-types": "file:../principal-store/ts",
     "@kayushkin/repo-store-types": "file:../repo-store/ts",

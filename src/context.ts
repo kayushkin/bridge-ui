@@ -33,6 +33,9 @@ export interface BridgeRoutes {
   /** Hooks: the shell commands the bridge wires into a harness's hook
    *  mechanism at spawn, by scope. llm-bridge-server's /hooks routes. */
   hooks: string
+  /** Inbound rules: what starts an agent session when a person messages in
+   *  through multichat. Needs `multichatBasePath`. */
+  inboundRules: string
   /** What a session is given, setting by setting, with the layer that decided
    *  each — for a stored session (`?session=`) or a dry run (`?harness=…`,
    *  `?board_id=…`). Backed by llm-bridge-server's effective-config routes. */
@@ -71,6 +74,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   serviceInventory: '/service-inventory',
   effectiveConfig: '/effective-config',
   hooks: '/hooks',
+  inboundRules: '/inbound-rules',
   orchestrator: '/orchestrator',
   card: '/card',
   notes: '',
@@ -137,6 +141,10 @@ export interface BridgeConfig {
    * proxies no mail service, and offering a button that 404s is worse than
    * offering none. */
   mailBasePath: string
+  /** Base path for multichat's API as the host proxies it (dash:
+   * "/api/multichat", which carries the inbound-rule routes and the contact
+   * list and nothing that sends). If empty, the Inbound rules tab is hidden. */
+  multichatBasePath: string
   /** Path to the HOST's own mail page, which is not one of this library's
    * exported pages — hence a plain path rather than an entry in BridgeRoutes,
    * whose contract is that every route has a component here. Empty hides the
