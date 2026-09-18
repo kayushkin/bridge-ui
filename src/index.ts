@@ -114,6 +114,8 @@ export type { BridgeProps } from './components/Bridge'
 // Page components — for a host that composes them by hand instead.
 export { BridgeLayout } from './components/BridgeLayout'
 export { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
+export { BridgeHooks } from './components/BridgeHooks'
+export { hookWireBodyOf, hookDraftOf, emptyHookDraft, shadowedHookIDs, type HookDraft } from './hookDraft'
 export { effectiveConfigQuery, effectiveConfigInputsFromParams, type EffectiveConfigInputs } from './effectiveConfigQuery'
 export { SettingsSection, useSectionSave, saveResultOf, SETTINGS_SCOPE_LABEL, SETTINGS_SCOPE_INDEX } from './components/settings/SettingsSection'
 export type { SettingsScope, SettingsSectionProps, SaveResult, SectionSave } from './components/settings/SettingsSection'

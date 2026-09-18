@@ -21,6 +21,7 @@ import { BridgeServiceInventory } from './components/BridgeServiceInventory'
 import { BridgeOrchestrator } from './components/BridgeOrchestrator'
 import { BridgeConformance } from './components/BridgeConformance'
 import { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
+import { BridgeHooks } from './components/BridgeHooks'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
@@ -90,6 +91,7 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   { route: 'skills', label: 'Skills', group: 'agents', listed: true, available: c => !!c.skillStoreBasePath, component: BridgeSkills },
   { route: 'tools', label: 'Tools', group: 'agents', listed: true, available: c => !!c.toolStoreBasePath, component: BridgeTools },
   { route: 'bundles', label: 'Bundles', group: 'agents', listed: true, available: c => !!c.bundleStoreBasePath, component: BridgeBundles },
+  { route: 'hooks', label: 'Hooks', group: 'agents', listed: true, component: BridgeHooks },
   // Access
   // The directory the Kanban assignees resolve against. Same gate as the
   // assignee UI itself: a host that proxies no principal-store gets no page.

@@ -5518,6 +5518,28 @@
 .bss-index th, .bss-index td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .bss-index th { color: var(--text-muted); font-weight: 500; white-space: nowrap; }
 
+/* ===== BridgeHooks ===== */
+.bh-container { max-width: 1000px; }
+.bh-title { font-size: 1.3em; font-weight: 600; margin: 0 0 4px; }
+.bh-subtitle { color: var(--text-dim); font-size: 0.85em; margin: 0 0 6px; }
+.bh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bh-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; }
+.bh-row-disabled { opacity: 0.6; }
+.bh-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.85em; }
+.bh-harness { color: var(--text-muted); }
+.bh-event { font-weight: 600; }
+.bh-matcher, .bh-scope-id { font-size: 0.95em; color: var(--text-muted); }
+.bh-flag { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.85em; color: var(--text-muted); }
+.bh-flag-warn { border-color: #f59e0b; color: #f59e0b; }
+.bh-row-actions { margin-left: auto; display: flex; gap: 6px; }
+.bh-delete { color: #ef4444; }
+.bh-command { margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--bg); font-size: 0.8em; white-space: pre-wrap; word-break: break-all; }
+.bh-id { font-size: 0.7em; color: var(--text-dim); font-family: var(--mono, monospace); }
+.bh-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; }
+.bh-fields .bks-field :is(input, select, textarea) { box-sizing: border-box; width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 0.85em; }
+.bh-command-field { grid-column: 1 / -1; }
+.bh-command-field textarea { font-family: var(--mono, monospace); }
+
 /* ===== BridgeEffectiveConfig ===== */
 .bec-container { max-width: 1100px; display: flex; flex-direction: column; gap: 14px; }
 .bec-title { font-size: 1.3em; font-weight: 600; margin: 0 0 4px; }

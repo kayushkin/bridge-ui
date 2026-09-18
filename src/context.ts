@@ -30,6 +30,9 @@ export interface BridgeRoutes {
    *  Not `/services`: dash owns that path for its topology page and matches
    *  it before the bridge's splat, so the bridge page there was unreachable. */
   serviceInventory: string
+  /** Hooks: the shell commands the bridge wires into a harness's hook
+   *  mechanism at spawn, by scope. llm-bridge-server's /hooks routes. */
+  hooks: string
   /** What a session is given, setting by setting, with the layer that decided
    *  each — for a stored session (`?session=`) or a dry run (`?harness=…`,
    *  `?board_id=…`). Backed by llm-bridge-server's effective-config routes. */
@@ -67,6 +70,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   bundles: '/bundles',
   serviceInventory: '/service-inventory',
   effectiveConfig: '/effective-config',
+  hooks: '/hooks',
   orchestrator: '/orchestrator',
   card: '/card',
   notes: '',

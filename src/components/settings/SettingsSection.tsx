@@ -156,7 +156,7 @@ export function SectionStatus({ saving, error, saved }: { saving: boolean; error
 export const SETTINGS_SCOPE_INDEX: { scope: SettingsScope; where: string; route: 'settings' | 'instances' | 'tools' | 'kanban' | 'principals' | 'chat' }[] = [
   { scope: 'global', where: 'This page.', route: 'settings' },
   { scope: 'harness', where: 'This page, one section per harness.', route: 'settings' },
-  { scope: 'instance', where: 'Instances (configuration, credentials) and Tools (which tools an instance is offered).', route: 'instances' },
+  { scope: 'instance', where: 'Instances (configuration, credentials), Tools (which tools an instance is offered) and Hooks (commands wired in at spawn, also global and per session).', route: 'instances' },
   { scope: 'board', where: 'Kanban → ⚙ Board settings: defaults, tag rules, classifier, ladder, working week, message triggers.', route: 'kanban' },
   { scope: 'principal', where: 'Principals: availability, time off, grants.', route: 'principals' },
   { scope: 'session', where: 'The chat header: model, effort, permission mode for one session.', route: 'chat' },
