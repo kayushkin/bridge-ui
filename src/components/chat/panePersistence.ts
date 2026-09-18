@@ -143,6 +143,33 @@ export function visiblePanes(panesHidden: PanesHidden, drawable: PaneDrawable = 
   })
 }
 
+/** What the visible panes' flex-grow numbers add up to, whatever the stored sizes are. */
+export const VISIBLE_PANES_GROW_TOTAL = 100
+
+/** The flex-grow each visible pane is drawn with: its stored size as a share of the
+ *  visible panes' total, scaled to `VISIBLE_PANES_GROW_TOTAL`.
+ *
+ *  The stored sizes cannot be handed to CSS as they are. Flex items whose grow numbers
+ *  add up to LESS THAN 1 take only that fraction of the free space and leave the rest of
+ *  the row empty. A drag conserves its pair's total, so dragging Turns narrow against
+ *  Timeline writes something like `{turns: 0.4, timeline: 1.6}`; hide Timeline — or open
+ *  the page on a phone, which draws one pane — and Turns alone held a grow of 0.4, drew
+ *  at its 240px floor and left an empty block beside it. Only the ratio between stored
+ *  sizes means anything, so scaling the visible ones to a fixed total changes no layout
+ *  that was already filling the row.
+ *
+ *  A pane that is not visible gets no entry. The drag handle keeps reading the STORED
+ *  sizes, not these: it works in the pair's own total and writes that total back. */
+export function growSharesOfVisiblePanes(
+  paneSizes: PaneSizes,
+  panes: readonly PaneKey[],
+): Partial<Record<PaneKey, number>> {
+  const total = panes.reduce((sum, key) => sum + paneSizes[key], 0)
+  const shares: Partial<Record<PaneKey, number>> = {}
+  for (const key of panes) shares[key] = (paneSizes[key] / total) * VISIBLE_PANES_GROW_TOTAL
+  return shares
+}
+
 /** Which conditionally-drawable panes can be drawn for THIS session right now.
  *
  *  Only `attach` so far. It is separated from `PanesHidden` rather than folded into it

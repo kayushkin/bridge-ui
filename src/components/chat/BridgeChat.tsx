@@ -38,6 +38,7 @@ import { loadMarkdownPref, saveMarkdownPref } from './threadPersistence'
 import { loadSidebarCollapsed, saveSidebarCollapsed } from './sidebarPersistence'
 import {
   DEFAULT_MOBILE_PANE,
+  growSharesOfVisiblePanes,
   loadMobilePane,
   loadPaneSizes,
   loadPanesHidden,
@@ -519,14 +520,15 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
   // page at `/` — one document, and the library's panes carry the same attribute.
   const splitRowRef = useRef<HTMLDivElement>(null)
 
-  // Passed unconditionally, and a `resizable ?` guard here was written and then deleted.
-  // It could not change an answer: a lone pane is the sole flex child of the row, and a
-  // sole flex child fills its container whatever its grow number is — `flex: 9 1 0` and
-  // `flex: 1 1 0` lay out identically with nothing to share with. `panePersistence.ts`
-  // records the same rule about its own dropped `Array.isArray` check, and the reason is
-  // the same: a guard that cannot change an answer is one more thing claiming to do work
-  // it does not do. `e2e/chat-pane-resizer.spec.ts` pins the CSS fact this rests on.
-  const paneStyle = (key: PaneKey) => ({ flex: `${paneSizes[key]} 1 0` })
+  // Each visible pane's share of the row, not its stored size. This comment used to say a
+  // lone pane fills the row whatever its grow number is, and that is false below 1: flex
+  // items whose grow numbers add up to less than 1 take only that fraction of the free
+  // space. A drag that left Turns at 0.4 drew a lone Turns pane at its 240px floor with an
+  // empty block beside it — on a phone, where one pane is all there is, on every visit.
+  // `growSharesOfVisiblePanes` says why scaling is safe. Passed to a lone pane too, with
+  // no `resizable ?` guard: the shares already give a lone pane the whole row.
+  const paneGrowShares = growSharesOfVisiblePanes(paneSizes, panes)
+  const paneStyle = (key: PaneKey) => ({ flex: `${paneGrowShares[key]} 1 0` })
 
   // On a phone the whole top bar is hidden (`.bc-workspace-minimal .bc-header`), so the
   // settings that now live on it would be unreachable. They go into the chrome sheet

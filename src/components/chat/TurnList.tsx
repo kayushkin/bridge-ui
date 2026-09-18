@@ -102,8 +102,8 @@ interface TurnListProps {
   composerStatus: ComposerStatus
   /** The pane's share of the split row, as `flex: <grow> 1 0`. Owned by the parent,
    *  which is the only place that knows what the other pane was given. Passed even when
-   *  this pane is alone, because a sole flex child fills the row whatever its grow
-   *  number is — see the note at the call site. */
+   *  this pane is alone: the parent scales the visible panes' shares to a fixed total, so
+   *  a lone pane is handed the whole row — see the note at the call site. */
   style?: React.CSSProperties
 }
 
