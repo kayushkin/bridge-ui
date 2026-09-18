@@ -36,6 +36,11 @@
   background: var(--bg-surface);
   flex-shrink: 0;
   overflow-x: auto;
+  /* `overflow-x: auto` alone computes overflow-y to auto as well, so a row whose
+     content was 1px taller than its box drew a vertical scrollbar that scrolled
+     nothing — visible on Windows, hidden by overlay scrollbars elsewhere. A tab row
+     scrolls sideways only. */
+  overflow-y: hidden;
 }
 .bridge-tab {
   padding: 10px 16px;
@@ -71,7 +76,7 @@
 .bridge-shell-start { padding-right: 14px; margin-right: 6px; border-right: 1px solid var(--border); }
 .bridge-shell-end { margin-left: auto; padding-left: 10px; }
 .bridge-nav-groups { flex: 1; min-width: 0; padding: 0; border-bottom: none; background: transparent; }
-.bridge-group-tab { display: flex; align-items: center; font-weight: 600; font-size: 0.9em; margin-bottom: -1px; }
+.bridge-group-tab { display: flex; align-items: center; font-weight: 600; font-size: 0.9em; }
 .bridge-nav-pages { background: var(--bg); }
 .bridge-nav-pages .bridge-tab { padding: 8px 14px; }
 .bridge-content { flex: 1; overflow-y: auto; padding: 20px; }
