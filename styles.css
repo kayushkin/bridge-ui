@@ -48,6 +48,9 @@
   white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: color 0.2s, border-color 0.2s;
+  /* With draggable={false} on the link: a tab is pressed, never dragged or selected. */
+  -webkit-user-drag: none;
+  user-select: none;
 }
 .bridge-tab:hover { color: var(--text); }
 .bridge-tab-active { color: var(--accent); border-bottom-color: var(--accent); }

@@ -16,7 +16,13 @@ interface BridgeLayoutProps {
  *  (Work, Agents, Access, System, Personal); the second is the pages of the
  *  group the current path belongs to. Both rows come from `navEntriesFor`, so a
  *  host that proxies no store for a page sees no tab for it, exactly as before —
- *  what changed on 2026-09-18 is that twenty-odd tabs became five groups. */
+ *  what changed on 2026-09-18 is that twenty-odd tabs became five groups.
+ *
+ *  The tabs are not draggable. A link is draggable by default, so a click made
+ *  while the mouse is moving starts a link drag; choosing a group replaces the
+ *  second row, and a tab removed mid-drag never gets its `dragend` (measured:
+ *  `dragstart`, then nothing). While the browser believes a drag is on, the
+ *  cursor is pinned and the page takes no clicks. A tab has no use for a drag. */
 export function BridgeLayout({ showConformance = true, showServiceInventory = true, hostPages = [] }: BridgeLayoutProps) {
   const config = useBridgeConfig()
   const { pathname } = useLocation()
@@ -44,6 +50,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
               <Link
                 key={g.key}
                 to={first.to}
+                draggable={false}
                 className={`bridge-tab bridge-group-tab ${g.key === activeGroup ? 'bridge-tab-active' : ''}`}
                 aria-current={g.key === activeGroup ? 'true' : undefined}
               >
@@ -58,6 +65,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
               key={t.to}
               to={t.to}
               end={t.end}
+              draggable={false}
               className={({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`}
             >
               {t.label}
