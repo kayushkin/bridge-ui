@@ -306,3 +306,43 @@ export function filterSectionGroups(groups: PromptSectionGroup[], tag: string | 
   }
   return out
 }
+
+/** What the Files list needs to know about a tracked file that a collection renders. */
+export interface RenderedOutputRef {
+  collectionId: number
+  collectionTitle: string
+  scope: 'global' | 'project'
+  relativePath: string
+  state: PromptOutputState
+}
+
+/**
+ * Every rendered prompt file, by absolute path. A file in this map is an output
+ * of a collection: its text is the collection's sections, so the Files list
+ * sends the reader to the sections instead of offering a second, free-text way
+ * to edit the same words.
+ */
+export function renderedOutputsByPath(views: PromptCollectionView[]): Map<string, RenderedOutputRef> {
+  const out = new Map<string, RenderedOutputRef>()
+  for (const view of views) {
+    for (const output of view.outputs) {
+      out.set(output.path, {
+        collectionId: view.collection.id,
+        collectionTitle: view.collection.title,
+        scope: view.collection.scope,
+        relativePath: output.relative_path,
+        state: promptOutputState(output),
+      })
+    }
+  }
+  return out
+}
+
+/** The collections worth a tab, host prompt first, then project prompts by root path. */
+export function collectionsForTabs(views: PromptCollectionView[]): { host: PromptCollectionView[]; projects: PromptCollectionView[] } {
+  const shown = views.filter(view => view.sections.length > 0 || view.outputs.length > 0)
+  return {
+    host: shown.filter(view => view.collection.scope === 'global'),
+    projects: shown.filter(view => view.collection.scope !== 'global').sort((a, b) => a.collection.root_path.localeCompare(b.collection.root_path)),
+  }
+}

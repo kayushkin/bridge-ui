@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import type { FetchFn } from '../types'
 import { PromptSourcePanel } from './PromptSourcePanel'
+import { PROMPT_OUTPUT_STATE_LABEL, renderedOutputsByPath, type PromptCollectionView, type RenderedOutputRef } from '../promptSource'
 
 interface TrackedFile {
   id: number
@@ -79,6 +80,9 @@ export function BridgeFiles() {
   const [showIgnored, setShowIgnored] = useState(false)
   const [showMissing, setShowMissing] = useState(false)
   const [promptSourceReloadSignal, setPromptSourceReloadSignal] = useState(0)
+  const [renderedByPath, setRenderedByPath] = useState<Map<string, RenderedOutputRef>>(new Map())
+  const [openCollection, setOpenCollection] = useState<{ id: number; nonce: number } | null>(null)
+  const onPromptViews = useCallback((views: PromptCollectionView[]) => setRenderedByPath(renderedOutputsByPath(views)), [])
 
   const fetchFiles = async () => {
     try {
@@ -217,7 +221,7 @@ export function BridgeFiles() {
 
       {scanMsg && <p className="bfiles-scan-msg">{scanMsg}</p>}
 
-      <PromptSourcePanel apiFetch={apiFetch} basePath={basePath} reloadSignal={promptSourceReloadSignal} />
+      <PromptSourcePanel apiFetch={apiFetch} basePath={basePath} reloadSignal={promptSourceReloadSignal} onViews={onPromptViews} openCollection={openCollection} />
 
       <MachinesSeedPanel apiFetch={apiFetch} basePath={basePath} />
 
@@ -226,8 +230,8 @@ export function BridgeFiles() {
         <div className="bfiles-preview-header">
           <strong>Files on disk</strong>
           <span className="bfiles-preview-hint">
-            Everything the scan tracks: rendered prompt files, subagents, memory, commands — each with its full history.
-            Editing a rendered prompt file here is an edit on disk: the next scan carries it into the sections.
+            Everything the scan tracks, each with its full history. A prompt file rendered from sections is shown as
+            what it is — open its sections to change it. Subagents, memory and commands are plain files and edit here.
           </span>
         </div>
         <div className="bfiles-actions">
@@ -268,6 +272,8 @@ export function BridgeFiles() {
                       onToggle={() => setOpenId(openId === f.id ? null : f.id)}
                       onToggleEnabled={() => toggleEnabled(f)}
                       onSaved={updated => setFiles(prev => prev.map(x => x.id === updated.id ? updated : x))}
+                      renderedFrom={renderedByPath.get(f.path)}
+                      onOpenSections={collectionId => setOpenCollection(prev => ({ id: collectionId, nonce: (prev?.nonce ?? 0) + 1 }))}
                     />
                   ))}
               </ul>
@@ -279,7 +285,7 @@ export function BridgeFiles() {
   )
 }
 
-function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled, onSaved }: {
+function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled, onSaved, renderedFrom, onOpenSections }: {
   file: TrackedFile
   apiFetch: FetchFn
   basePath: string
@@ -287,6 +293,9 @@ function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled
   onToggle: () => void
   onToggleEnabled: () => void
   onSaved: (f: TrackedFile) => void
+  /** Set when a prompt collection renders this file: it is then not edited here. */
+  renderedFrom?: RenderedOutputRef
+  onOpenSections: (collectionId: number) => void
 }) {
   const [content, setContent] = useState<string | null>(null)
   const [draft, setDraft] = useState<string>('')
@@ -344,9 +353,15 @@ function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled
           <span className="bfiles-file-basename">{basename}</span>
           <span className="bfiles-file-parent">{parent}</span>
         </button>
-        <span className={`bfiles-usedby-tag bfiles-mode-${consumer.mode}`} title={`Consumed by: ${consumer.label}`}>
-          {consumer.label}
-        </span>
+        {renderedFrom ? (
+          <span className="bfiles-usedby-tag bfiles-mode-native" title="Its text is that prompt's sections">
+            rendered from {renderedFrom.scope === 'global' ? 'the host prompt' : renderedFrom.collectionTitle} · {PROMPT_OUTPUT_STATE_LABEL[renderedFrom.state]}
+          </span>
+        ) : (
+          <span className={`bfiles-usedby-tag bfiles-mode-${consumer.mode}`} title={`Consumed by: ${consumer.label}`}>
+            {consumer.label}
+          </span>
+        )}
         {file.agent_slug && <span className="bfiles-slug-tag">{file.agent_slug}</span>}
         {file.status === 'missing' && <span className="bfiles-missing-tag">missing</span>}
         {file.ignored_by_rule_id ? <span className="bfiles-missing-tag" title={`ignore rule ${file.ignored_by_rule_id}`}>ignored</span> : null}
@@ -362,7 +377,21 @@ function FileRow({ file, apiFetch, basePath, expanded, onToggle, onToggleEnabled
         <div className="bfiles-file-body">
           {loading && <p>Loading…</p>}
           {err && <p className="bridge-error">{err}</p>}
-          {content !== null && (
+          {content !== null && renderedFrom && (
+            <>
+              <div className="bfiles-actions">
+                <button className="bfiles-btn-primary" onClick={() => onOpenSections(renderedFrom.collectionId)}>Open its sections</button>
+                <span className="bfiles-meta">
+                  This file is a render of {renderedFrom.scope === 'global' ? 'the host prompt' : `the ${renderedFrom.collectionTitle} prompt`}, so it
+                  is changed in its sections, not here. An edit made to the file itself is still picked up by the next scan.
+                  · {(file.size / 1024).toFixed(1)} KB · mtime {new Date(file.mtime * 1000).toLocaleString()}
+                </span>
+              </div>
+              <pre className="bfiles-preview-content">{content}</pre>
+              <FileHistory fileID={file.id} apiFetch={apiFetch} basePath={basePath} />
+            </>
+          )}
+          {content !== null && !renderedFrom && (
             <>
               <textarea
                 className="bfiles-editor"
@@ -405,7 +434,8 @@ function FileHistory({ fileID, apiFetch, basePath, onRestore }: {
   fileID: number
   apiFetch: FetchFn
   basePath: string
-  onRestore: (content: string) => void
+  /** Absent for a rendered file, which has no editor to load a version into. */
+  onRestore?: (content: string) => void
 }) {
   const [versions, setVersions] = useState<FileVersion[] | null>(null)
   const [open, setOpen] = useState(false)
@@ -474,7 +504,7 @@ function FileHistory({ fileID, apiFetch, basePath, onRestore }: {
             <div className="bfiles-version-preview">
               <div className="bfiles-version-preview-header">
                 <strong>Version #{previewID}</strong>
-                <button className="bfiles-btn" onClick={() => onRestore(previewBody)}>Load into editor</button>
+                {onRestore && <button className="bfiles-btn" onClick={() => onRestore(previewBody)}>Load into editor</button>}
                 <button className="bfiles-btn" onClick={() => { setPreviewID(null); setPreviewBody(null) }}>Close</button>
               </div>
               <pre className="bfiles-version-content">{previewBody}</pre>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation, filterSectionGroups, groupSections, parseTagInput,
+  annotationFromLabelDrafts, collectionNeedsRender, collectionsForTabs, renderedOutputsByPath, describeDriftOperation, filterSectionGroups, groupSections, parseTagInput,
   promptOutputState, sectionMatchesFilter,
   type PromptCollectionOutput, type PromptDrift, type PromptSection,
 } from '../src/promptSource'
@@ -94,5 +94,29 @@ describe('section tree', () => {
     expect(filterSectionGroups(tree, null, 'cron').map(entry => [entry.group?.id ?? null, entry.children.map(child => child.id)])).toEqual([[2, [3]]])
     expect(filterSectionGroups(tree, 'services', '').map(entry => entry.children.length)).toEqual([2])
     expect(filterSectionGroups(tree, null, '')).toBe(tree)
+  })
+})
+
+describe('rendered files and collection tabs', () => {
+  const view = (id: number, scope: 'global' | 'project', root: string, outputs: PromptCollectionOutput[], sections = 1) => ({
+    collection: { id, slug: `c${id}`, title: `c${id}`, scope, root_path: root, created_at: 0, updated_at: 0 },
+    sections: Array.from({ length: sections }, (_, i) => section({ id: id * 100 + i })), outputs, rendered: '', open_drifts: [],
+  })
+  const views = [
+    view(3, 'project', '/r/zeta', [output({ id: 5, path: '/r/zeta/AGENTS.md', relative_path: 'AGENTS.md', drifted: true, matches_render: false })]),
+    view(1, 'global', '/home', [output({ id: 1, path: '/home/AGENTS.md', relative_path: 'AGENTS.md' }), output({ id: 2, path: '/home/CLAUDE.md', relative_path: 'CLAUDE.md' })]),
+    view(2, 'project', '/r/alpha', [output({ id: 3, path: '/r/alpha/CLAUDE.md', relative_path: 'CLAUDE.md' })]),
+    view(4, 'project', '/r/empty', [], 0),
+  ]
+  it('maps every rendered file to the collection that renders it, with its state', () => {
+    const byPath = renderedOutputsByPath(views)
+    expect([...byPath.keys()].sort()).toEqual(['/home/AGENTS.md', '/home/CLAUDE.md', '/r/alpha/CLAUDE.md', '/r/zeta/AGENTS.md'])
+    expect(byPath.get('/r/zeta/AGENTS.md')).toMatchObject({ collectionId: 3, scope: 'project', state: 'edited_on_disk' })
+    expect(byPath.get('/somewhere/else.md')).toBeUndefined()
+  })
+  it('puts the host prompt apart from project prompts, sorts those by path, and drops empty collections', () => {
+    const tabs = collectionsForTabs(views)
+    expect(tabs.host.map(v => v.collection.id)).toEqual([1])
+    expect(tabs.projects.map(v => v.collection.id)).toEqual([2, 3])
   })
 })

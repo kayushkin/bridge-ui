@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { FetchFn } from '../types'
 import {
   PROMPT_OUTPUT_STATE_LABEL, allTags, annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation,
-  filterSectionGroups, groupSections, promptOutputState, sectionWriteBody,
+  collectionsForTabs, filterSectionGroups, groupSections, promptOutputState, sectionWriteBody,
   type PromptCollectionView, type PromptDeliveryOptions, type PromptDrift, type PromptHarnessDelivery,
   type PromptRenderResult, type PromptSection, type PromptSectionRevision, type ResolvedContext,
 } from '../promptSource'
@@ -29,7 +29,14 @@ function formatTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleString()
 }
 
-export function PromptSourcePanel({ apiFetch, basePath, reloadSignal }: Api & { reloadSignal: number }) {
+export function PromptSourcePanel({ apiFetch, basePath, reloadSignal, onViews, openCollection }: Api & {
+  reloadSignal: number
+  /** Called with every load, so the Files list can tell which files are renders. */
+  onViews?: (views: PromptCollectionView[]) => void
+  /** Ask the panel to show one collection and scroll to it. `nonce` makes a repeat request count. */
+  openCollection?: { id: number; nonce: number } | null
+}) {
+  const panelRef = useRef<HTMLDivElement>(null)
   const [views, setViews] = useState<PromptCollectionView[]>([])
   const [options, setOptions] = useState<PromptDeliveryOptions | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -46,6 +53,7 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal }: Api & { 
       if (!optionsRes.ok) throw new Error(await readError(optionsRes))
       const data: PromptCollectionView[] = await collectionsRes.json()
       setViews(data)
+      onViews?.(data)
       setOptions(await optionsRes.json())
       setSelectedId(current => current ?? data.find(view => view.collection.scope === 'global')?.collection.id ?? data[0]?.collection.id ?? null)
       setError(null)
@@ -58,8 +66,15 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal }: Api & { 
 
   useEffect(() => { load() }, [load, reloadSignal])
 
+  useEffect(() => {
+    if (!openCollection) return
+    setSelectedId(openCollection.id)
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [openCollection])
+
   const drifts = useMemo(() => views.flatMap(view => view.open_drifts), [views])
   const selected = views.find(view => view.collection.id === selectedId) ?? null
+  const tabs = useMemo(() => collectionsForTabs(views), [views])
 
   if (loading) return <div className="bfiles-preview-section"><p>Loading the prompt source…</p></div>
   if (error) return <div className="bfiles-preview-section"><p className="bridge-error">Prompt source: {error}</p></div>
@@ -88,28 +103,33 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal }: Api & { 
         </div>
       )}
 
-      <div className="bfiles-preview-section">
+      <div className="bfiles-preview-section" ref={panelRef}>
         <div className="bfiles-preview-header">
           <strong>Prompt source</strong>
           <span className="bfiles-preview-hint">
-            Sections are the source of truth. Every harness receives the same ones: the host prompt, then the prompt of each
-            project its working directory sits in.
+            Every prompt is edited here, as groups and sections: the host prompt every session gets, and one prompt per
+            project, which a session gets when it works in that project. Each renders to the same files for every harness.
           </span>
         </div>
-        <div className="bfiles-preview-tabs">
-          {views.filter(view => view.sections.length > 0 || view.outputs.length > 0).map(view => (
-            <button
-              key={view.collection.id}
-              className={`bfiles-preview-tab ${view.collection.id === selectedId ? 'bfiles-preview-tab-active' : ''}`}
-              onClick={() => setSelectedId(view.collection.id)}
-              title={view.collection.root_path}
-            >
-              {view.collection.scope === 'global' ? '🌐 ' : '📁 '}{view.collection.title}
-              <span className="bfiles-section-count">{view.sections.length}</span>
-              {view.open_drifts.length > 0 && <span className="bprompt-state bprompt-state-edited_on_disk">edited</span>}
-            </button>
-          ))}
-        </div>
+        {([['Host prompt', tabs.host], ['Project prompts', tabs.projects]] as const).map(([label, group]) => group.length > 0 && (
+          <div key={label} className="bprompt-tab-row">
+            <span className="bprompt-tab-row-label">{label}</span>
+            <div className="bfiles-preview-tabs">
+              {group.map(view => (
+                <button
+                  key={view.collection.id}
+                  className={`bfiles-preview-tab ${view.collection.id === selectedId ? 'bfiles-preview-tab-active' : ''}`}
+                  onClick={() => setSelectedId(view.collection.id)}
+                  title={view.collection.root_path}
+                >
+                  {view.collection.scope === 'global' ? '🌐 ' : '📁 '}{view.collection.title}
+                  <span className="bfiles-section-count">{view.sections.length}</span>
+                  {view.open_drifts.length > 0 && <span className="bprompt-state bprompt-state-edited_on_disk">edited</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         {selected && options && (
           <CollectionEditor key={selected.collection.id} view={selected} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={load} />
         )}
