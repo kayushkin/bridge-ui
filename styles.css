@@ -2884,6 +2884,14 @@
   padding: 14px 0 16px;
   overflow-y: auto;
 }
+/* The `width` above comes later in this file than the phone rule
+   (`@media (max-width: 768px)`, where `.bc-main` turns into a column) and has the
+   same specificity, so it beat that rule's `width: 100%`: the list stayed 252px wide
+   on top of the workspace and left an empty dark block beside it. Restated here, after
+   the rule it has to beat. */
+@media (max-width: 768px) {
+  .bc-session-list { width: 100%; }
+}
 .bc-new-session { padding: 6px 14px 14px; }
 .bc-new-session-btn {
   border-radius: var(--bc-radius-sm);
