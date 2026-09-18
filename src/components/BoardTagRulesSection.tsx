@@ -7,6 +7,7 @@ import {
   tagRulesDirty, tagRulesDraftOf, tagRulesDraftToWire, type TagRuleDraft,
 } from '../kanbanTagRules'
 import { DEFAULT_FIELD_LABELS, IdField, pickerValueLabel, useDefaultPickers, type DefaultPickers } from './BoardDefaultIdFields'
+import { SettingsSection } from './settings/SettingsSection'
 import type { Board, BoardTagRule, EffectiveDefaults } from '@kayushkin/kanban-store-types'
 
 /** How long the preview waits after the last keystroke before asking the store. */
@@ -82,8 +83,18 @@ export function BoardTagRulesSection({ board }: { board: Board }) {
   }
 
   return (
-    <section className="bks-section" data-section="tag-rules">
-      <h3 className="bks-section-title">Tag rules</h3>
+    <SettingsSection id="tag-rules" title="Tag rules" scope="board" storedBy="kanban-store · board tag rules"
+      save={{ dirty, state: { saving, error: saveError, saved }, onSave: () => { void save() }, label: 'Save tag rules', extra: (
+        <>
+        <button
+          type="button"
+          className="bi-add-btn"
+          disabled={stored === null}
+          onClick={() => reshape(previous => [...previous, emptyTagRuleDraft(`new-rule-${nextNewRuleNumber.current++}`)])}
+        >+ Add rule</button>
+        </>
+      ) }}
+      after={<TagRulesPreview board={board} storedRules={stored} savedRulesVersion={savedRulesVersion} pickers={pickers} />}>
       <p className="bks-help">
         Override this board’s defaults for cards carrying particular tags — the card’s noteboard tags, matched exactly.
       </p>
@@ -111,22 +122,7 @@ export function BoardTagRulesSection({ board }: { board: Board }) {
         </div>
       )}
 
-      <div className="bks-actions">
-        <button
-          type="button"
-          className="bi-add-btn"
-          disabled={stored === null}
-          onClick={() => reshape(previous => [...previous, emptyTagRuleDraft(`new-rule-${nextNewRuleNumber.current++}`)])}
-        >+ Add rule</button>
-        <button type="button" className="bi-save-btn" disabled={!dirty || saving} onClick={() => { void save() }}>
-          {saving ? 'Saving…' : 'Save tag rules'}
-        </button>
-        {saveError && <div className="bridge-error bks-error">{saveError}</div>}
-        {!saveError && saved && !saving && <span className="bks-saved">Saved.</span>}
-      </div>
-
-      <TagRulesPreview board={board} storedRules={stored} savedRulesVersion={savedRulesVersion} pickers={pickers} />
-    </section>
+    </SettingsSection>
   )
 }
 

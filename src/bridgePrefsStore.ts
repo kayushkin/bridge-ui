@@ -236,11 +236,14 @@ export function serverPrefsBackend(fetchFn: FetchFn, endpoint: string, storagePr
     },
     save: async (partial, merged) => {
       writeLocal(storagePrefix, merged)
-      await fetchFn(endpoint, {
+      const res = await fetchFn(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(partial),
       })
+      // A refused write used to resolve like a landed one, so a settings form
+      // said "Saved" over a record the server never took.
+      if (!res.ok) throw new Error(`PUT ${endpoint} → ${res.status}: ${await res.text()}`)
     },
   }
 }

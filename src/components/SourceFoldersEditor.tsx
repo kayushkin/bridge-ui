@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { SourceFolderMapping, SourceFolderApplyResult } from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
 import { useBridgeFolders } from '../useBridgeFolders'
+import { SettingsSection } from './settings/SettingsSection'
 
 // Editor for the runtime purpose→folder map. Each row maps a session.purpose
 // tag to a folder. Rows with default=true come from LLMBRIDGE_SOURCE_FOLDERS;
@@ -91,13 +92,17 @@ export function SourceFoldersEditor() {
   }, [apiFetch, basePath, newPurpose, newFolder, applyToExisting, refresh])
 
   return (
-    <div className="bset-container">
-      <h2 className="bset-title">Session Purpose Folders</h2>
-      <p className="bset-subtitle">
-        Auto-file new sessions into a sidebar folder based on their <code>purpose</code> tag
+    <SettingsSection
+      id="source-folders"
+      title="Session purpose folders"
+      scope="global"
+      storedBy="llm-bridge-server · source_folders"
+      help={<>Auto-file new sessions into a sidebar folder based on their <code>purpose</code> tag
         (set by the caller when creating the session). Rows marked <em>default</em>
-        come from LLMBRIDGE_SOURCE_FOLDERS; saving over them creates a runtime override.
-      </p>
+        come from LLMBRIDGE_SOURCE_FOLDERS; saving over them creates a runtime override.</>}
+      precedence="A session's folder can still be moved by hand; a manual move is kept when a mapping is applied to existing sessions."
+      status={{ busy: busy !== null, error: status && /failed:/.test(status) ? status : null, note: status && !/failed:/.test(status) ? <span className="bss-help">{status}</span> : null }}
+    >
 
       <label className="bset-field" style={{ marginBottom: '0.5rem' }}>
         <input type="checkbox" checked={applyToExisting} onChange={e => setApplyToExisting(e.target.checked)} />
@@ -160,7 +165,6 @@ export function SourceFoldersEditor() {
         </tbody>
       </table>
 
-      {status && <p className="bset-subtitle">{status}</p>}
-    </div>
+    </SettingsSection>
   )
 }

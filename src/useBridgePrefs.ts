@@ -56,8 +56,8 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
     updatePrefs({ last_session: { [harness]: sessionId } })
   }, [updatePrefs])
 
-  const setHarnessDefaults = useCallback((harness: string, defaults: HarnessDefaults) => {
-    updatePrefs({ defaults: { [harness]: defaults } })
+  const setHarnessDefaults = useCallback((harness: string, defaults: HarnessDefaults): Promise<void> => {
+    return updatePrefs({ defaults: { [harness]: defaults } })
   }, [updatePrefs])
 
   const setLastInstance = useCallback((harness: string, instanceId: string) => {
@@ -66,8 +66,8 @@ export function useBridgePrefs(options: BridgePrefsOptions = {}) {
 
   // Who new sessions are started as. '' clears: the server and `mergePrefs`
   // both key this field on presence, so an empty string is a real instruction.
-  const setDefaultPrincipalId = useCallback((principalId: string) => {
-    updatePrefs({ default_principal_id: principalId })
+  const setDefaultPrincipalId = useCallback((principalId: string): Promise<void> => {
+    return updatePrefs({ default_principal_id: principalId })
   }, [updatePrefs])
 
   // The three getters read the store's live snapshot rather than this render's

@@ -7,6 +7,7 @@ import {
   patchBodyOfMessageTriggerDraft, patchMessageTrigger,
   type MessageDelivery, type MessageTrigger, type MessageTriggerDraft, type MessageTriggerOptions,
 } from '../messageTriggers'
+import { SettingsSection } from './settings/SettingsSection'
 import type { Board, Column, PriorityLadder } from '@kayushkin/kanban-store-types'
 
 const DELIVERIES_SHOWN = 20
@@ -102,8 +103,8 @@ export function BoardMessageTriggersSection({ board }: { board: Board }) {
   const triggerName = (triggerID: string) => triggers?.find(trigger => trigger.id === triggerID)?.name ?? triggerID
 
   return (
-    <section className="bks-section" data-section="message-triggers">
-      <h3 className="bks-section-title">Message triggers</h3>
+    <SettingsSection id="message-triggers" title="Message triggers" scope="board" storedBy="kanban-store · board message triggers"
+      precedence="Each trigger saves on its own; delivery is through multichat and is recorded per firing, on or off.">
       <p className="bks-help">
         Send a text message through multichat when something happens to a card on this board. A human writes the
         message and picks who gets it, so it goes out without an agent or a permission prompt.
@@ -189,7 +190,7 @@ export function BoardMessageTriggersSection({ board }: { board: Board }) {
           ))}
         </div>
       </div>
-    </section>
+    </SettingsSection>
   )
 }
 

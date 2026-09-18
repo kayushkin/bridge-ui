@@ -8,6 +8,7 @@ import { listMailAccounts, type MailAccount } from '../mailstackClient'
 import { BoardMessageTriggersSection } from './BoardMessageTriggersSection'
 import { BoardTagRulesSection } from './BoardTagRulesSection'
 import { IdField, useDefaultPickers } from './BoardDefaultIdFields'
+import { SettingsSection, useSectionSave } from './settings/SettingsSection'
 import {
   BOARD_BUNDLE_HELP_TEXT, CLEAR_BUSINESS_HOURS_PATCH, WEEKDAY_CODES,
   businessHoursDraftOf, businessHoursPatchOf, classifierDraftOf, classifierPatchOf,
@@ -147,7 +148,7 @@ function KanbanSettingsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string 
       ) : !board ? (
         loadError ? null : <div className="bi-loading">Loading…</div>
       ) : (
-        <div className="bks-sections">
+        <div className="bss-sections">
           <GeneralSection key={`general:${board.id}:${JSON.stringify(generalDraftOf(board))}`} board={board} onSave={savePatch} />
           <BusinessHoursSection key={`hours:${board.id}:${JSON.stringify(board.business_hours ?? null)}`} board={board} onSave={savePatch} />
           <PriorityLadderSection key={`ladder:${board.id}:${JSON.stringify(ladder?.levels ?? null)}`} ladder={ladder} onSave={saveLadder} />
@@ -167,38 +168,6 @@ function KanbanSettingsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string 
   )
 }
 
-// --- one save per section ----------------------------------------------------
-
-/** The state a section's Save button carries: in flight, the last refusal in
- *  the store's words, or a note that the last save landed. */
-function useSectionSave() {
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-  const run = useCallback(async (write: () => Promise<KanbanStoreResult<unknown>>) => {
-    setSaving(true)
-    setSaved(false)
-    const result = await write()
-    setSaving(false)
-    if (result.ok) {
-      setError(null)
-      setSaved(true)
-    } else {
-      setError(result.error)
-    }
-  }, [])
-  return { saving, error, saved, run, setError }
-}
-
-function SectionStatus({ saving, error, saved }: { saving: boolean; error: string | null; saved: boolean }) {
-  return (
-    <>
-      {error && <div className="bridge-error bks-error">{error}</div>}
-      {!error && saved && !saving && <span className="bks-saved">Saved.</span>}
-    </>
-  )
-}
-
 // --- General -----------------------------------------------------------------
 
 function GeneralSection({ board, onSave }: { board: Board; onSave: (patch: BoardSettingsPatch) => Promise<KanbanStoreResult<Board>> }) {
@@ -207,8 +176,8 @@ function GeneralSection({ board, onSave }: { board: Board; onSave: (patch: Board
   const dirty = Object.keys(patch).length > 0
   const save = useSectionSave()
   return (
-    <section className="bks-section" data-section="general">
-      <h3 className="bks-section-title">General</h3>
+    <SettingsSection id="general" title="General" scope="board" storedBy="kanban-store · board"
+      save={{ dirty, state: save, onSave: () => save.run(() => onSave(patch)) }}>
       <label className="bks-field">
         <span className="bks-field-label">Name</span>
         <input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} />
@@ -221,13 +190,7 @@ function GeneralSection({ board, onSave }: { board: Board; onSave: (patch: Board
         <input type="checkbox" checked={draft.archived} onChange={e => setDraft({ ...draft, archived: e.target.checked })} />
         Archived
       </label>
-      <div className="bks-actions">
-        <button type="button" className="bi-save-btn" disabled={!dirty || save.saving} onClick={() => save.run(() => onSave(patch))}>
-          {save.saving ? 'Saving…' : 'Save'}
-        </button>
-        <SectionStatus {...save} />
-      </div>
-    </section>
+    </SettingsSection>
   )
 }
 
@@ -242,8 +205,21 @@ function BusinessHoursSection({ board, onSave }: { board: Board; onSave: (patch:
     setDraft({ ...draft, days: on ? [...draft.days, code] : draft.days.filter(day => day !== code) })
   }
   return (
-    <section className="bks-section" data-section="business-hours">
-      <h3 className="bks-section-title">Business hours</h3>
+    <SettingsSection id="business-hours" title="Business hours" scope="board" storedBy="kanban-store · board"
+      save={{ dirty, state: save, onSave: () => save.run(() => onSave(businessHoursPatchOf(draft))), extra: (
+        <>
+        {board.business_hours && (
+          <button
+            type="button"
+            className="bp-cancel"
+            disabled={save.saving}
+            title="Remove the working week. The board then reports wall-clock figures only."
+            onClick={() => save.run(() => onSave(CLEAR_BUSINESS_HOURS_PATCH))}
+          >Clear hours</button>
+        )}
+      
+        </>
+      ) }}>
       <p className="bks-help">
         A working week the board reports elapsed time against, beside the wall-clock figures — never instead of them.
         The zone is mandatory and never defaulted: an offset is not a zone. A board without hours reports no business figures at all.
@@ -270,22 +246,7 @@ function BusinessHoursSection({ board, onSave }: { board: Board; onSave: (patch:
           </label>
         ))}
       </div>
-      <div className="bks-actions">
-        <button type="button" className="bi-save-btn" disabled={!dirty || save.saving} onClick={() => save.run(() => onSave(businessHoursPatchOf(draft)))}>
-          {save.saving ? 'Saving…' : 'Save'}
-        </button>
-        {board.business_hours && (
-          <button
-            type="button"
-            className="bp-cancel"
-            disabled={save.saving}
-            title="Remove the working week. The board then reports wall-clock figures only."
-            onClick={() => save.run(() => onSave(CLEAR_BUSINESS_HOURS_PATCH))}
-          >Clear hours</button>
-        )}
-        <SectionStatus {...save} />
-      </div>
-    </section>
+    </SettingsSection>
   )
 }
 
@@ -308,8 +269,12 @@ function PriorityLadderSection({ ladder, onSave }: { ladder: PriorityLadder | nu
     void save.run(() => onSave(wire.value))
   }
   return (
-    <section className="bks-section" data-section="priority-ladder">
-      <h3 className="bks-section-title">Priority ladder</h3>
+    <SettingsSection id="priority-ladder" title="Priority ladder" scope="board" storedBy="kanban-store · board"
+      save={{ dirty, state: save, onSave: submit, label: 'Save ladder', extra: (
+        <>
+        <button type="button" className="bi-add-btn" onClick={() => setRows([...rows, emptyLadderRow(rows)])}>+ Rung</button>
+        </>
+      ) }}>
       <p className="bks-help">
         Each rung names a stored noteboard priority and how long work at that rung should take.
         The top rung is the HIGHEST priority value — noteboard sorts priority descending — so P0 is a label on the
@@ -346,14 +311,7 @@ function PriorityLadderSection({ ladder, onSave }: { ladder: PriorityLadder | nu
           </tbody>
         </table>
       )}
-      <div className="bks-actions">
-        <button type="button" className="bi-add-btn" onClick={() => setRows([...rows, emptyLadderRow(rows)])}>+ Rung</button>
-        <button type="button" className="bi-save-btn" disabled={!dirty || save.saving} onClick={submit}>
-          {save.saving ? 'Saving…' : 'Save ladder'}
-        </button>
-        <SectionStatus {...save} />
-      </div>
-    </section>
+    </SettingsSection>
   )
 }
 
@@ -368,8 +326,9 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
   const pickers = useDefaultPickers()
 
   return (
-    <section className="bks-section" data-section="defaults">
-      <h3 className="bks-section-title">Defaults</h3>
+    <SettingsSection id="defaults" title="Defaults" scope="board" storedBy="kanban-store · board"
+      precedence="Per card, a matching tag rule below outranks these. For a card dispatched from this board they outrank the global default principal on the Settings page, and the bundle's tools are what get provisioned, not the instance's opt-ins."
+      save={{ dirty, state: save, onSave: () => save.run(() => onSave(patch)), label: 'Save defaults' }}>
       <p className="bks-help">
         What a job runs with when it works this board. Each id is checked with its owner when saved; the store refuses
         one the owner does not know and writes nothing.
@@ -406,13 +365,7 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
         onChange={next => setDraft({ ...draft, default_bundle_id: next })}
         {...pickers.default_bundle_id}
       />
-      <div className="bks-actions">
-        <button type="button" className="bi-save-btn" disabled={!dirty || save.saving} onClick={() => save.run(() => onSave(patch))}>
-          {save.saving ? 'Saving…' : 'Save defaults'}
-        </button>
-        <SectionStatus {...save} />
-      </div>
-    </section>
+    </SettingsSection>
   )
 }
 
@@ -466,8 +419,9 @@ function ClassifierSection({ board, onSave, fetchFn, mailBasePath }: {
   const unlistedIDs = accounts ? draft.mailAccountIDs.filter(id => !accounts.some(account => account.id === id)) : []
 
   return (
-    <section className="bks-section" data-section="classifier">
-      <h3 className="bks-section-title">Classifier</h3>
+    <SettingsSection id="classifier" title="Classifier" scope="board" storedBy="kanban-store · board"
+      precedence="The scheduler job that runs email-classifier owns when it runs; this owns what it runs with."
+      save={{ dirty, state: save, onSave: () => save.run(() => onSave(patch)), label: 'Save classifier' }}>
       <p className="bks-help">
         How mail becomes cards on this board: what email-classifier runs with. The scheduler still owns when it runs.
         Switching it off clears the classifier from the board.
@@ -530,12 +484,6 @@ function ClassifierSection({ board, onSave, fetchFn, mailBasePath }: {
           </label>
         </>
       )}
-      <div className="bks-actions">
-        <button type="button" className="bi-save-btn" disabled={!dirty || save.saving} onClick={() => save.run(() => onSave(patch))}>
-          {save.saving ? 'Saving…' : 'Save classifier'}
-        </button>
-        <SectionStatus {...save} />
-      </div>
-    </section>
+    </SettingsSection>
   )
 }

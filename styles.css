@@ -5486,6 +5486,38 @@
 .bks-title { margin: 0; font-size: 1.2em; color: var(--text); }
 .bks-back { font-size: 0.85em; color: var(--accent); text-decoration: none; }
 .bks-back:hover { text-decoration: underline; }
+/* ===== SettingsSection — one frame for every setting ===== */
+.bss-sections { display: flex; flex-direction: column; gap: 16px; }
+.bss-section {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface);
+}
+.bss-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.bss-collapsed .bss-header { border-bottom: none; }
+.bss-header-button { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--border); color: inherit; cursor: pointer; font: inherit; }
+.bss-collapsed .bss-header-button { border-bottom: none; }
+.bss-header-button:hover { background: rgba(99, 102, 241, 0.05); }
+.bss-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bss-title { margin: 0; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.bss-meta { display: flex; align-items: center; gap: 8px; font-size: 0.75em; }
+.bss-scope { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; }
+.bss-scope-global { border-color: var(--accent); color: var(--accent); }
+.bss-scope-session { border-color: #22c55e; color: #22c55e; }
+.bss-stored-by { color: var(--text-dim); font-family: var(--mono, monospace); white-space: nowrap; }
+.bss-expand { color: var(--text-dim); font-size: 1.2em; }
+.bss-body { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.bss-help { margin: 0; font-size: 0.8em; color: var(--text-dim); }
+.bss-precedence { color: var(--text-muted); }
+.bss-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bss-saved { font-size: 0.85em; color: #22c55e; }
+.bss-error { font-size: 0.85em; color: #ef4444; white-space: pre-wrap; }
+.bss-index { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.bss-index th, .bss-index td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.bss-index th { color: var(--text-muted); font-weight: 500; white-space: nowrap; }
+
 .bks-sections { display: flex; flex-direction: column; gap: 16px; }
 .bks-section {
   display: flex; flex-direction: column; gap: 10px;
