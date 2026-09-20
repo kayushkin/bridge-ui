@@ -11,6 +11,7 @@ import {
   useManagedSession,
   usePendingSession,
   useSessionStatus,
+  useHarnessCapabilities,
   type useSessionControls,
 } from '@kayushkin/chat-core'
 import type {
@@ -174,6 +175,21 @@ export default function SessionHeader({
 
   const [toolsOpen, setToolsOpen] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
+
+  // One authoring per capability, read by BOTH the button that opens a panel and the
+  // panel's own render site.
+  //
+  // `toolsOpen` / `promptOpen` are component state, and this header stays mounted when
+  // the active session changes — while `capabilities` is recomputed from the NEW
+  // session's harness. So the toggle outlives the capability that justified it. Gating
+  // only the button would leave the panel mounted after a switch to a harness that does
+  // not carry the capability: the button disappears and the panel keeps rendering. Both
+  // are reporting capabilities — the panels draw `SessionInfo`, which codex, hermes and
+  // the rest never emit — so without the gate the Tools drawer tells such a session
+  // "the harness emits this after its first init", which it never will.
+  const capabilities = useHarnessCapabilities(summary?.harness ?? null)
+  const toolsCapabilityHeld = capabilities.has('tools')
+  const systemPromptCapabilityHeld = capabilities.has('system_prompt')
 
   // The details dropdown behind the caret. Closes on an outside mousedown or Escape.
   //
@@ -420,29 +436,35 @@ export default function SessionHeader({
 
                 <SessionSettingsPanel settings={settings} controls={controls} />
 
-                <div className={styles.detailsSection}>
-                  <span className={styles.detailsSectionLabel}>Inspect</span>
-                  <button
-                    className={`bc-ctrl-btn ${toolsOpen ? 'bc-ctrl-btn-active' : ''}`}
-                    onClick={() => setToolsOpen((v) => !v)}
-                    aria-pressed={toolsOpen}
-                    title="Tools, slash commands, sub-agents, skills & MCP servers for this session"
-                  >
-                    🧰 Tools
-                  </button>
-                  <button
-                    className="bc-ctrl-btn"
-                    onClick={() => setPromptOpen(true)}
-                    disabled={!info}
-                    title={
-                      info
-                        ? "View this session's system prompt, model & working directory"
-                        : 'No session info reported yet'
-                    }
-                  >
-                    📄 Prompt
-                  </button>
-                </div>
+                {(toolsCapabilityHeld || systemPromptCapabilityHeld) && (
+                  <div className={styles.detailsSection}>
+                    <span className={styles.detailsSectionLabel}>Inspect</span>
+                    {toolsCapabilityHeld && (
+                      <button
+                        className={`bc-ctrl-btn ${toolsOpen ? 'bc-ctrl-btn-active' : ''}`}
+                        onClick={() => setToolsOpen((v) => !v)}
+                        aria-pressed={toolsOpen}
+                        title="Tools, slash commands, sub-agents, skills & MCP servers for this session"
+                      >
+                        🧰 Tools
+                      </button>
+                    )}
+                    {systemPromptCapabilityHeld && (
+                      <button
+                        className="bc-ctrl-btn"
+                        onClick={() => setPromptOpen(true)}
+                        disabled={!info}
+                        title={
+                          info
+                            ? "View this session's system prompt, model & working directory"
+                            : 'No session info reported yet'
+                        }
+                      >
+                        📄 Prompt
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <SessionDetailsPanel summary={summary} detail={managed} />
               </div>
@@ -451,7 +473,7 @@ export default function SessionHeader({
         </div>
       </div>
 
-      {toolsOpen && (
+      {toolsCapabilityHeld && toolsOpen && (
         <div className={styles.toolsDrawer}>
           {infoLoading ? (
             <div className={styles.toolsLoading}>Loading session tools…</div>
@@ -467,7 +489,7 @@ export default function SessionHeader({
 
       <ContextStrip tokens={tokens} limit={limit} pct={pct} />
 
-      {promptOpen && info && (
+      {systemPromptCapabilityHeld && promptOpen && info && (
         <SystemPromptModal info={toBridgeSessionInfo(info)} onClose={() => setPromptOpen(false)} />
       )}
     </div>

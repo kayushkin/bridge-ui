@@ -1810,6 +1810,132 @@ console.log('\nStatusDot: every state it can render has a stylesheet rule')
   }
 }
 
+
+// --- A panel re-checks the capability its button needs -------------------
+//
+// `toolsOpen` and `promptOpen` are SessionHeader component state. The header stays
+// mounted when the active session changes, and `capabilities` is recomputed from the
+// NEW session's harness — so the toggle outlives the capability that justified
+// opening it.
+//
+// Gating only the button is therefore not enough. Open Tools on a claude_code session,
+// switch to a session on a harness without the `tools` capability, and the button
+// disappears while the drawer stays mounted, telling a codex session that "the harness
+// emits this after its first init" — which it never will. The pre-chat-core Workspace
+// shipped exactly that (`{showTools && bridge.activeSession?.info && ...}`), and this
+// header shipped worse: neither button nor panel read the capability at all.
+//
+// This is a SOURCE check, not a render check, and deliberately so: reproducing it
+// through the renderer means mounting SessionHeader inside a chat-core store with a
+// harness registry and two sessions, and the thing being pinned is a one-line JSX
+// condition. The discipline it enforces is that a toggle must never begin a JSX
+// conditional on its own — the capability const comes first.
+console.log('\nSessionHeader: a panel re-checks the capability its button needs')
+{
+  // Same root resolution, and the same reason, as the status-dot block above.
+  let root = process.env.npm_config_local_prefix || null
+  if (!root) {
+    root = __dirname
+    while (!(existsSync(join(root, 'package.json')) && existsSync(join(root, 'styles.css')))) {
+      const up = dirname(root)
+      if (up === root) { root = null; break }
+      root = up
+    }
+  }
+  const rootName = root && existsSync(join(root, 'package.json'))
+    ? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name
+    : null
+  check('found THIS package to read SessionHeader.tsx from', rootName === '@kayushkin/bridge-ui',
+    `resolved ${root} (name ${rootName})`)
+
+  if (rootName === '@kayushkin/bridge-ui') {
+    const header = readFileSync(join(root, 'src/components/chat/SessionHeader.tsx'), 'utf8')
+
+    // The pairs this file owns: a panel toggle, and the capability const its button is
+    // gated on. Derived from the source, not hardcoded, so a renamed const fails loudly
+    // here instead of quietly dropping out of the sweep.
+    const capabilityConsts = new Map(
+      [...header.matchAll(/const\s+(\w+CapabilityHeld)\s*=\s*capabilities\.has\('([\w]+)'\)/g)]
+        .map(m => [m[2], m[1]]),
+    )
+    const toggles = new Set(
+      [...header.matchAll(/const\s+\[(\w+Open),\s*set\w+\]\s*=\s*useState\(false\)/g)].map(m => m[1]),
+    )
+
+    // Prove the instrument can say "yes" before trusting it to say "no": two regexes
+    // that quietly stopped matching would report a vacuous all-clear.
+    check('parsed the capability consts (instrument is live)', capabilityConsts.size >= 2,
+      `parsed ${[...capabilityConsts.keys()].join(', ') || 'nothing'}`)
+    check('parsed the panel toggles (instrument is live)', toggles.size >= 2,
+      `parsed ${[...toggles].join(', ') || 'nothing'}`)
+    check('the two panel toggles this check is about are present',
+      toggles.has('toolsOpen') && toggles.has('promptOpen'),
+      `parsed ${[...toggles].join(', ')}`)
+
+    // One authoring per capability. Two `capabilities.has('tools')` in the file is how
+    // a button and its panel drift apart.
+    for (const [capability, constName] of capabilityConsts) {
+      const inline = [...header.matchAll(new RegExp(`capabilities\\.has\\('${capability}'\\)`, 'g'))].length
+      check(`capabilities.has('${capability}') is written once, bound to ${constName}`, inline === 1,
+        `found ${inline} occurrences`)
+    }
+
+    // The discipline: a toggle never begins a JSX conditional. Every render site that
+    // branches on the toggle must name the capability const too.
+    const pairs = [['toolsOpen', 'tools'], ['promptOpen', 'system_prompt']]
+    const conditionalLinesFor = (source, toggle) => source
+      .split('\n')
+      .filter(line => new RegExp(`\\{[^}]*\\b${toggle}\\b[^}]*&&`).test(line))
+
+    for (const [toggle, capability] of pairs) {
+      const constName = capabilityConsts.get(capability)
+      const lines = conditionalLinesFor(header, toggle)
+      // A toggle with no conditional render site means the panel was removed or
+      // renamed, and an empty sweep would otherwise pass. Say so instead.
+      check(`${toggle} has a conditional render site to check`, lines.length >= 1,
+        `found ${lines.length}`)
+      const ungated = lines.filter(line => !constName || !line.includes(constName))
+      check(`every ${toggle} render site also checks ${constName || `the ${capability} capability`}`,
+        ungated.length === 0,
+        ungated.length ? ungated.map(l => l.trim()).join(' | ') : '')
+      // The button half. The button that opens the panel is the one whose onClick calls
+      // the toggle's setter to OPEN it; the JSX line that opens that `<button` must sit
+      // directly under `{<const> && (`. Counting reads of the const is not enough — the
+      // section wrapper reads both consts, and scored an ungated button as gated.
+      const sourceLines = header.split('\n')
+      const setter = `set${toggle[0].toUpperCase()}${toggle.slice(1)}(`
+      const openers = sourceLines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => line.includes('onClick') && line.includes(setter) && !line.includes(`${setter}false)`))
+      check(`${toggle} has a button that opens it`, openers.length >= 1, `found ${openers.length}`)
+      for (const { index } of openers) {
+        let buttonLine = index
+        while (buttonLine > 0 && !sourceLines[buttonLine].includes('<button')) buttonLine--
+        const guard = sourceLines[buttonLine - 1].trim()
+        check(`the button that opens ${toggle} sits directly under ${constName}`,
+          Boolean(constName) && guard === `{${constName} && (`, `the line above <button is: ${guard}`)
+      }
+    }
+
+    // Negative control. The predicate above is the whole instrument, so run it against
+    // the line as it shipped: if this scores clean, the greens above mean nothing.
+    const defectiveSource = "  const [toolsOpen, setToolsOpen] = useState(false)\n" +
+      "      {toolsOpen && (\n"
+    const controlLines = conditionalLinesFor(defectiveSource, 'toolsOpen')
+    check('CONTROL the predicate finds the shipped defect line', controlLines.length === 1,
+      `matched ${controlLines.length}`)
+    check('CONTROL and calls it ungated without the capability const',
+      controlLines.every(line => !line.includes('toolsCapabilityHeld')))
+
+    // Second control, the other direction: a repaired line must NOT be flagged, or the
+    // check would refuse every possible source and pass by refusing.
+    const repairedSource = "      {toolsCapabilityHeld && toolsOpen && (\n"
+    const repairedLines = conditionalLinesFor(repairedSource, 'toolsOpen')
+    check('CONTROL a repaired line is found and accepted',
+      repairedLines.length === 1 && repairedLines.every(line => line.includes('toolsCapabilityHeld')))
+  }
+}
+
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
