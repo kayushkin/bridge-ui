@@ -4,7 +4,7 @@
 
 A React and TypeScript library, not a service: no port, no database, no deploy of its own. `@kayushkin/bridge-ui` is the whole user interface over an llm-bridge-server backend as one component — `<Bridge>` routes every page, draws the navigation, and mounts both providers: `BridgeProvider` for config and chat-core's `ChatProvider` for the session store, held above the router so switching tabs does not drop it. It is published source-only (`main` is `dist/index.js`, `files` ships `dist`, `styles.css` and `theme.css`) and consumed through a `file:` link; dash is the host that mounts it. `README.md` is the mounting guide: the props, the two stylesheets, and what a host wires.
 
-⚠️ `README.md` also says llm-bridge-server embeds the built `dist/` and serves it at the root. That is stale — llm-bridge-server contains no `go:embed` at all, and dash is the only surface that serves this library today.
+llm-bridge-server contains no `go:embed` and does not serve this library; dash is the only surface that serves it today.
 
 ## Where this prompt lives
 

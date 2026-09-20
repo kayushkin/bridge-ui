@@ -2,7 +2,7 @@
 
 The whole bridge surface for an [llm-bridge-server](https://github.com/kayushkin/llm-bridge-server) backend, as one React component. `<Bridge>` routes its own pages — the chat at `/` (on [`@kayushkin/chat-core`](https://github.com/kayushkin/chat-core)), instances, sessions, auth, usage, settings, agents, files, skills, tools, permissions, kanban, a card page, principals, bundles, the orchestrator and conformance — draws the tab row, and mounts both providers. A host wires auth and where it proxies each backend, mounts `<Bridge>` at the root of a router, and is done.
 
-The simplest way to get a working UI on top of llm-bridge-server is to run the server directly — it embeds bridge-ui's built `dist/` and serves it at the root. Embed this package in your own React app if you want to customize the host (chrome, auth, routing).
+llm-bridge-server does not serve this package: it has no embedded UI. To get a working UI on top of it, mount `<Bridge>` in a React app of your own, which is the host and owns the chrome, the auth and the proxying to each backend.
 
 ## Install
 
