@@ -1023,7 +1023,7 @@ console.log('\nprincipals — disabled resolves but is not pickable')
     pickablePrincipals(list, { query: '', kind: 'all', excludeIDs: ['principal_000001'] }).map(p => p.id).join() === 'principal_000003')
   check('the kind toggle narrows to people', pickablePrincipals(list, { query: '', kind: 'human', excludeIDs: [] }).map(p => p.id).join() === 'principal_000001')
   check('the kind toggle narrows to groups', pickablePrincipals(list, { query: '', kind: 'group', excludeIDs: [] }).map(p => p.id).join() === 'principal_000003')
-  check('initials are the first letters of the first two words', principalInitials('Slava Kayushkin') === 'VK' && principalInitials('priya') === 'P' && principalInitials('  ') === '?')
+  check('initials are the first letters of the first two words', principalInitials('Slava Kayushkin') === 'SK' && principalInitials('priya') === 'P' && principalInitials('  ') === '?')
 }
 
 // The drawer's "Assigned" section, rendered with no directory answer yet. A
@@ -1033,15 +1033,15 @@ console.log('\nprincipals — disabled resolves but is not pickable')
 console.log('\nCardDetail — assignees render honestly without a directory')
 {
   const TS = '2026-08-16T05:00:00Z'
-  const card = (assignments) => ({
-    placement: { card_id: 'c1', board_id: 'b1', column_id: 'col1', position: 0, created_at: TS, updated_at: TS },
+  const card = (assignments, boardID = 'b1') => ({
+    placement: { card_id: 'c1', board_id: boardID, column_id: 'col1', position: 0, created_at: TS, updated_at: TS },
     item: { id: 'c1', type: 'todo', title: 'A card', body: '', tags: [], status: 'open', created_at: TS, updated_at: TS },
     links: [],
     assignments,
   })
   const noop = async () => true
   const outcome = async () => ({ ok: true })
-  const mount = (principalStoreBasePath, assignments) => renderToStaticMarkup(
+  const mount = (principalStoreBasePath, assignments, boardID = 'b1') => renderToStaticMarkup(
     h(MemoryRouter, { initialEntries: ['/kanban'] },
       h(BridgeContext.Provider, { value: {
         fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
@@ -1049,7 +1049,7 @@ console.log('\nCardDetail — assignees render honestly without a directory')
         noteboardBasePath: '', mailBasePath: '', mailPagePath: '', routes: DEFAULT_BRIDGE_ROUTES,
       } },
         h(CardDetail, {
-          card: card(assignments), boardID: 'b1', entityTypes: [{ type: 'session' }],
+          card: card(assignments, boardID), boardID, entityTypes: [{ type: 'session' }],
           onClose: () => {}, onPatch: noop, onDetach: () => {}, onArchive: () => {}, onDelete: () => {},
           onAddLink: noop, onDeleteLink: noop, onAssign: outcome, onUnassign: outcome,
           onOpenChat: () => {}, onOpenInMail: () => {}, mailBasePath: '', fetchFn: async () => ({ ok: true }),
@@ -1072,7 +1072,14 @@ console.log('\nCardDetail — assignees render honestly without a directory')
   check('the drawer offers a "Runs on" select', two.includes('bk-agent-target-select') && two.includes('Choose a harness instance'), two.slice(0, 1200))
   check('with nothing chosen, the start button is disabled and says why',
     /<button[^>]*disabled=""[^>]*title="Choose where the agent runs first"[^>]*>▶ Start an agent on this/.test(two))
-  check('and the note says the card has had no session yet', two.includes('this card has had no session yet'))
+  // A card on a board waits for kanban-store to resolve its defaults, and a
+  // static render never gets that answer — so the note must claim nothing yet.
+  check('while the card’s defaults are still being read, no note claims where it runs', !two.includes('bk-agent-target-note'), two.slice(0, 1200))
+  // A card on no board has no defaults to wait for, so the note is settled on
+  // the first render.
+  const offBoard = mount('/api/principals', [], '')
+  check('a card on no board says it has had no session yet',
+    offBoard.includes('<span class="bk-agent-target-note">this card has had no session yet</span>'), offBoard.slice(0, 1200))
 }
 
 // The Principals page — the editor for the directory the assignee chips
@@ -1121,7 +1128,7 @@ console.log('\nBridgePrincipals — the directory editor')
   check('a disabled row carries the badge, an active one does not',
     roster.split('data-principal-id="principal_000002"')[1].split('</li>')[0].includes('bp-badge-disabled')
       && !roster.split('data-principal-id="principal_000001"')[1].split('</li>')[0].includes('bp-badge-disabled'))
-  check('a person is an initials avatar, a group the group glyph', roster.includes('>VK<') && roster.includes('👥'), roster.slice(0, 400))
+  check('a person is an initials avatar, a group the group glyph', roster.includes('>SK<') && roster.includes('👥'), roster.slice(0, 400))
   check('the selected row is marked', roster.includes('bp-row-selected') && roster.includes('aria-pressed="true"'))
   const failed = renderToStaticMarkup(h(PrincipalListView, {
     principals: [slava], selectedID: null, onSelect: () => {}, loading: false, error: 'HTTP 502',
