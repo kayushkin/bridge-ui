@@ -7,11 +7,18 @@
 // GET /prompt-harness-deliveries; a copy here would go stale the day a harness
 // is added.
 
+/**
+ * global: the host prompt. project: one repo's prompt. context: sections that
+ * render to no file and reach a session only when its card carries every one
+ * of a section's tags; root_path is '' for every directory.
+ */
+export type PromptCollectionScope = 'global' | 'project' | 'context'
+
 export interface PromptCollection {
   id: number
   slug: string
   title: string
-  scope: 'global' | 'project'
+  scope: PromptCollectionScope
   root_path: string
   description?: string
   created_at: number
@@ -134,6 +141,15 @@ export interface PromptDeliveryOptions {
   deepest_section_heading_level: number
 }
 
+/** One section of a context collection, and why the context tags did or did not select it. */
+export interface ResolvedContextSection {
+  section_id: number
+  title: string
+  tags: string[]
+  missing_tags?: string[]
+  reason: string
+}
+
 export interface ResolvedContextEntry {
   collection_id: number
   slug: string
@@ -142,12 +158,15 @@ export interface ResolvedContextEntry {
   bytes: number
   injected: boolean
   read_natively_from?: string
+  matched_sections?: ResolvedContextSection[]
+  unmatched_sections?: ResolvedContextSection[]
 }
 
 export interface ResolvedContext {
   harness: string
   work_dir?: string
   delivery: string
+  context_tags: string[]
   content: string
   manifest: ResolvedContextEntry[]
 }
@@ -191,6 +210,27 @@ export function parseTagInput(input: string): string[] {
     if (tag) seen.add(tag)
   }
   return [...seen].sort()
+}
+
+/**
+ * Card tags typed as "a, b  c" → ['a', 'b', 'c'], exactly as typed: a card's
+ * tags are compared with a section's exactly, so the preview must not change
+ * their case.
+ */
+export function parseCardTagInput(input: string): string[] {
+  return [...new Set(input.split(/[,\s]+/).map(tag => tag.trim()).filter(Boolean))]
+}
+
+/** The query for GET /context/resolve: one harness, a working directory, and card tags as repeated `tag`. */
+export function contextResolveQuery(harness: string, workDir: string, cardTagInput: string): string {
+  const query = new URLSearchParams({ harness, work_dir: workDir.trim() })
+  for (const tag of parseCardTagInput(cardTagInput)) query.append('tag', tag)
+  return query.toString()
+}
+
+/** The body of POST /prompt-collections for a context collection. A blank root means every directory. */
+export function contextCollectionCreateBody(rootPathInput: string, titleInput: string) {
+  return { scope: 'context' as const, root_path: rootPathInput.trim(), title: titleInput.trim() }
 }
 
 export function allTags(sections: PromptSection[]): string[] {
@@ -311,7 +351,7 @@ export function filterSectionGroups(groups: PromptSectionGroup[], tag: string | 
 export interface RenderedOutputRef {
   collectionId: number
   collectionTitle: string
-  scope: 'global' | 'project'
+  scope: PromptCollectionScope
   relativePath: string
   state: PromptOutputState
 }
@@ -338,11 +378,18 @@ export function renderedOutputsByPath(views: PromptCollectionView[]): Map<string
   return out
 }
 
-/** The collections worth a tab, host prompt first, then project prompts by root path. */
-export function collectionsForTabs(views: PromptCollectionView[]): { host: PromptCollectionView[]; projects: PromptCollectionView[] } {
+/**
+ * The collections worth a tab: the host prompt, project prompts by root path,
+ * then context collections by root path (every-directory first). An empty
+ * project collection is left out; an empty context collection is not, since
+ * it is made empty on this page and filled here.
+ */
+export function collectionsForTabs(views: PromptCollectionView[]): { host: PromptCollectionView[]; projects: PromptCollectionView[]; context: PromptCollectionView[] } {
+  const byRoot = (a: PromptCollectionView, b: PromptCollectionView) => a.collection.root_path.localeCompare(b.collection.root_path)
   const shown = views.filter(view => view.sections.length > 0 || view.outputs.length > 0)
   return {
     host: shown.filter(view => view.collection.scope === 'global'),
-    projects: shown.filter(view => view.collection.scope !== 'global').sort((a, b) => a.collection.root_path.localeCompare(b.collection.root_path)),
+    projects: shown.filter(view => view.collection.scope === 'project').sort(byRoot),
+    context: views.filter(view => view.collection.scope === 'context').sort(byRoot),
   }
 }

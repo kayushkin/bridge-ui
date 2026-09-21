@@ -3,7 +3,7 @@ import type React from 'react'
 import type { FetchFn } from '../types'
 import {
   PROMPT_OUTPUT_STATE_LABEL, allTags, annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation,
-  collectionsForTabs, filterSectionGroups, groupSections, promptOutputState, sectionWriteBody,
+  collectionsForTabs, contextCollectionCreateBody, contextResolveQuery, filterSectionGroups, groupSections, promptOutputState, sectionWriteBody,
   type PromptCollectionView, type PromptDeliveryOptions, type PromptDrift, type PromptHarnessDelivery,
   type PromptRenderResult, type PromptSection, type PromptSectionRevision, type ResolvedContext,
 } from '../promptSource'
@@ -27,6 +27,55 @@ async function readError(res: Response): Promise<string> {
 
 function formatTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleString()
+}
+
+const SCOPE_ICON: Record<PromptCollectionView['collection']['scope'], string> = { global: '🌐 ', project: '📁 ', context: '🏷 ' }
+
+/**
+ * Makes a context collection: sections a session gets from its card's tags.
+ * A blank root applies in every directory; a root limits it to sessions
+ * working under that path.
+ */
+function NewContextCollectionForm({ apiFetch, basePath, onCreated }: Api & { onCreated: (id: number) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [rootPath, setRootPath] = useState('')
+  const [title, setTitle] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  if (!open) return <button className="bprompt-link" onClick={() => setOpen(true)}>+ ticket context collection</button>
+
+  const create = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await apiFetch(`${basePath}/prompt-collections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contextCollectionCreateBody(rootPath, title)),
+      })
+      if (!res.ok) throw new Error(await readError(res))
+      const created: PromptCollectionView = await res.json()
+      setOpen(false)
+      setRootPath('')
+      setTitle('')
+      await onCreated(created.collection.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create the collection')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bfiles-actions">
+      <input className="bfiles-search" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
+      <input className="bfiles-search" placeholder="Limit to a directory (blank = every directory)" value={rootPath} onChange={e => setRootPath(e.target.value)} />
+      <button className="bfiles-btn-primary" disabled={busy} onClick={create}>{busy ? 'Creating…' : 'Create'}</button>
+      <button className="bfiles-btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+      {error && <span className="bridge-error">{error}</span>}
+    </div>
+  )
 }
 
 export function PromptSourcePanel({ apiFetch, basePath, reloadSignal, onViews, openCollection }: Api & {
@@ -109,9 +158,11 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal, onViews, o
           <span className="bfiles-preview-hint">
             Every prompt is edited here, as groups and sections: the host prompt every session gets, and one prompt per
             project, which a session gets when it works in that project. Each renders to the same files for every harness.
+            Ticket context renders to no file: a session gets a section of it when its card carries every one of the
+            section's tags.
           </span>
         </div>
-        {([['Host prompt', tabs.host], ['Project prompts', tabs.projects]] as const).map(([label, group]) => group.length > 0 && (
+        {([['Host prompt', tabs.host], ['Project prompts', tabs.projects], ['Ticket context', tabs.context]] as const).map(([label, group]) => group.length > 0 && (
           <div key={label} className="bprompt-tab-row">
             <span className="bprompt-tab-row-label">{label}</span>
             <div className="bfiles-preview-tabs">
@@ -122,7 +173,7 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal, onViews, o
                   onClick={() => setSelectedId(view.collection.id)}
                   title={view.collection.root_path}
                 >
-                  {view.collection.scope === 'global' ? '🌐 ' : '📁 '}{view.collection.title}
+                  {SCOPE_ICON[view.collection.scope]}{view.collection.title}
                   <span className="bfiles-section-count">{view.sections.length}</span>
                   {view.open_drifts.length > 0 && <span className="bprompt-state bprompt-state-edited_on_disk">edited</span>}
                 </button>
@@ -130,6 +181,11 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal, onViews, o
             </div>
           </div>
         ))}
+        <NewContextCollectionForm
+          apiFetch={apiFetch}
+          basePath={basePath}
+          onCreated={async id => { await load(); setSelectedId(id) }}
+        />
         {selected && options && (
           <CollectionEditor key={selected.collection.id} view={selected} options={options} apiFetch={apiFetch} basePath={basePath} onChanged={load} />
         )}
@@ -250,6 +306,7 @@ function CollectionEditor({ view, options, apiFetch, basePath, onChanged }: Api 
   const [showRendered, setShowRendered] = useState(false)
   const [newOutput, setNewOutput] = useState('')
 
+  const isContext = view.collection.scope === 'context'
   const tags = useMemo(() => allTags(view.sections), [view.sections])
   const tree = useMemo(() => filterSectionGroups(groupSections(view.sections), tag, query), [view.sections, tag, query])
   const [addingAfterId, setAddingAfterId] = useState<number | null>(null)
@@ -301,10 +358,17 @@ function CollectionEditor({ view, options, apiFetch, basePath, onChanged }: Api 
   return (
     <div className="bfiles-preview-body">
       <div className="bfiles-meta">
-        <code>{view.collection.root_path}</code> · {view.sections.length} sections · {enabledBytes.toLocaleString()} characters rendered
+        <code>{view.collection.root_path || 'every directory'}</code> · {view.sections.length} sections · {enabledBytes.toLocaleString()} characters rendered
         {view.collection.description ? ` · ${view.collection.description}` : ''}
       </div>
 
+      {isContext ? (
+        <p className="bfiles-preview-hint">
+          Renders to no file. A session gets a section here when its card carries every one of the section's tags,
+          compared exactly; a section with no tags reaches no session. A level-2 section goes in under its group's heading.
+          Check what a card would get under “How each harness receives it”, or on the Effective config page.
+        </p>
+      ) : (<>
       <div className="bprompt-outputs">
         <span className="bfiles-preview-hint">Renders to</span>
         {view.outputs.map(output => {
@@ -332,11 +396,15 @@ function CollectionEditor({ view, options, apiFetch, basePath, onChanged }: Api 
         <button className="bfiles-btn" disabled={busy || !newOutput.trim()} onClick={() => changeOutput(`/prompt-collections/${view.collection.id}/outputs`, { relative_path: newOutput.trim() })}>Add</button>
       </div>
 
+      </>)}
+
       <div className="bfiles-actions">
-        <button className="bfiles-btn-primary" disabled={busy} onClick={render}>
-          {busy ? 'Working…' : collectionNeedsRender(view) ? 'Render to files' : 'Render (files already match)'}
-        </button>
-        <button className="bfiles-btn" onClick={() => setShowRendered(!showRendered)}>{showRendered ? 'Hide' : 'Show'} rendered prompt</button>
+        {!isContext && (
+          <button className="bfiles-btn-primary" disabled={busy} onClick={render}>
+            {busy ? 'Working…' : collectionNeedsRender(view) ? 'Render to files' : 'Render (files already match)'}
+          </button>
+        )}
+        <button className="bfiles-btn" onClick={() => setShowRendered(!showRendered)}>{showRendered ? 'Hide' : 'Show'} {isContext ? 'every section' : 'rendered prompt'}</button>
         <input className="bfiles-search" placeholder="Filter sections…" value={query} onChange={e => setQuery(e.target.value)} />
       </div>
       {message && <p className="bfiles-scan-msg">{message}</p>}
@@ -536,6 +604,7 @@ function HarnessDeliveryPanel({ options, apiFetch, basePath }: Api & { options: 
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [workDir, setWorkDir] = useState('')
+  const [cardTags, setCardTags] = useState('')
   const [previewHarness, setPreviewHarness] = useState<string | null>(null)
   const [preview, setPreview] = useState<ResolvedContext | null>(null)
 
@@ -564,7 +633,7 @@ function HarnessDeliveryPanel({ options, apiFetch, basePath }: Api & { options: 
     if (previewHarness === harness) { setPreviewHarness(null); setPreview(null); return }
     setPreviewHarness(harness)
     setPreview(null)
-    const res = await apiFetch(`${basePath}/context/resolve?harness=${encodeURIComponent(harness)}&work_dir=${encodeURIComponent(workDir.trim())}`)
+    const res = await apiFetch(`${basePath}/context/resolve?${contextResolveQuery(harness, workDir, cardTags)}`)
     if (!res.ok) { setError(await readError(res)); return }
     setPreview(await res.json())
     setError(null)
@@ -581,6 +650,7 @@ function HarnessDeliveryPanel({ options, apiFetch, basePath }: Api & { options: 
           {error && <p className="bridge-error">{error}</p>}
           <div className="bfiles-actions">
             <input className="bfiles-search" placeholder="Working directory for the preview (blank = host prompt only)" value={workDir} onChange={e => setWorkDir(e.target.value)} />
+            <input className="bfiles-search" placeholder="Card tags for the preview, as a card would carry them" value={cardTags} onChange={e => setCardTags(e.target.value)} />
           </div>
           <ul className="bfiles-manifest-list">
             {deliveries.map(delivery => (
@@ -603,7 +673,17 @@ function HarnessDeliveryPanel({ options, apiFetch, basePath }: Api & { options: 
                           <span className="bfiles-manifest-scope">{entry.scope}</span>
                           <code>{entry.root_path}</code>
                           <span className="bfiles-manifest-bytes">{entry.bytes.toLocaleString()} B</span>
-                          <span className="bfiles-preview-hint">{entry.injected ? 'injected by the bridge' : `read by the harness from ${entry.read_natively_from}`}</span>
+                          <span className="bfiles-preview-hint">{entry.injected ? 'injected by the bridge' : entry.scope === 'context' ? 'no section selected' : `read by the harness from ${entry.read_natively_from}`}</span>
+                          {entry.scope === 'context' && (
+                            <ul className="bfiles-manifest-list">
+                              {(entry.matched_sections ?? []).map(section => (
+                                <li key={section.section_id}>✓ {section.title} <span className="bfiles-preview-hint">{section.tags.join(', ')}</span></li>
+                              ))}
+                              {(entry.unmatched_sections ?? []).map(section => (
+                                <li key={section.section_id}>✗ {section.title} <span className="bfiles-preview-hint">{section.reason}</span></li>
+                              ))}
+                            </ul>
+                          )}
                         </li>
                       ))}
                     </ul>

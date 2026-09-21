@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  annotationFromLabelDrafts, collectionNeedsRender, collectionsForTabs, renderedOutputsByPath, describeDriftOperation, filterSectionGroups, groupSections, parseTagInput,
+  annotationFromLabelDrafts, collectionNeedsRender, collectionsForTabs, contextCollectionCreateBody, contextResolveQuery, parseCardTagInput, renderedOutputsByPath, describeDriftOperation, filterSectionGroups, groupSections, parseTagInput,
   promptOutputState, sectionMatchesFilter,
   type PromptCollectionOutput, type PromptDrift, type PromptSection,
 } from '../src/promptSource'
@@ -98,7 +98,7 @@ describe('section tree', () => {
 })
 
 describe('rendered files and collection tabs', () => {
-  const view = (id: number, scope: 'global' | 'project', root: string, outputs: PromptCollectionOutput[], sections = 1) => ({
+  const view = (id: number, scope: 'global' | 'project' | 'context', root: string, outputs: PromptCollectionOutput[], sections = 1) => ({
     collection: { id, slug: `c${id}`, title: `c${id}`, scope, root_path: root, created_at: 0, updated_at: 0 },
     sections: Array.from({ length: sections }, (_, i) => section({ id: id * 100 + i })), outputs, rendered: '', open_drifts: [],
   })
@@ -107,6 +107,8 @@ describe('rendered files and collection tabs', () => {
     view(1, 'global', '/home', [output({ id: 1, path: '/home/AGENTS.md', relative_path: 'AGENTS.md' }), output({ id: 2, path: '/home/CLAUDE.md', relative_path: 'CLAUDE.md' })]),
     view(2, 'project', '/r/alpha', [output({ id: 3, path: '/r/alpha/CLAUDE.md', relative_path: 'CLAUDE.md' })]),
     view(4, 'project', '/r/empty', [], 0),
+    view(5, 'context', '/r/alpha', [], 2),
+    view(6, 'context', '', [], 0),
   ]
   it('maps every rendered file to the collection that renders it, with its state', () => {
     const byPath = renderedOutputsByPath(views)
@@ -118,5 +120,21 @@ describe('rendered files and collection tabs', () => {
     const tabs = collectionsForTabs(views)
     expect(tabs.host.map(v => v.collection.id)).toEqual([1])
     expect(tabs.projects.map(v => v.collection.id)).toEqual([2, 3])
+  })
+  it('lists context collections apart, every-directory first, keeping an empty one to fill', () => {
+    expect(collectionsForTabs(views).context.map(v => v.collection.id)).toEqual([6, 5])
+  })
+})
+
+describe('ticket context', () => {
+  it('keeps card tags exactly as typed, since they are compared exactly', () => {
+    expect(parseCardTagInput(' Billing, billing  ops,')).toEqual(['Billing', 'billing', 'ops'])
+  })
+  it('asks for a preview with each card tag as its own parameter', () => {
+    expect(contextResolveQuery('claude_code', ' /r/alpha ', 'billing ops')).toBe('harness=claude_code&work_dir=%2Fr%2Falpha&tag=billing&tag=ops')
+    expect(contextResolveQuery('codex', '', '')).toBe('harness=codex&work_dir=')
+  })
+  it('creates a context collection with a blank root for every directory', () => {
+    expect(contextCollectionCreateBody('  ', ' Billing ')).toEqual({ scope: 'context', root_path: '', title: 'Billing' })
   })
 })
