@@ -53,6 +53,17 @@ export interface BridgeProviderProps {
   /** Base path for usage-store API. If omitted, spend/limits sections of the
    * Usage tab are hidden and only per-session aggregates are shown. */
   usageStoreBasePath?: string
+  /** Base paths for seven services the settings page asks and nothing else
+   * does (dash: "/api/scheduler", "/api/log-store", "/api/jobs",
+   * "/api/quotes", "/api/predictions", "/api/events", "/api/authstore"). If
+   * one is omitted, the page does not list that service. */
+  schedulerBasePath?: string
+  logStoreBasePath?: string
+  jobStoreBasePath?: string
+  quoteStoreBasePath?: string
+  predictionStoreBasePath?: string
+  eventStoreBasePath?: string
+  authStoreBasePath?: string
   /** Optional render hook for per-harness Settings-tab extensions. Return null
    * for harnesses that don't need a custom panel. */
   renderHarnessExtension?: (harnessName: string) => ReactNode
@@ -82,6 +93,13 @@ export function BridgeProvider({
   bridgeAdapterBasePath = '',
   producerBasePath = '',
   usageStoreBasePath = '',
+  schedulerBasePath = '',
+  logStoreBasePath = '',
+  jobStoreBasePath = '',
+  quoteStoreBasePath = '',
+  predictionStoreBasePath = '',
+  eventStoreBasePath = '',
+  authStoreBasePath = '',
   renderHarnessExtension,
   routes,
   children,
@@ -105,9 +123,16 @@ export function BridgeProvider({
     bridgeAdapterBasePath,
     producerBasePath,
     usageStoreBasePath,
+    schedulerBasePath,
+    logStoreBasePath,
+    jobStoreBasePath,
+    quoteStoreBasePath,
+    predictionStoreBasePath,
+    eventStoreBasePath,
+    authStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

@@ -30,6 +30,13 @@ const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName:
   { configKey: 'multichatBasePath', serviceName: 'multichat' },
   { configKey: 'producerBasePath', serviceName: 'producer' },
   { configKey: 'bridgeAdapterBasePath', serviceName: 'llm-bridge-adapter' },
+  { configKey: 'schedulerBasePath', serviceName: 'scheduler' },
+  { configKey: 'logStoreBasePath', serviceName: 'log-store' },
+  { configKey: 'jobStoreBasePath', serviceName: 'job-store' },
+  { configKey: 'quoteStoreBasePath', serviceName: 'quote-store' },
+  { configKey: 'predictionStoreBasePath', serviceName: 'prediction-store' },
+  { configKey: 'eventStoreBasePath', serviceName: 'event-store' },
+  { configKey: 'authStoreBasePath', serviceName: 'auth-store' },
 ]
 
 /** The backends this host proxies, which are the ones the page can ask. A

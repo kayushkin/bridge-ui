@@ -150,6 +150,19 @@ export interface BridgeConfig {
    * "/api/multichat", which carries the inbound-rule routes and the contact
    * list and nothing that sends). If empty, the Inbound rules tab is hidden. */
   multichatBasePath: string
+  /** Base paths the host proxies seven more services at, read only by the
+   * service settings page, which asks `{base}/settings`. dash: scheduler
+   * "/api/scheduler", log-store "/api/log-store", job-store "/api/jobs",
+   * quote-store "/api/quotes", prediction-store "/api/predictions",
+   * event-store "/api/events", auth-store "/api/authstore". If one is empty,
+   * the page does not list that service. */
+  schedulerBasePath: string
+  logStoreBasePath: string
+  jobStoreBasePath: string
+  quoteStoreBasePath: string
+  predictionStoreBasePath: string
+  eventStoreBasePath: string
+  authStoreBasePath: string
   /** Path to the HOST's own mail page, which is not one of this library's
    * exported pages — hence a plain path rather than an entry in BridgeRoutes,
    * whose contract is that every route has a component here. Empty hides the

@@ -28,6 +28,18 @@ describe('serviceSettingsSourcesOf', () => {
       ['llm-bridge-server', '/api/bridge'], ['kanban-store', '/api/kanban'], ['multichat', '/api/multichat'],
     ])
   })
+  it('lists the seven services that had no base path, after the fifteen, in order', () => {
+    const sources = serviceSettingsSourcesOf({
+      basePath: '/api/bridge', schedulerBasePath: '/api/scheduler', logStoreBasePath: '/api/log-store',
+      jobStoreBasePath: '/api/jobs', quoteStoreBasePath: '/api/quotes', predictionStoreBasePath: '/api/predictions',
+      eventStoreBasePath: '/api/events', authStoreBasePath: '/api/authstore',
+    } as BridgeConfig)
+    expect(sources.map(s => [s.serviceName, s.basePath])).toEqual([
+      ['llm-bridge-server', '/api/bridge'], ['scheduler', '/api/scheduler'], ['log-store', '/api/log-store'],
+      ['job-store', '/api/jobs'], ['quote-store', '/api/quotes'], ['prediction-store', '/api/predictions'],
+      ['event-store', '/api/events'], ['auth-store', '/api/authstore'],
+    ])
+  })
   it('builds the two routes of the convention', () => {
     expect(serviceSettingsURL('/api/bridge')).toBe('/api/bridge/settings')
     expect(serviceSettingURL('/api/bridge', 'session.idle_timeout')).toBe('/api/bridge/settings/session.idle_timeout')
