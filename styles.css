@@ -5782,6 +5782,11 @@
 .bsv-source-stored { border-color: var(--accent); color: var(--accent); }
 .bsv-source-unset { opacity: 0.7; }
 
+/* An email chip whose message would not load: its id stands in for the
+   subject, and this marks it as a failure rather than a message with no
+   subject. */
+.ref-chip-error { border-style: dashed; color: #f59e0b; }
+
 /* ===== BridgeEmailTickets, CardsForEmail ===== */
 .bet-container { max-width: 1200px; }
 .bet-title { font-size: 1.3em; font-weight: 600; margin: 0 0 4px; }

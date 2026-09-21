@@ -52,9 +52,11 @@ export function EmailRefChip({ locator, className }: { locator: string; classNam
         className={`${className ?? 'ref-chip'} ref-chip-email${open ? ' ref-chip-open' : ''}${error ? ' ref-chip-error' : ''}`}
         onClick={toggle}
         aria-expanded={open}
-        title={`email — ${subject || locator}`}
+        title={error ? `email ${locator} — couldn’t load: ${error}` : `email — ${subject || locator}`}
       >
-        <span className="ref-chip-glyph" aria-hidden>✉</span>
+        {/* A message that would not load says so on the chip itself, so a
+            table of chips shows which failed without opening each one. */}
+        <span className="ref-chip-glyph" aria-hidden>{error ? '⚠' : '✉'}</span>
         <span className="ref-chip-label">{label}</span>
         <span className="ref-chip-caret-inline" aria-hidden>▾</span>
       </button>
