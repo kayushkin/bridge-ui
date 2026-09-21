@@ -105,7 +105,7 @@ const VIEWPORT_MARGIN = 8;
  * scroll and resize. `capture: true` on the scroll listener is required — the
  * turns list is an inner scroller and scroll events do not bubble to window.
  */
-function useAnchoredPanel(): {
+export function useAnchoredPanel(): {
   open: boolean;
   toggle: () => void;
   wrapRef: React.RefObject<HTMLSpanElement | null>;
@@ -183,7 +183,7 @@ function useAnchoredPanel(): {
 
 /** The portaled panel shell. Kept in one place so both chips share the
  *  placement, the ref wiring and the dialog semantics. */
-function AnchoredPanel({
+export function AnchoredPanel({
   panelRef,
   panelStyle,
   label,
@@ -225,19 +225,19 @@ function AnchoredPanel({
   );
 }
 
-function truncate(s: string, n = 28): string {
+export function truncate(s: string, n = 28): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
 /** Last `n` characters of an id, for a chip whose target has no name yet. */
-function idTail(id: string, n = 12): string {
+export function idTail(id: string, n = 12): string {
   return id.length > n ? `…${id.slice(-n)}` : id;
 }
 
 /** Relative time, for rows where "how long ago" is the question. Falls back to
  *  the raw string when the timestamp does not parse — never to "now", which
  *  would be a fabricated answer. */
-function timeAgo(iso: string): string {
+export function timeAgo(iso: string): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return iso;
   const seconds = Math.round((Date.now() - then) / 1000);
@@ -762,7 +762,7 @@ function MultiMatchRefChip({
 
 // ---------------------------------------------------------------------------
 
-function RefRow({
+export function RefRow({
   label,
   value,
   badge,

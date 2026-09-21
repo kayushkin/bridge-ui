@@ -93,7 +93,7 @@ export {
 export type { ResourceOption, DispatchInstanceChoice, DispatchInstanceChoices } from './grantResources'
 export { fetchSessionRunsOn, useSessionRunsOn } from './sessionRunsOn'
 export type { SessionRunsOn } from './sessionRunsOn'
-export type { Board, Column, Placement, CardLink, CardAssignment, EntityTag, CardView, ColumnView, BoardView, EntityTypeInfo, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline } from '@kayushkin/kanban-store-types'
+export type { Board, Column, Placement, CardLink, CardAssignment, EntityTag, CardView, ColumnView, BoardView, EntityTypeInfo, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline, Ticket, TicketView, TicketList, TicketLogEntry, EntityCardView } from '@kayushkin/kanban-store-types'
 export type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
 export { CardBudgetBadge, CardTimelinePanel, describeCardTime, hasClockData } from './components/CardTime'
 export { useStickyBottomScroll } from './useStickyBottomScroll'
@@ -259,6 +259,10 @@ export type { SignalCardProps, SignalRequestCardProps } from './components/chat/
 export { SessionSignals, SignalRequestList } from './components/chat/SessionSignals'
 export type { SessionSignalsProps, SignalRequestListProps } from './components/chat/SessionSignals'
 export { RefChip } from './components/chat/RefChip'
+export { EmailRefChip } from './components/chat/EmailRefChip'
+export { CardRefChip } from './components/CardRefChip'
+export { CardsForEmail } from './components/CardsForEmail'
+export { BridgeEmailTickets } from './components/BridgeEmailTickets'
 export type { RefChipProps } from './components/chat/RefChip'
 
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.

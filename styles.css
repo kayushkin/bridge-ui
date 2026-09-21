@@ -5781,3 +5781,24 @@
 .bsv-note { margin: 0; color: #f59e0b; }
 .bsv-source-stored { border-color: var(--accent); color: var(--accent); }
 .bsv-source-unset { opacity: 0.7; }
+
+/* ===== BridgeEmailTickets, CardsForEmail ===== */
+.bet-container { max-width: 1200px; }
+.bet-title { font-size: 1.3em; font-weight: 600; margin: 0 0 4px; }
+.bet-subtitle { color: var(--text-dim); font-size: 0.85em; margin: 0 0 12px; }
+.bet-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.bet-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.bet-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.bet-when { white-space: nowrap; color: var(--text-muted); }
+.bet-arrow { color: var(--text-dim); }
+.bet-where { color: var(--text-muted); }
+.bet-unknown { color: var(--text-dim); font-style: italic; }
+.bet-arrival { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.85em; white-space: nowrap; color: var(--text-muted); }
+.bet-arrival-new { border-color: #10b981; color: #10b981; }
+.bet-card-ref { display: inline-flex; align-items: center; gap: 4px; }
+.bet-card-open { color: var(--text-muted); text-decoration: none; }
+.bet-card-open:hover { color: var(--text); }
+.bet-more { margin-top: 10px; }
+.bet-email-cards { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 0.85em; }
+.bet-email-cards-label { color: var(--text-muted); }
+.bet-email-card { display: inline-flex; align-items: center; gap: 6px; }

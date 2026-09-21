@@ -49,6 +49,8 @@ export interface BridgeRoutes {
   orchestrator: string
   /** The single-card page. The card id is appended as a path segment. */
   card: string
+  /** Every ticket that came from an email, and the email it came from. */
+  emailTickets: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
   // exists, so it is empty, and a link to an empty route is not rendered at all —
@@ -82,6 +84,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   inboundRules: '/inbound-rules',
   orchestrator: '/orchestrator',
   card: '/card',
+  emailTickets: '/email-tickets',
   notes: '',
 }
 

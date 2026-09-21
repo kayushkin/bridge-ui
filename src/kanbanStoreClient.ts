@@ -1,5 +1,5 @@
 import type { FetchFn } from './types'
-import type { Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, PriorityLadder } from '@kayushkin/kanban-store-types'
+import type { Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, EntityCardView, PriorityLadder, TicketList, TicketView } from '@kayushkin/kanban-store-types'
 import type { BoardSettingsPatch, LadderWireLevel } from './kanbanBoardSettings'
 import { readErrorText } from './useKanban'
 
@@ -109,4 +109,43 @@ export function getEffectiveDefaultsForTags(
     fetchFn, 'read effective defaults',
     `${boardURL(kanbanStoreBasePath, boardID)}/effective-defaults${query ? `?${query}` : ''}`,
   )
+}
+
+/** `GET /api/tickets` — tickets the caller can view, newest first, across
+ *  boards. `before` is the previous page's `next_before`. */
+export function listTickets(
+  fetchFn: FetchFn, kanbanStoreBasePath: string, query: { channel?: string; before?: string; limit?: number },
+): Promise<KanbanStoreResult<TicketList>> {
+  const params = new URLSearchParams()
+  if (query.channel) params.set('channel', query.channel)
+  if (query.before) params.set('before', query.before)
+  if (query.limit) params.set('limit', String(query.limit))
+  const suffix = params.toString()
+  return request(fetchFn, 'list tickets', `${kanbanStoreBasePath}/api/tickets${suffix ? `?${suffix}` : ''}`)
+}
+
+/** `GET /api/entities/{type}/{ref}/cards` — the cards that link one entity,
+ *  such as every card an email was filed onto. */
+export function listCardsForEntity(
+  fetchFn: FetchFn, kanbanStoreBasePath: string, entityType: string, entityRef: string,
+): Promise<KanbanStoreResult<EntityCardView[]>> {
+  return request(fetchFn, 'list cards for entity',
+    `${kanbanStoreBasePath}/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityRef)}/cards`)
+}
+
+/** `GET /api/cards/{id}/ticket` — the card's ticket, or null when the card is
+ *  not one (the store answers 404 for that, which is not a failure here). */
+export async function getCardTicket(
+  fetchFn: FetchFn, kanbanStoreBasePath: string, cardID: string,
+): Promise<KanbanStoreResult<TicketView | null>> {
+  const url = `${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardID)}/ticket`
+  let res: Response
+  try {
+    res = await fetchFn(url)
+  } catch (err) {
+    return { ok: false, error: `read ticket: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  if (res.status === 404) return { ok: true, value: null }
+  if (!res.ok) return { ok: false, error: await readErrorText(res, 'read ticket') }
+  return { ok: true, value: (await res.json()) as TicketView }
 }

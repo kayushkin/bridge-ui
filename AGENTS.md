@@ -18,7 +18,7 @@ These sections are stored in agent-store as a project prompt collection and rend
 
 The pages, by group, with the config field that makes each available:
 
-- **Work** — Chat (`end`), Sessions, Kanban (`kanbanStoreBasePath`), Board settings (routed, not listed), Card (`/:cardId`, routed, not listed), Orchestrator (`producerBasePath`).
+- **Work** — Chat (`end`), Sessions, Kanban (`kanbanStoreBasePath`), Board settings (routed, not listed), Card (`/:cardId`, routed, not listed), Email tickets (`kanbanStoreBasePath` and `mailBasePath`; each email ticket beside the email its `source_entity_ref` names), Orchestrator (`producerBasePath`).
 - **Agents** — Instances, Agents, Files, Skills (`skillStoreBasePath`), Tools (`toolStoreBasePath`), Bundles (`bundleStoreBasePath`), Hooks, Inbound rules (`multichatBasePath`).
 - **Access** — Principals (`principalStoreBasePath`), Grants (`grantStoreBasePath`), Permissions (`permissionStoreBasePath`), Auth.
 - **System** — Settings, Usage, Effective config, Service inventory (`showServiceInventory`), Conformance (`showConformance`).

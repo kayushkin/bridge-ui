@@ -13,6 +13,7 @@ import { BridgeTools } from './components/BridgeTools'
 import { BridgePermissions } from './components/BridgePermissions'
 import { BridgeKanban } from './components/BridgeKanban'
 import { BridgeKanbanSettings } from './components/BridgeKanbanSettings'
+import { BridgeEmailTickets } from './components/BridgeEmailTickets'
 import { BridgeCardPage } from './components/BridgeCardPage'
 import { BridgePrincipals } from './components/BridgePrincipals'
 import { BridgeGrants } from './components/BridgeGrants'
@@ -83,6 +84,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   { route: 'kanban', label: 'Kanban', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath, component: BridgeKanban },
   { route: 'kanbanSettings', label: 'Board settings', group: 'work', listed: false, component: BridgeKanbanSettings },
   { route: 'card', label: 'Card', group: 'work', listed: false, routeSuffix: '/:cardId', component: BridgeCardPage },
+  // Each email ticket beside the message it came from. Needs mail as well as
+  // kanban, since the log is half emails.
+  { route: 'emailTickets', label: 'Email tickets', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath && !!c.mailBasePath, component: BridgeEmailTickets },
   // The page exists on every host; it is listed only where the producer is
   // proxied, since without it the page can say nothing but "not configured".
   { route: 'orchestrator', label: 'Orchestrator', group: 'work', listed: true, available: c => !!c.producerBasePath, component: BridgeOrchestrator },
