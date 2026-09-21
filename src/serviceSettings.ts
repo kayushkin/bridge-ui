@@ -13,7 +13,9 @@ export interface ServiceSettingsSource {
 }
 
 /** Every base path a host can name, with the service behind it. The order is
- *  the page's order: the bridge server first, then the stores. */
+ *  the page's order: the bridge server first, then the stores, then the host
+ *  itself. The host's name is a placeholder until it answers, because the
+ *  library cannot know which host mounted it; an answer names the host. */
 const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName: string }> = [
   { configKey: 'basePath', serviceName: 'llm-bridge-server' },
   { configKey: 'kanbanStoreBasePath', serviceName: 'kanban-store' },
@@ -37,6 +39,7 @@ const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName:
   { configKey: 'predictionStoreBasePath', serviceName: 'prediction-store' },
   { configKey: 'eventStoreBasePath', serviceName: 'event-store' },
   { configKey: 'authStoreBasePath', serviceName: 'auth-store' },
+  { configKey: 'hostBasePath', serviceName: 'the host' },
 ]
 
 /** The backends this host proxies, which are the ones the page can ask. A

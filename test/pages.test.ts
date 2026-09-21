@@ -10,7 +10,7 @@ const config = (overrides: Partial<BridgeConfig> = {}): BridgeConfig => ({
   mailBasePath: '', mailPagePath: '', noteboardBasePath: '', resolveEndpoint: '', bridgeAdapterBasePath: '',
   producerBasePath: '', usageStoreBasePath: '',
   schedulerBasePath: '', logStoreBasePath: '', jobStoreBasePath: '', quoteStoreBasePath: '',
-  predictionStoreBasePath: '', eventStoreBasePath: '', authStoreBasePath: '',
+  predictionStoreBasePath: '', eventStoreBasePath: '', authStoreBasePath: '', hostBasePath: '',
   routes: DEFAULT_BRIDGE_ROUTES,
   ...overrides,
 } as BridgeConfig)

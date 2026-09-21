@@ -166,6 +166,12 @@ export interface BridgeConfig {
   predictionStoreBasePath: string
   eventStoreBasePath: string
   authStoreBasePath: string
+  /** Base path of the HOST's own routes, read only by the service settings
+   * page, which asks `{base}/settings` — the host describes its own settings
+   * there like any backend (dash: "/api/dash"). The host is not proxied under a
+   * base path, so it needs a field of its own. If empty, the page does not list
+   * the host. */
+  hostBasePath: string
   /** Path to the HOST's own mail page, which is not one of this library's
    * exported pages — hence a plain path rather than an entry in BridgeRoutes,
    * whose contract is that every route has a component here. Empty hides the

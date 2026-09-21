@@ -64,6 +64,9 @@ export interface BridgeProviderProps {
   predictionStoreBasePath?: string
   eventStoreBasePath?: string
   authStoreBasePath?: string
+  /** Base path of the host's own routes, read only by the service settings
+   * page (dash: "/api/dash"). If omitted, the page does not list the host. */
+  hostBasePath?: string
   /** Optional render hook for per-harness Settings-tab extensions. Return null
    * for harnesses that don't need a custom panel. */
   renderHarnessExtension?: (harnessName: string) => ReactNode
@@ -100,6 +103,7 @@ export function BridgeProvider({
   predictionStoreBasePath = '',
   eventStoreBasePath = '',
   authStoreBasePath = '',
+  hostBasePath = '',
   renderHarnessExtension,
   routes,
   children,
@@ -130,9 +134,10 @@ export function BridgeProvider({
     predictionStoreBasePath,
     eventStoreBasePath,
     authStoreBasePath,
+    hostBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

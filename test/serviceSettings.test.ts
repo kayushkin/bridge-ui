@@ -40,6 +40,19 @@ describe('serviceSettingsSourcesOf', () => {
       ['event-store', '/api/events'], ['auth-store', '/api/authstore'],
     ])
   })
+  it('lists the host itself last, under its own base path', () => {
+    const sources = serviceSettingsSourcesOf({
+      basePath: '/api/bridge', authStoreBasePath: '/api/authstore', hostBasePath: '/api/dash',
+    } as BridgeConfig)
+    expect(sources.map(s => [s.configKey, s.basePath])).toEqual([
+      ['basePath', '/api/bridge'], ['authStoreBasePath', '/api/authstore'], ['hostBasePath', '/api/dash'],
+    ])
+    expect(serviceSettingsURL(sources[2].basePath)).toBe('/api/dash/settings')
+  })
+  it('does not list a host that names no base path of its own', () => {
+    const sources = serviceSettingsSourcesOf({ basePath: '/api/bridge', hostBasePath: '' } as BridgeConfig)
+    expect(sources.map(s => s.configKey)).toEqual(['basePath'])
+  })
   it('builds the two routes of the convention', () => {
     expect(serviceSettingsURL('/api/bridge')).toBe('/api/bridge/settings')
     expect(serviceSettingURL('/api/bridge', 'session.idle_timeout')).toBe('/api/bridge/settings/session.idle_timeout')
