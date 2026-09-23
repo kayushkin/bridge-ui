@@ -483,6 +483,14 @@ function ClassifierSection({ board, onSave, fetchFn, mailBasePath }: {
             )}
             <span className="bks-help">Explicit, never "every account": the classifier reads only the accounts named here.</span>
           </div>
+          <label className="bks-field">
+            <span className="bks-field-label">Organization</span>
+            <input value={draft.organizationID} placeholder="principal_000023" onChange={e => setDraft({ ...draft, organizationID: e.target.value })} />
+            <span className="bks-help">
+              The principal-store group the classifier's model calls are made for, as llm-bridge-server operations: that group's
+              budget and grants apply. kanban-store checks on save that it is an active group.
+            </span>
+          </label>
           <label className="bks-check">
             <input type="checkbox" checked={draft.holdNewCards} onChange={e => setDraft({ ...draft, holdNewCards: e.target.checked })} />
             Hold new cards — every filed card is created parked, so no autoworker picks it up before the pipeline that owns it releases it

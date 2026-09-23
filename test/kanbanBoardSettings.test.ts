@@ -48,8 +48,14 @@ describe('clearing', () => {
 })
 
 describe('classifier and business hours', () => {
+  it('a classifier saved from the form keeps the organization it was stored with', () => {
+    const stored = board({ classifier: { vocabulary: 'personal', mail_account_ids: ['gmail-personal'], hold_new_cards: false, organization_id: 'principal_000023' } })
+    expect(classifierPatchOf(classifierDraftOf(stored))).toEqual({
+      classifier: { vocabulary: 'personal', mail_account_ids: ['gmail-personal'], hold_new_cards: false, organization_id: 'principal_000023' },
+    })
+  })
   it('trims the vocabulary and sends the account list and hold flag as the store names them', () => {
-    expect(classifierPatchOf({ enabled: true, vocabulary: ' work ', mailAccountIDs: [' demo-work ', ''], holdNewCards: true }))
+    expect(classifierPatchOf({ enabled: true, vocabulary: ' work ', mailAccountIDs: [' demo-work ', ''], holdNewCards: true, organizationID: '' }))
       .toEqual({ classifier: { vocabulary: 'work', mail_account_ids: ['demo-work'], hold_new_cards: true } })
   })
 

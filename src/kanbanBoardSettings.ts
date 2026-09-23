@@ -207,13 +207,18 @@ export interface ClassifierDraft {
   vocabulary: string
   mailAccountIDs: string[]
   holdNewCards: boolean
+  /** principal-store group id the classifier's model calls run for; empty when unset. */
+  organizationID: string
 }
 
 export function classifierDraftOf(board: Board): ClassifierDraft {
   const classifier = board.classifier
   return classifier
-    ? { enabled: true, vocabulary: classifier.vocabulary, mailAccountIDs: [...classifier.mail_account_ids], holdNewCards: classifier.hold_new_cards }
-    : { enabled: false, vocabulary: '', mailAccountIDs: [], holdNewCards: false }
+    ? {
+        enabled: true, vocabulary: classifier.vocabulary, mailAccountIDs: [...classifier.mail_account_ids],
+        holdNewCards: classifier.hold_new_cards, organizationID: classifier.organization_id ?? '',
+      }
+    : { enabled: false, vocabulary: '', mailAccountIDs: [], holdNewCards: false, organizationID: '' }
 }
 
 /** A free-text account list: comma or whitespace separated, trimmed, deduped. */
@@ -235,6 +240,9 @@ export function classifierPatchOf(draft: ClassifierDraft): BoardSettingsPatch {
       vocabulary: draft.vocabulary.trim(),
       mail_account_ids: draft.mailAccountIDs.map(id => id.trim()).filter(Boolean),
       hold_new_cards: draft.holdNewCards,
+      // Sent only when set: the classifier object is replaced whole on save,
+      // and an empty id would be refused rather than read as "none".
+      ...(draft.organizationID.trim() ? { organization_id: draft.organizationID.trim() } : {}),
     },
   }
 }
