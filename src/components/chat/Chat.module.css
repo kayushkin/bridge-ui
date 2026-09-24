@@ -1470,12 +1470,21 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   min-height: 0;
   max-height: 32vh;
   padding: 0 10px 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* A rule between requests, for the same reason the signals page frames each
+   one: without it a request's Answer and Dismiss buttons sit right on the next
+   request's session line. A rule rather than a frame, because the sidebar has
+   no width to spare for padding. */
+.inboxBody > :global(.signal-request) + :global(.signal-request) {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 /* The card header — the session a signal belongs to, and the way into it. This
@@ -1657,9 +1666,26 @@
 .signalsPageSection {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
   max-width: 860px;
+}
+
+/* One frame per request: the session line, the question and its Answer and
+   Dismiss buttons together. Framing only the question left the buttons loose
+   directly above the next request's session line, where they read as the next
+   question's. The question's own frame is dropped inside, so it is one box,
+   not a box in a box. */
+.signalsPageSection > :global(.signal-request) {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.signalsPageSection > :global(.signal-request) :global(.signal-card) {
+  padding: 0;
+  border: none;
+  background: none;
 }
 .signalsPageSectionTitle {
   margin: 0;
