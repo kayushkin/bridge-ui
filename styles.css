@@ -5440,6 +5440,16 @@
   line-height: 1.35;
 }
 
+/* Inline code in a title or option description. These are rendered without
+   `bc-turns-md` (signalMarkdown.tsx keeps them inline), so they take its code
+   rule here to match code in the body. */
+.signal-title code,
+.signal-option-desc code {
+  font-family: monospace; font-size: 0.9em;
+  background: color-mix(in srgb, var(--text-dim) 18%, transparent);
+  padding: 0.1em 0.35em; border-radius: 3px;
+}
+
 .signal-freeform {
   box-sizing: border-box;
   width: 100%;
