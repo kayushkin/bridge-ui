@@ -186,6 +186,15 @@ export function BridgeChat() {
     setSidebarCollapsed(next)
   }, [sidebarCollapsed])
 
+  // The signals page ("Needs you", opened out) takes the thread pane's place. It is
+  // state here, read from `?view=signals` once on load and written back by the URL
+  // effect below, so it survives a reload and can be linked to. It sits beside
+  // `?session=` rather than replacing it: the session stays active behind the page
+  // and comes back when the page closes.
+  const [signalsPageOpen, setSignalsPageOpen] = useState(
+    () => searchParams.get('view') === SIGNALS_VIEW,
+  )
+
   // Declared BEFORE the bootstrap effect so an inbound deeplink claims the bootstrap
   // latch first. Otherwise a cold `/?session=<id>` opens a pending "New chat"
   // over the top of the session the link asked for.
@@ -214,34 +223,31 @@ export function BridgeChat() {
     // it would only make a future effect reordering silently work instead of visibly
     // breaking. Measured: with the guard absent and this effect declared first, the whole
     // deeplink spec still passes.
+    //
+    // It writes `?view=` too, and it must be the ONLY writer of both. react-router's
+    // `setSearchParams` builds on the params of the last render, even in its function
+    // form, so two writers in one click overwrite each other: opening a session from the
+    // signals page removed `view`, then this effect wrote `session` over a copy that
+    // still had it, and the page stayed open.
     const { write, value, state } = writeSessionParam(activeId, deeplink.current)
     deeplink.current = state
-    if (!write) return
     const next = new URLSearchParams(searchParams)
-    if (value) next.set('session', value)
-    else next.delete('session')
+    let changed = false
+    if (write) {
+      if (value) next.set('session', value)
+      else next.delete('session')
+      changed = true
+    }
+    if ((next.get('view') === SIGNALS_VIEW) !== signalsPageOpen) {
+      if (signalsPageOpen) next.set('view', SIGNALS_VIEW)
+      else next.delete('view')
+      changed = true
+    }
+    if (!changed) return
     // Replace, not push: browsing sessions must not fill the back stack with one entry
     // per session looked at.
     setSearchParams(next, { replace: true })
-  }, [activeId, searchParams, setSearchParams])
-
-  // One element, rendered in one of two places: in the row on a desktop, inside the
-  // drawer on a phone. Not two copies — a second mounted `Sidebar` would open a second
-  // session-list subscription and hold its own filter, search and folder-collapse state,
-  // so the list in the drawer would answer differently from the one behind it.
-  // The signals page ("Needs you", opened out) takes the thread pane's place while
-  // `?view=signals` is in the URL, so it survives a reload and can be linked to. It
-  // sits beside `?session=` rather than replacing it: the session stays active behind
-  // the page and comes back when the page closes.
-  const signalsPageOpen = searchParams.get('view') === SIGNALS_VIEW
-  const setSignalsPageOpen = useCallback((open: boolean) => {
-    setSearchParams(previous => {
-      const next = new URLSearchParams(previous)
-      if (open) next.set('view', SIGNALS_VIEW)
-      else next.delete('view')
-      return next
-    })
-  }, [setSearchParams])
+  }, [activeId, signalsPageOpen, searchParams, setSearchParams])
 
   const afterOpenSession = useCallback(() => {
     setSignalsPageOpen(false)
@@ -252,6 +258,10 @@ export function BridgeChat() {
     if (minimal) setDrawerOpen(false)
   }, [setSignalsPageOpen, minimal, setDrawerOpen])
 
+  // One element, rendered in one of two places: in the row on a desktop, inside the
+  // drawer on a phone. Not two copies — a second mounted `Sidebar` would open a second
+  // session-list subscription and hold its own filter, search and folder-collapse state,
+  // so the list in the drawer would answer differently from the one behind it.
   const sidebar = (
     <Sidebar
       newTarget={target}
