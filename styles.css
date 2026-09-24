@@ -5292,11 +5292,13 @@
   line-height: 1.4;
 }
 
+/* Markdown, rendered with `bc-turns-md` (signalMarkdown.tsx). No pre-wrap:
+   the paragraphs carry the line structure now, and pre-wrap would add a blank
+   line for every newline react-markdown leaves between blocks. */
 .signal-body {
   margin: 4px 0 0;
   color: var(--text-muted);
   line-height: 1.45;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 

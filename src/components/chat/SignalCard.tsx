@@ -14,6 +14,7 @@ import {
   everyQuestionAnswered,
   questionsIn,
 } from '@kayushkin/chat-core';
+import { SignalBodyMarkdown, SignalInlineMarkdown } from './signalMarkdown';
 
 // Every element carries a stable, unhashed class name (`signal-*`), styled by
 // this package's own `styles.css`. Lived in chat-core until 2026-09-10; that
@@ -210,9 +211,13 @@ export function SignalCard({
         )}
       </div>
 
-      {questionVisible && <p className="signal-title">{signal.title}</p>}
+      {questionVisible && (
+        <p className="signal-title">
+          <SignalInlineMarkdown text={signal.title} />
+        </p>
+      )}
       {signal.body !== '' && !compact && questionVisible && (
-        <p className="signal-body">{signal.body}</p>
+        <SignalBodyMarkdown text={signal.body} />
       )}
 
       {!isNotification && options.length > 0 && (
@@ -233,7 +238,9 @@ export function SignalCard({
               <span className="signal-option-body">
                 <span className="signal-option-label">{shownLabel}</span>
                 {option.description !== '' && !compact && questionVisible && (
-                  <span className="signal-option-desc">{option.description}</span>
+                  <span className="signal-option-desc">
+                    <SignalInlineMarkdown text={option.description} />
+                  </span>
                 )}
               </span>
             );

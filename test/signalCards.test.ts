@@ -13,6 +13,7 @@ import {
 } from '@kayushkin/chat-core'
 import { SignalCard, SignalRequestCard } from '../src/components/chat/SignalCard'
 import { SignalRequestList } from '../src/components/chat/SessionSignals'
+import { escapeBlockMarkers } from '../src/components/chat/signalMarkdown'
 
 // What the signal cards DRAW, for a given record — moved here from chat-core's
 // test/sessionSignals.test.ts on 2026-09-10 along with the cards. The verbs and
@@ -361,3 +362,61 @@ describe('a card opened showing only its answers', () => {
   });
 });
 
+
+describe('a card renders its text as markdown', () => {
+  // Agents write their questions in markdown; the cards used to show the
+  // asterisks.
+
+  it('renders the body as markdown, and opens its links in a new tab', () => {
+    const signal = question({
+      body: '**Roughly how many?**\n\n- one\n- two\n\nSee [the doc](https://example.com).',
+    });
+    const html = renderToStaticMarkup(createElement(SignalCard, { signal }));
+    expect(html).toContain('<strong>Roughly how many?</strong>');
+    expect(html).toContain('<li>one</li>');
+    expect(html).not.toContain('**');
+    expect(html).toContain('href="https://example.com" target="_blank" rel="noopener noreferrer"');
+  });
+
+  it('drops raw HTML and script links from the body', () => {
+    const signal = question({ body: '<img src=x onerror=alert(1)> [x](javascript:alert(1))' });
+    const html = renderToStaticMarkup(createElement(SignalCard, { signal }));
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('javascript:');
+  });
+
+  it('keeps a title and an option description inline, with no links or blocks', () => {
+    const signal = question({
+      title: '1. Use **Postgres** or [SQLite](https://example.com)?',
+      options: [{ label: 'Postgres', value: 'pg', description: '`pg` is *already* deployed' }],
+    });
+    const html = renderToStaticMarkup(createElement(SignalCard, { signal }));
+    // The "1." survives: unwrapping a list would keep the text and drop it.
+    expect(html).toContain('1. Use <strong>Postgres</strong> or SQLite?');
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('<ol');
+    expect(html).toContain('<code>pg</code> is <em>already</em> deployed');
+  });
+
+  it('leaves the option label as plain text', () => {
+    // The label is also what the rewrite box opens with, so it shows as written.
+    const signal = question({ options: [{ label: '**Yes**', value: 'yes' }] });
+    const html = renderToStaticMarkup(createElement(SignalCard, { signal }));
+    expect(html).toContain('**Yes**');
+  });
+});
+
+describe('escapeBlockMarkers', () => {
+  it('escapes line-start markers that would make a block', () => {
+    expect(escapeBlockMarkers('# a\n> b\n- c\n* d\n+ e\n1. f\n2) g')).toBe(
+      '\\# a\n\\> b\n\\- c\n\\* d\n\\+ e\n1\\. f\n2\\) g',
+    );
+  });
+
+  it('leaves emphasis and plain numbers at the start of a line alone', () => {
+    expect(escapeBlockMarkers('**bold** first')).toBe('**bold** first');
+    expect(escapeBlockMarkers('*it* first')).toBe('*it* first');
+    expect(escapeBlockMarkers('#hashtag')).toBe('#hashtag');
+    expect(escapeBlockMarkers('2026.09 release')).toBe('2026.09 release');
+  });
+});
