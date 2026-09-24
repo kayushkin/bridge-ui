@@ -33,9 +33,12 @@ import styles from './Chat.module.css'
  */
 export default function SignalsInbox({
   onSelectSession,
+  onOpenSignalsPage,
 }: {
   /** Open the session a card belongs to. */
   onSelectSession: (sessionId: string) => void
+  /** Show every signal on the thread pane's full width (`SignalsPage`). */
+  onOpenSignalsPage: () => void
 }) {
   const { signals, requests, available, error, reload } = useOpenSignals()
   const [open, setOpen] = useState(loadInboxOpen)
@@ -70,18 +73,28 @@ export default function SignalsInbox({
 
   return (
     <div className={styles.inbox} role="region" aria-label="Signals needing you">
-      <button
-        type="button"
-        className={styles.inboxHeader}
-        aria-expanded={open}
-        onClick={toggle}
-      >
-        <span className={styles.inboxCaret} aria-hidden>
-          {open ? '▾' : '▸'}
-        </span>
-        <span className={styles.inboxTitle}>Needs you</span>
-        <span className={styles.inboxCount}>{waiting}</span>
-      </button>
+      <div className={styles.inboxHeaderRow}>
+        <button
+          type="button"
+          className={styles.inboxHeader}
+          aria-expanded={open}
+          onClick={toggle}
+        >
+          <span className={styles.inboxCaret} aria-hidden>
+            {open ? '▾' : '▸'}
+          </span>
+          <span className={styles.inboxTitle}>Needs you</span>
+          <span className={styles.inboxCount}>{waiting}</span>
+        </button>
+        <button
+          type="button"
+          className={styles.inboxOpenPage}
+          title="Show every signal in full, in place of the chat"
+          onClick={onOpenSignalsPage}
+        >
+          Open all
+        </button>
+      </div>
 
       {/* Reported even while collapsed, because a failed read is why the panel might
           be short — saying so only when expanded would hide the explanation behind

@@ -18,6 +18,7 @@ import { SessionDrawer } from '../minimal/SessionDrawer'
 import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { SplitDragHandle } from './SplitDragHandle'
 import Sidebar from './Sidebar'
+import SignalsPage from './SignalsPage'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
 import TurnList from './TurnList'
 import Timeline from './Timeline'
@@ -49,6 +50,9 @@ import {
   type PaneKey,
   type PaneSizes,
 } from './panePersistence'
+
+/** `?view=` value that shows the signals page in place of the thread. */
+const SIGNALS_VIEW = 'signals'
 
 /** States in which the session is busy — it drives the live streaming indicator AND
  *  the composer's Stop button, which is why it must be the server's answer rather than
@@ -225,11 +229,35 @@ export function BridgeChat() {
   // drawer on a phone. Not two copies — a second mounted `Sidebar` would open a second
   // session-list subscription and hold its own filter, search and folder-collapse state,
   // so the list in the drawer would answer differently from the one behind it.
+  // The signals page ("Needs you", opened out) takes the thread pane's place while
+  // `?view=signals` is in the URL, so it survives a reload and can be linked to. It
+  // sits beside `?session=` rather than replacing it: the session stays active behind
+  // the page and comes back when the page closes.
+  const signalsPageOpen = searchParams.get('view') === SIGNALS_VIEW
+  const setSignalsPageOpen = useCallback((open: boolean) => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous)
+      if (open) next.set('view', SIGNALS_VIEW)
+      else next.delete('view')
+      return next
+    })
+  }, [setSearchParams])
+
+  const afterOpenSession = useCallback(() => {
+    setSignalsPageOpen(false)
+    if (minimal) setDrawerOpen(false)
+  }, [setSignalsPageOpen, minimal, setDrawerOpen])
+  const openSignalsPage = useCallback(() => {
+    setSignalsPageOpen(true)
+    if (minimal) setDrawerOpen(false)
+  }, [setSignalsPageOpen, minimal, setDrawerOpen])
+
   const sidebar = (
     <Sidebar
       newTarget={target}
       onToggleCollapse={toggleSidebar}
-      onAfterSelect={minimal ? () => setDrawerOpen(false) : undefined}
+      onAfterOpenSession={afterOpenSession}
+      onOpenSignalsPage={openSignalsPage}
     />
   )
 
@@ -258,7 +286,17 @@ export function BridgeChat() {
           </button>
         ) : sidebar)}
         <div className="bc-workspaces">
-          <ThreadPane newTarget={target} />
+          {signalsPageOpen ? (
+            <SignalsPage
+              onSelectSession={sessionId => {
+                select(sessionId)
+                setSignalsPageOpen(false)
+              }}
+              onClose={() => setSignalsPageOpen(false)}
+            />
+          ) : (
+            <ThreadPane newTarget={target} />
+          )}
         </div>
       </div>
       {minimal && (

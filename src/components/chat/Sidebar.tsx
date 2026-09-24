@@ -104,19 +104,25 @@ interface SidebarProps {
   /** Fold the sidebar down to the vertical strip. The flag itself lives in `Chat` —
    *  collapsing unmounts this component, so a flag held here would go with it. */
   onToggleCollapse: () => void
-  /** Called after a row has opened a session. The minimal (mobile) chrome renders this
-   *  list inside a slide-over drawer, which has to close itself once it has been used —
-   *  a drawer left open over the thread the user just asked for is the list refusing to
-   *  answer the click.
+  /** Called after this list has opened a session — a row, an inbox card, or the
+   *  "+ New" button. The minimal (mobile) chrome renders this list inside a slide-over
+   *  drawer, which has to close itself once it has been used, and the signals page has
+   *  to give the thread pane back to the session the user just asked for.
    *
-   *  A callback rather than the drawer watching the active id: the drawer must close
-   *  when a ROW is clicked, and the active id also changes for a `?session=` deeplink
-   *  and for a reference chip inside a transcript, neither of which the drawer is
-   *  involved in. Optional, because the desktop sidebar has nothing to close. */
-  onAfterSelect?: () => void
+   *  A callback rather than watching the active id: the active id also changes for a
+   *  `?session=` deeplink and for a reference chip inside a transcript, neither of
+   *  which this list is involved in. */
+  onAfterOpenSession: () => void
+  /** Show the signals page in place of the thread (the inbox's "Open all"). */
+  onOpenSignalsPage: () => void
 }
 
-export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: SidebarProps) {
+export default function Sidebar({
+  newTarget,
+  onToggleCollapse,
+  onAfterOpenSession,
+  onOpenSignalsPage,
+}: SidebarProps) {
   const {
     groups,
     loading,
@@ -152,8 +158,8 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
   const selectSession = useSelectSession()
   const select = useCallback((sessionId: string) => {
     selectSession(sessionId)
-    onAfterSelect?.()
-  }, [selectSession, onAfterSelect])
+    onAfterOpenSession()
+  }, [selectSession, onAfterOpenSession])
   const prefetch = usePrefetch()
   const { filter, set, contentSearchReach, searching, searchError } = useFilters()
   const { newSession, archive, unarchive, rename, error: actionError } = useSessionActions()
@@ -669,7 +675,10 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
                 click is never blocked, it just has no target to name. */}
             <button
               className="bc-new-session-btn"
-              onClick={() => newSession(newTarget.opts)}
+              onClick={() => {
+                newSession(newTarget.opts)
+                onAfterOpenSession()
+              }}
               disabled={!newTarget.ready}
               title={
                 !newTarget.ready
@@ -736,6 +745,7 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
                 // how a chat started from the picker ignored every default the user had
                 // set for that harness.
                 newSession(newTarget.optsFor(instanceId, harness))
+                onAfterOpenSession()
               }}
               onClose={() => setNewMenuOpen(false)}
             />
@@ -876,7 +886,7 @@ export default function Sidebar({ newTarget, onToggleCollapse, onAfterSelect }: 
 
           Given `select`, not `selectSession`, so opening a session from a card closes
           the mobile drawer exactly as clicking a row does. */}
-      <SignalsInbox onSelectSession={select} />
+      <SignalsInbox onSelectSession={select} onOpenSignalsPage={onOpenSignalsPage} />
 
       {/* The list is stale the moment the stream drops, and a stale sidebar is silent by
           nature — the rows keep rendering, they just stop changing. This strip is the only
