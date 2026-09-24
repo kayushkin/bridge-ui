@@ -7,7 +7,7 @@
  * This file DEFINES the CSS variables that `styles.css` consumes (--bg,
  * --bg-surface, --border, --text, --accent, --success, …) plus a base reset,
  * scrollbar styling, and body defaults. Hosts that already define their own
- * theme (e.g. dash, llmux define their own :root palette) should NOT import
+ * theme (e.g. dash defines its own :root palette) should NOT import
  * this — define the same variables at :root to override.
  *
  * Toggle light mode by setting `data-theme="light"` on a parent element.

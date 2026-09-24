@@ -308,7 +308,7 @@ export function BridgeKanban() {
 
   // Axis controls render only for boards whose cards actually carry these tags.
   // Boards that predate the classifier report no axes and are left exactly as
-  // they were — this component is shared with llmux.
+  // they were.
   const axes = useMemo(() => (k.view ? axisUsage(allCardsOf(k.view.columns)) : []), [k.view])
 
   // Filtering and sorting are applied to a copy. The board view itself stays
@@ -2037,7 +2037,7 @@ function CardDrawer(props: CardDetailProps) {
 }
 
 /** Link out to the host's standalone card page, when it mounts one. Absent
- *  rather than disabled on a host that does not (llmux) — an empty route is how
+ *  rather than disabled on a host that does not — an empty route is how
  *  a host says it has no such page. */
 function OpenCardPageLink({ cardID }: { cardID: string }) {
   const { routes } = useBridgeConfig()

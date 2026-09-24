@@ -145,8 +145,7 @@ export interface BridgeConfig {
    * per-session aggregates from llm-bridge-server are shown. */
   usageStoreBasePath: string
   /** Base path for the mailstack API, as the host proxies it. If omitted, the
-   * card drawer cannot read a linked email and hides those controls — llmux
-   * proxies no mail service, and offering a button that 404s is worse than
+   * card drawer cannot read a linked email and hides those controls — offering a button that 404s is worse than
    * offering none. */
   mailBasePath: string
   /** Base path for multichat's API as the host proxies it (dash:

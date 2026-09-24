@@ -24,7 +24,7 @@ The library is ESM-only (`"type": "module"`) and ships two stylesheets:
 - `@kayushkin/bridge-ui/theme.css` — **optional** default theme: defines those variables
   (dark + a `[data-theme="light"]` variant) plus a base reset, scrollbars, and body
   defaults. Import it to get a working look with zero config. Hosts that already define
-  their own palette (dash, llmux do) should **skip** it and set the same variables at
+  their own palette (dash does) should **skip** it and set the same variables at
   `:root` to override.
 
 ## Usage

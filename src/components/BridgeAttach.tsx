@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-// Pull xterm's stylesheet through the import graph so Vite (in dash /
-// llmux) bundles it automatically — saves the consumer from having to
+// Pull xterm's stylesheet through the import graph so Vite (in dash)
+// bundles it automatically — saves the consumer from having to
 // remember a separate `import '@xterm/xterm/css/xterm.css'` at app
 // startup. tsc passes the import through as-is in the compiled .js.
 import '@xterm/xterm/css/xterm.css'

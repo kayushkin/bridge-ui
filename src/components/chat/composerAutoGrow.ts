@@ -1,8 +1,8 @@
 /** The height the auto-growing composer must be given so its content fits.
  *
- *  `scrollHeight` is content plus padding and **excludes the border**. Both hosts
- *  that mount this component reset `* { box-sizing: border-box }` (dash
- *  `src/index.css:55`, llmux `src/index.css:13`), which makes an assigned height
+ *  `scrollHeight` is content plus padding and **excludes the border**. dash, which
+ *  mounts this component, resets `* { box-sizing: border-box }`
+ *  (`src/index.css:55`), which makes an assigned height
  *  the height of the *box* — border included. Assigning a bare `scrollHeight`
  *  therefore lands a border-width short of the content it was measured from, so
  *  the content never fits and `overflow-y: auto` gives the textarea a scrollbar at

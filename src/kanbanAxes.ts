@@ -10,9 +10,7 @@ import type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
  * back into something you can filter, group and edit.
  *
  * Nothing here is email-specific by construction: a board whose cards carry no
- * prefixed tags reports no axes and the UI leaves it exactly as it was. That
- * matters because this component is shared with llmux, whose boards have never
- * had these tags.
+ * prefixed tags reports no axes and the UI leaves it exactly as it was.
  */
 
 export interface AxisDefinition {
