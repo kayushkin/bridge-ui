@@ -32,9 +32,8 @@ export function toBridgeSessionInfo(info: ChatSessionInfo): BridgeSessionInfo {
   }
 }
 
-/** hh:mm:ss for a turn/entry/timeline timestamp — matches bridge-ui's turns &
- *  timeline `formatHMS` (chat/utils, not exported from the package), reproduced
- *  once here at the render edge so TurnList and Timeline share one formatter. */
+/** hh:mm:ss for a turn/entry/timeline timestamp, the one formatter TurnList and
+ *  Timeline share. */
 export function formatHMS(ts: string): string {
   try {
     const d = new Date(ts)

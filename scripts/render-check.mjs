@@ -41,7 +41,6 @@ import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
-import { harnessIsWorkingOnTurn, sessionCanBeResumed } from '../src/components/chat/utils.ts'
 import { composerAutoGrowHeightPx } from '../src/components/chat/composerAutoGrow.ts'
 import { StatusDot } from '../src/components/chat/StatusDot.tsx'
 import { MemoryRouter } from 'react-router-dom'
@@ -155,34 +154,6 @@ console.log('\npreserveUnchangedKanbanPayload')
     preserveUnchangedKanbanPayload(tags, [{ tag: 'kanban-do-not-track' }]) === tags)
   check('a removed tag is a new reference',
     preserveUnchangedKanbanPayload(tags, []) !== tags)
-}
-// --- the "streaming…" badge -------------------------------------------------
-//
-// The badge was on for 48 of 53 finished turns on the live dashboard, because
-// it was set by the presence of a streamed text row and never cleared.
-// Fixing it needed a completeness signal, and the event log does not carry one
-// that holds: about a tenth of this host's Claude Code turns that produced
-// assistant text emit no result, no turn_complete and no error. The share is
-// what survives — 10.8% when this was written on 2026-07-31, 9.8% on
-// 2026-08-17 — while the pair of totals behind it rots as the log grows, so
-// re-take it instead of trusting one. Group log-store events by data.turn_id
-// for harness claude_code, keep the groups carrying a stream or block event,
-// and count those carrying no result, turn_complete or error.
-// So the answer is split — the log says which turns are over
-// (everything before the last one, whatever the harness emitted), and the
-// session state says whether the last one is still running.
-
-console.log('\nharnessIsWorkingOnTurn')
-{
-  check('generating is working', harnessIsWorkingOnTurn('model_generating'))
-  check('a running tool is working', harnessIsWorkingOnTurn('tool_running'))
-  check('compacting is working', harnessIsWorkingOnTurn('compacting'))
-  check('idle is not working', !harnessIsWorkingOnTurn('idle'))
-  check('completed is not working', !harnessIsWorkingOnTurn('completed'))
-  // A wait is not production. Both have their own surface — the permission
-  // banner and the status chip — and "streaming…" during either is a lie.
-  check('awaiting permission is not working', !harnessIsWorkingOnTurn('awaiting_permission'))
-  check('rate limited is not working', !harnessIsWorkingOnTurn('rate_limited'))
 }
 console.log('\nsessionDeeplink')
 {

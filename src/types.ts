@@ -252,7 +252,7 @@ export type SessionUIState =
   // The turn is over, but subagents or backgrounded commands it started are
   // still running in the harness. Active, yet not a turn in flight: nothing is
   // streaming and there is no turn to stop, so it is in none of the
-  // turn-in-flight lists (STREAMING_STATES, harnessIsWorkingOnTurn).
+  // turn-in-flight list (STREAMING_STATES in BridgeChat.tsx).
   | 'background_tasks_running'
   // Blocked on user.
   | 'awaiting_permission'
