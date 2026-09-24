@@ -18,6 +18,12 @@ export interface BundleDraftMember {
   name: string
   /** A task tag that gates the member; empty means always included. */
   condition: string
+  /** `include` or `deny`, as the store sent it. Carried through untouched: the
+   *  form offers no way to change it, and dropping it would turn every denied tool
+   *  into an included one on the next save, because the store reads an empty
+   *  effect as `include`. Empty for a member added in this form, which is that
+   *  same default. */
+  effect: string
 }
 
 export interface BundleDraft {
@@ -34,13 +40,18 @@ export interface BundleDraft {
   effort: string
   enabled: boolean
   members: BundleDraftMember[]
+  /** Path patterns a session given this bundle may not read, as the store sent
+   *  them. The form does not edit them yet, but it must send them back: the
+   *  store's update overwrites the column, so leaving them out of a save would
+   *  erase them. */
+  deniedReadPaths: string[]
 }
 
 /** The body `POST /bundles` takes: a bundle without the fields the store
  *  assigns. `extends` (the parent's name) is left out on purpose — the store
  *  reads it back off the parent by id, so sending both would only give the
  *  two a way to disagree. */
-export type BundleWrite = Pick<Bundle, 'name' | 'display_name' | 'description' | 'match_tags' | 'members' | 'model' | 'effort' | 'enabled'>
+export type BundleWrite = Pick<Bundle, 'name' | 'display_name' | 'description' | 'match_tags' | 'members' | 'denied_read_paths' | 'model' | 'effort' | 'enabled'>
   & { extends_id?: number }
 
 export type BundleDraftResult = { ok: true; value: BundleWrite } | { ok: false; error: string }
@@ -48,7 +59,7 @@ export type BundleDraftResult = { ok: true; value: BundleWrite } | { ok: false; 
 export function emptyBundleDraft(): BundleDraft {
   return {
     name: '', displayName: '', description: '', extendsID: '', matchTagsText: '',
-    model: '', effort: '', enabled: true, members: [],
+    model: '', effort: '', enabled: true, members: [], deniedReadPaths: [],
   }
 }
 
@@ -63,7 +74,8 @@ export function bundleDraftOf(bundle: Bundle): BundleDraft {
     model: bundle.model ?? '',
     effort: bundle.effort ?? '',
     enabled: bundle.enabled,
-    members: (bundle.members ?? []).map(m => ({ kind: m.kind, id: String(m.id), name: m.name ?? '', condition: m.condition ?? '' })),
+    members: (bundle.members ?? []).map(m => ({ kind: m.kind, id: String(m.id), name: m.name ?? '', condition: m.condition ?? '', effect: m.effect })),
+    deniedReadPaths: bundle.denied_read_paths ?? [],
   }
 }
 
@@ -97,7 +109,7 @@ export function bundleDraftToWire(draft: BundleDraft): BundleDraftResult {
     const key = `${m.kind}:${idText}`
     if (seen.has(key)) return { ok: false, error: `${m.kind} #${idText} is on the list twice` }
     seen.add(key)
-    const member: BundleMember = { kind: m.kind, id: Number(idText) }
+    const member: BundleMember = { kind: m.kind, id: Number(idText), effect: m.effect }
     if (m.name.trim()) member.name = m.name.trim()
     if (m.condition.trim()) member.condition = m.condition.trim()
     members.push(member)
@@ -109,6 +121,7 @@ export function bundleDraftToWire(draft: BundleDraft): BundleDraftResult {
     description: draft.description.trim(),
     match_tags: parseTagList(draft.matchTagsText),
     members,
+    denied_read_paths: draft.deniedReadPaths,
     model: draft.model.trim(),
     effort: draft.effort.trim(),
     enabled: draft.enabled,

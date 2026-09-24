@@ -491,7 +491,7 @@ function SkillPicker({ exclude, onPick }: { exclude: ReadonlySet<string>; onPick
         <>
           <input className={styles.input} value={query} onChange={e => setQuery(e.target.value)} placeholder="search skill-store…" aria-label="Search skills" />
           {catalog.error && <span className={styles.error}>{catalog.error}</span>}
-          {matches && <PickerResults kind="skill" options={matches} onPick={option => { onPick({ kind: 'skill', id: option.id, name: option.label, condition: '' }); setQuery('') }} />}
+          {matches && <PickerResults kind="skill" options={matches} onPick={option => { onPick({ kind: 'skill', id: option.id, name: option.label, condition: '', effect: '' }); setQuery('') }} />}
         </>
       )}
     </div>
@@ -533,7 +533,7 @@ function ToolPicker({ exclude, onPick }: { exclude: ReadonlySet<string>; onPick:
       <span className={styles.fieldLabel}>add tool</span>
       <input className={styles.input} value={query} onChange={e => setQuery(e.target.value)} placeholder="filter tool-store…" aria-label="Filter tools" />
       {error && <span className={styles.error}>{error}</span>}
-      {options && <PickerResults kind="tool" options={options} onPick={option => { onPick({ kind: 'tool', id: option.id, name: option.label, condition: '' }); setQuery('') }} />}
+      {options && <PickerResults kind="tool" options={options} onPick={option => { onPick({ kind: 'tool', id: option.id, name: option.label, condition: '', effect: '' }); setQuery('') }} />}
     </div>
   )
 }
