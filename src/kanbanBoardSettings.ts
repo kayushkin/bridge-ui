@@ -8,20 +8,21 @@
 // `PUT /api/boards/{id}/priority-levels` (README "Board settings", "Priority
 // ladders", "Business hours"): omit a field to leave it alone, `""` clears an
 // id, `{"classifier":{}}` clears the classifier, `{"business_hours":{}}`
-// clears the hours.
+// clears the hours, `{"assignment_pool":{}}` clears the pool.
 
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import type { Machine } from './types'
 import type { Bundle } from '@kayushkin/bundle-store-types'
-import type { Board, BoardPriorityLevel, BusinessHours, ClassifierConfig, DefaultSource, EffectiveDefault, PriorityLadder, UpdateBoardRequest } from '@kayushkin/kanban-store-types'
+import type { AssignmentPool, Board, BoardPriorityLevel, BusinessHours, CardEvent, ClassifierConfig, DefaultSource, EffectiveDefault, PriorityLadder, UpdateBoardRequest } from '@kayushkin/kanban-store-types'
 import { machineLabel } from './grantResources'
 
 /** A `PATCH /api/boards/{id}` body. Every key is optional because an omitted
- *  key is "leave it alone"; an empty object clears the two object-valued
+ *  key is "leave it alone"; an empty object clears the three object-valued
  *  settings and an empty string clears an id. */
-export type BoardSettingsPatch = Omit<UpdateBoardRequest, 'business_hours' | 'classifier'> & {
+export type BoardSettingsPatch = Omit<UpdateBoardRequest, 'business_hours' | 'classifier' | 'assignment_pool'> & {
   business_hours?: BusinessHours | Record<string, never>
   classifier?: ClassifierConfig | Record<string, never>
+  assignment_pool?: AssignmentPool | Record<string, never>
 }
 
 export type BoardDefaultField = 'default_principal_id' | 'default_agent_id' | 'default_instance_id' | 'default_bundle_id'
@@ -108,6 +109,117 @@ export function defaultsPatchOf(board: Pick<Board, BoardDefaultField>, draft: De
     if (value !== stored[field]) patch[field] = value
   }
   return patch
+}
+
+// --- Assignment pool ---------------------------------------------------------
+//
+// A card that arrives with no assignee goes to one available member of a
+// principal-store group, chosen by a strategy kanban-store serves at
+// `GET /api/assignment-strategies`. kanban-store decides who; these helpers only
+// carry the form to the wire and word what the store recorded.
+
+export interface AssignmentPoolDraft {
+  /** principal-store group id; '' means no pool. */
+  principalID: string
+  /** One of the served strategies; '' until one is chosen. */
+  strategy: string
+}
+
+export function assignmentPoolDraftOf(board: Board): AssignmentPoolDraft {
+  const pool = board.assignment_pool
+  return pool ? { principalID: pool.principal_id, strategy: pool.strategy } : { principalID: '', strategy: '' }
+}
+
+export const CLEAR_ASSIGNMENT_POOL_PATCH: BoardSettingsPatch = { assignment_pool: {} }
+
+/** The whole pool, as the store replaces it outright; no group clears it. A
+ *  group with no strategy is sent as it stands, so the store's refusal — which
+ *  names the strategies it runs — is what the page shows. */
+export function assignmentPoolPatchOf(draft: AssignmentPoolDraft): BoardSettingsPatch {
+  const principalID = draft.principalID.trim()
+  if (!principalID) return CLEAR_ASSIGNMENT_POOL_PATCH
+  return { assignment_pool: { principal_id: principalID, strategy: draft.strategy } }
+}
+
+/** A strategy in words for the select. A strategy the store serves that this
+ *  list does not know is shown as its own name, not hidden. */
+const ASSIGNMENT_STRATEGY_LABELS: Record<string, string> = {
+  least_open_cards: 'least open cards — the member with the fewest unfinished cards here',
+  round_robin: 'round robin — the member whose last assignment here is oldest',
+}
+
+export function assignmentStrategyLabel(strategy: string): string {
+  return ASSIGNMENT_STRATEGY_LABELS[strategy] ?? strategy
+}
+
+/** The parts of an `assigned` or `assignment_skipped` event's detail that
+ *  kanban-store writes when it picks an assignee on arrival. Every field is
+ *  optional: an assignment made by hand carries no detail, and detail is
+ *  free-form JSON, so each field is checked rather than trusted. */
+export interface ArrivalAssignmentDetail {
+  source?: string
+  strategy?: string
+  candidates?: number
+  poolPrincipalID?: string
+  poolEmpty?: boolean
+  ruleTags?: string[]
+  ruleID?: string
+  reason?: string
+}
+
+export function arrivalAssignmentDetailOf(event: Pick<CardEvent, 'detail'>): ArrivalAssignmentDetail | null {
+  const detail = event.detail
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
+  const fields = detail as Record<string, unknown>
+  const text = (key: string) => (typeof fields[key] === 'string' && fields[key] !== '' ? fields[key] as string : undefined)
+  const parsed: ArrivalAssignmentDetail = {
+    source: text('source'),
+    strategy: text('strategy'),
+    candidates: typeof fields.candidates === 'number' ? fields.candidates : undefined,
+    poolPrincipalID: text('pool_principal_id'),
+    poolEmpty: fields.pool_empty === true ? true : undefined,
+    ruleTags: Array.isArray(fields.rule_tags) && fields.rule_tags.every(tag => typeof tag === 'string') ? fields.rule_tags as string[] : undefined,
+    ruleID: text('rule_id'),
+    reason: text('reason'),
+  }
+  if (!parsed.source && !parsed.reason) return null
+  return parsed
+}
+
+/**
+ * Why a card arriving on the board got the assignee it did, or none, in one
+ * line: "from the pool principal_000030 by round robin, 3 available",
+ * "board default — nobody in the pool principal_000030 was available". Null
+ * for an event that says nothing about arrival (an assignment by hand). A
+ * source or reason kanban-store adds later is named as it was recorded.
+ * `principalName` turns an id into what principal-store calls it, for display.
+ */
+export function describeArrivalAssignment(
+  kind: string, detail: ArrivalAssignmentDetail | null, principalName: (id: string) => string = id => id,
+): string | null {
+  if (!detail) return null
+  const pool = detail.poolPrincipalID ? `the pool ${principalName(detail.poolPrincipalID)}` : 'the pool'
+  if (kind === 'assignment_skipped') {
+    if (detail.reason === 'pool_empty') return `nobody in ${pool} was available and the board has no default principal, so the card is unassigned`
+    return `left unassigned: ${detail.reason ?? 'kanban-store gave no reason'}`
+  }
+  switch (detail.source) {
+    case 'pool': {
+      const how = detail.strategy ? ` by ${detail.strategy.replace(/_/g, ' ')}` : ''
+      const count = detail.candidates !== undefined ? `, ${detail.candidates} available` : ''
+      return `from ${pool}${how}${count}`
+    }
+    case 'board_default':
+      return detail.poolEmpty ? `board default — nobody in ${pool} was available` : 'board default'
+    case 'tag_rule':
+      return detail.ruleTags && detail.ruleTags.length > 0
+        ? `from tag rule ${detail.ruleTags.join(' + ')}`
+        : `from tag rule ${detail.ruleID ?? '(the store named no rule)'}`
+    case undefined:
+      return null
+    default:
+      return `from unknown source "${detail.source}"`
+  }
 }
 
 // --- Priority ladder ---------------------------------------------------------

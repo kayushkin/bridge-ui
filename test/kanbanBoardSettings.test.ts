@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Instance } from '@kayushkin/llm-bridge-types'
 import {
+  CLEAR_ASSIGNMENT_POOL_PATCH, arrivalAssignmentDetailOf, assignmentPoolDraftOf, assignmentPoolPatchOf, assignmentStrategyLabel,
+  describeArrivalAssignment,
   CLEAR_BUSINESS_HOURS_PATCH, CLEAR_CLASSIFIER_PATCH, budgetDraftOfSeconds, bundleLabelForID, businessHoursPatchOf,
   classifierDraftOf, classifierPatchOf, defaultSourceLabel, defaultsDraftOf, defaultsPatchOf, dispatchTargetForCard,
   dispatchTargetNote, generalDraftOf,
@@ -207,5 +209,74 @@ describe('a bundle named by its bundle-store id', () => {
   it('shows the raw id, never nothing, when the list lacks it or has not loaded', () => {
     expect(bundleLabelForID('9', bundles)).toBe('9')
     expect(bundleLabelForID('6', null)).toBe('6')
+  })
+})
+
+describe('assignment pool', () => {
+  it('a board with no pool reads as an empty form, and saving that form sends the clear', () => {
+    const stored = board()
+    expect(assignmentPoolDraftOf(stored)).toEqual({ principalID: '', strategy: '' })
+    expect(assignmentPoolPatchOf(assignmentPoolDraftOf(stored))).toEqual(CLEAR_ASSIGNMENT_POOL_PATCH)
+    expect(CLEAR_ASSIGNMENT_POOL_PATCH).toEqual({ assignment_pool: {} })
+  })
+
+  it('a stored pool round-trips to the same wire object', () => {
+    const stored = board({ assignment_pool: { principal_id: 'principal_000030', strategy: 'round_robin' } })
+    expect(assignmentPoolPatchOf(assignmentPoolDraftOf(stored))).toEqual({
+      assignment_pool: { principal_id: 'principal_000030', strategy: 'round_robin' },
+    })
+  })
+
+  it('choosing no group clears the pool whatever strategy is left on the form', () => {
+    expect(assignmentPoolPatchOf({ principalID: '  ', strategy: 'round_robin' })).toEqual({ assignment_pool: {} })
+  })
+
+  it('a group with no strategy is sent as it stands, so the store’s refusal names the strategies', () => {
+    expect(assignmentPoolPatchOf({ principalID: 'principal_000030', strategy: '' })).toEqual({
+      assignment_pool: { principal_id: 'principal_000030', strategy: '' },
+    })
+  })
+
+  it('a strategy this page has no words for is shown as its own name', () => {
+    expect(assignmentStrategyLabel('least_open_cards')).toContain('fewest')
+    expect(assignmentStrategyLabel('by_skill')).toBe('by_skill')
+  })
+})
+
+describe('why a card got its assignee on arrival, in words', () => {
+  const words = (kind: string, detail: unknown, name?: (id: string) => string) =>
+    describeArrivalAssignment(kind, arrivalAssignmentDetailOf({ detail }), name)
+
+  it('the pool, with its strategy and how many were available', () => {
+    expect(words('assigned', {
+      principal_id: 'principal_000011', source: 'pool', strategy: 'least_open_cards', pool_principal_id: 'principal_000030', candidates: 3,
+    }, id => (id === 'principal_000030' ? 'Northwind Eng' : id))).toBe('from the pool Northwind Eng by least open cards, 3 available')
+  })
+
+  it('the board default, and whether the pool was empty', () => {
+    expect(words('assigned', { principal_id: 'principal_000024', source: 'board_default' })).toBe('board default')
+    expect(words('assigned', { principal_id: 'principal_000024', source: 'board_default', pool_empty: true, pool_principal_id: 'principal_000030' }))
+      .toBe('board default — nobody in the pool principal_000030 was available')
+  })
+
+  it('a tag rule, by its tags', () => {
+    expect(words('assigned', { principal_id: 'p', source: 'tag_rule', rule_id: 'r1', rule_tags: ['cat:product', 'urgency:high'] }))
+      .toBe('from tag rule cat:product + urgency:high')
+  })
+
+  it('a skipped assignment says the card is unassigned and why', () => {
+    expect(words('assignment_skipped', { reason: 'pool_empty', pool_principal_id: 'principal_000030' }))
+      .toBe('nobody in the pool principal_000030 was available and the board has no default principal, so the card is unassigned')
+  })
+
+  it('a source kanban-store adds later is named, not passed off as a known one', () => {
+    expect(words('assigned', { principal_id: 'p', source: 'skills_match' })).toBe('from unknown source "skills_match"')
+  })
+
+  it('an assignment made by hand, or a detail that is not an object, says nothing', () => {
+    expect(words('assigned', undefined)).toBeNull()
+    expect(words('assigned', { principal_id: 'p' })).toBeNull()
+    expect(words('assigned', ['source', 'pool'])).toBeNull()
+    expect(words('assigned', 'pool')).toBeNull()
   })
 })

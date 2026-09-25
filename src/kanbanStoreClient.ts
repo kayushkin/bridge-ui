@@ -1,11 +1,11 @@
 import type { FetchFn } from './types'
-import type { Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, EntityCardView, PriorityLadder, TicketList, TicketView } from '@kayushkin/kanban-store-types'
+import type { AssignmentStrategy, Board, BoardTagRuleInput, BoardTagRules, EffectiveDefaults, EntityCardView, PriorityLadder, TicketList, TicketView } from '@kayushkin/kanban-store-types'
 import type { BoardSettingsPatch, LadderWireLevel } from './kanbanBoardSettings'
 import { readErrorText } from './useKanban'
 
 // The board-level reads and writes behind the board settings page, as typed
 // functions over the host's authenticated fetch. `useKanban` carries the
-// card-level verbs; these are the four the board's own record needs.
+// card-level verbs; these are the ones the board's own record needs.
 //
 // Every call answers a `KanbanStoreResult`: the stored record on success, and
 // on failure kanban-store's own `{"error":"…"}` text, verbatim — its refusals
@@ -51,6 +51,12 @@ export function patchBoard(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   })
+}
+
+/** `GET /api/assignment-strategies` — the strategies an assignment pool may
+ *  name. Served so no page keeps its own copy of the list. */
+export function listAssignmentStrategies(fetchFn: FetchFn, kanbanStoreBasePath: string): Promise<KanbanStoreResult<AssignmentStrategy[]>> {
+  return request(fetchFn, 'list assignment strategies', `${kanbanStoreBasePath}/api/assignment-strategies`)
 }
 
 export function getPriorityLadder(fetchFn: FetchFn, kanbanStoreBasePath: string, boardID: string): Promise<KanbanStoreResult<PriorityLadder>> {

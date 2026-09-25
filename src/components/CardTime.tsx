@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import type { CardEvent, CardNote, CardTimeSummary, CardTimeline, ClockState, TimelineEntry } from '@kayushkin/kanban-store-types'
 import { entityTarget } from '../entityLinks'
+import { arrivalAssignmentDetailOf, describeArrivalAssignment } from '../kanbanBoardSettings'
+import { usePrincipals } from '../usePrincipals'
 import { formatDurationCompact, formatDurationProse } from '../utils'
 
 /**
@@ -283,6 +285,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
       </div>
       {entry.event.summary && <div className="bk-timeline-summary">{entry.event.summary}</div>}
       <TimelineSubject event={entry.event} />
+      <TimelineArrivalAssignment event={entry.event} />
       {entry.note && <NoteBody note={entry.note} />}
       {held && entry.segment_seconds > 0 && (
         <div className="bk-timeline-segment">
@@ -354,6 +357,30 @@ function TimelineSubject({ event }: { event: CardEvent }) {
   )
 }
 
+/** Why the card got the assignee it did when it arrived — the pool, the board
+ * default, a tag rule — or why it got nobody. kanban-store writes that on the
+ * event's detail; an assignment made by hand has none and renders nothing. */
+function TimelineArrivalAssignment({ event }: { event: CardEvent }) {
+  const principals = usePrincipals()
+  const detail = arrivalAssignmentDetailOf(event)
+  if (!detail) return null
+  const principalName = (id: string) => {
+    const principal = principals.byId.get(id)
+    return principal ? `${principal.display_name} (${id})` : id
+  }
+  const assignee = typeof (event.detail as Record<string, unknown>).principal_id === 'string'
+    ? (event.detail as Record<string, string>).principal_id
+    : ''
+  const why = describeArrivalAssignment(event.kind, detail, principalName)
+  if (!why) return null
+  return (
+    <div className="bk-timeline-subject">
+      {assignee && <span className="bk-link-ref">{principalName(assignee)}</span>}
+      <span className="bk-timeline-assignment-source">{why}</span>
+    </div>
+  )
+}
+
 /** Reads the entity off an event's detail.
  *
  * `detail` is free-form JSON by design — kanban-store keeps whatever a caller
@@ -403,6 +430,9 @@ const EVENT_KIND_LABELS: Record<string, string> = {
   note_added: 'Note',
   waiting_started: 'Waiting on someone else',
   waiting_ended: 'Ball back with us',
+  assigned: 'Assigned',
+  unassigned: 'Unassigned',
+  assignment_skipped: 'Nobody assigned',
   // Kinds this store has never defined. kind is deliberately open — an action
   // it has never heard of is kept — and these are the two the demo team
   // records: work handed to a reviewer, and the verdict coming back.

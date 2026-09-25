@@ -3,15 +3,16 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { KANBAN_LAST_BOARD_STORAGE_KEY } from '../constants'
 import { useKanban } from '../useKanban'
-import { getBoard, getPriorityLadder, patchBoard, putPriorityLadder, type KanbanStoreResult } from '../kanbanStoreClient'
+import { getBoard, getPriorityLadder, listAssignmentStrategies, patchBoard, putPriorityLadder, type KanbanStoreResult } from '../kanbanStoreClient'
 import { listMailAccounts, type MailAccount } from '../mailstackClient'
 import { BoardMessageTriggersSection } from './BoardMessageTriggersSection'
 import { BoardTagRulesSection } from './BoardTagRulesSection'
 import { IdField, useDefaultPickers } from './BoardDefaultIdFields'
 import { SettingsSection, useSectionSave } from './settings/SettingsSection'
+import { pickablePrincipals, usePrincipals } from '../usePrincipals'
 import {
-  BOARD_BUNDLE_HELP_TEXT, CLEAR_BUSINESS_HOURS_PATCH, WEEKDAY_CODES,
-  businessHoursDraftOf, businessHoursPatchOf, classifierDraftOf, classifierPatchOf,
+  BOARD_BUNDLE_HELP_TEXT, CLEAR_ASSIGNMENT_POOL_PATCH, CLEAR_BUSINESS_HOURS_PATCH, WEEKDAY_CODES,
+  assignmentPoolDraftOf, assignmentPoolPatchOf, assignmentStrategyLabel, businessHoursDraftOf, businessHoursPatchOf, classifierDraftOf, classifierPatchOf,
   defaultsDraftOf, defaultsPatchOf, emptyLadderRow, generalDraftOf, generalPatchOf, ladderDraftOf,
   ladderDraftToWire, parseMailAccountIDs,
   type BoardSettingsPatch, type BudgetUnit, type LadderRowDraft, type LadderWireLevel,
@@ -23,8 +24,8 @@ import type { Board, PriorityLadder } from '@kayushkin/kanban-store-types'
  * Board settings page: everything kanban-store keeps on a board besides its
  * columns — name and description, the working week, the priority ladder, the
  * defaults a dispatcher or classifier used to take as flags on a cron job
- * (principal, agent, instance, bundle), the classifier that files mail
- * onto it, and the message triggers that text someone when a card changes. The board owns what a job runs with; the scheduler owns when.
+ * (principal, agent, instance, bundle), the assignment pool that hands a new
+ * card to someone who is working, the classifier that files mail onto it, and the message triggers that text someone when a card changes. The board owns what a job runs with; the scheduler owns when.
  *
  * The board is `?board=<id>`; without one, the board the kanban page last
  * opened. Each section saves on its own and sends only what it changed, so an
@@ -158,6 +159,13 @@ function KanbanSettingsPage({ fetchFn, base }: { fetchFn: FetchFn; base: string 
           <BusinessHoursSection key={`hours:${board.id}:${JSON.stringify(board.business_hours ?? null)}`} board={board} onSave={savePatch} />
           <PriorityLadderSection key={`ladder:${board.id}:${JSON.stringify(ladder?.levels ?? null)}`} ladder={ladder} onSave={saveLadder} />
           <DefaultsSection key={`defaults:${board.id}:${JSON.stringify(defaultsDraftOf(board))}`} board={board} onSave={savePatch} />
+          <AssignmentPoolSection
+            key={`assignment-pool:${board.id}:${JSON.stringify(board.assignment_pool ?? null)}`}
+            board={board}
+            onSave={savePatch}
+            fetchFn={fetchFn}
+            base={base}
+          />
           <BoardTagRulesSection key={`tag-rules:${board.id}`} board={board} />
           <ClassifierSection
             key={`classifier:${board.id}:${JSON.stringify(board.classifier ?? null)}`}
@@ -370,6 +378,110 @@ function DefaultsSection({ board, onSave }: { board: Board; onSave: (patch: Boar
         onChange={next => setDraft({ ...draft, default_bundle_id: next })}
         {...pickers.default_bundle_id}
       />
+    </SettingsSection>
+  )
+}
+
+// --- Assignment pool ---------------------------------------------------------
+
+function AssignmentPoolSection({ board, onSave, fetchFn, base }: {
+  board: Board
+  onSave: (patch: BoardSettingsPatch) => Promise<KanbanStoreResult<Board>>
+  fetchFn: FetchFn
+  base: string
+}) {
+  const [draft, setDraft] = useState(() => assignmentPoolDraftOf(board))
+  const patch = useMemo(() => assignmentPoolPatchOf(draft), [draft])
+  const stored = useMemo(() => JSON.stringify(assignmentPoolPatchOf(assignmentPoolDraftOf(board))), [board])
+  const dirty = JSON.stringify(patch) !== stored
+  const save = useSectionSave()
+
+  const [strategies, setStrategies] = useState<string[] | null>(null)
+  const [strategiesError, setStrategiesError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    listAssignmentStrategies(fetchFn, base).then(result => {
+      if (cancelled) return
+      if (result.ok) { setStrategies(result.value); setStrategiesError(null) } else setStrategiesError(result.error)
+    })
+    return () => { cancelled = true }
+  }, [fetchFn, base])
+
+  // Groups only: kanban-store refuses a pool that names a human.
+  const principals = usePrincipals()
+  const groupOptions = useMemo(() => {
+    if (!principals.enabled) return null
+    if (principals.loading && principals.list.length === 0) return null
+    return pickablePrincipals(principals.list, { query: '', kind: 'group', excludeIDs: [] })
+      .map(group => ({ value: group.id, label: `${group.display_name} (${group.id})` }))
+  }, [principals])
+  // The stored values stay on the form even when their owner no longer offers
+  // them: the record is true whatever the list says.
+  const shownGroups = groupOptions && draft.principalID && !groupOptions.some(option => option.value === draft.principalID)
+    ? [...groupOptions, { value: draft.principalID, label: `${draft.principalID} (not offered here)` }]
+    : groupOptions ?? []
+  const shownStrategies = strategies && draft.strategy && !strategies.includes(draft.strategy)
+    ? [...strategies, draft.strategy]
+    : strategies ?? []
+
+  return (
+    <SettingsSection id="assignment-pool" title="Assignment pool" scope="board" storedBy="kanban-store · board"
+      precedence="Per card, a tag rule that names a principal outranks the pool; the pool outranks the board's default principal, which takes the card only when nobody in the pool is available."
+      save={{ dirty, state: save, onSave: () => save.run(() => onSave(patch)), label: 'Save pool', extra: (
+        <>
+        {board.assignment_pool && (
+          <button
+            type="button"
+            className="bp-cancel"
+            disabled={save.saving}
+            title="Remove the pool. New cards then take the board's default principal alone."
+            onClick={() => save.run(() => onSave(CLEAR_ASSIGNMENT_POOL_PATCH))}
+          >Clear pool</button>
+        )}
+        </>
+      ) }}>
+      <p className="bks-help">
+        A card that arrives with no assignee goes to one member of this group who is working at that moment, by the hours
+        and time off each member declares on the Principals page. A member with no declared week is never available.
+        When nobody is, the card takes the default principal above, or arrives unassigned and its history says why.
+      </p>
+      <div className="bks-field" data-field="bks-assignment-pool-group">
+        <label className="bks-field-label" htmlFor="bks-assignment-pool-group">Group</label>
+        {principals.enabled ? (
+          <select
+            id="bks-assignment-pool-group"
+            className="bks-id-select"
+            value={draft.principalID}
+            disabled={groupOptions === null && !draft.principalID}
+            onChange={e => setDraft({ ...draft, principalID: e.target.value })}
+          >
+            <option value="">{groupOptions === null ? 'loading…' : '— no pool —'}</option>
+            {shownGroups.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        ) : (
+          <>
+            <input id="bks-assignment-pool-group" className="bks-id-input" value={draft.principalID} placeholder="principal_000030"
+              onChange={e => setDraft({ ...draft, principalID: e.target.value })} />
+            <p className="bks-help">This host has no route to principal-store, so the group id is typed here.</p>
+          </>
+        )}
+        {principals.error && <div className="bridge-error bks-error">{principals.error}</div>}
+      </div>
+      <div className="bks-field" data-field="bks-assignment-pool-strategy">
+        <label className="bks-field-label" htmlFor="bks-assignment-pool-strategy">Strategy</label>
+        <select
+          id="bks-assignment-pool-strategy"
+          className="bks-id-select"
+          value={draft.strategy}
+          disabled={strategies === null && !draft.strategy}
+          onChange={e => setDraft({ ...draft, strategy: e.target.value })}
+        >
+          <option value="">{strategies === null && !strategiesError ? 'loading…' : '— choose —'}</option>
+          {shownStrategies.map(strategy => <option key={strategy} value={strategy}>{assignmentStrategyLabel(strategy)}</option>)}
+        </select>
+        <p className="bks-help">How to choose among the members available when a card arrives. kanban-store serves the list.</p>
+        {strategiesError && <div className="bridge-error bks-error">{strategiesError}</div>}
+      </div>
     </SettingsSection>
   )
 }

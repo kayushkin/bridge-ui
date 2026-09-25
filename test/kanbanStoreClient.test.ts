@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getCardEffectiveDefaults, getEffectiveDefaultsForTags, getTagRules, patchBoard, putPriorityLadder, putTagRules,
+  getCardEffectiveDefaults, listAssignmentStrategies, getEffectiveDefaultsForTags, getTagRules, patchBoard, putPriorityLadder, putTagRules,
 } from '../src/kanbanStoreClient'
 import type { FetchFn } from '../src/types'
 
@@ -93,5 +93,20 @@ describe('tag rules and effective defaults', () => {
     expect(first.pathname).toBe('/api/kanban/api/boards/b1/effective-defaults')
     expect(first.searchParams.getAll('tag')).toEqual(['cat:product', 'urgency:high'])
     expect(calls[1].url).toBe('/api/kanban/api/boards/b1/effective-defaults')
+  })
+})
+
+describe('assignment strategies', () => {
+  it('reads the served list from the store rather than keeping a copy', async () => {
+    const { calls, fetchFn } = recordingFetch(200, ['least_open_cards', 'round_robin'])
+    const result = await listAssignmentStrategies(fetchFn, '/api/kanban')
+    expect(result).toEqual({ ok: true, value: ['least_open_cards', 'round_robin'] })
+    expect(calls).toEqual([{ url: '/api/kanban/api/assignment-strategies', method: undefined, body: undefined }])
+  })
+
+  it('reports a store without the route as an error, not as an empty list', async () => {
+    const { fetchFn } = recordingFetch(404, { error: 'not found' })
+    const result = await listAssignmentStrategies(fetchFn, '/api/kanban')
+    expect(result.ok).toBe(false)
   })
 })
