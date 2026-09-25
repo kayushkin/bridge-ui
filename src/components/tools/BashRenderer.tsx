@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { ToolRendererProps } from './types'
 import { registerToolRenderer } from './registry'
 import { useToolContext } from './context'
 import { useBridgeConfig } from '../../context'
 import { DiffView } from './DiffView'
+import { localPortsMentioned, previewsMentioned } from '../../devServerPreviews'
+import { useDevServerPreviews } from '../../useDevServerPreviews'
 import {
   loadSide,
   sidesHint,
@@ -19,10 +22,21 @@ import {
 // files (cat, ls, grep, …) shows up identical to the old renderer.
 function BashRenderer({ tool, running }: ToolRendererProps) {
   const { sessionId } = useToolContext()
-  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const { fetch: fetchFn, basePath, routes } = useBridgeConfig()
 
   const input = tool.input ?? {}
   const command = (input.command ?? input.cmd ?? '') as string
+
+  // A local URL in the command or its output — a dev server's "Local:" line,
+  // or a curl at one — gets a View link while an agent process still listens
+  // on that port. Only a call that names one asks for the list at all.
+  const commandAndOutput = `${command}\n${tool.output ?? ''}`
+  const namesLocalPort = useMemo(() => localPortsMentioned(commandAndOutput).length > 0, [commandAndOutput])
+  const { previews } = useDevServerPreviews(namesLocalPort)
+  const viewable = useMemo(
+    () => (namesLocalPort ? previewsMentioned(commandAndOutput, previews).filter(preview => preview.preview_port) : []),
+    [namesLocalPort, commandAndOutput, previews],
+  )
 
   const [diffs, setDiffs] = useState<LoadedFileDiff[] | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -69,6 +83,16 @@ function BashRenderer({ tool, running }: ToolRendererProps) {
         <span className="bc-tool-name">⌨ bash</span>
         {running && <span className="bc-tool-spinner">⟳</span>}
         {tool.error && !running && <span className="bc-tool-error-badge">error</span>}
+        {viewable.map(preview => (
+          <Link
+            key={preview.port}
+            className="bc-tool-preview-link"
+            to={`${routes.previews}?port=${preview.port}`}
+            title={`Show the server on port ${preview.port}`}
+          >
+            View :{preview.port}
+          </Link>
+        ))}
       </div>
       {command && <pre className="bc-tool-output-code">$ {command}</pre>}
       {tool.output && (

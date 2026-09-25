@@ -51,6 +51,9 @@ export interface BridgeRoutes {
   card: string
   /** Every ticket that came from an email, and the email it came from. */
   emailTickets: string
+  /** The dev servers agents are running, each shown in a frame. `?port=<n>`
+   *  opens the one listening on that port. Needs `previewsBasePath`. */
+  previews: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
   // exists, so it is empty, and a link to an empty route is not rendered at all —
@@ -85,6 +88,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   orchestrator: '/orchestrator',
   card: '/card',
   emailTickets: '/email-tickets',
+  previews: '/previews',
   notes: '',
 }
 
@@ -165,6 +169,10 @@ export interface BridgeConfig {
   predictionStoreBasePath: string
   eventStoreBasePath: string
   authStoreBasePath: string
+  /** The HOST's list of ports agents' processes listen on, each with the
+   * public port that shows it (dash: "/api/previews"). If empty, the Previews
+   * page is hidden and Bash calls show no View button. */
+  previewsBasePath: string
   /** Base path of the HOST's own routes, read only by the service settings
    * page, which asks `{base}/settings` — the host describes its own settings
    * there like any backend (dash: "/api/dash"). The host is not proxied under a

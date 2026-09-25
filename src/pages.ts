@@ -25,6 +25,7 @@ import { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
 import { BridgeServiceSettings } from './components/BridgeServiceSettings'
 import { BridgeHooks } from './components/BridgeHooks'
 import { BridgeInboundRules } from './components/BridgeInboundRules'
+import { BridgePreviews } from './components/BridgePreviews'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
@@ -90,6 +91,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The page exists on every host; it is listed only where the producer is
   // proxied, since without it the page can say nothing but "not configured".
   { route: 'orchestrator', label: 'Orchestrator', group: 'work', listed: true, available: c => !!c.producerBasePath, component: BridgeOrchestrator },
+  // The dev servers agents are running. Only the host can see a machine's
+  // listening ports, so a host that lists none gets no page.
+  { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },

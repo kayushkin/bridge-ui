@@ -80,6 +80,7 @@ components itself, passing its own `routes`.
 | `skillStoreBasePath` | `string` | `""` | Base path for skill-store API. If empty, the Skills tab is hidden. |
 | `bundleStoreBasePath` | `string` | `""` | Base path for bundle-store API. If empty, the Bundles tab is hidden. |
 | `repoStoreBasePath` | `string` | `""` | Base path for repo-store API, which gives the Bundles page repos to preview a resolution for. If empty, the page lists bundles only. |
+| `previewsBasePath` | `string` | `""` | The host's list of ports agents' processes listen on, each with the public port that shows it (dash: `/api/previews`). If empty, the Previews tab and the View link on Bash calls are hidden. |
 | `routes` | `Partial<BridgeRoutes>` | `DEFAULT_BRIDGE_ROUTES` | Override individual route paths used by inter-page navigation. `<Bridge>` sets only `notes`. |
 
 `DEFAULT_BRIDGE_ROUTES` is what `<Bridge>` renders:
@@ -89,7 +90,7 @@ components itself, passing its own `routes`.
   chat: '/', instances: '/instances', sessions: '/sessions', auth: '/auth', usage: '/usage',
   settings: '/settings', agents: '/agents', files: '/files', skills: '/skills', tools: '/tools',
   permissions: '/permissions', conformance: '/conformance', kanban: '/kanban',
-  principals: '/principals', bundles: '/bundles', orchestrator: '/orchestrator', card: '/card',
+  principals: '/principals', bundles: '/bundles', orchestrator: '/orchestrator', card: '/card', previews: '/previews',
   notes: '',   // the host's, if it has one
 }
 ```

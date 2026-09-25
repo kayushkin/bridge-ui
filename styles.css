@@ -1159,6 +1159,18 @@
   border-radius: 3px;
   font-weight: 500;
 }
+/* A Bash call that names a local URL an agent process still listens on links
+   to the Previews page for it (BashRenderer). */
+.bc-tool-preview-link {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bc-tool-preview-link:hover { background: var(--accent); color: var(--bg); }
 .bc-tool-output {
   margin-top: 0.3rem;
   padding: 0.3rem 0.4rem;
