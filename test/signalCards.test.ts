@@ -341,24 +341,49 @@ describe('a card opened showing only its answers', () => {
     ).not.toContain('textarea');
   });
 
-  it('keeps the freeform box when the question has no options at all', () => {
+  it('keeps the freeform box and the title when the question has no options at all', () => {
     // Otherwise the card has no answer field left. The chat composer is NOT the
     // fallback: a bare /send deliberately leaves a tool-parked question open,
     // because the harness is blocked on its hook and not on stdin
     // (TestAnswerDerivedQuestionsLeavesToolParksToTheHookVerb, llm-bridge-server).
-    const signal = question({ options: [] });
-    expect(
-      renderToStaticMarkup(createElement(SignalCard, { signal, startCollapsedToAnswers: true })),
-    ).toContain('textarea');
+    // The title stays because a text box with nothing above it reads as an empty
+    // question; the summary still waits behind the disclosure.
+    const signal = question({
+      title: 'Make that edit?',
+      body: 'It touches the deploy script.',
+      options: [],
+    });
+    const html = renderToStaticMarkup(
+      createElement(SignalCard, { signal, startCollapsedToAnswers: true }),
+    );
+    expect(html).toContain('textarea');
+    expect(html).toContain('Make that edit?');
+    expect(html).not.toContain('It touches the deploy script.');
   });
 
-  it('never collapses a notification — a notification IS its title', () => {
+  it('shows a notification as its Acknowledge button, with the text behind the disclosure', () => {
+    // The transcript above already says what the notification says.
     const note = question({ kind: 'notification', title: 'The deploy finished' });
     const html = renderToStaticMarkup(
-      createElement(SignalCard, { signal: note, startCollapsedToAnswers: true }),
+      createElement(SignalCard, {
+        signal: note,
+        startCollapsedToAnswers: true,
+        onAcknowledge: () => {},
+      }),
+    );
+    expect(html).not.toContain('The deploy finished');
+    expect(html).toContain('Show the notification');
+    expect(html).toContain('signal-ack');
+  });
+
+  it('shows a notification in full on a surface that does not collapse', () => {
+    const note = question({ kind: 'notification', title: 'The deploy finished' });
+    const html = renderToStaticMarkup(
+      createElement(SignalCard, { signal: note, onAcknowledge: () => {} }),
     );
     expect(html).toContain('The deploy finished');
     expect(html).not.toContain('signal-disclosure');
+    expect(html).toContain('signal-ack');
   });
 });
 

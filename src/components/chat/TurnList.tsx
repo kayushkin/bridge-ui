@@ -484,6 +484,22 @@ export default function TurnList({
     if (atBottom) h.scrollToIndex(lastChildIndex, { align: 'end' })
   }, [sessionId, lastChildIndex, entries, atBottom])
 
+  // The pane changing size is not the transcript changing, so the effect above never
+  // sees it. The "Waiting on you" banner below the pane is what does it most: a
+  // question arriving, or its card growing, takes height from this pane, virtua keeps
+  // the scroll offset, and the last lines sink under the banner until the next event
+  // lands. A reader at the bottom stays at the bottom; one scrolled up is left alone.
+  const paneRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const pane = paneRef.current
+    if (!pane || !atBottom || lastChildIndex < 0) return
+    const observer = new ResizeObserver(() => {
+      listRef.current?.scrollToIndex(lastChildIndex, { align: 'end' })
+    })
+    observer.observe(pane)
+    return () => observer.disconnect()
+  }, [atBottom, lastChildIndex])
+
   if (!sessionId) {
     // Two different situations arrive here as `sessionId === null`: nothing is selected,
     // and a new chat is open but unsent. Only the store's pending record separates them,
@@ -546,6 +562,7 @@ export default function TurnList({
   return (
     <div
       {...rootProps}
+      ref={paneRef}
       // User-initiated scroll intent clears the status slot's linger spacer. Attached
       // only while the spacer is up, so the pane carries no live wheel handler the
       // rest of the time.

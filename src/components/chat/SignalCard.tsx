@@ -55,6 +55,11 @@ export interface SignalCardProps {
    *  question — repeating it under the transcript is the same words twice, and
    *  the answers are the only part you cannot read further up.
    *
+   *  A question with no options keeps its title: its answers are a blank text
+   *  box, and a blank box with nothing above it reads as an empty question. A
+   *  notification shows only its Acknowledge button, for the same reason the
+   *  question hides — its text is the last thing the transcript said.
+   *
    *  It also drops the separate freeform box on a card that HAS options, because
    *  every option is editable: rewriting one is how you answer in your own words
    *  there. A question minted with no options keeps its box, or it would have no
@@ -114,11 +119,18 @@ export function SignalCard({
   // on the pick-many form, which really does wait.
   const submitsOnPick = !multiple && onAnswerAndSubmit !== undefined;
 
-  // A notification IS its title, so it is never collapsed — there would be
-  // nothing left of it.
-  const collapsible = startCollapsedToAnswers === true && !isNotification;
+  const collapsible = startCollapsedToAnswers === true;
   const [questionShown, setQuestionShown] = useState(false);
   const questionVisible = !collapsible || questionShown;
+  // See `startCollapsedToAnswers`: with no options to show, the title is what
+  // tells the reader what the text box answers.
+  const titleVisible = questionVisible || (!isNotification && options.length === 0);
+  const kindLabel = isNotification ? 'notification' : 'question';
+  const acknowledgeButton = isNotification && onAcknowledge && (
+    <button type="button" className="signal-ack" disabled={busy} onClick={onAcknowledge}>
+      Acknowledge
+    </button>
+  );
 
   /** The text of one option that has been rewritten, keyed by the option's own
    *  value. Local, ephemeral view state: what the human typed goes into the
@@ -190,28 +202,27 @@ export function SignalCard({
             type="button"
             className="signal-disclosure"
             aria-expanded={questionShown}
-            aria-label={questionShown ? 'Hide the question' : 'Show the question'}
-            title={questionShown ? 'Hide the question' : 'Show the question'}
+            aria-label={`${questionShown ? 'Hide' : 'Show'} the ${kindLabel}`}
+            title={`${questionShown ? 'Hide' : 'Show'} the ${kindLabel}`}
             onClick={() => setQuestionShown((shown) => !shown)}
           >
             <span className="signal-disclosure-caret" aria-hidden>
               {questionShown ? '▾' : '▸'}
             </span>
-            <span className="signal-kind signal-kind-question">question</span>
+            <span className={`signal-kind signal-kind-${kindLabel}`}>{kindLabel}</span>
           </button>
         ) : (
-          <span
-            className={`signal-kind signal-kind-${isNotification ? 'notification' : 'question'}`}
-          >
-            {isNotification ? 'notification' : 'question'}
-          </span>
+          <span className={`signal-kind signal-kind-${kindLabel}`}>{kindLabel}</span>
         )}
         {isNotification && signal.severity === SIGNAL_SEVERITY_WARN && (
           <span className="signal-severity">warn</span>
         )}
+        {/* On the header line when the card is collapsible, so a collapsed
+            notification is one line: its label and the one thing to do. */}
+        {collapsible && acknowledgeButton}
       </div>
 
-      {questionVisible && (
+      {titleVisible && (
         <p className="signal-title">
           <SignalInlineMarkdown text={signal.title} />
         </p>
@@ -369,12 +380,8 @@ export function SignalCard({
         />
       )}
 
-      {isNotification && onAcknowledge && (
-        <div className="signal-actions">
-          <button type="button" className="signal-ack" disabled={busy} onClick={onAcknowledge}>
-            Acknowledge
-          </button>
-        </div>
+      {!collapsible && acknowledgeButton && (
+        <div className="signal-actions">{acknowledgeButton}</div>
       )}
     </div>
   );

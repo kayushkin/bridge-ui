@@ -34,6 +34,11 @@ type ResolveFn = (input: HookResolveInput) => Promise<void>
  *
  *  Renders nothing when there is nothing waiting.
  *
+ *  Collapses to its one header line. It opens again by itself when something
+ *  arrives that was not there when it was collapsed, so collapsing hides what you
+ *  have seen and never what you have not. The host keys it by session, so a
+ *  collapse does not follow you into another chat.
+ *
  *  Takes a session id, NOT `string | null`, and the caller guards. `useOpenSignals`
  *  reads across EVERY session when given no id — that is how the sidebar builds its
  *  marker list — so a null threaded through here would fill the chat pane with other
@@ -66,33 +71,65 @@ export default function AwaitingYouBanner({ sessionId }: { sessionId: string }) 
     return pending.filter(hook => !covered.has(hook.requestId))
   }, [signals, pending])
 
+  // What was waiting when the reader collapsed the banner, by the same keys the
+  // cards are keyed by; null while it is open.
+  const [waitingWhenCollapsed, setWaitingWhenCollapsed] = useState<ReadonlySet<string> | null>(null)
+  const waitingKeys = useMemo(
+    () => [
+      ...uncoveredParks.map(hook => hook.requestId),
+      ...requests.map(request => request.requestId || request.signals[0]?.id || ''),
+    ],
+    [uncoveredParks, requests],
+  )
+  const collapsed =
+    waitingWhenCollapsed !== null && waitingKeys.every(key => waitingWhenCollapsed.has(key))
+
   if (requests.length === 0 && uncoveredParks.length === 0 && error === null) return null
 
   return (
-    <div className="bc-pending-banner" role="region" aria-label="Waiting on you">
-      {/* Said out loud rather than swallowed. The parked cards below are still
-          rendered — see `uncoveredParks` — so this reports a degraded surface,
-          not a dead one. */}
-      {error !== null && (
-        <p className="bc-pending-error">Couldn’t load this session’s questions: {error}</p>
-      )}
-      {/* Gates first: a parked tool call is frozen mid-turn right now, whereas a
-          question record may have been raised by a session that has since
-          stopped. */}
-      {uncoveredParks.map(hook => (
-        <PermissionCard key={hook.requestId} hook={hook} resolve={resolve} />
-      ))}
-      {/* Collapsed to the answers. The transcript directly above already carries the
-          question — a signal card that repeats it under the transcript is the same words
-          twice, and the suggested answers are the only part you cannot read further up.
-          The disclosure on each card puts the question back when you want it.
+    <div
+      className={`bc-pending-banner${collapsed ? ' bc-pending-banner-collapsed' : ''}`}
+      role="region"
+      aria-label="Waiting on you"
+    >
+      <button
+        type="button"
+        className="bc-pending-banner-toggle"
+        aria-expanded={!collapsed}
+        onClick={() => setWaitingWhenCollapsed(collapsed ? null : new Set(waitingKeys))}
+      >
+        <span className="signal-disclosure-caret" aria-hidden>
+          {collapsed ? '▸' : '▾'}
+        </span>
+        Waiting on you · {waitingKeys.length}
+      </button>
+      {!collapsed && (
+        <>
+          {/* Said out loud rather than swallowed. The parked cards below are still
+              rendered — see `uncoveredParks` — so this reports a degraded surface,
+              not a dead one. */}
+          {error !== null && (
+            <p className="bc-pending-error">Couldn’t load this session’s questions: {error}</p>
+          )}
+          {/* Gates first: a parked tool call is frozen mid-turn right now, whereas a
+              question record may have been raised by a session that has since
+              stopped. */}
+          {uncoveredParks.map(hook => (
+            <PermissionCard key={hook.requestId} hook={hook} resolve={resolve} />
+          ))}
+          {/* Collapsed to the answers. The transcript directly above already carries the
+              question — a signal card that repeats it under the transcript is the same words
+              twice, and the suggested answers are the only part you cannot read further up.
+              The disclosure on each card puts the question back when you want it.
 
-          ⚠️ It also drops the card's own freeform box wherever the question has options,
-          on the grounds that every option is editable. The composer is NOT the fallback:
-          a bare /send deliberately leaves a tool-parked question open, because the
-          harness is blocked on its hook and not on stdin. A question with no options
-          keeps its box. */}
-      <SignalRequestList requests={requests} onResolved={reload} startCollapsedToAnswers />
+              ⚠️ It also drops the card's own freeform box wherever the question has options,
+              on the grounds that every option is editable. The composer is NOT the fallback:
+              a bare /send deliberately leaves a tool-parked question open, because the
+              harness is blocked on its hook and not on stdin. A question with no options
+              keeps its box. */}
+          <SignalRequestList requests={requests} onResolved={reload} startCollapsedToAnswers />
+        </>
+      )}
     </div>
   )
 }

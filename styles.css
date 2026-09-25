@@ -1317,11 +1317,18 @@
      scrolls internally instead of pushing its Submit/Decline buttons off the
      bottom of the viewport. overscroll-behavior keeps the scroll from chaining
      to the transcript underneath. */
-  max-height: 70vh;
-  max-height: 70dvh;
+  max-height: 40vh;
+  max-height: 40dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.bc-pending-banner-collapsed { padding-top: 4px; padding-bottom: 4px; }
+.bc-pending-banner-toggle {
+  display: flex; gap: 6px; align-items: baseline; align-self: flex-start;
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--text-muted); font: inherit; font-size: 0.78em;
+}
+.bc-pending-banner-toggle:hover { color: var(--text); }
 .bc-pending-card {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: 6px; padding: 10px 12px; background: var(--bg-elevated, var(--bg-surface));
@@ -5512,6 +5519,8 @@
 }
 
 .signal-submit:hover,
+.signal-card-header .signal-ack { margin-left: auto; }
+
 .signal-ack:hover {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
 }

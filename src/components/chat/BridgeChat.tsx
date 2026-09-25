@@ -793,7 +793,7 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
       </div>
 
       <BudgetBanner sessionId={id} />
-      {id && <AwaitingYouBanner sessionId={id} />}
+      {id && <AwaitingYouBanner key={id} sessionId={id} />}
       {/* Portaled into the sheet on a phone, and rendered NOWHERE else — on a desktop these
           same controls are on the top bar, which is the whole point of the merge. Rendering
           both would put two model pickers on screen.
