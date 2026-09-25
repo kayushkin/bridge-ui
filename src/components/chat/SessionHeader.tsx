@@ -1,4 +1,5 @@
 import { useBridgeConfig } from '../../context'
+import { SessionPreviewLinks } from './SessionPreviewLinks'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -364,6 +365,8 @@ export default function SessionHeader({
             ceiling={spendCeiling}
           />
         )}
+
+        <SessionPreviewLinks sessionId={summary.sessionId} />
 
         <div className={`bc-header-right ${styles.headerCluster}`}>
           <SessionSettingsInline settings={settings} controls={controls} />

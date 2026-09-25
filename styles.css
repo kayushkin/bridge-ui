@@ -1159,8 +1159,9 @@
   border-radius: 3px;
   font-weight: 500;
 }
-/* A Bash call that names a local URL an agent process still listens on links
-   to the Previews page for it (BashRenderer). */
+/* A link to the Previews page for a server an agent is running: on a Bash
+   call that names its local URL (BashRenderer), and in the session header
+   (SessionPreviewLinks). */
 .bc-tool-preview-link {
   font-size: 0.65rem;
   padding: 0.1rem 0.4rem;

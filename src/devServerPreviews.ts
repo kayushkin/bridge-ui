@@ -73,3 +73,9 @@ export function workingDirectoryLabel(workingDirectory: string): string {
   const trimmed = workingDirectory.replace(/\/+$/, '')
   return trimmed.slice(trimmed.lastIndexOf('/') + 1) || workingDirectory
 }
+
+/** The previews whose process ran under this bridge session, as the host
+ *  reports it (`sessions`, from the process's harness session id). */
+export function previewsOfSession(previews: readonly DevServerPreview[], sessionId: string): DevServerPreview[] {
+  return previews.filter(preview => preview.sessions?.some(session => session.session_id === sessionId))
+}

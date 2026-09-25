@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   localPortsMentioned,
   previewsMentioned,
+  previewsOfSession,
   previewUrl,
   workingDirectoryLabel,
   type DevServerPreview,
@@ -55,5 +56,15 @@ describe('workingDirectoryLabel', () => {
   it('is the last segment', () => {
     expect(workingDirectoryLabel('/home/u/repos/dash-wt-previews/')).toBe('dash-wt-previews')
     expect(workingDirectoryLabel('/')).toBe('/')
+  })
+})
+
+describe('previewsOfSession', () => {
+  it('keeps the previews the host says that session ran', () => {
+    const session = (id: string) => ({ session_id: id, event_count: 1, last_active: '2026-09-25T19:59:37Z' })
+    const mine = { ...preview(5173, 9100), sessions: [session('br_1'), session('br_2')] }
+    const theirs = { ...preview(3000, 9101), sessions: [session('br_3')] }
+    const unknown = preview(8080, 9102)
+    expect(previewsOfSession([mine, theirs, unknown], 'br_2')).toEqual([mine])
   })
 })
