@@ -35,6 +35,10 @@ export interface DevServerPreview {
 
 export interface DevServerPreviewList {
   previews: DevServerPreview[]
+  /** Processes among the agents' that the host may not look inside — most
+   *  often root's, from an agent's `sudo` — so any port they listen on is
+   *  missing from `previews`. */
+  unreadable_process_ids: number[]
 }
 
 /** Where the browser opens a preview: the page's own hostname on the preview

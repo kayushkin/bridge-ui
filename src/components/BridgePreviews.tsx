@@ -14,7 +14,7 @@ import styles from './BridgePreviews.module.css'
  * on, which is what a Bash call's View button links to.
  */
 export function BridgePreviews() {
-  const { previews, error, loaded } = useDevServerPreviews()
+  const { previews, unreadableProcessIds, error, loaded } = useDevServerPreviews()
   const [searchParams, setSearchParams] = useSearchParams()
   const pickedPort = Number(searchParams.get('port')) || null
   const picked = previews.find(preview => preview.port === pickedPort) ?? null
@@ -35,6 +35,14 @@ export function BridgePreviews() {
         </p>
       </header>
       {error && <pre className={styles.error}>{error}</pre>}
+      {unreadableProcessIds.length > 0 && (
+        <div className={styles.muted}>
+          {unreadableProcessIds.length === 1 ? 'One agent process belongs' : `${unreadableProcessIds.length} agent processes belong`} to
+          another user (usually root, from <code>sudo</code>), so dash cannot see whether{' '}
+          {unreadableProcessIds.length === 1 ? 'it listens' : 'they listen'} on a port: process{' '}
+          {unreadableProcessIds.join(', ')}.
+        </div>
+      )}
       {loaded && !error && previews.length === 0 && (
         <div className={styles.empty}>No agent is running a server right now.</div>
       )}

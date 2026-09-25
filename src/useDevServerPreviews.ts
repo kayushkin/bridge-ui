@@ -7,13 +7,15 @@ const POLL_INTERVAL_MS = 5000
 
 export interface DevServerPreviewsState {
   previews: DevServerPreview[]
+  /** Agent processes the host could not look inside; see DevServerPreviewList. */
+  unreadableProcessIds: number[]
   /** The host's refusal, verbatim, or the network failure. */
   error: string | null
   /** False until the first answer, so a page can tell "none" from "not yet". */
   loaded: boolean
 }
 
-const NOT_LOADED: DevServerPreviewsState = { previews: [], error: null, loaded: false }
+const NOT_LOADED: DevServerPreviewsState = { previews: [], unreadableProcessIds: [], error: null, loaded: false }
 
 // One poll per list, however many components read it: every Bash row in the
 // chat asks, and a request per row every few seconds would be dozens.
@@ -53,13 +55,13 @@ class DevServerPreviewsPoller {
     try {
       const response = await this.fetchFn(this.url)
       if (!response.ok) {
-        next = { previews: this.state.previews, error: `${response.status}: ${(await response.text()).trim()}`, loaded: true }
+        next = { ...this.state, error: `${response.status}: ${(await response.text()).trim()}`, loaded: true }
       } else {
         const body = (await response.json()) as DevServerPreviewList
-        next = { previews: body.previews, error: null, loaded: true }
+        next = { previews: body.previews, unreadableProcessIds: body.unreadable_process_ids, error: null, loaded: true }
       }
     } catch (error) {
-      next = { previews: this.state.previews, error: String(error), loaded: true }
+      next = { ...this.state, error: String(error), loaded: true }
     }
     this.state = next
     for (const listener of this.listeners) listener()
