@@ -55,30 +55,32 @@ export interface SignalCardProps {
    *  question — repeating it under the transcript is the same words twice, and
    *  the answers are the only part you cannot read further up.
    *
-   *  A question with no options keeps its title: its answers are a blank text
-   *  box, and a blank box with nothing above it reads as an empty question. A
-   *  notification shows only its Acknowledge button, for the same reason the
-   *  question hides — its text is the last thing the transcript said.
+   *  A question with no options keeps its title, so the card says what it is
+   *  asking. A notification shows only its Acknowledge button, for the same
+   *  reason the question hides — its text is the last thing the transcript said.
    *
-   *  It also drops the separate freeform box on a card that HAS options, because
-   *  every option is editable: rewriting one is how you answer in your own words
-   *  there. A question minted with no options keeps its box, or it would have no
-   *  answer field left at all. ⚠️ The chat composer is NOT that field — a bare
-   *  /send deliberately leaves a tool-parked question open
-   *  (`TestAnswerDerivedQuestionsLeavesToolParksToTheHookVerb` in
-   *  llm-bridge-server), because the harness is blocked on its hook, not on
-   *  stdin. */
+   *  It also drops the freeform box, because the chat composer sits right under
+   *  it. That is safe for both producers, and for different reasons:
+   *   - A DERIVED question is answered by the session's next message: a /send
+   *     closes it (`closeQuestionsAnsweredByMessage` in llm-bridge-server).
+   *   - A TOOL question is NOT — a bare /send leaves its park open
+   *     (`TestAnswerDerivedQuestionsLeavesToolParksToTheHookVerb`), because the
+   *     harness is blocked on its hook, not on stdin. But AskUserQuestion always
+   *     carries options, and every option is editable: rewriting one is how you
+   *     answer a tool question in your own words here.
+   *  So a card with no options in the chat pane has nothing to click, and says
+   *  so by drawing no Answer button either. */
   startCollapsedToAnswers?: boolean;
 }
 
-/** Whether a card renders its own freeform answer box.
+/** Whether a card renders its own freeform answer box: never in the chat
+ *  pane, where the composer is right below — see `startCollapsedToAnswers`.
  *
- *  Read by {@link SignalRequestCard} as well as by the card, because the box is
- *  the one thing a Submit button is still needed for once a question answers on
- *  the click. One rule, one place. */
+ *  Read by {@link SignalRequestCard} as well as by the card, because the box
+ *  decides whether a Submit button has anything to send. One rule, one place. */
 function rendersFreeformBox(signal: Signal, startCollapsedToAnswers: boolean): boolean {
   if (signal.kind === SIGNAL_KIND_NOTIFICATION) return false;
-  return !(startCollapsedToAnswers && signal.options.length > 0);
+  return !startCollapsedToAnswers;
 }
 
 /**
@@ -355,8 +357,8 @@ export function SignalCard({
         </div>
       )}
 
-      {/* The freeform box, for every question that has no editable option to
-          rewrite instead — see `startCollapsedToAnswers`.
+      {/* The freeform box, on every surface but the chat pane — see
+          `startCollapsedToAnswers`.
           NOT gated on `compact`: that hid the only way to answer a question the
           producer minted with no options, and trimming chrome must never remove
           the means of answering.
@@ -450,11 +452,18 @@ export function SignalRequestCard({
   const sole = questions.length === 1 ? questions[0] : undefined;
   const answersOnPick =
     sole !== undefined && !sole.allowMultipleOptions && sole.options.length > 0 ? sole : null;
-  // The Submit button survives auto-submit only where a freeform box does: text
-  // typed into that box has nothing else to send it.
+  // Submit needs something on the card to submit: an option or a freeform box.
+  // A chat-pane card for a question with no options has neither, and is answered
+  // from the composer instead.
+  const answerableHere = questions.some(
+    (question) =>
+      question.options.length > 0 || rendersFreeformBox(question, startCollapsedToAnswers === true),
+  );
+  // It survives auto-submit only where a freeform box does: text typed into that
+  // box has nothing else to send it.
   const submitShown =
-    answersOnPick === null ||
-    rendersFreeformBox(answersOnPick, startCollapsedToAnswers === true);
+    answerableHere &&
+    (answersOnPick === null || rendersFreeformBox(answersOnPick, startCollapsedToAnswers === true));
 
   const setAnswer = useCallback((signalId: string, answer: SignalAnswerDraft) => {
     setAnswers((prev) => ({ ...prev, [signalId]: answer }));

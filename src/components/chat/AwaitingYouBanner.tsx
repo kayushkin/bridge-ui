@@ -122,11 +122,10 @@ export default function AwaitingYouBanner({ sessionId }: { sessionId: string }) 
               twice, and the suggested answers are the only part you cannot read further up.
               The disclosure on each card puts the question back when you want it.
 
-              ⚠️ It also drops the card's own freeform box wherever the question has options,
-              on the grounds that every option is editable. The composer is NOT the fallback:
-              a bare /send deliberately leaves a tool-parked question open, because the
-              harness is blocked on its hook and not on stdin. A question with no options
-              keeps its box. */}
+              It also drops every card's own freeform box: the composer right below answers
+              a derived question, and a tool question's options are editable. The reasoning,
+              and why the composer does NOT answer a tool question, is on
+              `startCollapsedToAnswers`. */}
           <SignalRequestList requests={requests} onResolved={reload} startCollapsedToAnswers />
         </>
       )}

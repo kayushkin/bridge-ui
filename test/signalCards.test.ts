@@ -341,13 +341,11 @@ describe('a card opened showing only its answers', () => {
     ).not.toContain('textarea');
   });
 
-  it('keeps the freeform box and the title when the question has no options at all', () => {
-    // Otherwise the card has no answer field left. The chat composer is NOT the
-    // fallback: a bare /send deliberately leaves a tool-parked question open,
-    // because the harness is blocked on its hook and not on stdin
-    // (TestAnswerDerivedQuestionsLeavesToolParksToTheHookVerb, llm-bridge-server).
-    // The title stays because a text box with nothing above it reads as an empty
-    // question; the summary still waits behind the disclosure.
+  it('shows only the title of a question with no options — the composer answers it', () => {
+    // A derived question is answered by the session's next message, and the
+    // composer is right below the card. A tool question always has options.
+    // The title stays so the card still says what it asks; the summary waits
+    // behind the disclosure.
     const signal = question({
       title: 'Make that edit?',
       body: 'It touches the deploy script.',
@@ -356,9 +354,27 @@ describe('a card opened showing only its answers', () => {
     const html = renderToStaticMarkup(
       createElement(SignalCard, { signal, startCollapsedToAnswers: true }),
     );
-    expect(html).toContain('textarea');
+    expect(html).not.toContain('textarea');
     expect(html).toContain('Make that edit?');
     expect(html).not.toContain('It touches the deploy script.');
+  });
+
+  it('draws no Answer button for a question with nothing on the card to answer with', () => {
+    // A disabled button that can never enable is noise.
+    const signal = question({ id: 'sig-1', options: [] });
+    const html = renderToStaticMarkup(
+      inChatContext(createElement(SignalRequestCard, {
+        request: requestOf(signal),
+        startCollapsedToAnswers: true,
+      })),
+    );
+    expect(html).not.toContain('signal-submit');
+  });
+
+  it('keeps the freeform box on a question with no options everywhere else', () => {
+    // The inbox and the kanban drawer have no composer below them.
+    const signal = question({ options: [] });
+    expect(renderToStaticMarkup(createElement(SignalCard, { signal }))).toContain('textarea');
   });
 
   it('shows a notification as its Acknowledge button, with the text behind the disclosure', () => {
