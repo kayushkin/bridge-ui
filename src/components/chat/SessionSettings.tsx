@@ -117,6 +117,10 @@ export function useSessionSettings(newTarget: NewSessionTarget, controls: Sessio
   // nothing to reconcile against and no local copy that could disagree with it.
   const modelValue = isPending ? pending?.model ?? '' : model
   const effortValue = isPending ? pending?.effort ?? '' : effort
+  // The level the harness says it runs at (SessionInfo.effort). With nothing chosen it
+  // names the default the harness picked — Claude Code's differs by model. A pending
+  // pane has no harness yet to ask, so it has none.
+  const reportedEffort = isPending ? '' : info?.effort ?? ''
 
   // A deliberate pick is also the user telling us what they want next time, so it is
   // written back as the harness's saved default — MERGED over the record already stored,
@@ -155,6 +159,7 @@ export function useSessionSettings(newTarget: NewSessionTarget, controls: Sessio
     models,
     modelValue,
     effortValue,
+    reportedEffort,
     chooseModel,
     chooseEffort,
     isPending,
@@ -339,6 +344,20 @@ export function SessionSettingsInline({
   )
 }
 
+const EFFORT_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'XHigh' },
+  { value: 'max', label: 'Max' },
+]
+
+/** A reported level in the same words as the options; a level the list does not know
+ *  is shown as the harness sent it. */
+function effortLabel(effort: string): string {
+  return EFFORT_OPTIONS.find((option) => option.value === effort)?.label ?? effort
+}
+
 /** The overflow cluster, rendered inside the header's details dropdown: reasoning effort
  *  and Fork.
  *
@@ -358,6 +377,7 @@ export function SessionSettingsPanel({
   const {
     capabilities,
     effortValue,
+    reportedEffort,
     chooseEffort,
     hasLiveSession,
     anySettings,
@@ -387,12 +407,15 @@ export function SessionSettingsPanel({
           aria-label="Reasoning effort"
           title="Reasoning effort"
         >
-          <option value="">Effort</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-          <option value="xhigh">XHigh</option>
-          <option value="max">Max</option>
+          {/* The empty option names the level in force only while nothing is chosen;
+              once a level is chosen it shows as itself, and a "Default (High)" beside a
+              chosen High would read as a second setting. */}
+          <option value="">
+            {effortValue === '' && reportedEffort ? `Default (${effortLabel(reportedEffort)})` : 'Default'}
+          </option>
+          {EFFORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
       )}
       {showFork && (
