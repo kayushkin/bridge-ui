@@ -88,7 +88,7 @@ export function useSessionSettings(newTarget: NewSessionTarget, controls: Sessio
   const capabilities = useHarnessCapabilities(harness)
   // ⚠️ `pty` is NOT in `capabilities`. It is a top-level boolean on the harness registry
   // row — `GET /harnesses` reports claude_code with `pty: true` and capabilities
-  // `['compact','fork','model','tools','system_prompt']` — so `capabilities.has('pty')`
+  // `['compact','fork','model','effort','tools','system_prompt']` — so `capabilities.has('pty')`
   // is false for every harness that supports it, and a control gated that way would
   // never appear at all. See chat-core's `useHarness`.
   const harnessRow = useHarness(harness)
