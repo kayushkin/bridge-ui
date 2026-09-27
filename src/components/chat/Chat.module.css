@@ -900,30 +900,29 @@
   gap: 6px;
   max-width: min(360px, 80%);
 }
-/* The lens chip: two halves joined into one pill, the same size as the legend toggle
-   beside it. A pressed half is filled. */
+/* The lens chip in the header: two halves joined into one pill beside the view tabs.
+   A pressed half is filled. */
 .lensChip {
   display: inline-flex;
   flex-shrink: 0;
+  height: 24px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 7px;
   overflow: hidden;
-  background: var(--bg-surface);
-  opacity: 0.8;
+  box-sizing: border-box;
 }
-.lensChip:hover { opacity: 1; }
 .lensHalf {
-  padding: 2px 7px;
+  padding: 0 5px;
   border: none;
   background: none;
   font-family: monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.5px;
+  font-size: 0.6rem;
   color: var(--text-dim);
   cursor: pointer;
 }
 .lensHalf + .lensHalf { border-left: 1px solid var(--border); }
 .lensHalf:hover { color: var(--text); }
+.lensHalf:disabled { opacity: 0.35; cursor: default; }
 .lensHalf[aria-pressed='true'] {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 20%, transparent);
@@ -936,6 +935,7 @@
   max-width: min(300px, 70%);
 }
 .vibeLegendToggle {
+  white-space: nowrap;
   padding: 2px 8px;
   font-family: monospace;
   font-size: 0.62rem;
@@ -1226,14 +1226,12 @@
    than no `?` at all, so nothing below is left to inherit its appearance.
    =========================================================================== */
 
-/* The marker's positioning context and the row's leading slot. It sits OUTSIDE
-   `bc-session-item-main` (buttons do not nest), so it supplies the left inset
-   that button's own padding would otherwise have given the status dot. */
+/* The marker's positioning context. On a session row it fills the status column
+   of the row's grid (`bc-session-item`), where the plain dot sits otherwise. */
 .questionMarkerAnchor {
   display: inline-flex;
   align-items: center;
   flex: none;
-  margin-left: 8px;
 }
 
 .questionMarker {
@@ -1535,7 +1533,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  max-height: 32vh;
+  max-height: 24vh;
   padding: 0 10px 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1623,11 +1621,14 @@
 
 /* A child row. The indent is the only thing saying "this belongs to the row
    above", so it is a border rather than padding — a padded row loses the
-   relationship the moment the list scrolls the parent off the top. */
+   relationship the moment the list scrolls the parent off the top. It is one
+   fixed step, the same for every child, and the row keeps the parent's column
+   grid inside it, so children line up with each other. */
 .subagentRow {
-  padding-left: 10px;
+  width: auto;
+  margin-left: 14px;
+  padding-left: 2px;
   border-left: 2px solid var(--border);
-  margin-left: 8px;
 }
 
 /* Still working. ⚠️ This exists because the status dot cannot answer it on its

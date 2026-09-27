@@ -43,6 +43,7 @@ import {
   type useSessionSettings,
 } from './SessionSettings'
 import styles from './Chat.module.css'
+import LensChip from './LensChip'
 import { PANE_KEYS, type PaneDrawable, type PaneKey, type PanesHidden } from './panePersistence'
 import type { CSSProperties } from 'react'
 
@@ -60,6 +61,12 @@ interface SessionHeaderProps {
   togglePane: (key: PaneKey) => void
   /** Shows one pane and hides the rest: a plain click on a view tab. */
   showOnlyPane: (key: PaneKey) => void
+  /** How the Turns pane draws its text — the lens chip beside the view tabs. Raw is a
+   *  mode of that pane, not a pane (see `panePersistence.ts`'s note on `PaneKey`). */
+  raw: boolean
+  setRaw: (v: boolean) => void
+  markdown: boolean
+  setMarkdown: (v: boolean) => void
   /** Per-session settings, resolved ONCE by `Chat` and shared. See `useSessionSettings`. */
   settings: Settings
   /** The single `useSessionControls` instance. See the warning on `useSessionSettings`. */
@@ -113,6 +120,10 @@ export default function SessionHeader({
   paneDrawable,
   togglePane,
   showOnlyPane,
+  raw,
+  setRaw,
+  markdown,
+  setMarkdown,
   settings,
   controls,
 }: SessionHeaderProps) {
@@ -238,6 +249,15 @@ export default function SessionHeader({
       showOnlyPane={showOnlyPane}
     />
   )
+  const lensChip = (
+    <LensChip
+      raw={raw}
+      setRaw={setRaw}
+      rawDisabled={panesHidden.turns}
+      markdown={markdown}
+      setMarkdown={setMarkdown}
+    />
+  )
 
   const detailsToggle = (
     <button
@@ -286,6 +306,7 @@ export default function SessionHeader({
             <SessionSettingsInline settings={settings} controls={controls} />
             <div className={styles.headerDivider} />
             {viewControls}
+          {lensChip}
             <div className={styles.headerDivider} />
             <div className="bc-details-wrap" ref={detailsRef}>
               {detailsToggle}
@@ -363,6 +384,7 @@ export default function SessionHeader({
           <SessionSettingsInline settings={settings} controls={controls} />
           <div className={styles.headerDivider} />
           {viewControls}
+          {lensChip}
           <div className={styles.headerDivider} />
           <button
             className={`${styles.iconButton} ${styles.iconButtonDone}`}
@@ -931,8 +953,8 @@ const PANE_TABS: Record<PaneKey, { label: string; short: string; title: string }
  *  how two panes end up side by side. The number keys 1–5 do the same (BridgeChat).
  *
  *  They replaced a row of emoji toggles (📋 ⏱ 🗂 🌿 ⌨) that nobody could read without
- *  hovering. How the Turns pane draws its text (markdown, plain, raw) is not here: that
- *  is a property of the one pane, so its control sits in that pane's corner (`LensChip`).
+ *  hovering. How the Turns pane draws its text (markdown, plain, raw) is the lens chip
+ *  beside them (`LensChip`).
  *
  *  ⚠️ The group keeps the accessible name "Pane visibility" and each tab keeps its pane's
  *  label as its name and `aria-pressed` as its state: the e2e specs and screen readers

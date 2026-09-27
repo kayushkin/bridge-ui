@@ -652,6 +652,10 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
         paneDrawable={paneDrawable}
         togglePane={togglePane}
         showOnlyPane={showOnlyPane}
+        raw={raw}
+        setRaw={setRaw}
+        markdown={markdown}
+        setMarkdown={setMarkdown}
         settings={settings}
         controls={controls}
       />
@@ -716,9 +720,7 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
               <TurnList
                 sessionId={id}
                 view={raw ? 'raw' : 'turns'}
-                setRaw={setRaw}
                 markdown={markdown}
-                setMarkdown={setMarkdown}
                 streaming={streaming}
                 compacting={controls.compacting}
                 composerStatus={composerStatus}

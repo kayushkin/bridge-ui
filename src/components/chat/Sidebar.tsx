@@ -1242,6 +1242,7 @@ const SessionRow = memo(function SessionRow({
     <div
       className={[
         'bc-session-item',
+        'bc-session-row-grid',
         active ? 'bc-session-item-selected' : '',
         nested ? styles.subagentRow : '',
         running ? styles.subagentRowRunning : '',
@@ -1251,11 +1252,16 @@ const SessionRow = memo(function SessionRow({
       onMouseEnter={() => onPrefetch(session.sessionId)}
       onContextMenu={(e) => onContextMenu(e, session.sessionId)}
     >
-      {/* Outside `bc-session-item-main` for the same reason the question marker is:
-          buttons do not nest. Absent rather than disabled when nothing was spawned —
-          most sessions spawn nothing, and a permanently dead caret on every row is
-          worse than one that appears when it means something. */}
-      {subagentCount > 0 && (
+      {/* The row is four fixed columns (the `bc-session-item` grid): the subagent toggle,
+          the status, then the harness mark and the name inside the select button. Every
+          column is drawn on every row, empty when it has nothing to say, so a row with
+          subagents or a question lines its name up with one that has neither. They used
+          to be drawn only when present, and each one pushed the name a different way.
+
+          The toggle is outside `bc-session-item-main` because buttons do not nest. Its
+          slot is empty rather than holding a disabled caret when nothing was spawned —
+          most sessions spawn nothing, and a dead caret on every row is noise. */}
+      {subagentCount > 0 ? (
         <button
           type="button"
           className={styles.subagentToggle}
@@ -1271,11 +1277,15 @@ const SessionRow = memo(function SessionRow({
           <span aria-hidden>{subagentsExpanded ? '▾' : '▸'}</span>
           <span className={styles.subagentToggleCount}>{subagentCount}</span>
         </button>
+      ) : (
+        <span className="bc-session-slot-empty" aria-hidden />
       )}
-      {/* Outside `bc-session-item-main`, because it is a button and buttons do not nest.
-          It takes the status dot's job for these two states rather than sitting beside
-          one — two indicators for one fact would read as two facts. */}
-      {awaitingHuman && (
+      {/* The status column: the question marker when the session waits on a person,
+          otherwise the plain dot. The marker takes the dot's job for those states rather
+          than sitting beside one — two indicators for one fact would read as two facts.
+          Outside `bc-session-item-main` because the marker is a button; the dot is not,
+          so a click on it selects the row like a click on the name. */}
+      {awaitingHuman ? (
         <SessionQuestionMarker
           sessionId={session.sessionId}
           sessionName={name}
@@ -1285,6 +1295,10 @@ const SessionRow = memo(function SessionRow({
           onToggle={onToggleQuestion}
           onDismiss={onDismissQuestion}
         />
+      ) : (
+        <span className="bc-session-status" onClick={() => onSelect(session.sessionId)}>
+          <StatusDot state={displayState} title={displayState} />
+        </span>
       )}
       <button className="bc-session-item-main" onClick={() => onSelect(session.sessionId)}>
         {/* Harness mark: mirror bridge-ui SessionList — the server logo image when the
@@ -1297,7 +1311,6 @@ const SessionRow = memo(function SessionRow({
             <span className="bc-session-harness-emoji">{harnessInfo?.emoji || '·'}</span>
           )}
         </span>
-        {!awaitingHuman && <StatusDot state={displayState} title={displayState} />}
         <EditableName
           value={name}
           onSave={(next) => onRename(session.sessionId, next)}
