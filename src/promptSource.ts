@@ -108,6 +108,14 @@ export interface PromptDrift {
   annotation?: PromptDriftAnnotation
   created_at: number
   resolved_at?: number
+  /** The same edit in the collection's other files; settling this drift settles them. */
+  twins?: PromptDriftTwin[]
+}
+
+export interface PromptDriftTwin {
+  id: number
+  output_id: number
+  path: string
 }
 
 export interface PromptCollectionView {

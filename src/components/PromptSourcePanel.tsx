@@ -210,9 +210,10 @@ function DriftCard({ drift, sections, apiFetch, basePath, onSettled }: Api & {
   const [openOperation, setOpenOperation] = useState<number | null>(null)
   const sectionsById = useMemo(() => new Map(sections.map(section => [section.id, section])), [sections])
   const canApply = drift.operations.length > 0 || !drift.held_reason
+  const editedPaths = [drift.path, ...(drift.twins ?? []).map(twin => twin.path)]
 
   const settle = async (action: 'apply' | 'dismiss') => {
-    if (action === 'dismiss' && !confirm(`Dismiss this edit to ${drift.path}? The next render will overwrite the file. The edited text stays in this drift and in the file's history.`)) return
+    if (action === 'dismiss' && !confirm(`Dismiss this edit to ${editedPaths.join(' and ')}? The next render will overwrite ${editedPaths.length > 1 ? 'them' : 'the file'}. The edited text stays in this drift and in the file's history.`)) return
     setBusy(true)
     setErr(null)
     try {
@@ -234,7 +235,7 @@ function DriftCard({ drift, sections, apiFetch, basePath, onSettled }: Api & {
   return (
     <div className="bfiles-version-preview bprompt-drift-card">
       <div className="bfiles-version-preview-header">
-        <code>{drift.path}</code>
+        {editedPaths.map(path => <code key={path}>{path}</code>)}
         <span className="bprompt-state bprompt-state-edited_on_disk">{drift.status}</span>
         <span className="bfiles-preview-hint">seen {formatTime(drift.created_at)}</span>
       </div>
