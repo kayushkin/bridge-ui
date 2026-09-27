@@ -382,7 +382,7 @@ export default function SessionHeader({
 
         <div className={`bc-header-right ${styles.headerCluster}`}>
           <SessionSettingsInline settings={settings} controls={controls} />
-          <div className={styles.headerDivider} />
+          {/* No divider before the tabs: their strip has its own border. */}
           {viewControls}
           {lensChip}
           <div className={styles.headerDivider} />

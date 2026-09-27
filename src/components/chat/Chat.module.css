@@ -583,7 +583,7 @@
    one `.bc-ctrl-select` also sets, at the same specificity, from a stylesheet
    emitted later. */
 :global(.bc-ctrl-select).modelPicker {
-  max-width: 132px;
+  max-width: 116px;
   padding: 3px 6px;
   font-size: 0.72rem;
 }
@@ -912,11 +912,11 @@
   box-sizing: border-box;
 }
 .lensHalf {
-  padding: 0 5px;
+  padding: 0 3px;
   border: none;
   background: none;
   font-family: monospace;
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   color: var(--text-dim);
   cursor: pointer;
 }
