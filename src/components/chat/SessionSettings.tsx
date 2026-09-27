@@ -464,18 +464,21 @@ export function SessionSettingsPanel({
   )
 }
 
-/** The context readout: a fill bar across the header's bottom edge with the token pair and
- *  percentage sitting on it.
+/** The context readout: a small ring in the header row that fills as the context window
+ *  does, with the percentage beside it. The exact token pair is in its title. It sits
+ *  next to the cost chip, so the two numbers about what a session has used read as one
+ *  group, and it takes no row of its own; it replaced a strip along the header's bottom
+ *  edge that did.
  *
  *  ⚠️ Renders NOTHING without a real measurement. "0%" is a different answer from "no
  *  reading yet", not a smaller one — a session that has reported no usage has no context
- *  measurement at all, and painting an empty bar with `0/0` beside it would claim it did.
- *  The old 2px hairline had the same guard for the same reason.
+ *  measurement at all, and painting an empty ring with `0%` beside it would claim it did.
  *
- *  The fill is clamped to 100% while the readout is not: a session over its limit should
- *  say `210k / 200k · 105%`, which is the fact, but a bar wider than its own container is
- *  just a broken bar. */
-export function ContextStrip({
+ *  The arc is clamped to a full circle while the readout is not: a session over its limit
+ *  should say `120%`, which is the fact, but an arc past 360° just draws over itself.
+ *  `data-fill` carries the clamped figure so the clamp can be asserted without doing
+ *  geometry on the SVG. */
+export function ContextRing({
   tokens,
   limit,
   pct,
@@ -488,24 +491,34 @@ export function ContextStrip({
 
   const tone = pct >= 90 ? 'Crit' : pct >= 70 ? 'Warn' : ''
   const pctLabel = pct.toFixed(0)
+  const fill = Math.min(100, pct)
+  // A circle of radius 7 in a 18×18 box; the arc is a dash of `fill`% of its length.
+  const circumference = 2 * Math.PI * 7
 
   return (
-    <div
-      className={styles.contextStrip}
+    <span
+      className={`${styles.contextRing}${tone ? ` ${styles[`contextRing${tone}`]}` : ''}`}
       title={`Context window: ${tokens.toLocaleString()} / ${limit.toLocaleString()} tokens (${pctLabel}%)`}
     >
-      <div
-        className={`${styles.contextFill}${tone ? ` ${styles[`contextFill${tone}`]}` : ''}`}
-        style={{ width: `${Math.min(100, pct)}%` }}
-        aria-hidden
-      />
+      <svg viewBox="0 0 18 18" className={styles.contextRingSvg} aria-hidden>
+        <circle cx="9" cy="9" r="7" className={styles.contextRingTrack} />
+        <circle
+          cx="9"
+          cy="9"
+          r="7"
+          className={styles.contextRingArc}
+          data-fill={fill}
+          strokeDasharray={`${(fill / 100) * circumference} ${circumference}`}
+          transform="rotate(-90 9 9)"
+        />
+      </svg>
       <span
-        className={`${styles.contextReadout}${tone ? ` ${styles[`contextReadout${tone}`]}` : ''}`}
+        className={styles.contextRingReadout}
         role="status"
         aria-label={`Context window ${pctLabel}% full, ${tokens.toLocaleString()} of ${limit.toLocaleString()} tokens`}
       >
-        {formatTokens(tokens)} / {formatTokens(limit)} · {pctLabel}%
+        {pctLabel}%
       </span>
-    </div>
+    </span>
   )
 }

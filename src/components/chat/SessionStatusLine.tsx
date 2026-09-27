@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   isRunningState,
   useConnState,
@@ -308,7 +308,15 @@ export default function SessionStatusLine({ status: content, onOpenSession }: Se
   const since = isLive ? statusActivitySince(content.status) : undefined
 
   return (
-    <div className={styles.statusSlot} role="status" aria-live="polite">
+    <div
+      className={`bc-status-slot ${styles.statusSlot}`}
+      role="status"
+      aria-live="polite"
+      data-mood={statusMood(content)}
+    >
+      {/* A slot for the host's mascot. bridge-ui draws nothing in it (the rule hides it);
+          a host theme that has a character can show one per `data-mood`. */}
+      <span className="bc-status-mascot" aria-hidden />
       {/* LEFT: whatever the slot is saying. The one part that may shrink. */}
       <div className={styles.statusMain}>
         {content.kind === 'error' && (
@@ -353,9 +361,7 @@ export default function SessionStatusLine({ status: content, onOpenSession }: Se
                 </span>
               </>
             )}
-            <span className={styles.statusText} title={activityText}>
-              {activityText}
-            </span>
+            <Ticker text={activityText} />
           </>
         )}
       </div>
@@ -370,6 +376,75 @@ export default function SessionStatusLine({ status: content, onOpenSession }: Se
 }
 
 const NO_SUBAGENTS: readonly SessionStatusSubagent[] = []
+
+/** What mood the slot is in, for a host theme to draw by (`data-mood` on the slot):
+ *  - `thinking`: the model is generating, or the context is being compacted
+ *  - `working`: a tool is running, or background tasks are
+ *  - `waiting`: parked on a person, for permission
+ *  - `resting`: paused, or stopped
+ *  - `trouble`: an error, a dropped connection, a rate limit */
+export type StatusMood = 'thinking' | 'working' | 'waiting' | 'resting' | 'trouble'
+
+export function statusMood(content: NonNullable<StatusSlotContent>): StatusMood {
+  switch (content.kind) {
+    case 'error':
+    case 'disconnected':
+    case 'rate_limited':
+      return 'trouble'
+    case 'stopped':
+    case 'paused':
+      return 'resting'
+    case 'compacting':
+      return 'thinking'
+    case 'tasks':
+      return 'working'
+    case 'live': {
+      const status = content.status
+      if ((status?.tools ?? []).length > 0) return 'working'
+      if (status?.state === 'awaiting_permission' || status?.state === 'waiting_on_approval') return 'waiting'
+      if (status?.state === 'model_generating') return 'thinking'
+      return 'working'
+    }
+  }
+}
+
+/** The live activity text as a ticker tape: when it is wider than its room it scrolls
+ *  slowly to its end and back, instead of being cut off with an ellipsis, so the part
+ *  that says what the command is doing can be read. It holds still while hovered, and
+ *  for anyone who asks the system for reduced motion (the CSS drops the animation, and
+ *  the ellipsis comes back). */
+function Ticker({ text }: { text: string }) {
+  const outerRef = useRef<HTMLSpanElement | null>(null)
+  const innerRef = useRef<HTMLSpanElement | null>(null)
+  const [shift, setShift] = useState(0)
+  useEffect(() => {
+    const outer = outerRef.current
+    const inner = innerRef.current
+    if (!outer || !inner) return
+    const measure = () => setShift(Math.max(0, inner.scrollWidth - outer.clientWidth))
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(outer)
+    return () => observer.disconnect()
+  }, [text])
+  // Roughly 40px a second, so a long command reads rather than whips past.
+  const seconds = Math.max(4, shift / 40)
+  const tickerStyle = shift > 0
+    ? ({ ['--ticker-shift']: `-${shift}px`, ['--ticker-seconds']: `${seconds}s` } as CSSProperties)
+    : undefined
+  return (
+    <span
+      ref={outerRef}
+      className={`${styles.statusText} ${styles.ticker}`}
+      data-ticker={shift > 0 ? 'on' : 'off'}
+      title={text}
+    >
+      <span ref={innerRef} className={styles.tickerTape} style={tickerStyle}>
+        {text}
+      </span>
+    </span>
+  )
+}
 
 /** The empty spacer TurnList renders while lingering after the slot empties: the
  *  same box as the slot with no content and a transparent border, so the transcript

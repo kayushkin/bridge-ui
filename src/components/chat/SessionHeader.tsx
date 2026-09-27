@@ -37,7 +37,7 @@ import type { Machine } from '../../types'
 import { isArchivedFolder, toBridgeSessionInfo } from './bridgeAdapters'
 import { useSelectSession } from './useSelectSession'
 import {
-  ContextStrip,
+  ContextRing,
   SessionSettingsInline,
   SessionSettingsPanel,
   type useSessionSettings,
@@ -55,17 +55,11 @@ interface SessionHeaderProps {
    *  `panesHidden` because it is a fact about the session rather than the user's choice —
    *  see `panePersistence.ts`'s `PaneDrawable`. */
   paneDrawable: PaneDrawable
-  /** Flips one pane's visibility. Not a setter for the whole record: every caller here is
-   *  a single button, and handing them the record would let a click on Turns decide
-   *  anything about Timeline. */
+  /** Flips one pane's visibility, leaving the others as they are: a view tab clicked with
+   *  Shift (or Ctrl/⌘), which is how two panes end up side by side. */
   togglePane: (key: PaneKey) => void
-  /** Whether the Turns pane renders its raw audit view (duplicates, source, eventId)
-   *  instead of the collapsed one. A mode of that pane, not a pane — see
-   *  `panePersistence.ts`'s note on `PaneKey`. */
-  raw: boolean
-  setRaw: (v: boolean) => void
-  markdown: boolean
-  setMarkdown: (v: boolean) => void
+  /** Shows one pane and hides the rest: a plain click on a view tab. */
+  showOnlyPane: (key: PaneKey) => void
   /** Per-session settings, resolved ONCE by `Chat` and shared. See `useSessionSettings`. */
   settings: Settings
   /** The single `useSessionControls` instance. See the warning on `useSessionSettings`. */
@@ -110,19 +104,15 @@ interface SessionHeaderProps {
  *  makes the name the single shrinkable element, so narrowing truncates the name — the one
  *  thing on the row that survives being cut short — instead of reflowing the chrome.
  *
- *  ## The context readout is along the bottom edge
+ *  ## The context readout is a ring beside the cost
  *
- *  `ContextStrip` replaces two readouts that disagreed about where they lived: a 2px
- *  hairline that carried no numbers and a percentage baked into the Compact button's
- *  label. See the note on that component. */
+ *  `ContextRing` sits in the row, grouped with the cost chip, rather than taking a strip
+ *  of its own along the bottom edge. See the note on that component. */
 export default function SessionHeader({
   panesHidden,
   paneDrawable,
   togglePane,
-  raw,
-  setRaw,
-  markdown,
-  setMarkdown,
+  showOnlyPane,
   settings,
   controls,
 }: SessionHeaderProps) {
@@ -241,14 +231,11 @@ export default function SessionHeader({
   const hasNext = idx >= 0 && idx < orderedIds.length - 1
 
   const viewControls = (
-    <ViewControls
+    <ViewTabs
       panesHidden={panesHidden}
       paneDrawable={paneDrawable}
       togglePane={togglePane}
-      raw={raw}
-      setRaw={setRaw}
-      markdown={markdown}
-      setMarkdown={setMarkdown}
+      showOnlyPane={showOnlyPane}
     />
   )
 
@@ -359,12 +346,16 @@ export default function SessionHeader({
         {/* The gate is spend OR a ceiling, not spend alone. A capped session that has not
             been billed for anything yet is exactly the session whose ceiling is worth
             reading, and a `totalUsd > 0` gate hides the chip on every one of them. */}
-        {(totalUsd > 0 || spendCeiling) && (
-          <CostBreakdown
-            aggregate={{ totalUsd, byModel, bySource: byQuerySource }}
-            ceiling={spendCeiling}
-          />
-        )}
+        {/* What the session has used, as one group: the context ring, then spend. */}
+        <span className={styles.usageGroup}>
+          <ContextRing tokens={tokens} limit={limit} pct={pct} />
+          {(totalUsd > 0 || spendCeiling) && (
+            <CostBreakdown
+              aggregate={{ totalUsd, byModel, bySource: byQuerySource }}
+              ceiling={spendCeiling}
+            />
+          )}
+        </span>
 
         <SessionPreviewLinks sessionId={summary.sessionId} />
 
@@ -489,8 +480,6 @@ export default function SessionHeader({
           )}
         </div>
       )}
-
-      <ContextStrip tokens={tokens} limit={limit} pct={pct} />
 
       {systemPromptCapabilityHeld && promptOpen && info && (
         <SystemPromptModal info={toBridgeSessionInfo(info)} onClose={() => setPromptOpen(false)} />
@@ -925,127 +914,63 @@ function PermissionControls({
   )
 }
 
-/** What each pane's icon is and what it is for. A table rather than branches inside the
+/** What each pane's tab says and what it is for. A table rather than branches inside the
  *  map, because the set is closed (`PANE_KEYS`) and TypeScript then refuses a pane added
- *  without an entry for it. */
-const PANE_PILLS: Record<PaneKey, { label: string; icon: string; title: string }> = {
-  turns: {
-    label: 'Turns',
-    icon: '📋',
-    title: 'The conversation — one row per message',
-  },
-  timeline: {
-    label: 'Timeline',
-    icon: '⏱',
-    title: 'Timeline — event-granular, turn → task grouped',
-  },
-  kanban: {
-    label: 'Cards',
-    icon: '🗂',
-    title: 'The kanban cards linked to this session',
-  },
-  git: {
-    label: 'Git',
-    icon: '🌿',
-    title: 'The working tree — branch, status, staged and unstaged diffs',
-  },
-  attach: {
-    label: 'Terminal',
-    icon: '⌨',
-    title: 'The session terminal — pty mode only',
-  },
+ *  without an entry for it. `short` is what the tab shrinks to when the header is narrow;
+ *  `key` is the number key that picks it (see `usePaneKeys` in BridgeChat). */
+const PANE_TABS: Record<PaneKey, { label: string; short: string; title: string }> = {
+  turns: { label: 'Turns', short: 'T', title: 'The conversation — one row per message' },
+  timeline: { label: 'Timeline', short: 'TL', title: 'Timeline — event-granular, turn → task grouped' },
+  kanban: { label: 'Cards', short: 'C', title: 'The kanban cards linked to this session' },
+  git: { label: 'Git', short: 'G', title: 'The working tree — branch, status, staged and unstaged diffs' },
+  attach: { label: 'Terminal', short: '>_', title: 'The session terminal — pty mode only' },
 }
 
-/** The view controls: which panes are on screen, then the two modifiers that apply to the
- *  Turns pane. All four are icon-only now — they are the controls a person recognises by
- *  position rather than by reading, and the row they sit on has eight other things on it.
+/** The view tabs: one labelled tab per pane this session can draw. A click shows that pane
+ *  alone; Shift-, Ctrl- or ⌘-click adds it beside the others (or takes it away), which is
+ *  how two panes end up side by side. The number keys 1–5 do the same (BridgeChat).
  *
- *  ⚠️ EVERY button here carries an `aria-label`, and that is load-bearing rather than
- *  decorative. Dropping the text means the glyph is the only visible name, and a glyph is
- *  not an accessible name — without the label these become unreachable to a screen reader
- *  AND to the e2e specs, which locate them by role + accessible name precisely because
- *  that is what a user reaches for. Raw in particular had NO aria-label while it had a
- *  text node to fall back on; it needs one now.
+ *  They replaced a row of emoji toggles (📋 ⏱ 🗂 🌿 ⌨) that nobody could read without
+ *  hovering. How the Turns pane draws its text (markdown, plain, raw) is not here: that
+ *  is a property of the one pane, so its control sits in that pane's corner (`LensChip`).
  *
- *  Raw is disabled while the Turns pane is hidden rather than removed: a control that
- *  vanishes when a pane closes and reappears somewhere in a row of icons is harder to find
- *  again than one that greys out where it was.
- *
- *  ⚠️ MD/TXT is NOT disabled with it, and the two are not the same kind of control. Raw is
- *  a mode of one pane and is forgotten on reload; markdown is a durable global preference
- *  (`threadPersistence.ts`) that outlives the session it is set in. Greying it out because
- *  a pane is closed would refuse a choice the user is entitled to make about every pane
- *  they open next.
- *
- *  Markdown keeps its `bc-turns-md-toggle` class alongside the icon styling: it is the one
- *  control here whose state is a WORD rather than a glyph, because "is this rendering
- *  markdown" has no icon that reads unambiguously, and MD/TXT already did. */
-function ViewControls({
+ *  ⚠️ The group keeps the accessible name "Pane visibility" and each tab keeps its pane's
+ *  label as its name and `aria-pressed` as its state: the e2e specs and screen readers
+ *  both find them that way. */
+function ViewTabs({
   panesHidden,
   togglePane,
-  raw,
-  setRaw,
-  markdown,
-  setMarkdown,
+  showOnlyPane,
   paneDrawable,
-}: Pick<
-  SessionHeaderProps,
-  'panesHidden' | 'togglePane' | 'raw' | 'setRaw' | 'markdown' | 'setMarkdown' | 'paneDrawable'
->) {
-  const turnsHidden = panesHidden.turns
+}: Pick<SessionHeaderProps, 'panesHidden' | 'togglePane' | 'showOnlyPane' | 'paneDrawable'>) {
+  const drawable = PANE_KEYS.filter(
+    // A tab for a pane this session cannot draw is a control that does nothing. Absent
+    // rather than disabled, because "your session is not in pty mode" is not something a
+    // greyed-out tab can say (bridge-ui hides it on the same test, `attachAvailable`).
+    (key) => key !== 'attach' || paneDrawable.attach === true,
+  )
   return (
-    <>
-      <div className="bc-pane-toggles" role="group" aria-label="Pane visibility">
-        {PANE_KEYS.filter(
-          // A pill for a pane this session cannot draw is a control that does nothing.
-          // Absent rather than disabled, because "your session is not in pty mode" is not
-          // something a greyed-out glyph can say, and the row already carries nine other
-          // controls — a permanently dead tenth on every events session is worse than one
-          // that appears when it means something. bridge-ui hides it on the same test
-          // (`Workspace.tsx:479`, `attachAvailable`).
-          (key) => key !== 'attach' || paneDrawable.attach === true,
-        ).map((key) => {
-          const visible = !panesHidden[key]
-          const pill = PANE_PILLS[key]
-          return (
-            <button
-              key={key}
-              className={styles.iconButton}
-              onClick={() => togglePane(key)}
-              aria-pressed={visible}
-              aria-label={pill.label}
-              title={`${visible ? 'Hide' : 'Show'} ${pill.label.toLowerCase()} — ${pill.title}`}
-            >
-              <span aria-hidden>{pill.icon}</span>
-            </button>
-          )
-        })}
-      </div>
-      <button
-        className={styles.iconButton}
-        onClick={() => setRaw(!raw)}
-        aria-pressed={raw}
-        aria-label="Raw"
-        disabled={turnsHidden}
-        title={
-          turnsHidden
-            ? 'Raw needs the Turns pane — show it first'
-            : raw
-              ? 'Raw view — every entry incl. duplicates, with source + eventId. Click for the collapsed view'
-              : 'Collapsed view — duplicates hidden, sources badge per message. Click for raw'
-        }
-      >
-        <span aria-hidden>👁</span>
-      </button>
-      <button
-        className={`bc-turns-md-toggle ${styles.iconButton}`}
-        onClick={() => setMarkdown(!markdown)}
-        aria-pressed={markdown}
-        aria-label={markdown ? 'Rendering markdown' : 'Rendering plain text'}
-        title={markdown ? 'Rendering markdown — click for plain text' : 'Plain text — click for markdown'}
-      >
-        {markdown ? 'MD' : 'TXT'}
-      </button>
-    </>
+    <div className={`bc-pane-toggles ${styles.viewTabs}`} role="group" aria-label="Pane visibility">
+      {drawable.map((key, index) => {
+        const visible = !panesHidden[key]
+        const tab = PANE_TABS[key]
+        return (
+          <button
+            key={key}
+            type="button"
+            className={styles.viewTab}
+            onClick={(event) =>
+              event.shiftKey || event.ctrlKey || event.metaKey ? togglePane(key) : showOnlyPane(key)
+            }
+            aria-pressed={visible}
+            aria-label={tab.label}
+            title={`${tab.title}\nClick: show only this · Shift-click: ${visible ? 'hide' : 'add beside'} · key ${index + 1}`}
+          >
+            <span className={styles.viewTabLabel} aria-hidden>{tab.label}</span>
+            <span className={styles.viewTabShort} aria-hidden>{tab.short}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }

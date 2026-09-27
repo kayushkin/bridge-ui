@@ -513,25 +513,56 @@
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* The markdown toggle is the one control in this row whose state is a WORD rather
-   than a glyph — "is this rendering markdown" has no icon that reads
-   unambiguously, and MD/TXT already did. It keeps `bc-turns-md-toggle` (its
-   monospace face, and the class the e2e specs locate it by) but has to be forced
-   back to the same square box as its neighbours: that class sets its own padding,
-   border-radius and font-size at the same specificity from a later stylesheet, so
-   without this it renders as a differently-shaped button in the middle of the row. */
-:global(.bc-turns-md-toggle).iconButton {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border-radius: 7px;
-  font-size: 0.58rem;
-  letter-spacing: 0;
+/* The header is a size container so the view tabs can shorten by the header's own
+   width, not the window's: a narrow chat pane beside a wide sidebar needs the short
+   tabs as much as a narrow window does. */
+:global(.bc-header) {
+  container: session-header / inline-size;
 }
-:global(.bc-turns-md-toggle).iconButton[aria-pressed='true'] {
+
+/* The view tabs: short words in one joined strip, the pressed ones filled. The
+   strip is the header's widest control, so below 760px of header it drops to the
+   one- or two-letter forms rather than push the name off the row. */
+.viewTabs {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.viewTab {
+  padding: 0 8px;
+  height: 24px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.viewTab:first-child { border-left: none; }
+.viewTab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.viewTab[aria-pressed='true'] {
   color: var(--text);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.viewTabShort { display: none; }
+@container session-header (max-width: 760px) {
+  .viewTabLabel { display: none; }
+  .viewTabShort { display: inline; }
+  .viewTab { padding: 0 6px; }
+}
+
+/* The usage group: the context ring and the cost chip, side by side. */
+.usageGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* Done is the one icon that earns a colour: it is the only control on the row
@@ -578,78 +609,43 @@
   white-space: nowrap;
 }
 
-/* ---- The context strip across the bottom of the header ----
+/* The context ring: a readout, not a control, beside the cost chip. Its arc is
+   the fill; the percentage sits next to it in tabular figures so it does not
+   jitter sideways as the count climbs during a turn.
 
-   This replaces TWO readouts that used to disagree about where they lived: a 2px
-   hairline pinned to the header's bottom edge that carried no numbers, and a
-   percentage baked into the Compact button's own label. The percentage was on the
-   button because there was nowhere else to put it — the hairline was two pixels
-   tall and could not hold text.
-
-   Now the strip is tall enough to read, so the fill and the numbers are the same
-   object, and Compact goes back to being a button that does one thing.
-
-   ⚠️ The strip renders ONLY when there is a real measurement (tokens > 0 && limit
-   > 0). "0%" is not a small answer, it is a different one — a session that has not
-   reported usage has no context reading at all, and painting an empty bar would
-   claim it had. */
-.contextStrip {
-  position: relative;
-  display: flex;
+   ⚠️ It renders ONLY when there is a real measurement (tokens > 0 && limit > 0);
+   see `ContextRing`. */
+.contextRing {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  height: 15px;
-  /* Bleeds sideways to the header's edges by cancelling its 18px horizontal padding, so
-     the fill measures the full width of the bar rather than an inset box.
-
-     The bottom margin eats into the header's 11px bottom padding but deliberately does
-     NOT cancel all of it: a margin of -11px would make the strip flush with the border,
-     and since the strip is taller than that padding it would then overhang the header
-     entirely and paint over the first few pixels of the transcript. -6px leaves the strip
-     inside the header with 5px of breathing room under it. */
-  margin: 5px -18px -6px;
-  padding: 0 18px;
-  border-top: 1px solid var(--border);
-  overflow: hidden;
-  /* The whole strip is a readout, not a control. The Compact button beside the
-     model picker is the action; making the bar clickable too would put two
-     controls on one measurement. */
-  pointer-events: none;
-}
-
-/* The fill. Its width is the percentage, set inline — the same contract
-   `.bc-header-context` had, kept deliberately so the clamp stays in one place. */
-.contextFill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: color-mix(in srgb, var(--bc-harness, var(--accent)) 26%, transparent);
-  transition: width 0.3s ease, background 0.2s ease;
-}
-.contextFillWarn {
-  background: color-mix(in srgb, #f59e0b 30%, transparent);
-}
-.contextFillCrit {
-  background: color-mix(in srgb, #ef4444 34%, transparent);
-}
-
-/* The numbers, right-aligned and sitting above the fill. Tabular figures so the
-   readout does not jitter sideways as the token count climbs during a turn. */
-.contextReadout {
-  position: relative;
-  font-size: 0.64rem;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
   color: var(--text-dim);
   white-space: nowrap;
+  cursor: default;
 }
-.contextReadoutWarn {
-  color: #f59e0b;
+.contextRingSvg {
+  width: 16px;
+  height: 16px;
 }
-.contextReadoutCrit {
-  color: #ef4444;
+.contextRingTrack {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2.6;
 }
+.contextRingArc {
+  fill: none;
+  stroke: var(--bc-harness, var(--accent));
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s ease, stroke 0.2s ease;
+}
+.contextRingWarn { color: #f59e0b; }
+.contextRingWarn .contextRingArc { stroke: #f59e0b; }
+.contextRingCrit { color: #ef4444; }
+.contextRingCrit .contextRingArc { stroke: #ef4444; }
 
 /* ---- The details dropdown ----
 
@@ -875,15 +871,49 @@
 }
 
 /* ---- Vibe legend ---- */
-/* Floating, top-right of the Turns pane, above the scroller. Mirrors `.bc-jump-latest`'s
+/* The corner row (`.paneCorner`) floats top-right of the Turns pane, above the scroller. Mirrors `.bc-jump-latest`'s
    treatment (bridge-ui styles.css) so the pane's two floating controls read as a pair —
    this one at the top because the other one moves, and two controls in the same corner
    would overlap the moment new messages arrived. */
-.vibeLegend {
+.paneCorner {
   position: absolute;
   top: 8px;
   right: 14px;
   z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(360px, 80%);
+}
+/* The lens chip: two halves joined into one pill, the same size as the legend toggle
+   beside it. A pressed half is filled. */
+.lensChip {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  opacity: 0.8;
+}
+.lensChip:hover { opacity: 1; }
+.lensHalf {
+  padding: 2px 7px;
+  border: none;
+  background: none;
+  font-family: monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.lensHalf + .lensHalf { border-left: 1px solid var(--border); }
+.lensHalf:hover { color: var(--text); }
+.lensHalf[aria-pressed='true'] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.vibeLegend {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -982,6 +1012,24 @@
   white-space: nowrap;
   border-top: 1px dashed color-mix(in srgb, var(--accent) 30%, var(--border));
 }
+/* The ticker: the live activity text scrolls to its end and back when it does not
+   fit. `--ticker-shift` and `--ticker-seconds` are set inline by `Ticker`. */
+.ticker { display: block; }
+.tickerTape { display: inline-block; white-space: nowrap; }
+.ticker[data-ticker='on'] { text-overflow: clip; }
+.ticker[data-ticker='on'] .tickerTape {
+  animation: bc-ticker var(--ticker-seconds, 6s) ease-in-out 1s infinite alternate;
+}
+.ticker[data-ticker='on']:hover .tickerTape { animation-play-state: paused; }
+@keyframes bc-ticker {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--ticker-shift, 0)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker[data-ticker='on'] { text-overflow: ellipsis; }
+  .ticker[data-ticker='on'] .tickerTape { animation: none; }
+}
+
 /* The empty stand-in that holds the transcript still after the slot empties, until
    the user scrolls. Same box, nothing drawn. */
 .statusSpacer {

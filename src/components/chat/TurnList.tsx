@@ -24,6 +24,7 @@ import { UsageLine } from './UsageLine'
 import { toBridgeUsage, formatHMS } from './bridgeAdapters'
 import { remarkVibes } from './vibes'
 import VibeLegend from './VibeLegend'
+import LensChip from './LensChip'
 import SessionStatusLine, {
   STATUS_SPACER_CLASSNAME,
   useStatusSlotContent,
@@ -88,8 +89,11 @@ const PROVISIONAL_NARRATION_MS = 5000
 interface TurnListProps {
   sessionId: string | null
   view: 'turns' | 'raw'
+  /** Turns the raw view on or off — the lens chip in the pane's corner. */
+  setRaw: (raw: boolean) => void
   /** Render assistant/user prose through ReactMarkdown (default) or as plain text. */
   markdown: boolean
+  setMarkdown: (markdown: boolean) => void
   /** The session is actively producing output — show a live streaming indicator on
    *  the trailing assistant turn. Derived from the session state by the parent. */
   streaming: boolean
@@ -118,7 +122,9 @@ interface TurnListProps {
 export default function TurnList({
   sessionId,
   view,
+  setRaw,
   markdown,
+  setMarkdown,
   streaming,
   compacting,
   composerStatus,
@@ -584,7 +590,12 @@ export default function TurnList({
           draws no rails, so a legend there would explain something not on screen. It is
           NOT additionally gated on the Turns view: Raw renders the same prose through the
           same `ProseBody`, so it carries the same rails and needs the same key. */}
-      {markdown && <VibeLegend />}
+      {/* The pane's corner: how the text is drawn, and the legend when there are rails to
+          explain. One absolutely placed row, so the two never overlap each other. */}
+      <div className={styles.paneCorner}>
+        <LensChip raw={view === 'raw'} setRaw={setRaw} markdown={markdown} setMarkdown={setMarkdown} />
+        {markdown && <VibeLegend />}
+      </div>
       {/* The session the tool renderers fetch snapshots for.
           `EditRenderer` and `BashRenderer` read `GET /sessions/{id}/tools/{tool_id}/snapshots`
           to draw a real before/after diff, and they take the session id from this context
@@ -1157,10 +1168,22 @@ function Aside({
         <span className="bc-turns-aside-icon" aria-hidden>{icon}</span>
         <span>{label}</span>
         {live && <span className="bc-turns-aside-dots" aria-hidden>…</span>}
+        <span className="bc-turns-aside-preview">{latestStep(text)}</span>
       </summary>
       <div className="bc-turns-aside-text">{text}</div>
     </details>
   )
+}
+
+/** The last non-empty line of an aside's text: what the agent said most recently, for
+ *  the one-line preview a shut box shows beside its label. */
+function latestStep(text: string): string {
+  const lines = text.split('\n')
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim()
+    if (line) return line
+  }
+  return ''
 }
 
 /** One user prompt row.

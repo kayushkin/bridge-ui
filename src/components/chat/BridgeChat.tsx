@@ -44,12 +44,15 @@ import {
   loadMobilePane,
   loadPaneSizes,
   loadPanesHidden,
+  PANE_KEYS,
   saveMobilePane,
   savePaneSizes,
   savePanesHidden,
   visiblePanes,
+  type PaneDrawable,
   type PaneKey,
   type PaneSizes,
+  type PanesHidden,
 } from './panePersistence'
 
 /** `?view=` values, each a surface drawn in place of the thread: the signals page,
@@ -396,6 +399,17 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
     setPanesHidden(next)
   }, [panesHidden])
 
+  // A plain click on a view tab: this pane on screen, every other one off. Most of the
+  // time a person wants one view, and toggling meant opening the new one and then closing
+  // the old one. Side by side is still one Shift-click away (`togglePane`). Every key is
+  // written, so a pane this session cannot draw (Terminal on an events session) is hidden
+  // too and does not reappear on the next pty session by surprise.
+  const showOnlyPane = useCallback((key: PaneKey) => {
+    const next = Object.fromEntries(PANE_KEYS.map((k) => [k, k !== key])) as PanesHidden
+    savePanesHidden(next)
+    setPanesHidden(next)
+  }, [])
+
   // How the two panes divide the row. Same `useState` initialiser as the record above,
   // for the same reason: a stored 3:1 that arrived a frame after paint would show the
   // user an even split and then snap.
@@ -541,6 +555,7 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
   // way — a phone that had stored `attach` and then opened an events session would
   // otherwise draw an empty pane with no way back to Turns.
   const paneDrawable = useMemo(() => ({ attach: isPty }), [isPty])
+  usePaneNumberKeys(paneDrawable, minimal, showOnlyPane, togglePane, setMobilePane)
   const desktopPanes = visiblePanes(panesHidden, paneDrawable)
   const panes =
     minimal
@@ -630,16 +645,13 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
         // control belongs with the panes it switches and the state stays in this
         // component. The position on screen is the same either way — it takes the slot
         // the header has just given up, directly under the top bar.
-        <MinimalPaneSwitch pane={mobilePane} onPick={setMobilePane} />
+        <MinimalPaneSwitch pane={mobilePane} onPick={setMobilePane} drawable={paneDrawable} />
       ) : null}
       <SessionHeader
         panesHidden={panesHidden}
         paneDrawable={paneDrawable}
         togglePane={togglePane}
-        raw={raw}
-        setRaw={setRaw}
-        markdown={markdown}
-        setMarkdown={setMarkdown}
+        showOnlyPane={showOnlyPane}
         settings={settings}
         controls={controls}
       />
@@ -704,7 +716,9 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
               <TurnList
                 sessionId={id}
                 view={raw ? 'raw' : 'turns'}
+                setRaw={setRaw}
                 markdown={markdown}
+                setMarkdown={setMarkdown}
                 streaming={streaming}
                 compacting={controls.compacting}
                 composerStatus={composerStatus}
@@ -830,4 +844,38 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
       />
     </div>
   )
+}
+
+/** The number keys pick a view: 1 is the first view tab, 2 the second, and so on, in the
+ *  order the tabs are drawn. On its own a key shows that pane alone; with Shift it adds or
+ *  removes it, the same as clicking a tab. On a phone it picks the one pane shown.
+ *
+ *  Ignored while typing — in an input, a textarea, a select or anything editable — and
+ *  with Alt, Ctrl or ⌘ held, so it never takes a keystroke meant for text or for the
+ *  browser. Reads `event.code`, not `event.key`, because Shift turns "1" into "!". */
+function usePaneNumberKeys(
+  paneDrawable: PaneDrawable,
+  minimal: boolean,
+  showOnlyPane: (key: PaneKey) => void,
+  togglePane: (key: PaneKey) => void,
+  setMobilePane: (key: PaneKey) => void,
+): void {
+  useEffect(() => {
+    const drawable = PANE_KEYS.filter((key) => key !== 'attach' || paneDrawable.attach === true)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.repeat) return
+      const target = event.target as HTMLElement | null
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      const match = /^Digit([1-9])$/.exec(event.code)
+      if (!match) return
+      const key = drawable[Number(match[1]) - 1]
+      if (!key) return
+      event.preventDefault()
+      if (minimal) setMobilePane(key)
+      else if (event.shiftKey) togglePane(key)
+      else showOnlyPane(key)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [paneDrawable, minimal, showOnlyPane, togglePane, setMobilePane])
 }

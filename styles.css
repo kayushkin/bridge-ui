@@ -623,22 +623,9 @@
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg-surface) 35%, var(--bg));
 }
-.bc-turns-md-toggle {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-family: monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.5px;
-  padding: 1px 6px;
-  border-radius: 3px;
-}
-.bc-turns-md-toggle:hover { color: var(--text); border-color: var(--border); }
-.bc-turns-md-toggle[aria-pressed="true"] {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-}
+/* The status slot's mascot hook (`SessionStatusLine`): empty and hidden here. A host
+   theme with a character shows it, picking a drawing by the slot's `data-mood`. */
+.bc-status-mascot { display: none; }
 
 .bc-turns-body {
   flex: 1;
@@ -775,7 +762,7 @@
   color: var(--text-dim);
   font-size: 0.82em;
   border-left: 2px solid color-mix(in srgb, var(--aside-accent) 40%, var(--border));
-  padding: 4px 0 4px 10px;
+  padding: 2px 0 2px 8px;
   background: color-mix(in srgb, var(--aside-accent) 4%, transparent);
   border-radius: 0 4px 4px 0;
 }
@@ -789,11 +776,27 @@
   text-transform: uppercase;
   color: var(--aside-accent);
   letter-spacing: 0.5px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   list-style: none;
 }
+/* The one-line preview of the latest step, shown while the box is shut, so a closed
+   box still says what the agent was last doing. */
+.bc-turns-aside-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.bc-turns-aside[open] .bc-turns-aside-preview { display: none; }
 .bc-turns-aside summary::-webkit-details-marker { display: none; }
 .bc-turns-aside summary::before {
   content: '▸';
@@ -2984,7 +2987,7 @@
  * is composited as a left-to-right wash on top of the standard glass
  * top-light gradient. */
 .bc-header {
-  padding: 11px 18px;
+  padding: 7px 14px;
   background:
     linear-gradient(110deg,
       color-mix(in srgb, var(--bc-harness, var(--accent)) 16%, color-mix(in srgb, white 4%, var(--bc-surface-thin))) 0%,
@@ -3217,20 +3220,31 @@
   font-size: 0.66rem;
 }
 
-/* Turn items — soft cards */
-.bc-turns-body { padding: 16px; gap: 12px; }
+/* Turn items. Dense on purpose: the agent's messages are not boxed at all, only a
+   rule down their left edge, and a person's messages are notes pushed to the right,
+   as wide as their text and no wider. The eye tells the two apart by side, so neither
+   needs a heavy frame, and the transcript fits about a third more on screen. */
+.bc-turns-body { padding: 10px 14px; gap: 8px; }
 .bc-turns-item {
   border-radius: var(--bc-radius-sm);
-  border: 1px solid var(--bc-edge);
-  background: color-mix(in srgb, white 3%, var(--bc-surface-thin));
-  padding: 12px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 6px 12px;
+}
+.bc-turns-assistant {
+  border-radius: 0;
+  border-left: 2px solid color-mix(in srgb, var(--text) 22%, transparent);
 }
 .bc-turns-user {
+  margin-left: auto;
+  width: fit-content;
+  max-width: min(78%, 760px);
   background: linear-gradient(135deg,
     color-mix(in srgb, var(--accent) 16%, var(--bc-surface-thin)),
-    color-mix(in srgb, var(--accent) 4%, var(--bc-surface-thin)));
+    color-mix(in srgb, var(--accent) 6%, var(--bc-surface-thin)));
   border-color: color-mix(in srgb, var(--accent) 30%, var(--bc-surface-thin));
 }
+.bc-turns-error { border: 1px solid color-mix(in srgb, #ef4444 30%, transparent); }
 .bc-turns-actor { font-size: 0.62rem; letter-spacing: 0.16em; font-weight: 700; }
 .bc-turns-text { line-height: 1.6; font-size: 0.9em; }
 

@@ -1,4 +1,4 @@
-import { PANE_KEYS, type PaneKey } from './panePersistence'
+import { PANE_KEYS, type PaneDrawable, type PaneKey } from './panePersistence'
 
 /** What each pane is called on the switch. A record rather than a label baked into the
  *  loop, so adding a pane to `PANE_KEYS` is a type error here until it is named. */
@@ -15,6 +15,8 @@ interface MinimalPaneSwitchProps {
   pane: PaneKey
   /** Show this pane instead. */
   onPick: (pane: PaneKey) => void
+  /** Which conditionally-drawable panes this session can draw. */
+  drawable: PaneDrawable
 }
 
 /** The mobile pane switch: pick ONE of the thread's panes.
@@ -38,13 +40,15 @@ interface MinimalPaneSwitchProps {
  *  separate. `panePersistence.ts` records why neither reading is derived from the other.
  *
  *  Raw is deliberately not a button here. It is a MODE of the Turns pane rather than a
- *  pane (see `panePersistence.ts`), so it would not be one of these N; on a narrow
- *  viewport it is reached the same way every other header control is, through the
- *  sheet's "Show full layout". */
-export default function MinimalPaneSwitch({ pane, onPick }: MinimalPaneSwitchProps) {
+ *  pane (see `panePersistence.ts`), so it would not be one of these N; it is the lens
+ *  chip in that pane's corner, on a phone as on a desktop.
+ *
+ *  Terminal is offered only when the session can draw it (`drawable`): offered on an
+ *  events session it silently showed Turns instead. */
+export default function MinimalPaneSwitch({ pane, onPick, drawable }: MinimalPaneSwitchProps) {
   return (
     <div className="bc-mc-paneswitch" role="tablist" aria-label="Pane">
-      {PANE_KEYS.map(key => (
+      {PANE_KEYS.filter(key => key !== 'attach' || drawable.attach === true).map(key => (
         <button
           key={key}
           type="button"
