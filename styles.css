@@ -183,6 +183,9 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
   overflow: hidden;
+  /* The sidebar is a flex column; without this the opened settings panel is
+     squeezed and its own overflow clips the spend meter and Reset week. */
+  flex-shrink: 0;
 }
 .bc-producer-enabled { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .bc-producer-row { font-weight: 600; }
