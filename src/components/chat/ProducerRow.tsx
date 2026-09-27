@@ -135,7 +135,7 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpen, selected }: Pr
                 {enabled ? '● Autonomous mode on — click to disable' : '○ Enable autonomous mode'}
               </button>
 
-              <label className="bc-producer-limit">
+              <label className="bc-producer-limit" title="0 means no limit">
                 <span>Weekly limit&nbsp;$</span>
                 <input
                   type="number"
@@ -154,7 +154,9 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpen, selected }: Pr
                   <div className="bc-producer-meter-fill" style={{ width: `${pct}%` }} />
                 </div>
                 <div className="bc-producer-meter-label">
-                  ${cfg.week_spent_usd.toFixed(2)} spent · ${cfg.week_remaining_usd.toFixed(2)} left this week
+                  ${cfg.week_spent_usd.toFixed(2)} spent · {cfg.week_limit_usd > 0
+                    ? `$${cfg.week_remaining_usd.toFixed(2)} left this week`
+                    : 'no weekly limit'}
                 </div>
               </div>
 

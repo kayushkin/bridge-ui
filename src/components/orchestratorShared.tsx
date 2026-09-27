@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
@@ -143,6 +143,20 @@ interface CostWindows {
 export function CostHeader({ refreshSignal = null }: { refreshSignal?: unknown } = {}): JSX.Element | null {
   const { data, error } = useProducerResource<CostWindows | null>('/cost', null, refreshSignal)
   const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLSpanElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocMouseDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
 
   if (error && !data) return <span style={{ color: '#ef4444', fontSize: 12 }}>cost: {error}</span>
   if (!data) return null
@@ -158,9 +172,9 @@ export function CostHeader({ refreshSignal = null }: { refreshSignal?: unknown }
   ]
 
   return (
-    <span className="bc-orchestrator-cost" style={{ position: 'relative', display: 'inline-block' }}>
+    <span ref={ref} className="bc-orchestrator-cost" style={{ position: 'relative', display: 'inline-block' }}>
       <button onClick={() => setOpen((o) => !o)} style={{ ...pill, color: over ? '#ef4444' : 'inherit' }}>
-        week {formatCost(week)} / {formatCost(data.week_limit_usd)} · {windows.week?.runs ?? 0} runs ▾
+        week {formatCost(week)} / {data.week_limit_usd > 0 ? formatCost(data.week_limit_usd) : 'no limit'} · {windows.week?.runs ?? 0} runs ▾
       </button>
       {open && (
         <div style={dropdown}>
