@@ -1252,35 +1252,13 @@ const SessionRow = memo(function SessionRow({
       onMouseEnter={() => onPrefetch(session.sessionId)}
       onContextMenu={(e) => onContextMenu(e, session.sessionId)}
     >
-      {/* The row is four fixed columns (the `bc-session-item` grid): the subagent toggle,
-          the status, then the harness mark and the name inside the select button. Every
-          column is drawn on every row, empty when it has nothing to say, so a row with
-          subagents or a question lines its name up with one that has neither. They used
-          to be drawn only when present, and each one pushed the name a different way.
+      {/* The row is four fixed columns (the `bc-session-row-grid` grid): the status, the
+          select button holding the harness mark and the name, the subagent toggle, and
+          the archive button. Every column is drawn on every row, empty when it has
+          nothing to say, so a row with subagents or a question lines its name up with one
+          that has neither.
 
-          The toggle is outside `bc-session-item-main` because buttons do not nest. Its
-          slot is empty rather than holding a disabled caret when nothing was spawned —
-          most sessions spawn nothing, and a dead caret on every row is noise. */}
-      {subagentCount > 0 ? (
-        <button
-          type="button"
-          className={styles.subagentToggle}
-          aria-expanded={subagentsExpanded}
-          aria-label={
-            subagentsExpanded
-              ? `Hide the ${subagentCount} sessions ${name} spawned`
-              : `Show the ${subagentCount} sessions ${name} spawned`
-          }
-          title={`${subagentCount} subagent session${subagentCount === 1 ? '' : 's'}`}
-          onClick={() => onToggleSubagents(session.sessionId)}
-        >
-          <span aria-hidden>{subagentsExpanded ? '▾' : '▸'}</span>
-          <span className={styles.subagentToggleCount}>{subagentCount}</span>
-        </button>
-      ) : (
-        <span className="bc-session-slot-empty" aria-hidden />
-      )}
-      {/* The status column: the question marker when the session waits on a person,
+          The status column: the question marker when the session waits on a person,
           otherwise the plain dot. The marker takes the dot's job for those states rather
           than sitting beside one — two indicators for one fact would read as two facts.
           Outside `bc-session-item-main` because the marker is a button; the dot is not,
@@ -1317,19 +1295,79 @@ const SessionRow = memo(function SessionRow({
           className="bc-session-label"
         />
       </button>
+      {/* The subagent toggle, at the right-hand end of the row where it moves nothing.
+          Outside `bc-session-item-main` because buttons do not nest. Its slot is empty
+          rather than holding a disabled caret when nothing was spawned — most sessions
+          spawn nothing, and a dead caret on every row is noise. */}
+      {subagentCount > 0 ? (
+        <button
+          type="button"
+          className={styles.subagentToggle}
+          aria-expanded={subagentsExpanded}
+          aria-label={
+            subagentsExpanded
+              ? `Hide the ${subagentCount} sessions ${name} spawned`
+              : `Show the ${subagentCount} sessions ${name} spawned`
+          }
+          title={`${subagentCount} subagent session${subagentCount === 1 ? '' : 's'}`}
+          onClick={() => onToggleSubagents(session.sessionId)}
+        >
+          <span aria-hidden>{subagentsExpanded ? '▾' : '▸'}</span>
+          <span className={styles.subagentToggleCount}>{subagentCount}</span>
+        </button>
+      ) : (
+        <span className="bc-session-slot-empty" aria-hidden />
+      )}
       <span
         className="bc-session-menu-btn"
         role="button"
         tabIndex={0}
         title={isArchived ? 'Unarchive' : 'Archive'}
+        aria-label={isArchived ? 'Unarchive' : 'Archive'}
+        data-archived={isArchived ? 'true' : 'false'}
         onClick={(e) => {
           e.stopPropagation()
           if (isArchived) onUnarchive(session.sessionId)
           else onArchive(session.sessionId)
         }}
       >
-        {isArchived ? '↺' : '🗄'}
+        {isArchived ? <UnarchiveIcon /> : <ArchiveIcon />}
       </span>
     </div>
   )
 })
+
+/** The archive button's icons: a file box, and the same box with an arrow coming back
+ *  out of it. Drawn rather than emoji, which render at a different size and weight on
+ *  every platform (🗄 is a filing cabinet on some and a blank box on others). A host
+ *  theme can replace them: the button carries `data-archived`. */
+const archiveIconProps = {
+  viewBox: '0 0 16 16',
+  width: 14,
+  height: 14,
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.5,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const
+
+function ArchiveIcon() {
+  return (
+    <svg {...archiveIconProps}>
+      <rect x="1.5" y="2.5" width="13" height="3.5" rx="0.8" />
+      <path d="M2.8 6v6.7c0 .5.4.8.8.8h8.8c.4 0 .8-.3.8-.8V6" />
+      <path d="M6.3 9h3.4" />
+    </svg>
+  )
+}
+
+function UnarchiveIcon() {
+  return (
+    <svg {...archiveIconProps}>
+      <path d="M2.8 7v5.7c0 .5.4.8.8.8h8.8c.4 0 .8-.3.8-.8V7" />
+      <path d="M8 11V2.5M5.3 5.2 8 2.5l2.7 2.7" />
+    </svg>
+  )
+}

@@ -157,19 +157,19 @@
   font-size: 0.85em;
   transition: background 0.15s;
 }
-/* A session row is four fixed columns — subagent toggle, status, then the select
-   button holding the harness mark and the name — and every row draws all four (see
-   `SessionRow`), so the names line up whatever else a row carries. The last column is
-   the archive button. Its own class, because the Orchestrator row shares
-   `bc-session-item` and is laid out differently. */
+/* A session row is four fixed columns — status, the select button holding the harness
+   mark and the name, the subagent toggle, the archive button — and every row draws all
+   four (see `SessionRow`), so the names line up whatever else a row carries. Its own
+   class, because the Orchestrator row shares `bc-session-item` and is laid out
+   differently. */
 .bc-session-row-grid {
   display: grid;
-  grid-template-columns: 20px 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) 26px auto;
   padding-left: 4px;
   box-sizing: border-box;
 }
 .bc-session-row-grid > :first-child,
-.bc-session-row-grid > :nth-child(2) { justify-self: center; }
+.bc-session-row-grid > :nth-child(3) { justify-self: center; }
 .bc-session-status { display: inline-flex; align-items: center; cursor: pointer; }
 .bc-session-item-main {
   display: flex;
@@ -251,8 +251,10 @@
 .bc-producer-hint { color: var(--text-dim); font-size: 0.92em; }
 /* Session menu (three-dots, appears on hover) */
 .bc-session-menu-btn {
+  display: inline-flex;
+  align-items: center;
   margin-left: auto;
-  padding: 0 6px;
+  padding: 3px 5px;
   color: var(--text-dim);
   font-size: 1.1em;
   line-height: 1;
