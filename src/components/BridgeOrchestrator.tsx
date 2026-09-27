@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
 import { ProducerMarkdown, ProducerTextWithReferenceChips } from './chat/producerReferences'
+import { CostHeader, useProducerConversation, useProducerResource } from './orchestratorShared'
 
 // The orchestrator's dedicated page. It is NOT a chat session — the producer is
 // a stateless-per-run runtime — so this is purpose-built rather than another
@@ -34,18 +35,6 @@ export interface BridgeOrchestratorProps {
    * no signals route to read — passes false, and every reference stays a chip.
    */
   expandSessionsWithOpenQuestions?: boolean
-}
-
-/** Reads a producer response, or throws with the status. Every panel below
- *  surfaces what this throws — an orchestrator page that quietly shows stale
- *  numbers when the producer is down is worse than one that says so. */
-async function producerJSON<T>(response: Response): Promise<T> {
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
-  return (await response.json()) as T
-}
-
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
 }
 
 export function BridgeOrchestrator({
@@ -82,118 +71,17 @@ export function BridgeOrchestrator({
   )
 }
 
-/** The producer's own polling cadence for the read-only panels. */
-const REFRESH_MS = 20000
-
-/** Poll one producer endpoint, keeping whatever it last answered and the reason
- *  the latest attempt failed. Both, deliberately: a failed refresh must not blank
- *  a panel that is still showing the last good answer, and it must not be
- *  invisible either. */
-function useProducerResource<T>(path: string, initial: T): { data: T; error: string | null } {
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
-  const [data, setData] = useState<T>(initial)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    if (!producerBasePath) return
-    try {
-      setData(await producerJSON<T>(await apiFetch(`${producerBasePath}${path}`)))
-      setError(null)
-    } catch (e) {
-      setError(messageOf(e))
-    }
-  }, [apiFetch, producerBasePath, path])
-
-  useEffect(() => {
-    void load()
-    const timer = setInterval(() => void load(), REFRESH_MS)
-    return () => clearInterval(timer)
-  }, [load])
-
-  return { data, error }
-}
-
-// --- cost windows (this week vs limit, dropdown for 24h / 7d / lifetime) -----
-
-interface CostWindow {
-  cost_usd: number
-  runs: number
-}
-interface CostWindows {
-  windows: Record<string, CostWindow>
-  week_limit_usd: number
-}
-
-function CostHeader(): JSX.Element | null {
-  const { data, error } = useProducerResource<CostWindows | null>('/cost', null)
-  const [open, setOpen] = useState(false)
-
-  if (error && !data) return <span style={{ color: '#ef4444', fontSize: 12 }}>cost: {error}</span>
-  if (!data) return null
-
-  const windows = data.windows
-  const week = windows.week?.cost_usd ?? 0
-  const over = data.week_limit_usd > 0 && week >= data.week_limit_usd
-  const rows: Array<[string, CostWindow | undefined]> = [
-    ['this week', windows.week],
-    ['last 24h', windows.last_24h],
-    ['last 7 days', windows.last_7d],
-    ['lifetime', windows.lifetime],
-  ]
-
-  return (
-    <span className="bc-orchestrator-cost" style={{ position: 'relative', display: 'inline-block' }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ ...pill, color: over ? '#ef4444' : 'inherit' }}>
-        week {formatCost(week)} / {formatCost(data.week_limit_usd)} · {windows.week?.runs ?? 0} runs ▾
-      </button>
-      {open && (
-        <div style={dropdown}>
-          {rows.map(([label, costWindow]) => (
-            <div key={label} style={{ display: 'flex', gap: 16, padding: '3px 4px', fontSize: 13 }}>
-              <span style={{ opacity: 0.7, minWidth: 90 }}>{label}</span>
-              <span style={{ marginLeft: 'auto' }}>{formatCost(costWindow?.cost_usd ?? 0)}</span>
-              <span style={{ opacity: 0.5, minWidth: 48, textAlign: 'right' }}>{costWindow?.runs ?? 0} runs</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </span>
-  )
-}
-
 // --- conversation + composer (each send is one /run) ------------------------
-
-interface ProducerMessage {
-  id: string
-  role: string
-  content: string
-  tokens: number
-  at: string
-}
 
 function Conversation({
   expandSessionsWithOpenQuestions,
 }: {
   expandSessionsWithOpenQuestions: boolean
 }): JSX.Element {
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
-  const [messages, setMessages] = useState<ProducerMessage[]>([])
+  const { messages, running, error, send: sendMessage } = useProducerConversation()
   const [draft, setDraft] = useState('')
-  const [running, setRunning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
-  const load = useCallback(async () => {
-    try {
-      setMessages(await producerJSON<ProducerMessage[]>(await apiFetch(`${producerBasePath}/convo`)))
-    } catch (e) {
-      setError(messageOf(e))
-    }
-  }, [apiFetch, producerBasePath])
-
-  useEffect(() => {
-    void load()
-  }, [load])
   useEffect(() => {
     endRef.current?.scrollIntoView()
   }, [messages])
@@ -202,28 +90,7 @@ function Conversation({
     const message = draft.trim()
     if (!message || running) return
     setDraft('')
-    setRunning(true)
-    setError(null)
-    // Optimistic echo of what was just sent, replaced by the server's own copy
-    // when the run finishes and /convo is re-read.
-    setMessages((m) => [...m, { id: 'pending', role: 'user', content: message, tokens: 0, at: '' }])
-    try {
-      const response = await apiFetch(`${producerBasePath}/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, trigger: 'user' }),
-      })
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string }
-        throw new Error(body.error || `HTTP ${response.status}`)
-      }
-      await response.json()
-    } catch (e) {
-      setError(messageOf(e))
-    } finally {
-      setRunning(false)
-      void load()
-    }
+    await sendMessage(message)
   }
 
   return (
@@ -465,6 +332,4 @@ function ContextInspector(): JSX.Element {
 const page: React.CSSProperties = { padding: 20, maxWidth: 960, margin: '0 auto', color: 'var(--text,#e2e8f0)' }
 const card: React.CSSProperties = { border: '1px solid var(--border,#334155)', borderRadius: 10, marginTop: 16, overflow: 'hidden' }
 const cardHeader: React.CSSProperties = { padding: '9px 12px', background: 'var(--bg-surface)', fontWeight: 600, fontSize: 14 }
-const pill: React.CSSProperties = { padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border,#334155)', background: 'var(--bg-surface)', color: 'inherit', cursor: 'pointer', fontSize: 13 }
-const dropdown: React.CSSProperties = { position: 'absolute', right: 0, top: '110%', zIndex: 10, background: 'var(--bg,#0f172a)', border: '1px solid var(--border,#334155)', borderRadius: 8, padding: 8, minWidth: 220, boxShadow: '0 6px 20px rgba(0,0,0,0.4)' }
 const tag: React.CSSProperties = { fontSize: 10, padding: '1px 6px', borderRadius: 4 }

@@ -18,9 +18,10 @@ export interface ProducerRowProps {
    *  BridgeProvider. A host that proxies none should not render the row at all
    *  rather than pass an empty string — there is no path to guess. */
   producerBasePath: string
-  /** Where this host mounts the producer's review page, from `routes.orchestrator`.
-   *  Empty means it mounts none, and the row stops offering to open it. */
-  orchestratorPath: string
+  /** Opens the Orchestrator in the chat's workspace, in place of the thread. */
+  onOpen: () => void
+  /** Whether the Orchestrator is the view on screen. */
+  selected: boolean
 }
 
 // ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar.
@@ -29,7 +30,7 @@ export interface ProducerRowProps {
 // sidebar uses, so it needs no new provider wiring. If the service is
 // unreachable the row still renders, showing an offline state rather than
 // breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: ProducerRowProps) {
+export function ProducerRow({ apiFetch, producerBasePath, onOpen, selected }: ProducerRowProps) {
   const [cfg, setCfg] = useState<ProducerConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -88,14 +89,6 @@ export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: Pr
   const enabled = cfg?.enabled ?? false
   const unreachable = !cfg && !!error
 
-  // The orchestrator is NOT a chat session — it's a stateless-per-run runtime —
-  // so the row opens its dedicated surface page, not a bridge session. A host
-  // that mounts no such page gets the settings panel instead of a dead link.
-  const openReviewPage = useCallback(() => {
-    if (orchestratorPath) window.location.assign(orchestratorPath)
-    else setExpanded(x => !x)
-  }, [orchestratorPath])
-
   const saveLimit = () => {
     const v = parseFloat(limitDraft)
     if (!Number.isNaN(v) && v >= 0 && v !== cfg?.week_limit_usd) patch({ week_limit_usd: v })
@@ -107,13 +100,12 @@ export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: Pr
 
   return (
     <div className={`bc-producer ${enabled ? 'bc-producer-enabled' : ''}`}>
-      <div className="bc-session-item bc-producer-row">
+      <div className={`bc-session-item bc-producer-row ${selected ? 'bc-session-item-selected' : ''}`}>
         <button
           className="bc-session-item-main"
-          onClick={openReviewPage}
-          title={unreachable
-            ? 'Orchestrator service unreachable'
-            : orchestratorPath ? 'Open the Orchestrator review page' : 'Orchestrator settings'}
+          onClick={onOpen}
+          aria-current={selected || undefined}
+          title={unreachable ? 'Orchestrator service unreachable' : 'Open the Orchestrator'}
         >
           <span className="bc-session-harness bc-producer-badge" aria-hidden>🎬</span>
           <span className={`bc-producer-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
@@ -134,8 +126,6 @@ export function ProducerRow({ apiFetch, producerBasePath, orchestratorPath }: Pr
             <div className="bc-producer-error">Orchestrator offline ({error})</div>
           ) : cfg ? (
             <>
-              {orchestratorPath && <div className="bc-producer-hint">Click the row to open the review page.</div>}
-
               <button
                 className={`bc-producer-enable ${enabled ? 'on' : 'off'}`}
                 disabled={busy}

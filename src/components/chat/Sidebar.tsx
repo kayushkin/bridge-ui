@@ -115,6 +115,10 @@ interface SidebarProps {
   onAfterOpenSession: () => void
   /** Show the signals page in place of the thread (the inbox's "Open all"). */
   onOpenSignalsPage: () => void
+  /** Show the Orchestrator in place of the thread (the pinned row). */
+  onOpenOrchestrator: () => void
+  /** Whether the Orchestrator is the view on screen, so its row reads as selected. */
+  orchestratorOpen: boolean
 }
 
 export default function Sidebar({
@@ -122,6 +126,8 @@ export default function Sidebar({
   onToggleCollapse,
   onAfterOpenSession,
   onOpenSignalsPage,
+  onOpenOrchestrator,
+  orchestratorOpen,
 }: SidebarProps) {
   const {
     groups,
@@ -174,11 +180,11 @@ export default function Sidebar({
   const { instanceMap } = useBridgeInstances()
   const { machineMap } = useBridgeMachines()
   const { harnessMap, basePath } = useBridgeHarnesses()
-  // The Orchestrator row's two paths, both from the provider rather than literals:
+  // The Orchestrator row's path and fetch, both from the provider rather than literals:
   // `fetch` is the same credentialed fetch every other call on this page uses, and
   // an empty `producerBasePath` means this host proxies no producer, in which case
   // the row is not rendered at all rather than pointed at a guessed path.
-  const { fetch: bridgeApiFetch, producerBasePath, routes } = useBridgeConfig()
+  const { fetch: bridgeApiFetch, producerBasePath } = useBridgeConfig()
   // Liveness of the session-list stream. `listLoading` only covers the FIRST fetch, so
   // without this an empty list after a dropped stream reads as "you have no sessions".
   // 'open' is the only state in which updates are flowing — see useConnState.
@@ -518,7 +524,7 @@ export default function Sidebar({
             basePath={basePath}
             displayState={s.state}
             hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
-            active={s.sessionId === activeId}
+            active={!orchestratorOpen && s.sessionId === activeId}
             subagentCount={subagentsOf(s.sessionId).length}
             subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
             onToggleSubagents={toggleSubagents}
@@ -582,7 +588,7 @@ export default function Sidebar({
                 // row the list stream keeps current, not the point-in-time fetch.
                 displayState={child.state}
                 hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
-                active={child.sessionId === activeId}
+                active={!orchestratorOpen && child.sessionId === activeId}
                 // A child's own children are not drawn — see the note above on depth.
                 subagentCount={0}
                 subagentsExpanded={false}
@@ -767,13 +773,14 @@ export default function Sidebar({
       {/* The pinned Orchestrator entry, between "+ New" and the search box — the same
           slot bridge-ui's SessionList gives it, so the two sidebars read alike. It is
           bridge-ui's own component, self-fetching against the producer proxy: the only
-          part chat owns is the mount and the two paths. It is the one piece of the
-          "side panels" work that does not wait on the workspace/pane model. */}
+          part chat owns is the mount, the path and what a click opens: the Orchestrator
+          in the workspace, in place of the thread, as a session would be. */}
       {producerBasePath && (
         <ProducerRow
           apiFetch={bridgeApiFetch}
           producerBasePath={producerBasePath}
-          orchestratorPath={routes.orchestrator}
+          onOpen={onOpenOrchestrator}
+          selected={orchestratorOpen}
         />
       )}
 

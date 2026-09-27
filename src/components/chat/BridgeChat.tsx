@@ -19,6 +19,7 @@ import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { SplitDragHandle } from './SplitDragHandle'
 import Sidebar from './Sidebar'
 import SignalsPage from './SignalsPage'
+import { OrchestratorThread } from './OrchestratorThread'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
 import TurnList from './TurnList'
 import Timeline from './Timeline'
@@ -51,8 +52,14 @@ import {
   type PaneSizes,
 } from './panePersistence'
 
-/** `?view=` value that shows the signals page in place of the thread. */
-const SIGNALS_VIEW = 'signals'
+/** `?view=` values, each a surface drawn in place of the thread: the signals page,
+ *  and the Orchestrator, which the producer runs rather than llm-bridge. */
+const WORKSPACE_VIEWS = ['signals', 'orchestrator'] as const
+type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
+
+function workspaceViewOf(param: string | null): WorkspaceView | null {
+  return WORKSPACE_VIEWS.find((view) => view === param) ?? null
+}
 
 /** States in which the session is busy — it drives the live streaming indicator AND
  *  the composer's Stop button, which is why it must be the server's answer rather than
@@ -186,13 +193,13 @@ export function BridgeChat() {
     setSidebarCollapsed(next)
   }, [sidebarCollapsed])
 
-  // The signals page ("Needs you", opened out) takes the thread pane's place. It is
-  // state here, read from `?view=signals` once on load and written back by the URL
-  // effect below, so it survives a reload and can be linked to. It sits beside
-  // `?session=` rather than replacing it: the session stays active behind the page
-  // and comes back when the page closes.
-  const [signalsPageOpen, setSignalsPageOpen] = useState(
-    () => searchParams.get('view') === SIGNALS_VIEW,
+  // The signals page ("Needs you", opened out) or the Orchestrator takes the thread
+  // pane's place. It is state here, read from `?view=` once on load and written back
+  // by the URL effect below, so it survives a reload and can be linked to. It sits
+  // beside `?session=` rather than replacing it: the session stays active behind the
+  // view and comes back when the view closes.
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView | null>(
+    () => workspaceViewOf(searchParams.get('view')),
   )
 
   // Declared BEFORE the bootstrap effect so an inbound deeplink claims the bootstrap
@@ -238,8 +245,8 @@ export function BridgeChat() {
       else next.delete('session')
       changed = true
     }
-    if ((next.get('view') === SIGNALS_VIEW) !== signalsPageOpen) {
-      if (signalsPageOpen) next.set('view', SIGNALS_VIEW)
+    if (workspaceViewOf(next.get('view')) !== workspaceView) {
+      if (workspaceView) next.set('view', workspaceView)
       else next.delete('view')
       changed = true
     }
@@ -247,16 +254,20 @@ export function BridgeChat() {
     // Replace, not push: browsing sessions must not fill the back stack with one entry
     // per session looked at.
     setSearchParams(next, { replace: true })
-  }, [activeId, signalsPageOpen, searchParams, setSearchParams])
+  }, [activeId, workspaceView, searchParams, setSearchParams])
 
   const afterOpenSession = useCallback(() => {
-    setSignalsPageOpen(false)
+    setWorkspaceView(null)
     if (minimal) setDrawerOpen(false)
-  }, [setSignalsPageOpen, minimal, setDrawerOpen])
+  }, [minimal, setDrawerOpen])
   const openSignalsPage = useCallback(() => {
-    setSignalsPageOpen(true)
+    setWorkspaceView('signals')
     if (minimal) setDrawerOpen(false)
-  }, [setSignalsPageOpen, minimal, setDrawerOpen])
+  }, [minimal, setDrawerOpen])
+  const openOrchestrator = useCallback(() => {
+    setWorkspaceView('orchestrator')
+    if (minimal) setDrawerOpen(false)
+  }, [minimal, setDrawerOpen])
 
   // One element, rendered in one of two places: in the row on a desktop, inside the
   // drawer on a phone. Not two copies — a second mounted `Sidebar` would open a second
@@ -268,6 +279,8 @@ export function BridgeChat() {
       onToggleCollapse={toggleSidebar}
       onAfterOpenSession={afterOpenSession}
       onOpenSignalsPage={openSignalsPage}
+      onOpenOrchestrator={openOrchestrator}
+      orchestratorOpen={workspaceView === 'orchestrator'}
     />
   )
 
@@ -278,7 +291,7 @@ export function BridgeChat() {
     // no CSS.
     <div className={`bc-container ${minimal ? 'bc-minimal' : ''}`}>
       {minimal && (
-        <MinimalTopBar title={activeSummary?.displayName || activeSummary?.sessionId || ''} />
+        <MinimalTopBar title={workspaceView === 'orchestrator' ? 'Orchestrator' : activeSummary?.displayName || activeSummary?.sessionId || ''} />
       )}
       <div className="bc-main">
         {/* The strip is the desktop's way back to the list; on a phone that job belongs
@@ -296,14 +309,16 @@ export function BridgeChat() {
           </button>
         ) : sidebar)}
         <div className="bc-workspaces">
-          {signalsPageOpen ? (
+          {workspaceView === 'signals' ? (
             <SignalsPage
               onSelectSession={sessionId => {
                 select(sessionId)
-                setSignalsPageOpen(false)
+                setWorkspaceView(null)
               }}
-              onClose={() => setSignalsPageOpen(false)}
+              onClose={() => setWorkspaceView(null)}
             />
+          ) : workspaceView === 'orchestrator' ? (
+            <OrchestratorThread onClose={() => setWorkspaceView(null)} />
           ) : (
             <ThreadPane newTarget={target} />
           )}
