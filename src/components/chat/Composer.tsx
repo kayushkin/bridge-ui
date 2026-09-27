@@ -1,6 +1,27 @@
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent } from 'react'
-import { useConnState, type useComposer } from '@kayushkin/chat-core'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react'
+import { useChatContext, useConnState, type SessionFile, type useComposer } from '@kayushkin/chat-core'
 import { composerAutoGrowHeightPx } from './composerAutoGrow'
+import { filesFromPaste, messageWithAttachedFiles, nameForPastedFile } from '../../sessionFileAttachments'
+import { formatBytes } from '../../toolPayloadPreview'
+
+/** A file waiting in the composer to go out with the next send. `previewUrl` is an
+ *  object URL for an image, revoked when the file leaves the tray. */
+interface PendingAttachment {
+  key: string
+  file: File
+  name: string
+  previewUrl: string | null
+}
+
+let nextAttachmentKey = 0
 
 interface ComposerProps {
   sessionId: string | null
@@ -63,6 +84,69 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   // the test is `=== 'open'`, never `!== 'closed'`.
   const connected = connState === 'open'
   const ref = useRef<HTMLTextAreaElement>(null)
+  const { api } = useChatContext()
+  const filePicker = useRef<HTMLInputElement>(null)
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [attachError, setAttachError] = useState<string | null>(null)
+
+  // Attachments belong to the session they were picked for. Switching away drops
+  // them rather than sending them into whichever chat is opened next.
+  useEffect(() => {
+    return () => {
+      setAttachments((current) => {
+        for (const attachment of current) {
+          if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl)
+        }
+        return []
+      })
+      setAttachError(null)
+    }
+  }, [sessionId])
+
+  const addFiles = (files: readonly File[], pasted: boolean) => {
+    if (files.length === 0) return
+    const now = new Date()
+    setAttachError(null)
+    setAttachments((current) => [
+      ...current,
+      ...files.map((file) => ({
+        key: `attachment-${nextAttachmentKey++}`,
+        file,
+        name: pasted ? nameForPastedFile(file, now) : file.name,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      })),
+    ])
+  }
+
+  const removeAttachment = (key: string) => {
+    setAttachments((current) => {
+      const removed = current.find((attachment) => attachment.key === key)
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl)
+      return current.filter((attachment) => attachment.key !== key)
+    })
+  }
+
+  // A file is shared into an EXISTING session. A new chat has none until its first
+  // message creates it, so attaching waits for that rather than inventing a second
+  // way to create a session.
+  const canAttach = sessionId !== null
+
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!canAttach) return
+    const { files, keepText } = filesFromPaste({
+      files: event.clipboardData.files,
+      types: Array.from(event.clipboardData.types),
+    })
+    if (!keepText) event.preventDefault()
+    addFiles(files, true)
+  }
+
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!canAttach || event.dataTransfer.files.length === 0) return
+    event.preventDefault()
+    addFiles(Array.from(event.dataTransfer.files), false)
+  }
   // Which-action-failed phrasing lives in Chat now (`onFailedAction`), because the
   // message renders in the turns pane's status slot, not here — this component only
   // reports which of its buttons the hook's `error` belongs to.
@@ -142,7 +226,8 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   }
 
   const submit = async () => {
-    if (!draft.trim() || !connected || interrupting || sending) return
+    const hasContent = draft.trim() !== '' || attachments.length > 0
+    if (!hasContent || !connected || interrupting || sending || uploading) return
     // Clear the phrasing up front. `error` is now also set by a failed SEND — it
     // used to be swallowed — and a stale flag from an earlier stop or resume would
     // label the send's own message "couldn't stop".
@@ -159,7 +244,37 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
       }
       onFailedAction(null)
     }
-    send(draft)
+    if (attachments.length === 0 || !sessionId) {
+      send(draft)
+      return
+    }
+    // Upload first, then send one message naming every file. A failed upload sends
+    // nothing and keeps the draft and the tray: half the files and a message that
+    // names only some of them is worse than a second try.
+    setUploading(true)
+    setAttachError(null)
+    const shared: SessionFile[] = []
+    try {
+      for (const attachment of attachments) {
+        shared.push(await api.shareSessionFile(sessionId, attachment.file, attachment.name))
+      }
+    } catch (error) {
+      const sharedCount = shared.length
+      setAttachError(
+        `${error instanceof Error ? error.message : String(error)}` +
+          (sharedCount > 0 ? ` — ${sharedCount} of ${attachments.length} were shared before it failed, and nothing was sent` : ''),
+      )
+      // The ones that did go up are in the session already; keep only the rest.
+      setAttachments((current) => current.slice(sharedCount))
+      setUploading(false)
+      return
+    }
+    for (const attachment of attachments) {
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl)
+    }
+    setAttachments([])
+    setUploading(false)
+    send(messageWithAttachedFiles(draft, shared))
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -170,11 +285,58 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   }
 
   return (
-    <div className="bc-composer-wrap">
+    <div className="bc-composer-wrap" onDragOver={(event) => canAttach && event.preventDefault()} onDrop={onDrop}>
       {/* No status row here anymore: paused/stopped/disconnected/error render in the
           turns pane's SessionStatusLine — one slot, one style, no second thing popping
-          layout above the composer. */}
+          layout above the composer. The attachment tray is the exception: an upload
+          refusal belongs to the files it is about, beside them. */}
+      {(attachments.length > 0 || attachError) && (
+        <div className="bc-attach-tray">
+          {attachments.map((attachment) => (
+            <div key={attachment.key} className="bc-attach-chip" title={attachment.name}>
+              {attachment.previewUrl ? (
+                <img className="bc-attach-chip-preview" src={attachment.previewUrl} alt="" />
+              ) : (
+                <span aria-hidden>📄</span>
+              )}
+              <span className="bc-attach-chip-name">{attachment.name}</span>
+              <span className="bc-attach-chip-size">{formatBytes(attachment.file.size)}</span>
+              <button
+                type="button"
+                className="bc-attach-chip-remove"
+                onClick={() => removeAttachment(attachment.key)}
+                disabled={uploading}
+                aria-label={`Remove ${attachment.name}`}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {attachError && <div className="bc-attach-error">Couldn’t share: {attachError}</div>}
+        </div>
+      )}
       <div className="bc-composer">
+        <input
+          ref={filePicker}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            addFiles(Array.from(event.target.files ?? []), false)
+            // Cleared so picking the same file again still fires onChange.
+            event.target.value = ''
+          }}
+        />
+        <button
+          type="button"
+          className="bc-composer-attach"
+          onClick={() => filePicker.current?.click()}
+          disabled={!canAttach || uploading}
+          aria-label="Attach files"
+          title={canAttach ? 'Attach files — or paste or drop them here' : 'Send a first message to start the chat, then attach files'}
+        >
+          +
+        </button>
         {/* The textarea stays editable while disconnected: only the send is impossible,
             and disabling the box would throw away a draft over a reconnect that usually
             lasts a second. */}
@@ -184,6 +346,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           placeholder={connected ? 'Send a message...' : 'Waiting for the connection…'}
           rows={1}
         />
@@ -191,7 +354,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
           <button
             className="bc-composer-btn"
             onClick={() => void submit()}
-            disabled={!draft.trim() || !connected || interrupting || sending}
+            disabled={(!draft.trim() && attachments.length === 0) || !connected || interrupting || sending || uploading}
             title={
               !connected
                 ? 'Not connected'
@@ -200,7 +363,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
                   : 'Send'
             }
           >
-            Send
+            {uploading ? 'Sharing…' : 'Send'}
           </button>
           {turnRunning && (
             <button

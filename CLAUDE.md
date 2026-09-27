@@ -51,7 +51,7 @@ A narrower scope overrides a wider one: session over board over instance over ha
 
 **The rule that turns a form into a request body, or a store's answer into what the page shows, goes in a plain module under `src/`, not in the component** — because `npm test` covers `test/**/*.test.ts` and nothing renders a component there. Put the logic in the module, keep the component to rendering and fetching, and the rule gets a test.
 
-The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `kanbanBoardSettings.ts`, `kanbanTagRules.ts`, `messageTriggers.ts`, `effectiveConfigQuery.ts` (the effective-config dry run whose inputs live in the URL), `promptSource.ts`, `grantResources.ts`, `principalAvailability.ts`, `sessionSummaryPages.ts`, `toolPayloadPreview.ts`, `agentDispatch.ts`, `servicesClient.ts` and `kanbanStoreClient.ts`. `test/pages.test.ts` covers the registry itself — `navEntriesFor` and `groupForPath` — and `test/settingsSection.test.ts` the save frame.
+The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `kanbanBoardSettings.ts`, `kanbanTagRules.ts`, `messageTriggers.ts`, `effectiveConfigQuery.ts` (the effective-config dry run whose inputs live in the URL), `promptSource.ts`, `grantResources.ts`, `principalAvailability.ts`, `sessionSummaryPages.ts`, `toolPayloadPreview.ts`, `agentDispatch.ts`, `sessionFileAttachments.ts` (the message a send with attached files carries, pasted-file names, paste handling), `servicesClient.ts` and `kanbanStoreClient.ts`. `test/pages.test.ts` covers the registry itself — `navEntriesFor` and `groupForPath` — and `test/settingsSection.test.ts` the save frame.
 
 ## Generated store types, never hand copies
 

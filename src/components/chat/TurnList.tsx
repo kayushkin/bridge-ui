@@ -12,7 +12,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
-import type { Entry, Turn } from '@kayushkin/chat-core'
+import type { Entry, SessionFile, Turn } from '@kayushkin/chat-core'
 import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
 import { isToolRunning, toToolEvent } from './toolEvents'
 
@@ -30,6 +30,7 @@ import SessionStatusLine, {
   type ComposerStatus,
 } from './SessionStatusLine'
 import styles from './Chat.module.css'
+import { SharedFileCard, ToolResultImageStrip } from './SharedFiles'
 
 // react-markdown types `components` over intrinsic elements only; `ref-chip` is the
 // custom hast element remarkRefChips emits, so we cast the map like bridge-ui does.
@@ -410,6 +411,12 @@ export default function TurnList({
             )
             continue
           }
+          if (it.kind === 'file' && !it.sharedByAgent) {
+            flushSpan()
+            seg = null
+            out.push(<UserFileRow key={it.key} item={it} />)
+            continue
+          }
           if (it.kind === 'notification') {
             seg = { turnId: turn.id, notification: it.text, ts: it.ts, items: [] }
             span.push(seg)
@@ -685,6 +692,9 @@ type RenderItem =
    *  the reader never wrote it — but the span renderer surfaces it as a
    *  formatted, auto-collapsed chip at the seam it explains. */
   | { kind: 'notification'; key: string; ts: string; text: string }
+  /** A file shared into the session. One the user shared stands as its own row, on
+   *  the user's side; one the agent shared sits in the agent's reply. */
+  | { kind: 'file'; key: string; ts: string; file: SessionFile; sharedByAgent: boolean }
   | {
       kind: 'assistant'
       key: string
@@ -780,6 +790,10 @@ function buildTurnItems(
     if (!e) continue
     if (e.kind === 'system' && e.subtype === 'compact_boundary') {
       out.push({ kind: 'marker', key: id, ts: e.ts })
+      continue
+    }
+    if (e.kind === 'file' && e.sessionFile) {
+      out.push({ kind: 'file', key: id, ts: e.ts, file: e.sessionFile, sharedByAgent: e.sessionFile.shared_by === 'agent' })
       continue
     }
     if (e.role === 'user' && (e.kind === 'text' || e.kind === 'result') && e.text) {
@@ -1178,6 +1192,19 @@ const UserTurnRow = memo(function UserTurnRow({
   )
 })
 
+/** A file the user shared, on the user's side of the conversation like their messages. */
+function UserFileRow({ item }: { item: Extract<RenderItem, { kind: 'file' }> }) {
+  return (
+    <div className={`bc-turns-item bc-turns-user ${styles.vrow}`} data-file-id={item.file.file_id}>
+      <div className="bc-turns-meta">
+        <span className="bc-turns-actor">You</span>
+        <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
+      </div>
+      <SharedFileCard file={item.file} />
+    </div>
+  )
+}
+
 /** One TURN's worth of a span: the hidden notification that opened it (when one
  *  did), and its assistant/marker items in order. */
 interface SpanSegment {
@@ -1235,6 +1262,7 @@ function SegmentContent({
       {segment.notification && <NotificationChip text={segment.notification} ts={segment.ts} />}
       {segment.items.map((it) => {
         if (it.kind === 'marker') return <CompactBoundary key={it.key} ts={it.ts} />
+        if (it.kind === 'file') return <SharedFileCard key={it.key} file={it.file} />
         if (it.kind !== 'assistant') return null
         const itemLive = live && it === lastAssistant && !!(it.thinking || it.narration)
         return (
@@ -1466,6 +1494,8 @@ function EntryBody({
       // collapsed, which also keeps this from making Raw's per-turn virtualized children
       // much taller than they already are.
       return <EntryToolCall entry={entry} resultedToolIds={resultedToolIds ?? EMPTY_TOOL_IDS} />
+    case 'file':
+      return entry.sessionFile ? <SharedFileCard file={entry.sessionFile} /> : null
     case 'tool_result':
       // ⚠️ A result is NOT a second tool card, and making it one was a real fault before
       // it was a failing test. A cold-loaded model keeps the call and the result as two
@@ -1521,6 +1551,9 @@ function EntryToolCall({ entry, resultedToolIds }: { entry: Entry; resultedToolI
   return (
     <>
       <ToolItem tool={toToolEvent(full.entry)} running={isToolRunning(full.entry, resultedToolIds)} />
+      {entry.toolResultImages && (
+        <ToolResultImageStrip sessionId={sessionId || null} images={entry.toolResultImages} toolName={entry.toolName ?? 'tool'} />
+      )}
       <ShortenedPayloadBar
         entry={entry}
         shortened={full.shortened}
@@ -1550,6 +1583,9 @@ function EntryToolResult({ entry }: { entry: Entry }) {
           className={styles.entryPre}
           text={typeof result === 'string' ? result : stringify(result)}
         />
+      )}
+      {entry.toolResultImages && (
+        <ToolResultImageStrip sessionId={sessionId || null} images={entry.toolResultImages} toolName={entry.toolName ?? 'result'} />
       )}
       <ShortenedPayloadBar
         entry={entry}
