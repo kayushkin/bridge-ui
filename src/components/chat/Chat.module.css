@@ -521,8 +521,9 @@
 }
 
 /* The view tabs: short words in one joined strip, the pressed ones filled. The
-   strip is the header's widest control, so below 760px of header it drops to the
-   one- or two-letter forms rather than push the name off the row. */
+   strip is the header's widest control, so below 640px of header it drops to the
+   one- or two-letter forms. Not sooner: above that the name is what gives way as the
+   header narrows, and the controls keep one width (chat-header-overflow.spec.ts). */
 .viewTabs {
   display: inline-flex;
   flex-shrink: 0;
@@ -531,15 +532,15 @@
   overflow: hidden;
 }
 .viewTab {
-  padding: 0 8px;
+  padding: 0 6px;
   height: 24px;
   border: none;
   border-left: 1px solid var(--border);
   background: none;
   color: var(--text-dim);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
@@ -551,10 +552,10 @@
   background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .viewTabShort { display: none; }
-@container session-header (max-width: 760px) {
+@container session-header (max-width: 640px) {
   .viewTabLabel { display: none; }
   .viewTabShort { display: inline; }
-  .viewTab { padding: 0 6px; }
+  .viewTab { padding: 0 5px; }
 }
 
 /* The usage group: the context ring and the cost chip, side by side. */
@@ -610,37 +611,51 @@
 }
 
 /* The context ring: a readout, not a control, beside the cost chip. Its arc is
-   the fill; the percentage sits next to it in tabular figures so it does not
-   jitter sideways as the count climbs during a turn.
+   the fill, and the percentage is printed inside it in tabular figures so it does
+   not jitter as the count climbs during a turn.
 
    ⚠️ It renders ONLY when there is a real measurement (tokens > 0 && limit > 0);
    see `ContextRing`. */
 .contextRing {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
   flex-shrink: 0;
-  font-size: 0.66rem;
-  font-variant-numeric: tabular-nums;
   color: var(--text-dim);
-  white-space: nowrap;
   cursor: default;
 }
 .contextRingSvg {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
 }
 .contextRingTrack {
   fill: none;
   stroke: var(--border);
-  stroke-width: 2.6;
+  stroke-width: 2.4;
 }
 .contextRingArc {
   fill: none;
   stroke: var(--bc-harness, var(--accent));
-  stroke-width: 2.6;
+  stroke-width: 2.4;
   stroke-linecap: round;
   transition: stroke-dasharray 0.3s ease, stroke 0.2s ease;
+}
+/* The number inside the ring. Three digits (over the limit) still fit at this size. */
+.contextRingNumber {
+  fill: currentColor;
+  font-size: 8.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+/* The readout's words, for screen readers: the ring and its number draw it on screen. */
+.contextRingReadout {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .contextRingWarn { color: #f59e0b; }
 .contextRingWarn .contextRingArc { stroke: #f59e0b; }

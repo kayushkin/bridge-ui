@@ -465,7 +465,7 @@ export function SessionSettingsPanel({
 }
 
 /** The context readout: a small ring in the header row that fills as the context window
- *  does, with the percentage beside it. The exact token pair is in its title. It sits
+ *  does, with the percentage printed inside it. The exact token pair is in its title. It sits
  *  next to the cost chip, so the two numbers about what a session has used read as one
  *  group, and it takes no row of its own; it replaced a strip along the header's bottom
  *  edge that did.
@@ -492,25 +492,26 @@ export function ContextRing({
   const tone = pct >= 90 ? 'Crit' : pct >= 70 ? 'Warn' : ''
   const pctLabel = pct.toFixed(0)
   const fill = Math.min(100, pct)
-  // A circle of radius 7 in a 18×18 box; the arc is a dash of `fill`% of its length.
-  const circumference = 2 * Math.PI * 7
+  // A circle of radius 10 in a 24×24 box; the arc is a dash of `fill`% of its length.
+  const circumference = 2 * Math.PI * 10
 
   return (
     <span
       className={`${styles.contextRing}${tone ? ` ${styles[`contextRing${tone}`]}` : ''}`}
       title={`Context window: ${tokens.toLocaleString()} / ${limit.toLocaleString()} tokens (${pctLabel}%)`}
     >
-      <svg viewBox="0 0 18 18" className={styles.contextRingSvg} aria-hidden>
-        <circle cx="9" cy="9" r="7" className={styles.contextRingTrack} />
+      <svg viewBox="0 0 24 24" className={styles.contextRingSvg} aria-hidden>
+        <circle cx="12" cy="12" r="10" className={styles.contextRingTrack} />
         <circle
-          cx="9"
-          cy="9"
-          r="7"
+          cx="12"
+          cy="12"
+          r="10"
           className={styles.contextRingArc}
           data-fill={fill}
           strokeDasharray={`${(fill / 100) * circumference} ${circumference}`}
-          transform="rotate(-90 9 9)"
+          transform="rotate(-90 12 12)"
         />
+        <text x="12" y="12" className={styles.contextRingNumber}>{pctLabel}</text>
       </svg>
       <span
         className={styles.contextRingReadout}
