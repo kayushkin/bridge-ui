@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import type { DiscordBridgeStatus, DiscordBridgedServer, LoggedMessage, MessageLogPage } from '@kayushkin/multichat-types'
 import { useBridgeConfig } from '../context'
 import {
-  DISCORD_TABS, EMPTY_MESSAGE_LOG_FILTERS, appendMessageLogPage, bridgeProblems, bridgedChannelsOf, channelLabel, channelOptions,
+  DISCORD_TABS, EMPTY_MESSAGE_LOG_FILTERS, appendMessageLogPage, archivedDiscordExtras, bridgeProblems, bridgedChannelsOf, channelLabel, channelOptions,
   channelProblems, currentVersionOf, deletedBeforeRead, discordTabOf, messageLogQuery, nextPageBefore, senderLabel, serverOptions, serverTotals,
   versionsOf, whereLabel, withServer, type DiscordTab, type MessageLogFilters,
 } from '../discordLog'
@@ -223,9 +223,21 @@ function VersionList({ versions, discordNames }: { versions: ReturnType<typeof v
 
 function LogMessageBody({ message, discordNames }: { message: LoggedMessage; discordNames: DiscordNames }) {
   if (deletedBeforeRead(message)) return <div className={styles.muted}>No text: it was deleted before multichat read it.</div>
+  const extras = archivedDiscordExtras(message)
+  if (extras.systemLabel) return <div className={styles.systemMessage}>{senderLabel(message)} {extras.systemLabel}</div>
+  const hasContent = message.body !== '' || message.media_url !== ''
   return (
     <div className={styles.body}>
-      <MessageContent message={message} messageType={message.message_type} discordNames={discordNames} />
+      {hasContent && <MessageContent message={message} messageType={message.message_type} discordNames={discordNames} />}
+      {extras.stickers.map(sticker => (
+        <div key={sticker.id} className={styles.muted} title={`Discord sticker ${sticker.id}`}>sticker: {sticker.name}</div>
+      ))}
+      {extras.attachments.map(attachment => (
+        <div key={attachment.url} className={styles.muted}>
+          attachment: <a href={attachment.url} target="_blank" rel="noopener noreferrer" title="Discord's link to the file, which expires">{attachment.filename}</a>
+        </div>
+      ))}
+      {extras.unreadable && <div className={styles.error}>{extras.unreadable}</div>}
     </div>
   )
 }

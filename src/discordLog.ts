@@ -193,3 +193,61 @@ export function serverTotals(server: DiscordBridgedServer): { channels: number; 
     deleted: server.channels.reduce((sum, c) => sum + c.deleted_message_count, 0),
   }
 }
+
+/** What an archive row carries that its markdown body does not: Discord's
+ *  own message type for a system message (a join, a pin, a boost), the
+ *  stickers sent, and the files attached. Read from the archived Discord
+ *  object multichat keeps in `content_json`. */
+export interface ArchivedDiscordExtras {
+  /** How the row reads when Discord wrote it rather than a person; "" for a
+   *  person's message. */
+  systemLabel: string
+  stickers: { id: string; name: string }[]
+  attachments: { filename: string; url: string }[]
+  /** Set when `content_json` could not be read; the row says so. */
+  unreadable: string
+}
+
+/** Discord message types that are a person's message (discord.com's DEFAULT
+ *  and REPLY); every other type is Discord's own. */
+const DISCORD_PERSON_MESSAGE_TYPES = new Set([0, 19])
+
+const DISCORD_SYSTEM_MESSAGE_LABELS: Readonly<Record<number, string>> = {
+  1: 'added someone to the group',
+  2: 'removed someone from the group',
+  4: 'renamed the channel',
+  6: 'pinned a message',
+  7: 'joined the server',
+  8: 'boosted the server',
+  9: 'boosted the server to level 1',
+  10: 'boosted the server to level 2',
+  11: 'boosted the server to level 3',
+  12: 'followed an announcement channel',
+  18: 'started a thread',
+  20: 'used a slash command',
+  46: 'finished a poll',
+}
+
+interface ArchivedDiscordObject {
+  type?: number
+  sticker_items?: { id?: string; name?: string }[] | null
+  attachments?: { filename?: string; url?: string }[] | null
+}
+
+export function archivedDiscordExtras(message: LoggedMessage): ArchivedDiscordExtras {
+  const none: ArchivedDiscordExtras = { systemLabel: '', stickers: [], attachments: [], unreadable: '' }
+  if (message.source !== 'discord-archive') return none
+  let archived: ArchivedDiscordObject
+  try {
+    archived = JSON.parse(message.content_json) as ArchivedDiscordObject
+  } catch (err) {
+    return { ...none, unreadable: `The archived Discord message cannot be read: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  const type = archived.type ?? 0
+  return {
+    systemLabel: DISCORD_PERSON_MESSAGE_TYPES.has(type) ? '' : DISCORD_SYSTEM_MESSAGE_LABELS[type] ?? `Discord system message (type ${type})`,
+    stickers: (archived.sticker_items ?? []).map(s => ({ id: s.id ?? '', name: s.name ?? '' })),
+    attachments: (archived.attachments ?? []).map(a => ({ filename: a.filename ?? '', url: a.url ?? '' })),
+    unreadable: '',
+  }
+}

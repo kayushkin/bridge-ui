@@ -60,6 +60,7 @@ tr.rowAlert td { color: var(--text); }
   font-size: 0.9em; overflow-wrap: anywhere; min-width: 0;
 }
 .flag { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.85em; color: var(--text-muted); }
+.systemMessage { font-size: 0.85em; font-style: italic; color: var(--text-muted); padding: 0 8px; }
 .flagButton {
   font: inherit; font-size: 0.85em; padding: 1px 8px; border-radius: 999px; cursor: pointer;
   border: 1px dashed var(--border); background: none; color: var(--text-muted);

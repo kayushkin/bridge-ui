@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscordBridgeStatus, DiscordBridgedChannel, LoggedMessage, MessageLogPage } from '@kayushkin/multichat-types'
 import {
-  EMPTY_MESSAGE_LOG_FILTERS, MESSAGE_LOG_PAGE_SIZE, appendMessageLogPage, bridgeProblems, bridgedChannelsOf, channelLabel,
+  EMPTY_MESSAGE_LOG_FILTERS, MESSAGE_LOG_PAGE_SIZE, appendMessageLogPage, archivedDiscordExtras, bridgeProblems, bridgedChannelsOf, channelLabel,
   channelOptions, channelProblems, currentVersionOf, deletedBeforeRead, discordTabOf, messageLogQuery, nextPageBefore,
   serverTotals, versionsOf, whereLabel, withServer,
 } from '../src/discordLog'
@@ -162,5 +162,33 @@ describe('bridge status', () => {
   it('totals a server and marks announcement channels', () => {
     expect(serverTotals(status().bridged_servers[0])).toEqual({ channels: 3, unreadable: 2, logged: 3, deleted: 1 })
     expect(channelLabel(status().bridged_servers[1].channels[0])).toBe('#general (announcements)')
+  })
+})
+
+describe('an archived Discord message', () => {
+  const archived = (object: unknown, overrides: Partial<LoggedMessage> = {}) =>
+    message({ source: 'discord-archive', event_id: '', discord_message_id: '9', body: '', format: 'discord-markdown', content_json: JSON.stringify(object), ...overrides })
+
+  it('reads a join, a pin or a boost as Discord’s own line, and any other system type by number', () => {
+    expect(archivedDiscordExtras(archived({ type: 7 })).systemLabel).toBe('joined the server')
+    expect(archivedDiscordExtras(archived({ type: 6 })).systemLabel).toBe('pinned a message')
+    expect(archivedDiscordExtras(archived({ type: 8 })).systemLabel).toBe('boosted the server')
+    expect(archivedDiscordExtras(archived({ type: 99 })).systemLabel).toBe('Discord system message (type 99)')
+  })
+
+  it('treats a plain message and a reply as a person’s, with their stickers and attachments', () => {
+    const extras = archivedDiscordExtras(archived({
+      type: 19, sticker_items: [{ id: '1', name: 'Wave' }], attachments: [{ filename: 'a.png', url: 'https://cdn.discordapp.com/a.png' }],
+    }))
+    expect(extras).toEqual({
+      systemLabel: '', stickers: [{ id: '1', name: 'Wave' }],
+      attachments: [{ filename: 'a.png', url: 'https://cdn.discordapp.com/a.png' }], unreadable: '',
+    })
+    expect(archivedDiscordExtras(archived({ type: 0, sticker_items: null, attachments: null })).systemLabel).toBe('')
+  })
+
+  it('says when the archived object cannot be read, and reads nothing from a live row', () => {
+    expect(archivedDiscordExtras(archived({}, { content_json: '{not json' })).unreadable).toMatch(/cannot be read/)
+    expect(archivedDiscordExtras(message({ content_json: '{"type":7}' })).systemLabel).toBe('')
   })
 })
