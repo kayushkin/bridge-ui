@@ -7,14 +7,17 @@ import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messa
 import {
   conversationMessagesPath, conversationPlatforms, conversationSendPath, conversationTags, filterConversations,
   conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
+  reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
 } from '../../multichatMessages'
+import { reactionChipAction, withReactionPosted, withReactionTakenBack } from '../../messageReactions'
+import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage, MultichatSendAnswer,
 } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChips } from './messagesShared'
 import { MessageContent, ReactionChips } from './MessageContent'
-import { EmojiPickerButton } from './EmojiPicker'
+import { EmojiPickerButton, EmojiPickerPanel } from './EmojiPicker'
 import styles from './Messages.module.css'
 
 const CONVERSATIONS_POLL_MS = 30_000
@@ -147,6 +150,10 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  /** The message the reaction picker is open for, if any. */
+  const [reactingTo, setReactingTo] = useState<ShownMessage | null>(null)
+  const [reacting, setReacting] = useState(false)
+  const [reactionError, setReactionError] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
   const composer = useRef<HTMLTextAreaElement | null>(null)
   /** Where the cursor goes after an emoji is put in, applied once the draft redraws. */
@@ -254,6 +261,41 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
     try { await refreshNewest(true) } catch (err) { setError(errorText(err)) }
   }
 
+  /** Puts a change to one message's reactions on the shown list at once; the
+   *  next poll brings the logged copy. */
+  const updateReactions = (targetEventID: string, change: (reactions: MessageReactionGroup[]) => MessageReactionGroup[]) => {
+    setMessages(current => current && current.map(message =>
+      message.event_id === targetEventID ? { ...message, reactions: change(message.reactions ?? []) } : message))
+  }
+
+  /** Reacts to a message as our account; the bridge passes it on to the
+   *  people in the room. */
+  const postReaction = async (message: ShownMessage, key: string) => {
+    const target = reactionTargetEventID(message)
+    setReacting(true)
+    const posted = await write<{ event_id: string }>('POST', reactionPostPath(roomID), { event_id: target, key })
+    setReacting(false)
+    if (!posted.ok) { setReactionError(posted.error); return }
+    setReactionError(null)
+    updateReactions(target, reactions => withReactionPosted(reactions, key, posted.value.event_id, 'You'))
+  }
+
+  const takeBackReaction = async (message: ShownMessage, reactionEventID: string) => {
+    const target = reactionTargetEventID(message)
+    setReacting(true)
+    const taken = await write<{ redaction_event_id: string }>('DELETE', reactionTakeBackPath(roomID, reactionEventID))
+    setReacting(false)
+    if (!taken.ok) { setReactionError(taken.error); return }
+    setReactionError(null)
+    updateReactions(target, reactions => withReactionTakenBack(reactions, reactionEventID, 'You'))
+  }
+
+  const onChipClick = (message: ShownMessage, reaction: MessageReactionGroup) => {
+    const action = reactionChipAction(reaction)
+    if (action.kind === 'post') void postReaction(message, action.key)
+    if (action.kind === 'take-back') void takeBackReaction(message, action.reactionEventID)
+  }
+
   return (
     <div className={styles.thread}>
       <div className={styles.threadBar}>
@@ -281,12 +323,26 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
               <div className={styles.messageBody}>
                 <MessageContent message={message} messageType={message.msg_type} discordNames={discordNames} />
               </div>
-              <ReactionChips reactions={message.reactions} />
+              <ReactionChips reactions={message.reactions} busy={reacting}
+                onChipClick={reaction => onChipClick(message, reaction)}>
+                <button type="button" className={styles.reactButton} disabled={reacting}
+                  aria-expanded={reactingTo?.event_id === message.event_id}
+                  title="React to this message" aria-label="React to this message"
+                  onClick={() => setReactingTo(current => current?.event_id === message.event_id ? null : message)}>
+                  +{'\u{1F642}'}
+                </button>
+              </ReactionChips>
             </div>
           ))
         )}
       </div>
       <div className={styles.composer}>
+        {reactingTo && (
+          <EmojiPickerPanel
+            heading={`React to ${reactingTo.is_me ? 'your' : `${reactingTo.sender_name || reactingTo.sender}'s`} message: “${reactingTo.body.slice(0, 60)}${reactingTo.body.length > 60 ? '…' : ''}”`}
+            onPick={emoji => { const message = reactingTo; setReactingTo(null); void postReaction(message, emoji) }}
+            onClose={() => setReactingTo(null)} />
+        )}
         <EmojiPickerButton onPick={insertEmoji} disabled={sending} />
         <textarea ref={composer} className={styles.input} rows={2} value={draft} disabled={sending}
           placeholder={`Message ${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''} — Enter sends, Shift+Enter is a new line`}
@@ -299,6 +355,7 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
         </button>
       </div>
       {sendError && <pre className={styles.error}>{sendError}</pre>}
+      {reactionError && <pre className={styles.error}>{reactionError}</pre>}
     </div>
   )
 }

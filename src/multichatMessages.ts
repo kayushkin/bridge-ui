@@ -21,6 +21,9 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /conversations',
   'GET /conversations/{room_id}/messages',
   'POST /conversations/{room_id}/send',
+  // Reacting to a message, and taking back a reaction we posted.
+  'POST /conversations/{room_id}/reactions',
+  'DELETE /conversations/{room_id}/reactions/{reaction_event_id}',
   'GET /search',
   'GET /contacts/unified',
   'GET /tags',
@@ -43,6 +46,23 @@ export function conversationMessagesPath(roomID: string, from?: string | null): 
   const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_SIZE) })
   if (from) query.set('from', from)
   return `/conversations/${roomSegment(roomID)}/messages?${query.toString()}`
+}
+
+/** Where a reaction to a message in the room is posted. */
+export function reactionPostPath(roomID: string): string {
+  return `/conversations/${roomSegment(roomID)}/reactions`
+}
+
+/** Where a reaction we posted is taken back. */
+export function reactionTakeBackPath(roomID: string, reactionEventID: string): string {
+  return `/conversations/${roomSegment(roomID)}/reactions/${encodeURIComponent(reactionEventID)}`
+}
+
+/** The message a reaction on a shown message goes to: the message itself, or,
+ *  for an edit shown alone because its original is on an older page, the
+ *  original — reactions point at the original, never at an edit. */
+export function reactionTargetEventID(message: MultichatMessage): string {
+  return message.replaces_event_id || message.event_id
 }
 
 export function conversationSendPath(roomID: string): string {
@@ -91,7 +111,8 @@ export function sameMessages(a: readonly MultichatMessage[], b: readonly Multich
 }
 
 function reactionSignature(message: MultichatMessage): string {
-  return (message.reactions ?? []).map(r => `${r.key}\u0000${r.count}\u0000${(r.sender_display_names ?? []).join('\u0001')}`).join('\u0002')
+  return (message.reactions ?? []).map(r =>
+    `${r.key}\u0000${r.count}\u0000${(r.sender_display_names ?? []).join('\u0001')}\u0000${r.my_reaction_event_id}\u0000${r.reacted_by_me}`).join('\u0002')
 }
 
 /** The apps the conversations are on, each once, sorted. */

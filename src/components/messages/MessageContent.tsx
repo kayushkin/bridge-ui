@@ -7,7 +7,7 @@ import {
   MESSAGE_IMAGE_THUMBNAIL, isImageMedia, mediaPathOfMxc, messageBodyKind, sanitizeMatrixHtml,
   type DiscordNames, type SafeNode,
 } from '../../messageBody'
-import { groupReactions, reactionFace, reactionTooltip } from '../../messageReactions'
+import { groupReactions, reactionChipAction, reactionFace, reactionTooltip } from '../../messageReactions'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import styles from './Messages.module.css'
 
@@ -128,24 +128,53 @@ function DiscordMarkdown({ text, discordNames }: { text: string; discordNames: D
   )
 }
 
-/** The reactions under a message, one chip per emoji with its count. */
-export function ReactionChips({ reactions }: { reactions: readonly MessageReactionGroup[] | null | undefined }) {
+/** The reactions under a message, one chip per emoji with its count. With
+ *  `onChipClick` a chip is a button: it adds our reaction with that emoji, or
+ *  takes back the one we posted (see `reactionChipAction`); ours is marked.
+ *  `children` goes at the end of the row (the Conversations page puts its
+ *  react button there, so the row shows even with no reactions yet). */
+export function ReactionChips({ reactions, onChipClick, busy, children }: {
+  reactions: readonly MessageReactionGroup[] | null | undefined
+  onChipClick?: (reaction: MessageReactionGroup) => void
+  busy?: boolean
+  children?: ReactNode
+}) {
   const { multichatBasePath } = useBridgeConfig()
   const grouped = useMemo(() => groupReactions(reactions ?? []), [reactions])
-  if (grouped.length === 0) return null
+  if (grouped.length === 0 && !children) return null
   return (
     <div className={styles.reactions}>
       {grouped.map(reaction => {
         const face = reactionFace(reaction, multichatBasePath)
-        return (
-          <span key={reaction.key} className={styles.reactionChip} title={reactionTooltip(reaction)} data-reaction-key={reaction.key}>
+        const drawn = (
+          <>
             {face.kind === 'image'
               ? <img className={styles.reactionImage} src={face.src} alt={face.alt} />
               : <span className={styles.reactionText}>{face.text}</span>}
             <span className={styles.reactionCount}>{reaction.count}</span>
-          </span>
+          </>
+        )
+        const className = `${styles.reactionChip} ${reaction.reacted_by_me ? styles.reactionChipMine : ''}`
+        if (!onChipClick) {
+          return (
+            <span key={reaction.key} className={className} title={reactionTooltip(reaction)} data-reaction-key={reaction.key}>
+              {drawn}
+            </span>
+          )
+        }
+        const action = reactionChipAction(reaction)
+        const hint = action.kind === 'post' ? 'Click to add yours.'
+          : action.kind === 'take-back' ? 'Click to take yours back.'
+          : 'You reacted in the app; take it back there.'
+        return (
+          <button key={reaction.key} type="button" className={className} data-reaction-key={reaction.key}
+            title={`${reactionTooltip(reaction)}\n${hint}`} aria-pressed={reaction.reacted_by_me}
+            disabled={busy || action.kind === 'made-in-the-app'} onClick={() => onChipClick(reaction)}>
+            {drawn}
+          </button>
         )
       })}
+      {children}
     </div>
   )
 }

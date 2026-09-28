@@ -39,7 +39,9 @@ export function EmojiPickerButton({ onPick, disabled }: { onPick: (emoji: string
   )
 }
 
-function EmojiPickerPanel({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
+/** The searchable emoji list. `heading`, when given, says what a pick is for
+ *  (the reaction picker names the message it reacts to). */
+export function EmojiPickerPanel({ onPick, onClose, heading }: { onPick: (emoji: string) => void; onClose: () => void; heading?: string }) {
   const [groups, setGroups] = useState<readonly EmojiGroup[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -57,6 +59,12 @@ function EmojiPickerPanel({ onPick, onClose }: { onPick: (emoji: string) => void
   return (
     <div className={styles.emojiPanel} role="dialog" aria-label="Emoji"
       onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
+      {heading && (
+        <div className={styles.emojiPanelHeading}>
+          <span>{heading}</span>
+          <button type="button" className={styles.emojiPanelClose} aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+      )}
       <input className={styles.input} type="search" value={query} placeholder="Search emoji" autoFocus
         onChange={event => setQuery(event.target.value)} />
       <div className={styles.emojiGroups}>

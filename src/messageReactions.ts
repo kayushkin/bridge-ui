@@ -39,6 +39,8 @@ export function groupReactions(reactions: readonly MessageReactionGroup[]): Mess
     }
     seen.count += reaction.count
     if (!seen.shortcode) seen.shortcode = reaction.shortcode
+    seen.reacted_by_me = seen.reacted_by_me || reaction.reacted_by_me
+    if (!seen.my_reaction_event_id) seen.my_reaction_event_id = reaction.my_reaction_event_id
     for (const name of reaction.sender_display_names ?? []) {
       if (!seen.sender_display_names!.includes(name)) seen.sender_display_names!.push(name)
     }
@@ -71,4 +73,51 @@ export function reactionTooltip(reaction: MessageReactionGroup): string {
   const names = reaction.sender_display_names ?? []
   if (names.length > 0) return `${names.join(', ')} reacted with ${emoji}`
   return `${reaction.count} ${reaction.count === 1 ? 'reaction' : 'reactions'} with ${emoji}`
+}
+
+/** What clicking a reaction chip does. A key we have not reacted with adds
+ *  ours; one we posted from multichat is taken back; one we made in the
+ *  platform's own app belongs to our puppet there, which multichat cannot
+ *  redact, so the chip says so instead. */
+export type ReactionChipAction =
+  | { kind: 'post'; key: string }
+  | { kind: 'take-back'; reactionEventID: string }
+  | { kind: 'made-in-the-app' }
+
+export function reactionChipAction(reaction: MessageReactionGroup): ReactionChipAction {
+  if (reaction.my_reaction_event_id) return { kind: 'take-back', reactionEventID: reaction.my_reaction_event_id }
+  if (reaction.reacted_by_me) return { kind: 'made-in-the-app' }
+  return { kind: 'post', key: reaction.key }
+}
+
+/** A message's reactions with ours added, shown at once while the next poll
+ *  brings the logged copy. */
+export function withReactionPosted(reactions: readonly MessageReactionGroup[], key: string, reactionEventID: string,
+  myName: string): MessageReactionGroup[] {
+  const existing = reactions.find(reaction => reaction.key === key)
+  if (!existing) {
+    return [...reactions, {
+      key, shortcode: '', count: 1, sender_display_names: [myName], reacted_by_me: true, my_reaction_event_id: reactionEventID,
+    }]
+  }
+  return reactions.map(reaction => reaction.key !== key ? reaction : {
+    ...reaction,
+    count: reaction.count + 1,
+    sender_display_names: [...(reaction.sender_display_names ?? []), myName],
+    reacted_by_me: true,
+    my_reaction_event_id: reactionEventID,
+  })
+}
+
+/** A message's reactions with ours taken back. */
+export function withReactionTakenBack(reactions: readonly MessageReactionGroup[], reactionEventID: string,
+  myName: string): MessageReactionGroup[] {
+  return reactions.flatMap(reaction => {
+    if (reaction.my_reaction_event_id !== reactionEventID) return [reaction]
+    if (reaction.count <= 1) return []
+    const names = [...(reaction.sender_display_names ?? [])]
+    const mine = names.lastIndexOf(myName)
+    if (mine >= 0) names.splice(mine, 1)
+    return [{ ...reaction, count: reaction.count - 1, sender_display_names: names, reacted_by_me: false, my_reaction_event_id: '' }]
+  })
 }

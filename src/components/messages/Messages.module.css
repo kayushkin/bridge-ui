@@ -152,6 +152,18 @@ a.name:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 0.8em; line-height: 1.5;
   border: 1px solid var(--border); border-radius: 999px; background: var(--bg-surface); color: var(--text); cursor: default;
 }
+.reactionChipMine { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface)); }
+button.reactionChip { cursor: pointer; font: inherit; font-size: 0.8em; }
+button.reactionChip:hover:not(:disabled) { border-color: var(--accent); }
+button.reactionChip:disabled { cursor: default; opacity: 0.85; }
+.reactButton {
+  display: inline-flex; align-items: center; padding: 1px 7px; font-size: 0.8em; line-height: 1.5; cursor: pointer;
+  border: 1px dashed var(--border); border-radius: 999px; background: none; color: var(--text-muted);
+}
+.reactButton:hover:not(:disabled), .reactButton[aria-expanded="true"] { border-color: var(--accent); color: var(--text); }
+.emojiPanelHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8em; color: var(--text-muted); }
+.emojiPanelHeading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emojiPanelClose { background: none; border: none; cursor: pointer; color: var(--text-muted); }
 .reactionImage { height: 1.25em; width: auto; object-fit: contain; }
 .reactionText { font-size: 1.1em; }
 .reactionCount { color: var(--text-muted); font-variant-numeric: tabular-nums; }

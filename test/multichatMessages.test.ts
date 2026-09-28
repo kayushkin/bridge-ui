@@ -5,7 +5,7 @@ import {
   MESSAGE_PAGE_SIZE, contactListPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, conversationMessagesPath,
   conversationPlatforms, conversationSendPath, conversationTags, filterContacts, filterConversations, highlightSegments,
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
-  searchPath, foldEdits, conversationPreviewText, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
+  searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
 } from '../src/multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatTag, MultichatUnifiedContact,
@@ -254,5 +254,16 @@ describe('conversationPreviewText', () => {
   })
   it('leaves plain text alone', () => {
     expect(conversationPreviewText('Sure, that sounds good')).toBe('Sure, that sounds good')
+  })
+})
+
+describe('reaction routes', () => {
+  it('escapes the room and the reaction as single path segments', () => {
+    expect(reactionPostPath('!a:chat.kayushkin.com')).toBe('/conversations/!a%3Achat.kayushkin.com/reactions')
+    expect(reactionTakeBackPath('!a:x', '$abc/def')).toBe('/conversations/!a%3Ax/reactions/%24abc%2Fdef')
+  })
+  it('reacts to the original when an edit is shown alone', () => {
+    expect(reactionTargetEventID({ event_id: '$edit', replaces_event_id: '$post' } as MultichatMessage)).toBe('$post')
+    expect(reactionTargetEventID({ event_id: '$post' } as MultichatMessage)).toBe('$post')
   })
 })

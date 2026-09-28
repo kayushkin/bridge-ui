@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { groupReactions, reactionFace, reactionMapKeyOf, reactionTooltip, reactionsOfLoggedMessage } from '../src/messageReactions'
+import {
+  groupReactions, reactionChipAction, reactionFace, reactionMapKeyOf, reactionTooltip, reactionsOfLoggedMessage,
+  withReactionPosted, withReactionTakenBack,
+} from '../src/messageReactions'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 
 /** Go sends a nil slice as null, whatever the rendered type says. */
 const NO_NAMES = null as unknown as string[]
 
 const reaction = (overrides: Partial<MessageReactionGroup> = {}): MessageReactionGroup => ({
-  key: '\u{1F44D}', shortcode: '', count: 1, sender_display_names: ['Ann'], ...overrides,
+  key: '\u{1F44D}', shortcode: '', count: 1, sender_display_names: ['Ann'], reacted_by_me: false, my_reaction_event_id: '', ...overrides,
 })
 
 describe('finding a row’s reactions', () => {
@@ -62,5 +65,34 @@ describe('what a chip shows', () => {
       .toBe('3 reactions with :cat:')
     expect(reactionTooltip(reaction({ key: 'mxc://s/i', shortcode: '', count: 1, sender_display_names: NO_NAMES })))
       .toBe('1 reaction with a custom emoji')
+  })
+})
+
+describe('reacting from the Conversations page', () => {
+  const group = (extra: Partial<MessageReactionGroup>): MessageReactionGroup => ({
+    key: '🔥', shortcode: '', count: 1, sender_display_names: ['Kai'], reacted_by_me: false, my_reaction_event_id: '', ...extra,
+  })
+  it('adds ours to a key we have not used, takes back ours, and leaves one made in the app alone', () => {
+    expect(reactionChipAction(group({}))).toEqual({ kind: 'post', key: '🔥' })
+    expect(reactionChipAction(group({ reacted_by_me: true, my_reaction_event_id: '$mine' }))).toEqual({ kind: 'take-back', reactionEventID: '$mine' })
+    expect(reactionChipAction(group({ reacted_by_me: true }))).toEqual({ kind: 'made-in-the-app' })
+  })
+  it('shows a posted reaction at once, on a new key or an existing one', () => {
+    expect(withReactionPosted([], '❤️', '$r1', 'You')).toEqual([
+      { key: '❤️', shortcode: '', count: 1, sender_display_names: ['You'], reacted_by_me: true, my_reaction_event_id: '$r1' },
+    ])
+    expect(withReactionPosted([group({})], '🔥', '$r2', 'You')).toEqual([
+      group({ count: 2, sender_display_names: ['Kai', 'You'], reacted_by_me: true, my_reaction_event_id: '$r2' }),
+    ])
+  })
+  it('takes ours back, dropping the chip when it was the only one', () => {
+    const shared = group({ count: 2, sender_display_names: ['Kai', 'You'], reacted_by_me: true, my_reaction_event_id: '$r2' })
+    expect(withReactionTakenBack([shared], '$r2', 'You')).toEqual([group({})])
+    expect(withReactionTakenBack([group({ sender_display_names: ['You'], reacted_by_me: true, my_reaction_event_id: '$r1' })], '$r1', 'You')).toEqual([])
+    expect(withReactionTakenBack([group({})], '$other', 'You')).toEqual([group({})])
+  })
+  it('keeps our reaction when two groups with one key are merged', () => {
+    const merged = groupReactions([group({}), group({ sender_display_names: ['You'], reacted_by_me: true, my_reaction_event_id: '$r' })])
+    expect(merged).toEqual([group({ count: 2, sender_display_names: ['Kai', 'You'], reacted_by_me: true, my_reaction_event_id: '$r' })])
   })
 })
