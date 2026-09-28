@@ -20,6 +20,7 @@ import { SplitDragHandle } from './SplitDragHandle'
 import Sidebar from './Sidebar'
 import SignalsPage from './SignalsPage'
 import { OrchestratorThread } from './OrchestratorThread'
+import { WorkGraphView } from './WorkGraphView'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
 import TurnList from './TurnList'
 import Timeline from './Timeline'
@@ -56,8 +57,9 @@ import {
 } from './panePersistence'
 
 /** `?view=` values, each a surface drawn in place of the thread: the signals page,
- *  and the Orchestrator, which the producer runs rather than llm-bridge. */
-const WORKSPACE_VIEWS = ['signals', 'orchestrator'] as const
+ *  the Orchestrator, which the producer runs rather than llm-bridge, and the work
+ *  graph, each repo's commits coloured by the session that made them. */
+const WORKSPACE_VIEWS = ['signals', 'orchestrator', 'work-graph'] as const
 type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 function workspaceViewOf(param: string | null): WorkspaceView | null {
@@ -271,6 +273,10 @@ export function BridgeChat() {
     setWorkspaceView('orchestrator')
     if (minimal) setDrawerOpen(false)
   }, [minimal, setDrawerOpen])
+  const openWorkGraph = useCallback(() => {
+    setWorkspaceView('work-graph')
+    if (minimal) setDrawerOpen(false)
+  }, [minimal, setDrawerOpen])
 
   // One element, rendered in one of two places: in the row on a desktop, inside the
   // drawer on a phone. Not two copies — a second mounted `Sidebar` would open a second
@@ -284,6 +290,8 @@ export function BridgeChat() {
       onOpenSignalsPage={openSignalsPage}
       onOpenOrchestrator={openOrchestrator}
       orchestratorOpen={workspaceView === 'orchestrator'}
+      onOpenWorkGraph={openWorkGraph}
+      workGraphOpen={workspaceView === 'work-graph'}
     />
   )
 
@@ -294,7 +302,13 @@ export function BridgeChat() {
     // no CSS.
     <div className={`bc-container ${minimal ? 'bc-minimal' : ''}`}>
       {minimal && (
-        <MinimalTopBar title={workspaceView === 'orchestrator' ? 'Orchestrator' : activeSummary?.displayName || activeSummary?.sessionId || ''} />
+        <MinimalTopBar
+          title={
+            workspaceView === 'orchestrator' ? 'Orchestrator'
+              : workspaceView === 'work-graph' ? 'Work graph'
+                : activeSummary?.displayName || activeSummary?.sessionId || ''
+          }
+        />
       )}
       <div className="bc-main">
         {/* The strip is the desktop's way back to the list; on a phone that job belongs
@@ -321,7 +335,15 @@ export function BridgeChat() {
               onClose={() => setWorkspaceView(null)}
             />
           ) : workspaceView === 'orchestrator' ? (
-            <OrchestratorThread onClose={() => setWorkspaceView(null)} />
+            <OrchestratorThread onClose={() => setWorkspaceView(null)} onOpenWorkGraph={openWorkGraph} />
+          ) : workspaceView === 'work-graph' ? (
+            <WorkGraphView
+              onSelectSession={sessionId => {
+                select(sessionId)
+                setWorkspaceView(null)
+              }}
+              onClose={() => setWorkspaceView(null)}
+            />
           ) : (
             <ThreadPane newTarget={target} />
           )}

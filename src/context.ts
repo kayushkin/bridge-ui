@@ -192,6 +192,11 @@ export interface BridgeConfig {
    * public port that shows it (dash: "/api/previews"). If empty, the Previews
    * page is hidden and Bash calls show no View button. */
   previewsBasePath: string
+  /** Base path for work-graph-store as the host proxies it (dash:
+   * "/api/work-graph"): which agent session moved which git ref, drawn as
+   * each repo's commit graph by the chat's `?view=work-graph`. If empty, the
+   * view says the store is not configured and nothing links to it. */
+  workGraphStoreBasePath: string
   /** Base path of the HOST's own routes, read only by the service settings
    * page, which asks `{base}/settings` — the host describes its own settings
    * there like any backend (dash: "/api/dash"). The host is not proxied under a

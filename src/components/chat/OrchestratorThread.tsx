@@ -31,10 +31,13 @@ interface ProducerRunSummary {
 
 export interface OrchestratorThreadProps {
   onClose: () => void
+  /** Show the work graph in the workspace instead. The button is drawn only when
+   *  this is given and the host proxies work-graph-store. */
+  onOpenWorkGraph?: () => void
 }
 
-export function OrchestratorThread({ onClose }: OrchestratorThreadProps): JSX.Element {
-  const { routes } = useBridgeConfig()
+export function OrchestratorThread({ onClose, onOpenWorkGraph }: OrchestratorThreadProps): JSX.Element {
+  const { routes, workGraphStoreBasePath } = useBridgeConfig()
   const { messages, running, error, completedSends, send } = useProducerConversation()
   const { data: lastRuns } = useProducerResource<ProducerRunSummary[]>('/runs?limit=1', [], completedSends)
   const lastRun = lastRuns[0]
@@ -78,6 +81,15 @@ export function OrchestratorThread({ onClose }: OrchestratorThreadProps): JSX.El
             >
               Context
             </button>
+            {onOpenWorkGraph && workGraphStoreBasePath && (
+              <button
+                style={iconButton}
+                onClick={onOpenWorkGraph}
+                title="Each repo's commit graph, coloured by the agent session that made each commit"
+              >
+                Work graph
+              </button>
+            )}
             {routes.orchestrator && (
               <a style={iconButton} href={routes.orchestrator} title="The full Orchestrator page, with every run">
                 Runs ↗

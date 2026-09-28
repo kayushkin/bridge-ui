@@ -30,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
         grantStoreBasePath="/api/grants"
         bundleStoreBasePath="/api/bundle-store"
         repoStoreBasePath="/api/repo-store"
+        workGraphStoreBasePath="/api/work-graph"
       />
     </BrowserRouter>
   </StrictMode>,

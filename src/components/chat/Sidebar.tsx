@@ -119,6 +119,11 @@ interface SidebarProps {
   onOpenOrchestrator: () => void
   /** Whether the Orchestrator is the view on screen, so its row reads as selected. */
   orchestratorOpen: boolean
+  /** Show the work graph in place of the thread (the pinned row under the
+   *  Orchestrator's). */
+  onOpenWorkGraph: () => void
+  /** Whether the work graph is the view on screen, so its row reads as selected. */
+  workGraphOpen: boolean
 }
 
 export default function Sidebar({
@@ -128,6 +133,8 @@ export default function Sidebar({
   onOpenSignalsPage,
   onOpenOrchestrator,
   orchestratorOpen,
+  onOpenWorkGraph,
+  workGraphOpen,
 }: SidebarProps) {
   const {
     groups,
@@ -184,7 +191,7 @@ export default function Sidebar({
   // `fetch` is the same credentialed fetch every other call on this page uses, and
   // an empty `producerBasePath` means this host proxies no producer, in which case
   // the row is not rendered at all rather than pointed at a guessed path.
-  const { fetch: bridgeApiFetch, producerBasePath } = useBridgeConfig()
+  const { fetch: bridgeApiFetch, producerBasePath, workGraphStoreBasePath } = useBridgeConfig()
   // Liveness of the session-list stream. `listLoading` only covers the FIRST fetch, so
   // without this an empty list after a dropped stream reads as "you have no sessions".
   // 'open' is the only state in which updates are flowing — see useConnState.
@@ -524,7 +531,7 @@ export default function Sidebar({
             basePath={basePath}
             displayState={s.state}
             hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
-            active={!orchestratorOpen && s.sessionId === activeId}
+            active={!orchestratorOpen && !workGraphOpen && s.sessionId === activeId}
             subagentCount={subagentsOf(s.sessionId).length}
             subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
             onToggleSubagents={toggleSubagents}
@@ -588,7 +595,7 @@ export default function Sidebar({
                 // row the list stream keeps current, not the point-in-time fetch.
                 displayState={child.state}
                 hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
-                active={!orchestratorOpen && child.sessionId === activeId}
+                active={!orchestratorOpen && !workGraphOpen && child.sessionId === activeId}
                 // A child's own children are not drawn — see the note above on depth.
                 subagentCount={0}
                 subagentsExpanded={false}
@@ -782,6 +789,22 @@ export default function Sidebar({
           onOpen={onOpenOrchestrator}
           selected={orchestratorOpen}
         />
+      )}
+
+      {/* The work graph, pinned under the Orchestrator with a session row's own
+          classes. Drawn only when the host proxies work-graph-store. */}
+      {workGraphStoreBasePath && (
+        <div className={`bc-session-item ${workGraphOpen ? 'bc-session-item-selected' : ''}`}>
+          <button
+            className="bc-session-item-main"
+            onClick={onOpenWorkGraph}
+            aria-current={workGraphOpen || undefined}
+            title="Each repo's commit graph, coloured by the agent session that made each commit"
+          >
+            <span className="bc-session-harness" aria-hidden>⎇</span>
+            <span className="bc-session-label">Work graph</span>
+          </button>
+        </div>
       )}
 
       <div className="bc-session-search">

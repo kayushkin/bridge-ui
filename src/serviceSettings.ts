@@ -39,6 +39,7 @@ const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName:
   { configKey: 'predictionStoreBasePath', serviceName: 'prediction-store' },
   { configKey: 'eventStoreBasePath', serviceName: 'event-store' },
   { configKey: 'authStoreBasePath', serviceName: 'auth-store' },
+  { configKey: 'workGraphStoreBasePath', serviceName: 'work-graph-store' },
   { configKey: 'hostBasePath', serviceName: 'the host' },
 ]
 

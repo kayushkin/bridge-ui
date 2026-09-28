@@ -68,6 +68,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/repo-store/, '') || '/',
       },
+      '/api/work-graph': {
+        target: 'http://127.0.0.1:8319',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/work-graph/, '') || '/',
+      },
     },
   },
   build: {
