@@ -130,18 +130,15 @@ function DiscordMarkdown({ text, discordNames }: { text: string; discordNames: D
 
 /** The reactions under a message, one chip per emoji with its count. With
  *  `onChipClick` a chip is a button: it adds our reaction with that emoji, or
- *  takes back the one we posted (see `reactionChipAction`); ours is marked.
- *  `children` goes at the end of the row (the Conversations page puts its
- *  react button there, so the row shows even with no reactions yet). */
-export function ReactionChips({ reactions, onChipClick, busy, children }: {
+ *  takes back the one we posted (see `reactionChipAction`); ours is marked. */
+export function ReactionChips({ reactions, onChipClick, busy }: {
   reactions: readonly MessageReactionGroup[] | null | undefined
   onChipClick?: (reaction: MessageReactionGroup) => void
   busy?: boolean
-  children?: ReactNode
 }) {
   const { multichatBasePath } = useBridgeConfig()
   const grouped = useMemo(() => groupReactions(reactions ?? []), [reactions])
-  if (grouped.length === 0 && !children) return null
+  if (grouped.length === 0) return null
   return (
     <div className={styles.reactions}>
       {grouped.map(reaction => {
@@ -174,7 +171,6 @@ export function ReactionChips({ reactions, onChipClick, busy, children }: {
           </button>
         )
       })}
-      {children}
     </div>
   )
 }

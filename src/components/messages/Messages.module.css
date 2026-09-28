@@ -74,6 +74,7 @@ a.name:hover { text-decoration: underline; }
 }
 .olderButton:hover { color: var(--text); }
 .message {
+  position: relative;
   align-self: flex-start; max-width: min(75%, 70ch); padding: 6px 10px;
   border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
 }
@@ -147,24 +148,34 @@ a.name:hover { text-decoration: underline; }
 }
 
 /* Reactions under a message. */
-.reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.reactions { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
 .reactionChip {
-  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 0.8em; line-height: 1.5;
+  display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; font-size: 0.72em; line-height: 1.4;
   border: 1px solid var(--border); border-radius: 999px; background: var(--bg-surface); color: var(--text); cursor: default;
 }
 .reactionChipMine { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface)); }
-button.reactionChip { cursor: pointer; font: inherit; font-size: 0.8em; }
+button.reactionChip { cursor: pointer; font: inherit; font-size: 0.72em; }
 button.reactionChip:hover:not(:disabled) { border-color: var(--accent); }
 button.reactionChip:disabled { cursor: default; opacity: 0.85; }
+/* The react button sits just outside the bubble, beside its bottom corner on
+   the side away from the page edge, and shows while the message is hovered
+   or the button has focus, so it adds no height to a message. The hide waits
+   a moment so the pointer can cross the gap to reach it. */
 .reactButton {
-  display: inline-flex; align-items: center; padding: 1px 7px; font-size: 0.8em; line-height: 1.5; cursor: pointer;
-  border: 1px dashed var(--border); border-radius: 999px; background: none; color: var(--text-muted);
+  position: absolute; bottom: 2px; left: calc(100% + 3px);
+  display: inline-flex; align-items: center; padding: 0 4px; font-size: 0.72em; line-height: 1.5; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-muted);
+  opacity: 0; transition: opacity 0.12s ease 0.25s;
 }
+.messageMine .reactButton { left: auto; right: calc(100% + 3px); }
+.message:hover .reactButton, .reactButton:focus-visible, .reactButton[aria-expanded="true"] { opacity: 1; transition-delay: 0s; }
 .reactButton:hover:not(:disabled), .reactButton[aria-expanded="true"] { border-color: var(--accent); color: var(--text); }
+/* A touch screen has no hover: keep the button faintly in view there. */
+@media (hover: none) { .reactButton { opacity: 0.5; } }
 .emojiPanelHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8em; color: var(--text-muted); }
 .emojiPanelHeading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .emojiPanelClose { background: none; border: none; cursor: pointer; color: var(--text-muted); }
-.reactionImage { height: 1.25em; width: auto; object-fit: contain; }
+.reactionImage { height: 1.15em; width: auto; object-fit: contain; }
 .reactionText { font-size: 1.1em; }
 .reactionCount { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 

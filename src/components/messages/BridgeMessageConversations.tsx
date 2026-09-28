@@ -324,14 +324,13 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
                 <MessageContent message={message} messageType={message.msg_type} discordNames={discordNames} />
               </div>
               <ReactionChips reactions={message.reactions} busy={reacting}
-                onChipClick={reaction => onChipClick(message, reaction)}>
-                <button type="button" className={styles.reactButton} disabled={reacting}
-                  aria-expanded={reactingTo?.event_id === message.event_id}
-                  title="React to this message" aria-label="React to this message"
-                  onClick={() => setReactingTo(current => current?.event_id === message.event_id ? null : message)}>
-                  +{'\u{1F642}'}
-                </button>
-              </ReactionChips>
+                onChipClick={reaction => onChipClick(message, reaction)} />
+              <button type="button" className={styles.reactButton} disabled={reacting}
+                aria-expanded={reactingTo?.event_id === message.event_id}
+                title="React to this message" aria-label="React to this message"
+                onClick={() => setReactingTo(current => current?.event_id === message.event_id ? null : message)}>
+                {'\u{1F642}'}
+              </button>
             </div>
           ))
         )}
