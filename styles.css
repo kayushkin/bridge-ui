@@ -684,6 +684,10 @@
   padding: 0; border: none; background: none; cursor: pointer;
   color: #f59e0b; font: inherit; font-weight: 600; text-decoration: underline;
 }
+.bc-conductor-waiting {
+  flex: none; padding: 0; border: none; background: none; cursor: pointer;
+  color: var(--text-muted); font: inherit; text-decoration: underline dotted;
+}
 .bc-conductor-ask { display: flex; }
 .bc-conductor-input {
   flex: 1; min-width: 0; padding: 5px 8px;

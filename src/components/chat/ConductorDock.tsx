@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useOpenSignals } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
-import { conductorCanAnswer, conductorState, conductorStatusText, type ConductorFacts } from '../../conductorState'
+import {
+  conductorCanAnswer,
+  conductorState,
+  conductorStatusText,
+  newestSignalTime,
+  signalsRaisedSince,
+  type ConductorFacts,
+} from '../../conductorState'
+import { chatKey } from './storageKeys'
 
 // The orchestrator as the conductor at the foot of the sidebar: what it is doing, a
 // click to open it, what needs you, and a one-line field to ask it something from any
@@ -12,6 +20,16 @@ import { conductorCanAnswer, conductorState, conductorStatusText, type Conductor
 // and the last run. A run takes tens of seconds, so 5s is soon enough to see one start.
 const ACTIVE_POLL_MS = 5_000
 const SLOW_POLL_MS = 30_000
+// The newest signal you have opened from the conductor. Older ones are waiting, not new.
+const SEEN_SIGNALS_KEY = chatKey('conductor-signals-seen-up-to')
+
+function readSeenUpTo(): string | null {
+  try {
+    return window.localStorage.getItem(SEEN_SIGNALS_KEY)
+  } catch {
+    return null
+  }
+}
 
 interface ActiveRuns {
   active: { trigger: string; message: string; started_at: string }[]
@@ -43,6 +61,21 @@ export function ConductorDock({ onOpenOrchestrator, onOpenSignalsPage }: Conduct
   const [draft, setDraft] = useState('')
   const [asking, setAsking] = useState(false)
   const [answer, setAnswer] = useState<Answer | null>(null)
+  const [seenUpTo, setSeenUpTo] = useState<string | null>(readSeenUpTo)
+  const raisedAt = signals.map((signal) => signal.createdAt)
+
+  const openSignals = () => {
+    const newest = newestSignalTime(raisedAt)
+    if (newest) {
+      setSeenUpTo(newest)
+      try {
+        window.localStorage.setItem(SEEN_SIGNALS_KEY, newest)
+      } catch {
+        // Storage refused (private mode, quota): the alert comes back on the next load.
+      }
+    }
+    onOpenSignalsPage()
+  }
 
   const readJSON = useCallback(
     async <T,>(path: string): Promise<T> => {
@@ -105,6 +138,7 @@ export function ConductorDock({ onOpenOrchestrator, onOpenSignalsPage }: Conduct
     activeRuns: Math.max(activeRuns, asking ? 1 : 0),
     lastRunError,
     needsYou: signals.length,
+    newNeedsYou: signalsRaisedSince(raisedAt, seenUpTo),
   }
   const state = conductorState(facts)
   const canAnswer = conductorCanAnswer(facts)
@@ -194,13 +228,18 @@ export function ConductorDock({ onOpenOrchestrator, onOpenSignalsPage }: Conduct
           <div className="bc-conductor-status">
             <span className="bc-conductor-dot" aria-hidden />
             {state === 'alert' ? (
-              <button type="button" className="bc-conductor-needs" onClick={onOpenSignalsPage}>
+              <button type="button" className="bc-conductor-needs" onClick={openSignals}>
                 {statusText}
               </button>
             ) : (
               <span className="bc-conductor-status-text" title={lastRunError ?? undefined}>
                 {statusText}
               </span>
+            )}
+            {state !== 'alert' && facts.needsYou > 0 && (
+              <button type="button" className="bc-conductor-waiting" onClick={openSignals}>
+                · {facts.needsYou} waiting
+              </button>
             )}
           </div>
           <form className="bc-conductor-ask" onSubmit={ask}>

@@ -20,6 +20,9 @@ export interface ConductorFacts {
   lastRunError: string | null
   /** Open signals across every session — the sidebar's "Needs you". */
   needsYou: number
+  /** Of those, the ones raised since you last opened them from the conductor. Only these
+   *  make it raise the alarm: a question weeks old is waiting, not urgent. */
+  newNeedsYou: number
 }
 
 /** In priority order: unreachable first, since nothing else it says can be trusted then;
@@ -27,7 +30,7 @@ export interface ConductorFacts {
  *  a run in flight both hides an older failure and decides whether it can answer. */
 export function conductorState(facts: ConductorFacts): ConductorState {
   if (facts.reachable === false) return 'offline'
-  if (facts.needsYou > 0) return 'alert'
+  if (facts.newNeedsYou > 0) return 'alert'
   if (facts.activeRuns > 0) return 'busy'
   if (facts.lastRunError) return 'trouble'
   if (facts.enabled === false) return 'resting'
@@ -46,7 +49,7 @@ export function conductorStatusText(state: ConductorState, facts: ConductorFacts
     case 'offline':
       return 'orchestrator unreachable'
     case 'alert':
-      return `${facts.needsYou} ${facts.needsYou === 1 ? 'thing needs' : 'things need'} you`
+      return `${facts.newNeedsYou} new — ${facts.newNeedsYou === 1 ? 'needs' : 'need'} you`
     case 'busy':
       return facts.activeRuns > 1 ? `busy — ${facts.activeRuns} runs in flight` : 'busy — a run is in flight'
     case 'trouble':
@@ -56,4 +59,19 @@ export function conductorStatusText(state: ConductorState, facts: ConductorFacts
     case 'conducting':
       return 'conducting'
   }
+}
+
+/** How many signals were raised after `seenUpTo` (an ISO time; null counts them all). */
+export function signalsRaisedSince(createdAts: readonly string[], seenUpTo: string | null): number {
+  if (seenUpTo === null) return createdAts.length
+  const seen = Date.parse(seenUpTo)
+  return createdAts.filter((createdAt) => Date.parse(createdAt) > seen).length
+}
+
+/** The newest of the signals' raise times — what "seen up to" becomes once you open
+ *  them. Null when there are none. */
+export function newestSignalTime(createdAts: readonly string[]): string | null {
+  let newest: string | null = null
+  for (const createdAt of createdAts) if (newest === null || Date.parse(createdAt) > Date.parse(newest)) newest = createdAt
+  return newest
 }
