@@ -10,9 +10,9 @@ import { Fragment,
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry } from '@kayushkin/chat-core'
+import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
-import type { Entry, SessionFile, Turn } from '@kayushkin/chat-core'
+import type { Entry, SessionAction, SessionFile, Turn } from '@kayushkin/chat-core'
 import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
 import { isToolRunning, toToolEvent } from './toolEvents'
 
@@ -31,6 +31,7 @@ import SessionStatusLine, {
 } from './SessionStatusLine'
 import styles from './Chat.module.css'
 import { SharedFileCard, ToolResultImageStrip } from './SharedFiles'
+import { SessionActionEntry, SessionActionsContext } from './SessionActions'
 
 // react-markdown types `components` over intrinsic elements only; `ref-chip` is the
 // custom hast element remarkRefChips emits, so we cast the map like bridge-ui does.
@@ -276,6 +277,9 @@ export default function TurnList({
   // Memoized: a fresh object here would re-render every mounted tool card on every
   // folded event, and the cards are the most expensive rows in the pane.
   const toolContextValue = useMemo(() => ({ sessionId: sessionId ?? '' }), [sessionId])
+  // A session action's button sits at its offer, and reads its state from the newest
+  // of its records, which arrive as later entries.
+  const newestActions = useMemo(() => newestSessionActions(Object.values(entries)), [entries])
 
   const listRef = useRef<VListHandle>(null)
   const [atBottom, setAtBottom] = useState(true)
@@ -598,6 +602,7 @@ export default function TurnList({
           for `/sessions//tools/...` and quietly draw a card with no diff — which looks
           exactly like a tool that changed nothing. */}
       <ToolContext.Provider value={toolContextValue}>
+      <SessionActionsContext.Provider value={newestActions}>
       <VList ref={listRef} className="bc-turns-body" onScroll={onScroll}>
         {more ? (
           <button key="__older__" className={styles.loadOlder} onClick={loadOlder}>
@@ -606,6 +611,7 @@ export default function TurnList({
         ) : null}
         {items}
       </VList>
+      </SessionActionsContext.Provider>
       </ToolContext.Provider>
       {/* "Compacting context…" — the only thing on screen that says a compaction is
           running. The POST only ACKs; the work happens server-side and produces no turn,
@@ -700,6 +706,9 @@ type RenderItem =
   /** A file shared into the session. One the user shared stands as its own row, on
    *  the user's side; one the agent shared sits in the agent's reply. */
   | { kind: 'file'; key: string; ts: string; file: SessionFile; sharedByAgent: boolean }
+  /** A session action: the button where the agent offered it, and a line for each
+   *  later step of its run. */
+  | { kind: 'action'; key: string; ts: string; action: SessionAction }
   | {
       kind: 'assistant'
       key: string
@@ -799,6 +808,10 @@ function buildTurnItems(
     }
     if (e.kind === 'file' && e.sessionFile) {
       out.push({ kind: 'file', key: id, ts: e.ts, file: e.sessionFile, sharedByAgent: e.sessionFile.shared_by === 'agent' })
+      continue
+    }
+    if (e.kind === 'action' && e.sessionAction) {
+      out.push({ kind: 'action', key: id, ts: e.ts, action: e.sessionAction })
       continue
     }
     if (e.role === 'user' && (e.kind === 'text' || e.kind === 'result') && e.text) {
@@ -1280,6 +1293,7 @@ function SegmentContent({
       {segment.items.map((it) => {
         if (it.kind === 'marker') return <CompactBoundary key={it.key} ts={it.ts} />
         if (it.kind === 'file') return <SharedFileCard key={it.key} file={it.file} />
+        if (it.kind === 'action') return <SessionActionEntry key={it.key} action={it.action} />
         if (it.kind !== 'assistant') return null
         const itemLive = live && it === lastAssistant && !!(it.thinking || it.narration)
         return (
@@ -1513,6 +1527,8 @@ function EntryBody({
       return <EntryToolCall entry={entry} resultedToolIds={resultedToolIds ?? EMPTY_TOOL_IDS} />
     case 'file':
       return entry.sessionFile ? <SharedFileCard file={entry.sessionFile} /> : null
+    case 'action':
+      return entry.sessionAction ? <SessionActionEntry action={entry.sessionAction} /> : null
     case 'tool_result':
       // ⚠️ A result is NOT a second tool card, and making it one was a real fault before
       // it was a failing test. A cold-loaded model keeps the call and the result as two
