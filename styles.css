@@ -5098,6 +5098,36 @@
   vertical-align: baseline;
 }
 
+/* The chip itself, for a chip rendered outside the chat.
+
+   `RefChip` falls back to this class name when no caller gives it one, and
+   the chat does give it one — its own module class, which carries the pill.
+   Every chip on a page that is not the chat therefore had no rule at all and
+   drew as a bare transparent button. The pill lives here so a chip looks the
+   same wherever it is mounted; the chat's own class still overrides it,
+   because the fallback and the caller's class are never both applied.
+
+   The border is transparent rather than absent so a variant below can colour
+   it without moving the text by a pixel. */
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.ref-chip:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
 .ref-chip-label {
   white-space: nowrap;
 }
@@ -5851,7 +5881,7 @@
 /* An email chip whose message would not load: its id stands in for the
    subject, and this marks it as a failure rather than a message with no
    subject. */
-.ref-chip-error { border-style: dashed; color: #f59e0b; }
+.ref-chip-error { border-color: #f59e0b; border-style: dashed; color: #f59e0b; background: color-mix(in srgb, #f59e0b 12%, transparent); }
 
 /* ===== BridgeEmailTickets, CardsForEmail ===== */
 .bet-container { max-width: 1200px; }
