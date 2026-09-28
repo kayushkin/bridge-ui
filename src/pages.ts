@@ -29,6 +29,7 @@ import { BridgeServiceSettings } from './components/BridgeServiceSettings'
 import { BridgeHooks } from './components/BridgeHooks'
 import { BridgeInboundRules } from './components/BridgeInboundRules'
 import { BridgePreviews } from './components/BridgePreviews'
+import { BridgeDiscord } from './components/BridgeDiscord'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
@@ -105,6 +106,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   { route: 'messageConversations', label: 'Conversations', group: 'messages', listed: true, end: true, available: c => !!c.multichatBasePath, component: BridgeMessageConversations },
   { route: 'messageSearch', label: 'Search', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessageSearch },
   { route: 'messageContacts', label: 'Contacts', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessageContacts },
+  // The Discord message log, deleted messages with their text, and the bridge's
+  // status. Read-only: GET /message-log and GET /discord/status.
+  { route: 'discord', label: 'Discord', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeDiscord },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },

@@ -62,6 +62,9 @@ export interface BridgeRoutes {
   /** The dev servers agents are running, each shown in a frame. `?port=<n>`
    *  opens the one listening on that port. Needs `previewsBasePath`. */
   previews: string
+  /** Discord through multichat: the message log with deleted messages kept,
+   *  and the bridge's status. `?tab=deleted|status`. Needs `multichatBasePath`. */
+  discord: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
   // exists, so it is empty, and a link to an empty route is not rendered at all —
@@ -100,6 +103,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   messageSearch: '/messages/search',
   messageContacts: '/messages/contacts',
   previews: '/previews',
+  discord: '/messages/discord',
   notes: '',
 }
 
@@ -167,7 +171,8 @@ export interface BridgeConfig {
    * "/api/multichat", which forwards only the routes it names). Inbound rules
    * reads the inbound-rule routes and the contact list; the Messages pages call
    * the routes `MULTICHAT_ROUTES_CALLED` in `src/multichatMessages.ts` lists,
-   * including a send that reaches a real person. If empty, Inbound rules and
+   * including a send that reaches a real person, and the Discord page those in
+   * `DISCORD_ROUTES_CALLED` in `src/discordLog.ts`. If empty, Inbound rules and
    * the Messages group are hidden. */
   multichatBasePath: string
   /** Base paths the host proxies seven more services at, read only by the
