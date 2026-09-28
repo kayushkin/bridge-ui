@@ -1,0 +1,74 @@
+/* The projects view (`?view=projects`). A CSS module, like the work graph, so
+   the view carries its own styles into dist/ beside its .js
+   (scripts/copy-css.mjs). Every colour is a theme variable, so the zine, light
+   and dark themes each draw it in their own inks. */
+
+.page { min-height: 0; }
+.headerRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.headerEnd { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+.scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 32px; }
+
+.notice { margin: 16px; color: var(--text-muted); font-size: 0.9em; }
+.muted { color: var(--text-muted); font-size: 0.85em; }
+.mono { font-family: var(--font-mono, monospace); }
+.error {
+  margin: 8px 12px 0; padding: 8px 10px; font-size: 0.85em; white-space: pre-wrap;
+  color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px;
+}
+
+.section { margin: 0 0 20px; }
+.sectionTitle { margin: 4px 0 8px; font-size: 1.25em; }
+.pageTitle { margin: 0; font-size: 1.4em; }
+.subTitle { margin: 0 0 8px; font-size: 1em; font-weight: 600; color: var(--text); }
+
+.cardList { display: flex; flex-direction: column; gap: 10px; }
+.card {
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-surface); color: var(--text);
+}
+.cardChild { border-left: 3px solid var(--accent); }
+.cardHead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cardName {
+  padding: 0; font: inherit; font-size: 1.05em; font-weight: 700; color: var(--text);
+  background: none; border: none; cursor: pointer; text-align: left;
+}
+.cardName:hover { color: var(--accent); text-decoration: underline; }
+.goal { margin: 4px 0 6px; font-size: 0.9em; color: var(--text); }
+
+.stageChip {
+  display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 0.75em; line-height: 1.6;
+  border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap;
+}
+
+.stats { display: flex; flex-wrap: wrap; gap: 18px; margin: 6px 0; }
+.stat { min-width: 0; }
+.statValue { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; font-weight: 600; }
+.statLabel { font-size: 0.75em; color: var(--text-muted); }
+
+.stateChip {
+  display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 0.85em; font-weight: 500;
+  border: 1px solid var(--border);
+}
+.stateWaiting { color: var(--warning); border-color: var(--warning); font-weight: 700; }
+
+.deploys { margin: 4px 0 0; font-size: 0.8em; color: var(--text-muted); }
+
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: 0.9em; }
+.facts dt { color: var(--text-muted); }
+.facts dd { margin: 0; }
+
+.group { margin: 0 0 10px; }
+.groupTitle { margin: 0 0 4px; font-size: 0.9em; font-weight: 600; text-transform: capitalize; }
+.plainList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+.sessionRow { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.branch { font-weight: 600; }
+
+.linkButton {
+  padding: 0; font: inherit; color: var(--accent); background: none; border: none; cursor: pointer; text-align: left;
+}
+.linkButton:hover { text-decoration: underline; }
+.sessionPill {
+  margin-left: 6px; padding: 0 6px; font: inherit; font-size: 0.85em; border-radius: 999px;
+  color: var(--accent); background: none; border: 1px solid var(--accent); cursor: pointer;
+}

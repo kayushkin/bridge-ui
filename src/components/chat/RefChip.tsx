@@ -4,6 +4,8 @@ import type { RefKind } from '@kayushkin/chat-core';
 import type { ManagedSessionDetail, TurnModel } from '@kayushkin/chat-core';
 import type { NoteboardItem } from '@kayushkin/chat-core';
 import type { ResolvedRefMatch } from '@kayushkin/chat-core';
+import type { Project } from '@kayushkin/project-store-types';
+import { useBridgeConfig } from '../../context';
 import {
   useNoteboardRefDetail,
   useResolvedRef,
@@ -78,7 +80,9 @@ export function RefChip(props: RefChipProps): JSX.Element {
     // A button this session's agent offered and placed here by writing its id.
     return <SessionActionInText actionId={refId} />;
   }
-  if (kind === 'uuid') {
+  if (kind === 'uuid' || kind === 'registered') {
+    // A bare uuid, or an id of a type the resolver registered (`project_000001`):
+    // either way the resolver says what it names.
     return (
       <UnclassifiedRefChip refId={refId} className={props.className} onActivate={props.onActivate} />
     );
@@ -705,6 +709,9 @@ function UnclassifiedRefChip({
       const itemType = (match.data as { type?: string } | null)?.type ?? 'note';
       return <NoteboardRefChip refId={refId} kind={itemType} className={className} />;
     }
+    if (match.type === 'project') {
+      return <ProjectRefChip refId={refId} project={match.data as Project} className={className} />;
+    }
   }
   return <MultiMatchRefChip refId={refId} matches={matches} className={className} />;
 }
@@ -722,8 +729,12 @@ function MultiMatchRefChip({
   className?: string;
 }): JSX.Element {
   const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  // A uuid is long and says nothing, so its tail is enough to tell two apart; a
+  // registered id (`prediction_000267`) is short and names its own type, so it
+  // is shown whole.
+  const shownId = UUID_SHAPE.test(refId) ? idTail(refId) : refId;
   const label =
-    matches.length === 1 ? `${matches[0]?.type} ${idTail(refId)}` : idTail(refId);
+    matches.length === 1 && UUID_SHAPE.test(refId) ? `${matches[0]?.type} ${shownId}` : shownId;
 
   return (
     <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="resolved" data-ref-id={refId}>
@@ -759,6 +770,63 @@ function MultiMatchRefChip({
           {matches.map((m) => (
             <RefRow key={`${m.service}/${m.type}`} label={m.type} value={m.service} />
           ))}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A project id, resolved by project-store: the project's name on the chip, and
+ *  its stage, goal and id in the panel, with a link that opens the project's
+ *  page in the chat's projects view. The link is a plain one: the view reads
+ *  `?view=projects&project=` when the chat loads. */
+function ProjectRefChip({
+  refId,
+  project,
+  className,
+}: {
+  refId: string;
+  project: Project;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { routes } = useBridgeConfig();
+  const href = routes.chat
+    ? `${routes.chat}?view=projects&project=${encodeURIComponent(refId)}`
+    : '';
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="project" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${project.name} (${refId})`}
+      >
+        <span className="ref-chip-glyph" aria-hidden>
+          ▦
+        </span>
+        <span className="ref-chip-label">{truncate(project.name || refId)}</span>
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Project details" refId={refId} refKind="project">
+          <div className="ref-chip-panel-title">{project.name}</div>
+          <RefRow label="Id" value={refId} />
+          <RefRow label="Kind" value={project.kind} />
+          <RefRow label="Stage" value={project.stage.replace(/_/g, ' ')} />
+          {project.goal && <RefRow label="Goal" value={project.goal} />}
+          {href && (
+            <div className="ref-chip-panel-actions">
+              <a className="ref-chip-panel-btn" href={href}>
+                Open project
+              </a>
+            </div>
+          )}
         </AnchoredPanel>
       )}
     </span>

@@ -1822,3 +1822,65 @@
 .inboxOpenPage:hover {
   color: var(--text);
 }
+
+/* ---- Group by project ---- */
+
+/* The ↗ beside a project group's name opens that project's page. Quiet until the
+   header is hovered, so a column of headers does not read as a column of links. */
+.projectGroupOpen {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.5;
+}
+:global(.bc-folder-header):hover .projectGroupOpen,
+.projectGroupOpen:focus-visible { opacity: 1; color: var(--accent); }
+
+.groupByProjectRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 10px 4px;
+  font-size: 0.8em;
+}
+.groupByProjectToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.groupByProjectError {
+  color: var(--error);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- The session header's project filing control ---- */
+
+.projectFiling { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.8em; }
+.projectFilingLabel { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.projectFilingPrefix { white-space: nowrap; }
+.projectFilingSelect {
+  max-width: 220px;
+  padding: 1px 4px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.projectFiling:not([data-filed]) .projectFilingSelect { color: var(--text-muted); border-style: dashed; }
+.projectFilingError {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--error);
+}

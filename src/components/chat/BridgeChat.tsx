@@ -21,6 +21,7 @@ import Sidebar from './Sidebar'
 import SignalsPage from './SignalsPage'
 import { OrchestratorThread } from './OrchestratorThread'
 import { WorkGraphView } from './WorkGraphView'
+import { ProjectsView } from './ProjectsView'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
 import TurnList from './TurnList'
 import Timeline from './Timeline'
@@ -57,9 +58,10 @@ import {
 } from './panePersistence'
 
 /** `?view=` values, each a surface drawn in place of the thread: the signals page,
- *  the Orchestrator, which the producer runs rather than llm-bridge, and the work
- *  graph, each repo's commits coloured by the session that made them. */
-const WORKSPACE_VIEWS = ['signals', 'orchestrator', 'work-graph'] as const
+ *  the Orchestrator, which the producer runs rather than llm-bridge, the work
+ *  graph, each repo's commits coloured by the session that made them, and the
+ *  projects (`&project=` opens one project's page). */
+const WORKSPACE_VIEWS = ['signals', 'orchestrator', 'work-graph', 'projects'] as const
 type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 function workspaceViewOf(param: string | null): WorkspaceView | null {
@@ -206,6 +208,12 @@ export function BridgeChat() {
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView | null>(
     () => workspaceViewOf(searchParams.get('view')),
   )
+  // The project whose page the projects view shows, `?project=`; null is the
+  // landing page. Written back by the same URL effect as `view`, for the same
+  // reason: that effect must be the only writer.
+  const [openProjectId, setOpenProjectId] = useState<string | null>(
+    () => searchParams.get('project') || null,
+  )
 
   // Declared BEFORE the bootstrap effect so an inbound deeplink claims the bootstrap
   // latch first. Otherwise a cold `/?session=<id>` opens a pending "New chat"
@@ -255,11 +263,17 @@ export function BridgeChat() {
       else next.delete('view')
       changed = true
     }
+    const shownProjectId = workspaceView === 'projects' ? openProjectId : null
+    if ((next.get('project') || null) !== shownProjectId) {
+      if (shownProjectId) next.set('project', shownProjectId)
+      else next.delete('project')
+      changed = true
+    }
     if (!changed) return
     // Replace, not push: browsing sessions must not fill the back stack with one entry
     // per session looked at.
     setSearchParams(next, { replace: true })
-  }, [activeId, workspaceView, searchParams, setSearchParams])
+  }, [activeId, workspaceView, openProjectId, searchParams, setSearchParams])
 
   const afterOpenSession = useCallback(() => {
     setWorkspaceView(null)
@@ -277,6 +291,12 @@ export function BridgeChat() {
     setWorkspaceView('work-graph')
     if (minimal) setDrawerOpen(false)
   }, [minimal, setDrawerOpen])
+  /** Open the projects view: one project's page, or the landing page for null. */
+  const openProjects = useCallback((projectId: string | null) => {
+    setOpenProjectId(projectId)
+    setWorkspaceView('projects')
+    if (minimal) setDrawerOpen(false)
+  }, [minimal, setDrawerOpen])
 
   // One element, rendered in one of two places: in the row on a desktop, inside the
   // drawer on a phone. Not two copies — a second mounted `Sidebar` would open a second
@@ -292,6 +312,8 @@ export function BridgeChat() {
       orchestratorOpen={workspaceView === 'orchestrator'}
       onOpenWorkGraph={openWorkGraph}
       workGraphOpen={workspaceView === 'work-graph'}
+      onOpenProjects={openProjects}
+      projectsOpen={workspaceView === 'projects'}
     />
   )
 
@@ -306,6 +328,7 @@ export function BridgeChat() {
           title={
             workspaceView === 'orchestrator' ? 'Orchestrator'
               : workspaceView === 'work-graph' ? 'Work graph'
+              : workspaceView === 'projects' ? 'Projects'
                 : activeSummary?.displayName || activeSummary?.sessionId || ''
           }
         />
@@ -336,6 +359,16 @@ export function BridgeChat() {
             />
           ) : workspaceView === 'orchestrator' ? (
             <OrchestratorThread onClose={() => setWorkspaceView(null)} onOpenWorkGraph={openWorkGraph} />
+          ) : workspaceView === 'projects' ? (
+            <ProjectsView
+              projectId={openProjectId}
+              onOpenProject={setOpenProjectId}
+              onSelectSession={sessionId => {
+                select(sessionId)
+                setWorkspaceView(null)
+              }}
+              onClose={() => setWorkspaceView(null)}
+            />
           ) : workspaceView === 'work-graph' ? (
             <WorkGraphView
               onSelectSession={sessionId => {

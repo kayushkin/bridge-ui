@@ -35,6 +35,7 @@
     "@kayushkin/multichat-types": "file:../multichat/ts",
     "@kayushkin/noteboard-types": "file:../noteboard/ts",
     "@kayushkin/principal-store-types": "file:../principal-store/ts",
+    "@kayushkin/project-store-types": "file:../project-store/ts",
     "@kayushkin/repo-store-types": "file:../repo-store/ts",
     "@kayushkin/tool-store-types": "file:../tool-store/ts",
     "@kayushkin/work-graph-store-types": "file:../work-graph-store/ts",

@@ -197,6 +197,12 @@ export interface BridgeConfig {
    * each repo's commit graph by the chat's `?view=work-graph`. If empty, the
    * view says the store is not configured and nothing links to it. */
   workGraphStoreBasePath: string
+  /** Base path for project-store as the host proxies it (dash:
+   * "/api/projects"): what each project is for and what it owns, filed
+   * sessions included. Read by the chat's `?view=projects`, the sidebar's
+   * "Group by project" toggle and the session header's filing control. If
+   * empty, none of those is drawn. */
+  projectStoreBasePath: string
   /** Base path of the HOST's own routes, read only by the service settings
    * page, which asks `{base}/settings` — the host describes its own settings
    * there like any backend (dash: "/api/dash"). The host is not proxied under a

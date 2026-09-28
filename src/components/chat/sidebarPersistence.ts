@@ -27,7 +27,12 @@ const SIDEBAR_COLLAPSED_KEY = chatKey('sidebar-collapsed')
 const FOLDER_COLLAPSED_KEY = chatKey('folder-collapsed')
 const FILTERS_OPEN_KEY = chatKey('filters-open')
 const INBOX_OPEN_KEY = chatKey('inbox-open')
-const MIGRATED_KEYS: readonly string[] = [SIDEBAR_COLLAPSED_KEY, FOLDER_COLLAPSED_KEY, FILTERS_OPEN_KEY, INBOX_OPEN_KEY]
+const GROUP_BY_PROJECT_KEY = chatKey('group-by-project')
+const PROJECT_GROUP_COLLAPSED_KEY = chatKey('project-group-collapsed')
+const MIGRATED_KEYS: readonly string[] = [
+  SIDEBAR_COLLAPSED_KEY, FOLDER_COLLAPSED_KEY, FILTERS_OPEN_KEY, INBOX_OPEN_KEY,
+  GROUP_BY_PROJECT_KEY, PROJECT_GROUP_COLLAPSED_KEY,
+]
 
 /** How many collapsed folder names are kept. A collapsed folder that is later deleted
  *  leaves its name behind — there is nowhere to notice the deletion, since the folder
@@ -180,5 +185,64 @@ export function saveInboxOpen(open: boolean): void {
     store.setItem(INBOX_OPEN_KEY, String(open))
   } catch {
     // As above — losing the preference is not worth losing the interaction.
+  }
+}
+
+/** Whether the session list is grouped under project headers rather than folders.
+ *  Defaults to ON: a stored value only restores a choice the user made. Only the host
+ *  that proxies project-store offers the toggle at all. */
+export function loadGroupByProject(): boolean {
+  const store = storage()
+  if (!store) return true
+  try {
+    return store.getItem(GROUP_BY_PROJECT_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+export function saveGroupByProject(on: boolean): void {
+  const store = storage()
+  if (!store) return
+  try {
+    store.setItem(GROUP_BY_PROJECT_KEY, String(on))
+  } catch {
+    // As above — losing the preference is not worth losing the interaction.
+  }
+}
+
+/** The collapsed project groups, by project id, with '' for "Not filed". A record of
+ *  its own rather than a share of the folder record: a folder may be named anything,
+ *  so one key space could fold a folder and a project together. */
+export function loadCollapsedProjectGroups(): Set<string> {
+  const store = storage()
+  if (!store) return new Set()
+  try {
+    const raw = store.getItem(PROJECT_GROUP_COLLAPSED_KEY)
+    if (!raw) return new Set()
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(
+      parsed.filter((v): v is string => typeof v === 'string').slice(-MAX_PERSISTED_COLLAPSED_FOLDERS),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveCollapsedProjectGroups(collapsed: ReadonlySet<string>): void {
+  const store = storage()
+  if (!store) return
+  try {
+    if (collapsed.size === 0) {
+      store.removeItem(PROJECT_GROUP_COLLAPSED_KEY)
+      return
+    }
+    store.setItem(
+      PROJECT_GROUP_COLLAPSED_KEY,
+      JSON.stringify([...collapsed].slice(-MAX_PERSISTED_COLLAPSED_FOLDERS)),
+    )
+  } catch {
+    // As above.
   }
 }

@@ -10,7 +10,7 @@ import { Fragment,
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse } from '@kayushkin/chat-core'
+import { useTurns, remarkRefChips, useResolvableIdPatterns, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import type { Entry, SessionAction, SessionFile, Turn } from '@kayushkin/chat-core'
 import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
@@ -56,6 +56,21 @@ type MdPlugins = ComponentProps<typeof ReactMarkdown>['remarkPlugins']
 // it never descends into a block, so `remarkRefChips` sees exactly the tree it saw before
 // — its chips are built inside the nodes this one wraps.
 const REMARK_PLUGINS = [remarkGfm, remarkRefChips, remarkVibes] as unknown as MdPlugins
+
+// The same list with the id patterns the host's resolver answers (`project_…`,
+// `prediction_…`, …) handed to `remarkRefChips`, so those ids become chips too. One list
+// per patterns array: chat-core hands every reader the same array, so every row shares
+// one plugins identity and ReactMarkdown re-parses a row only when the patterns arrive.
+const remarkPluginsByPatterns = new WeakMap<readonly string[], MdPlugins>()
+function remarkPluginsFor(patterns: readonly string[] | null): MdPlugins {
+  if (!patterns) return REMARK_PLUGINS
+  let plugins = remarkPluginsByPatterns.get(patterns)
+  if (!plugins) {
+    plugins = [remarkGfm, [remarkRefChips, { resolvableIdPatterns: patterns }], remarkVibes] as unknown as MdPlugins
+    remarkPluginsByPatterns.set(patterns, plugins)
+  }
+  return plugins
+}
 
 /** How long the provisional-narration guess may stand after the transcript last
  *  changed — the PROMOTE half of "assume narration, promote at the end".
@@ -1455,13 +1470,14 @@ const ProseBody = memo(function ProseBody({
       }) as unknown as MdComponents,
     [onActivateSessionRef],
   )
+  const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns())
   // The plain-text toggle wins, and it takes the vibes with it: TXT is the "show me
   // exactly what the model sent" mode, and a rail drawn beside unparsed source would be
   // claiming a structure the user just asked not to have interpreted.
   if (!markdown) return <div className="bc-turns-text">{text}</div>
   return (
     <div className={`bc-turns-text bc-turns-md ${styles.vibeProse}`}>
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>

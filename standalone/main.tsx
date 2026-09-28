@@ -31,6 +31,7 @@ createRoot(document.getElementById('root')!).render(
         bundleStoreBasePath="/api/bundle-store"
         repoStoreBasePath="/api/repo-store"
         workGraphStoreBasePath="/api/work-graph"
+        projectStoreBasePath="/api/projects"
       />
     </BrowserRouter>
   </StrictMode>,

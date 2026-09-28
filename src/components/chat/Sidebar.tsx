@@ -24,10 +24,17 @@ import { StatusDot } from './StatusDot'
 import { isArchivedFolder } from './bridgeAdapters'
 import {
   loadCollapsedFolders,
+  loadCollapsedProjectGroups,
   loadFiltersOpen,
+  loadGroupByProject,
   saveCollapsedFolders,
+  saveCollapsedProjectGroups,
   saveFiltersOpen,
+  saveGroupByProject,
 } from './sidebarPersistence'
+import { useProjectStore } from '../../useProjectStore'
+import { groupSessionsByProject } from '../../projects'
+import { formatCost } from '../../utils'
 import { FolderQuestionRollupMarker, SessionQuestionMarker } from './QuestionMarkers'
 import { isSessionAwaitingHuman } from './sessionAwaitingHuman'
 import { useSessionsWithOpenQuestion } from './sessionsWithOpenQuestion'
@@ -125,6 +132,11 @@ interface SidebarProps {
   onOpenWorkGraph: () => void
   /** Whether the work graph is the view on screen, so its row reads as selected. */
   workGraphOpen: boolean
+  /** Show the projects view in place of the thread: the landing page for null, or
+   *  one project's page. */
+  onOpenProjects: (projectId: string | null) => void
+  /** Whether the projects view is on screen, so its row reads as selected. */
+  projectsOpen: boolean
 }
 
 export default function Sidebar({
@@ -136,6 +148,8 @@ export default function Sidebar({
   orchestratorOpen,
   onOpenWorkGraph,
   workGraphOpen,
+  onOpenProjects,
+  projectsOpen,
 }: SidebarProps) {
   const {
     groups,
@@ -206,6 +220,42 @@ export default function Sidebar({
   // rehydrates — see sidebarPersistence.ts for why these are chat's own keys.
   const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(loadCollapsedFolders)
+
+  // Grouping by project. The toggle and each project group's collapse are read back
+  // in the initialiser like the folders above. The projects and every filed session
+  // come from one shared read (`useProjectStore`: `GET /projects` and
+  // `GET /links?entity_type=session`), which the header's filing control refreshes,
+  // so a filed session moves groups as soon as project-store has it.
+  const projectStore = useProjectStore()
+  const [groupByProject, setGroupByProjectState] = useState(loadGroupByProject)
+  const toggleGroupByProject = useCallback(() => {
+    const next = !groupByProject
+    saveGroupByProject(next)
+    setGroupByProjectState(next)
+  }, [groupByProject])
+  const [collapsedProjectGroups, setCollapsedProjectGroups] = useState<Set<string>>(loadCollapsedProjectGroups)
+  useEffect(() => {
+    saveCollapsedProjectGroups(collapsedProjectGroups)
+  }, [collapsedProjectGroups])
+  const toggleProjectGroupCollapsed = useCallback((key: string) => {
+    setCollapsedProjectGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+  // Null when the list is grouped by folder. Until project-store has answered — or
+  // when it failed, which the sidebar says in words below the toggle — the list keeps
+  // its folders rather than showing every session as "Not filed".
+  const projectGroups = useMemo(() => {
+    if (!groupByProject || !projectStore.enabled || !projectStore.loaded || projectStore.error) return null
+    return groupSessionsByProject(
+      groups.flatMap((g) => g.sessions),
+      projectStore.sessionLinks,
+      projectStore.projects,
+    )
+  }, [groupByProject, projectStore.enabled, projectStore.loaded, projectStore.error, projectStore.sessionLinks, projectStore.projects, groups])
 
   // Write on change rather than from inside the toggles. The collapse toggle is a
   // functional `setState` updater, and React may call one of those twice — a save in
@@ -458,6 +508,159 @@ export default function Sidebar({
   // one virtualized list.
   const rows = useMemo(() => {
     const out: React.ReactNode[] = []
+    // A session's row, and under it the sessions it spawned when its caret is open.
+    // `keyPrefix` scopes the keys: grouped by project, one session can sit under two
+    // projects, and every row goes into ONE flat array of siblings.
+    const pushSessionRows = (s: SessionSummary, keyPrefix: string): void => {
+      out.push(
+        <SessionRow
+          key={`${keyPrefix}${s.sessionId}`}
+          session={s}
+          harnessInfo={harnessMap.get(s.harness)}
+          basePath={basePath}
+          displayState={s.state}
+          hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
+          active={!orchestratorOpen && !workGraphOpen && !projectsOpen && s.sessionId === activeId}
+          subagentCount={subagentsOf(s.sessionId).length}
+          subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
+          onToggleSubagents={toggleSubagents}
+          // Only the row whose panel is open, and the one that just closed, see this
+          // prop change — every other row's props are identical and `SessionRow`'s
+          // `memo` bails out. Rebuilding this array is cheap; re-rendering hundreds of
+          // rows would not be.
+          questionOpen={s.sessionId === openQuestionSessionId}
+          onSelect={select}
+          onPrefetch={prefetch}
+          onArchive={archive}
+          onUnarchive={unarchive}
+          onRename={rename}
+          onContextMenu={openSessionMenu}
+          onToggleQuestion={toggleQuestionPanel}
+          onDismissQuestion={closeQuestionPanel}
+        />,
+      )
+      // The sessions this one spawned, drawn under it.
+      //
+      // ⚠️ These come from `subagentsOf`, NOT from `groups`, and that is the whole
+      // point rather than a shortcut. `groups` is chat-core's FILTERED set, so a
+      // child excluded by a chip, by the search box or by the hidden-type default
+      // would silently vanish from its parent's list — and a list of "what this
+      // session spawned" that quietly drops three of eight is worse than none. Being
+      // a separate read is what makes them immune to all of it.
+      //
+      // They are full `SessionRow`s: the same component, the same click-to-open, the
+      // same status dot. A child that ALSO appears in the flat list therefore appears
+      // twice, which is intended — the nested one is a copy, and pulling it out of the
+      // main list would mean expanding a caret changed what the list above showed.
+      //
+      // One level, not a recursion, and that is measured rather than assumed: on this
+      // host every one of the 1,325 subagent sessions is a direct child of a top-level
+      // session — 8,388 roots, 1,325 children, zero grandchildren. The store does
+      // support deeper trees (`internal/store/subagent_test.go` pins an L2), so if
+      // that histogram ever grows a third bucket this is the place that needs to
+      // learn recursion.
+      if (expandedSubagentParents.has(s.sessionId)) {
+        for (const child of subagentsOf(s.sessionId)) {
+          out.push(
+            <SessionRow
+              // Prefixed with the parent, because the same session can be BOTH a row
+              // in the flat list and a row under its parent — and these go into ONE
+              // flat array of siblings, so the bare session id would appear twice as a
+              // key.
+              //
+              // ⚠️ Measured, not assumed: swapping this for the bare id does NOT drop
+              // a row, and the spec beside this stays green with it. React's
+              // production build renders both and only warns in development, so a
+              // duplicate key here is undefined reconciliation behaviour rather than a
+              // visible break — the kind that surfaces later as row state attaching to
+              // the wrong row. Scoped because it is right, not because a test caught
+              // it; do not read the green spec as proof this line is load-bearing.
+              key={`${keyPrefix}sub:${s.sessionId}:${child.sessionId}`}
+              session={child}
+              harnessInfo={harnessMap.get(child.harness)}
+              basePath={basePath}
+              // The child's own state. `useSubagents` already hands back the
+              // store's copy of a child where the store holds one, so this is the
+              // row the list stream keeps current, not the point-in-time fetch.
+              displayState={child.state}
+              hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
+              active={!orchestratorOpen && !workGraphOpen && !projectsOpen && child.sessionId === activeId}
+              // A child's own children are not drawn — see the note above on depth.
+              subagentCount={0}
+              subagentsExpanded={false}
+              onToggleSubagents={toggleSubagents}
+              nested
+              questionOpen={child.sessionId === openQuestionSessionId}
+              onSelect={select}
+              onPrefetch={prefetch}
+              onArchive={archive}
+              onUnarchive={unarchive}
+              onRename={rename}
+              onContextMenu={openSessionMenu}
+              onToggleQuestion={toggleQuestionPanel}
+              onDismissQuestion={closeQuestionPanel}
+            />,
+          )
+        }
+      }
+        }
+
+    if (projectGroups) {
+      for (const pg of projectGroups) {
+        const collapsed = collapsedProjectGroups.has(pg.key)
+        const waitingCount = pg.sessions.reduce(
+          (n, s) => (!isArchivedFolder(s.folderName) && waitingOnHuman(s.sessionId, s.state) ? n + 1 : n),
+          0,
+        )
+        out.push(
+          <div key={`p:${pg.key}`} className="bc-folder-header" data-project-id={pg.project?.id}>
+            <button
+              type="button"
+              className={styles.folderHeaderMain}
+              aria-expanded={!collapsed}
+              onClick={() => toggleProjectGroupCollapsed(pg.key)}
+              title={pg.project ? `${pg.label} (${pg.project.id})` : 'Sessions not filed under any project'}
+            >
+              <span className="bc-folder-chevron">{collapsed ? '▸' : '▾'}</span>
+              <span className="bc-folder-icon">{pg.project ? '▦' : '·'}</span>
+              <span className="bc-folder-name">{pg.label}</span>
+              <span className="bc-folder-count">
+                {pg.sessions.length}
+                {pg.spendUsd > 0 && ` · ${formatCost(pg.spendUsd)}`}
+              </span>
+            </button>
+            {pg.project && (
+              <button
+                type="button"
+                className={styles.projectGroupOpen}
+                onClick={() => onOpenProjects(pg.project?.id ?? null)}
+                title={`Open ${pg.label}`}
+                aria-label={`Open project ${pg.label}`}
+              >
+                ↗
+              </button>
+            )}
+            <FolderQuestionRollupMarker
+              waitingCount={waitingCount}
+              collapsed={collapsed}
+              folderLabel={pg.label}
+              onReveal={() =>
+                setCollapsedProjectGroups((prev) => {
+                  if (!prev.has(pg.key)) return prev
+                  const next = new Set(prev)
+                  next.delete(pg.key)
+                  return next
+                })
+              }
+            />
+          </div>,
+        )
+        if (collapsed) continue
+        for (const s of pg.sessions) pushSessionRows(s, `p:${pg.key}:`)
+      }
+      return out
+    }
+
     for (const g of groups) {
       const sessions = g.sessions
       // chat-core now emits a group for every folder the SERVER holds, including ones
@@ -523,99 +726,7 @@ export default function Sidebar({
         </div>,
       )
       if (collapsed) continue
-      for (const s of sessions) {
-        out.push(
-          <SessionRow
-            key={s.sessionId}
-            session={s}
-            harnessInfo={harnessMap.get(s.harness)}
-            basePath={basePath}
-            displayState={s.state}
-            hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
-            active={!orchestratorOpen && !workGraphOpen && s.sessionId === activeId}
-            subagentCount={subagentsOf(s.sessionId).length}
-            subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
-            onToggleSubagents={toggleSubagents}
-            // Only the row whose panel is open, and the one that just closed, see this
-            // prop change — every other row's props are identical and `SessionRow`'s
-            // `memo` bails out. Rebuilding this array is cheap; re-rendering hundreds of
-            // rows would not be.
-            questionOpen={s.sessionId === openQuestionSessionId}
-            onSelect={select}
-            onPrefetch={prefetch}
-            onArchive={archive}
-            onUnarchive={unarchive}
-            onRename={rename}
-            onContextMenu={openSessionMenu}
-            onToggleQuestion={toggleQuestionPanel}
-            onDismissQuestion={closeQuestionPanel}
-          />,
-        )
-        // The sessions this one spawned, drawn under it.
-        //
-        // ⚠️ These come from `subagentsOf`, NOT from `groups`, and that is the whole
-        // point rather than a shortcut. `groups` is chat-core's FILTERED set, so a
-        // child excluded by a chip, by the search box or by the hidden-type default
-        // would silently vanish from its parent's list — and a list of "what this
-        // session spawned" that quietly drops three of eight is worse than none. Being
-        // a separate read is what makes them immune to all of it.
-        //
-        // They are full `SessionRow`s: the same component, the same click-to-open, the
-        // same status dot. A child that ALSO appears in the flat list therefore appears
-        // twice, which is intended — the nested one is a copy, and pulling it out of the
-        // main list would mean expanding a caret changed what the list above showed.
-        //
-        // One level, not a recursion, and that is measured rather than assumed: on this
-        // host every one of the 1,325 subagent sessions is a direct child of a top-level
-        // session — 8,388 roots, 1,325 children, zero grandchildren. The store does
-        // support deeper trees (`internal/store/subagent_test.go` pins an L2), so if
-        // that histogram ever grows a third bucket this is the place that needs to
-        // learn recursion.
-        if (expandedSubagentParents.has(s.sessionId)) {
-          for (const child of subagentsOf(s.sessionId)) {
-            out.push(
-              <SessionRow
-                // Prefixed with the parent, because the same session can be BOTH a row
-                // in the flat list and a row under its parent — and these go into ONE
-                // flat array of siblings, so the bare session id would appear twice as a
-                // key.
-                //
-                // ⚠️ Measured, not assumed: swapping this for the bare id does NOT drop
-                // a row, and the spec beside this stays green with it. React's
-                // production build renders both and only warns in development, so a
-                // duplicate key here is undefined reconciliation behaviour rather than a
-                // visible break — the kind that surfaces later as row state attaching to
-                // the wrong row. Scoped because it is right, not because a test caught
-                // it; do not read the green spec as proof this line is load-bearing.
-                key={`sub:${s.sessionId}:${child.sessionId}`}
-                session={child}
-                harnessInfo={harnessMap.get(child.harness)}
-                basePath={basePath}
-                // The child's own state. `useSubagents` already hands back the
-                // store's copy of a child where the store holds one, so this is the
-                // row the list stream keeps current, not the point-in-time fetch.
-                displayState={child.state}
-                hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
-                active={!orchestratorOpen && !workGraphOpen && child.sessionId === activeId}
-                // A child's own children are not drawn — see the note above on depth.
-                subagentCount={0}
-                subagentsExpanded={false}
-                onToggleSubagents={toggleSubagents}
-                nested
-                questionOpen={child.sessionId === openQuestionSessionId}
-                onSelect={select}
-                onPrefetch={prefetch}
-                onArchive={archive}
-                onUnarchive={unarchive}
-                onRename={rename}
-                onContextMenu={openSessionMenu}
-                onToggleQuestion={toggleQuestionPanel}
-                onDismissQuestion={closeQuestionPanel}
-              />,
-            )
-          }
-        }
-      }
+      for (const s of sessions) pushSessionRows(s, '')
     }
     return out
   }, [
@@ -647,6 +758,11 @@ export default function Sidebar({
     subagentsOf,
     expandedSubagentParents,
     toggleSubagents,
+    projectGroups,
+    projectsOpen,
+    collapsedProjectGroups,
+    toggleProjectGroupCollapsed,
+    onOpenProjects,
   ])
 
   // The session the open menu points at, resolved from the loaded window so the menu
@@ -808,6 +924,22 @@ export default function Sidebar({
         </div>
       )}
 
+      {/* The projects, pinned under the work graph with the same classes. Drawn only
+          when the host proxies project-store. */}
+      {projectStore.enabled && (
+        <div className={`bc-session-item ${projectsOpen ? 'bc-session-item-selected' : ''}`}>
+          <button
+            className="bc-session-item-main"
+            onClick={() => onOpenProjects(null)}
+            aria-current={projectsOpen || undefined}
+            title="Every project: what it is for, its open cards, branches, deploys and filed sessions"
+          >
+            <span className="bc-session-harness" aria-hidden>▦</span>
+            <span className="bc-session-label">Projects</span>
+          </button>
+        </div>
+      )}
+
       <div className="bc-session-search">
         <input
           type="search"
@@ -863,6 +995,20 @@ export default function Sidebar({
               can never be painted however far the window is opened. Promising the
               button would fix it sends the user clicking forever. */}
           {moreSessions ? ' — loading older sessions may surface more.' : '.'}
+        </div>
+      )}
+
+      {projectStore.enabled && (
+        <div className={styles.groupByProjectRow}>
+          <label className={styles.groupByProjectToggle}>
+            <input type="checkbox" checked={groupByProject} onChange={toggleGroupByProject} />
+            Group by project
+          </label>
+          {groupByProject && projectStore.error && (
+            <span className={styles.groupByProjectError} title={projectStore.error}>
+              project-store did not answer, so the list shows folders: {projectStore.error}
+            </span>
+          )}
         </div>
       )}
 

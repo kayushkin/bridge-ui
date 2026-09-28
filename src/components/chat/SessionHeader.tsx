@@ -44,6 +44,7 @@ import {
 } from './SessionSettings'
 import styles from './Chat.module.css'
 import LensChip from './LensChip'
+import { SessionProjectControl } from './SessionProjectControl'
 import { PANE_KEYS, type PaneDrawable, type PaneKey, type PanesHidden } from './panePersistence'
 import type { CSSProperties } from 'react'
 
@@ -379,6 +380,8 @@ export default function SessionHeader({
         </span>
 
         <SessionPreviewLinks sessionId={summary.sessionId} />
+
+        <SessionProjectControl sessionId={summary.sessionId} />
 
         <div className={`bc-header-right ${styles.headerCluster}`}>
           <SessionSettingsInline settings={settings} controls={controls} />

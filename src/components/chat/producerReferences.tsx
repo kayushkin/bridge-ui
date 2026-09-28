@@ -3,7 +3,7 @@ import type { ComponentProps, JSX, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useNavigate } from 'react-router-dom'
-import { SIGNAL_KIND_QUESTION, parseRefChips, remarkRefChips, useOpenSignals } from '@kayushkin/chat-core'
+import { SIGNAL_KIND_QUESTION, parseRefChips, remarkRefChips, useOpenSignals, useResolvableIdPatterns } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import { SignalRequestList } from './SessionSignals'
 import type { RefChipProps } from './RefChip'
@@ -47,10 +47,11 @@ function referenceHref(routes: BridgeRoutes, kind: string, refId: string): strin
   if (kind === 'session') {
     return routes.chat ? `${routes.chat}?session=${encodeURIComponent(refId)}` : ''
   }
-  // A bare uuid with no cue: only the reference resolver knows what it names,
-  // and this link surface has no resolver. A plain span is the honest render —
-  // a link to the notes page would present a guess as a fact.
-  if (kind === 'uuid') return ''
+  // A bare uuid with no cue, or an id of a type the resolver registered: only
+  // the reference resolver knows what it names, and this link surface has no
+  // resolver. A plain span is the honest render — a link to the notes page
+  // would present a guess as a fact.
+  if (kind === 'uuid' || kind === 'registered') return ''
   // note / todo — one noteboard id space, one host page. `task` never reaches
   // here: the parser has already resolved it to `todo`.
   return routes.notes
@@ -165,6 +166,19 @@ type MarkdownPlugins = ComponentProps<typeof ReactMarkdown>['remarkPlugins']
 // address into a chip.
 const REMARK_PLUGINS = [remarkGfm, remarkRefChips] as unknown as MarkdownPlugins
 
+// With the resolver's id patterns, one list per patterns array (see TurnList's
+// `remarkPluginsFor`).
+const remarkPluginsByPatterns = new WeakMap<readonly string[], MarkdownPlugins>()
+function remarkPluginsFor(patterns: readonly string[] | null): MarkdownPlugins {
+  if (!patterns) return REMARK_PLUGINS
+  let plugins = remarkPluginsByPatterns.get(patterns)
+  if (!plugins) {
+    plugins = [remarkGfm, [remarkRefChips, { resolvableIdPatterns: patterns }]] as unknown as MarkdownPlugins
+    remarkPluginsByPatterns.set(patterns, plugins)
+  }
+  return plugins
+}
+
 export interface ProducerMarkdownProps {
   /** Producer prose — a conversation message, a run's reply. */
   text: string
@@ -201,6 +215,7 @@ export function ProducerMarkdown({
       }) as unknown as MarkdownComponents,
     [onOpenSession, expandSessionsWithOpenQuestions],
   )
+  const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns())
   // `bc-turns-md` by default, and not for want of a name of its own: it is the
   // markdown normalization this package's stylesheet already ships (first/last
   // child margins, list indents, code and table rules), and producer prose is
@@ -208,7 +223,7 @@ export function ProducerMarkdown({
   // component or leaving every host to re-derive those rules.
   return (
     <div className={className ?? 'bc-producer-md bc-turns-md'}>
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>
@@ -228,7 +243,8 @@ export function ProducerMarkdown({
  */
 export function ProducerTextWithReferenceChips({ text }: { text: string }): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
-  const segments = useMemo(() => parseRefChips(text), [text])
+  const resolvableIdPatterns = useResolvableIdPatterns()
+  const segments = useMemo(() => parseRefChips(text, { resolvableIdPatterns }), [text, resolvableIdPatterns])
   return (
     <>
       {segments.map((segment, i) =>
