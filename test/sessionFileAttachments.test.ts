@@ -5,6 +5,7 @@ import {
   mayDrawAsImage,
   messageWithAttachedFiles,
   nameForPastedFile,
+  textPreviewKind,
 } from '../src/sessionFileAttachments'
 
 const shared = (path: string): SessionFile => ({
@@ -57,5 +58,23 @@ describe('filesFromPaste', () => {
   })
   it('leaves a plain text paste alone', () => {
     expect(filesFromPaste({ files: [], types: ['text/plain'] })).toEqual({ files: [], keepText: true })
+  })
+})
+
+describe('textPreviewKind', () => {
+  it('reads a .md file as markdown even when the server typed it text/plain', () => {
+    expect(textPreviewKind({ filename: 'week.md', media_type: 'text/plain' })).toBe('markdown')
+    expect(textPreviewKind({ filename: 'NOTES.Markdown', media_type: 'text/plain; charset=utf-8' })).toBe('markdown')
+  })
+  it('reads text/markdown as markdown whatever the name', () => {
+    expect(textPreviewKind({ filename: 'notes', media_type: 'text/markdown; charset=utf-8' })).toBe('markdown')
+  })
+  it('shows any other text file as plain text', () => {
+    expect(textPreviewKind({ filename: 'log.txt', media_type: 'text/plain' })).toBe('plain')
+    expect(textPreviewKind({ filename: 'rows.csv', media_type: 'text/csv' })).toBe('plain')
+  })
+  it('offers no preview for a file that is not text', () => {
+    expect(textPreviewKind({ filename: 'a.png', media_type: 'image/png' })).toBeNull()
+    expect(textPreviewKind({ filename: 'a.pdf', media_type: 'application/pdf' })).toBeNull()
   })
 })

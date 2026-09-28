@@ -52,3 +52,17 @@ export function filesFromPaste(clipboard: {
   const files = Array.from(clipboard.files)
   return { files, keepText: files.length === 0 || clipboard.types.includes('text/plain') }
 }
+
+/** How a shared file's text can be shown in the chat, or null when it cannot.
+ *
+ *  Markdown is told by name as well as type: llm-bridge-server types a `.md` file
+ *  `text/plain`, so the type alone would show every markdown file as raw source. Any
+ *  other `text/*` file is shown as it is. */
+export type TextPreviewKind = 'markdown' | 'plain'
+
+export function textPreviewKind(file: { filename: string; media_type: string }): TextPreviewKind | null {
+  const mediaType = file.media_type.split(';')[0].trim().toLowerCase()
+  if (mediaType === 'text/markdown' || /\.(md|markdown)$/i.test(file.filename)) return 'markdown'
+  if (mediaType.startsWith('text/')) return 'plain'
+  return null
+}

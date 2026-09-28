@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentProps } from 'react'
 import { createPortal } from 'react-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useChatContext, type SessionFile, type ToolResultImage } from '@kayushkin/chat-core'
 import { formatBytes } from '../../toolPayloadPreview'
-import { mayDrawAsImage } from '../../sessionFileAttachments'
+import { mayDrawAsImage, textPreviewKind, type TextPreviewKind } from '../../sessionFileAttachments'
 
 /**
  * Images and files in the chat: an image viewer, a card for a file shared into the
@@ -62,14 +64,78 @@ function ImageThumbnail({ src, alt, onUndrawable }: { src: string; alt: string; 
   )
 }
 
+/** Links in a previewed file leave the app in a new tab, so following one does not
+ *  lose the chat. */
+const PREVIEW_MARKDOWN_COMPONENTS: ComponentProps<typeof ReactMarkdown>['components'] = {
+  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+}
+
+type PreviewState =
+  | { status: 'closed' }
+  | { status: 'loading' }
+  | { status: 'loaded'; text: string }
+  | { status: 'failed'; message: string }
+
+/** A text file's contents, folded under the card until opened. The bytes are fetched
+ *  the first time it opens — a transcript with many files should not download them all
+ *  — through the host's credentialed fetch, and kept for the life of the card. A
+ *  failed fetch says what the server answered; closing and opening again retries it. */
+function TextFilePreview({ file, kind }: { file: SessionFile; kind: TextPreviewKind }) {
+  const { api } = useChatContext()
+  const [state, setState] = useState<PreviewState>({ status: 'closed' })
+
+  const load = async () => {
+    setState({ status: 'loading' })
+    try {
+      const response = await api.fetchFor()(api.sessionFileContentUrl(file.session_id, file.file_id))
+      if (!response.ok) {
+        const detail = await response.text()
+        setState({ status: 'failed', message: `${response.status} ${response.statusText} ${detail}`.trim() })
+        return
+      }
+      setState({ status: 'loaded', text: await response.text() })
+    } catch (error) {
+      setState({ status: 'failed', message: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  return (
+    <details
+      className="bc-shared-file-preview"
+      onToggle={(event) => {
+        if (!event.currentTarget.open) return
+        if (state.status === 'closed' || state.status === 'failed') void load()
+      }}
+    >
+      <summary>Preview</summary>
+      {state.status === 'loading' && <div className="bc-shared-file-preview-note">Loading…</div>}
+      {state.status === 'failed' && (
+        <div className="bc-shared-file-preview-note bc-shared-file-preview-error">Could not load: {state.message}</div>
+      )}
+      {state.status === 'loaded' &&
+        (kind === 'markdown' ? (
+          <div className="bc-shared-file-preview-body bc-turns-md">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={PREVIEW_MARKDOWN_COMPONENTS}>
+              {state.text}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <pre className="bc-shared-file-preview-body">{state.text}</pre>
+        ))}
+    </details>
+  )
+}
+
 /** One file shared into the session: drawn when it is an image the server serves
- *  inline, otherwise its name and size as a download link. */
+ *  inline, otherwise its name and size as a download link, with a preview to unfold
+ *  when it is text. */
 export function SharedFileCard({ file }: { file: SessionFile }) {
   const { api } = useChatContext()
   const [undrawable, setUndrawable] = useState(false)
   const inlineSrc = api.sessionFileContentUrl(file.session_id, file.file_id, { inline: true })
   const downloadHref = api.sessionFileContentUrl(file.session_id, file.file_id)
   const drawn = mayDrawAsImage(file.media_type) && !undrawable
+  const previewKind = textPreviewKind(file)
   return (
     <div className="bc-shared-file" data-file-id={file.file_id}>
       {drawn ? (
@@ -80,6 +146,7 @@ export function SharedFileCard({ file }: { file: SessionFile }) {
         <span className="bc-shared-file-name">{file.filename}</span>
         <span className="bc-shared-file-size">{formatBytes(file.size_bytes)}</span>
       </a>
+      {previewKind && <TextFilePreview file={file} kind={previewKind} />}
     </div>
   )
 }

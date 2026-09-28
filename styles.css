@@ -5938,6 +5938,16 @@
 .bc-shared-file-link:hover .bc-shared-file-name { text-decoration: underline; }
 .bc-shared-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bc-shared-file-size { color: var(--text-muted); white-space: nowrap; }
+.bc-shared-file-preview { align-self: stretch; font-size: 0.85em; }
+.bc-shared-file-preview > summary { cursor: pointer; color: var(--text-muted); user-select: none; }
+.bc-shared-file-preview[open] > summary { margin-bottom: 4px; }
+.bc-shared-file-preview-body {
+  max-height: 60vh; overflow: auto; margin: 0; padding: 8px 12px;
+  border: 1px solid var(--bc-edge, var(--border)); border-radius: 8px;
+}
+pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.95em; }
+.bc-shared-file-preview-note { color: var(--text-muted); }
+.bc-shared-file-preview-error { color: var(--error, #e57373); }
 
 .bc-image-thumb {
   display: block; padding: 0; border: 1px solid var(--bc-edge, var(--border));
