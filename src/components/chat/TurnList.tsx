@@ -1361,14 +1361,20 @@ function SpanRow({
   const finalLast = [...final.items].reverse().find((it) => it.kind === 'assistant')
   const lastAssistant = finalLast && finalLast.kind === 'assistant' ? finalLast : null
   const asideLive = streaming && !!(lastAssistant?.thinking || lastAssistant?.narration)
-  const isError = segments.some((seg) =>
-    seg.items.some((it) => it.kind === 'assistant' && it.errors.length > 0),
-  )
+  // Only the final segment decides whether the row reads as failed: it is the answer the
+  // user reads at full weight. An earlier segment's error stays in the progress reports,
+  // with its chip, and the summary counts it. Colouring the whole row for one made a
+  // successful answer read as a failure when an interrupt left a 138 ms errored turn in
+  // front of it (br_1790618948251389077, 2026-09-28).
+  const segmentHasError = (seg: SpanSegment) =>
+    seg.items.some((it) => it.kind === 'assistant' && it.errors.length > 0)
+  const finalSegmentHasError = segmentHasError(final)
+  const intermediateSegmentsWithErrorCount = intermediate.filter(segmentHasError).length
   const headerTs = segments[0]!.ts
 
   return (
     <div
-      className={`bc-turns-item bc-turns-assistant${isError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''} ${styles.vrow}`}
+      className={`bc-turns-item bc-turns-assistant${finalSegmentHasError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''} ${styles.vrow}`}
       data-entry-ids={segments.flatMap((seg) => seg.items.flatMap((it) => (it.kind === 'assistant' || it.kind === 'user' ? it.entryIds : []))).join(' ')}
     >
       <div className="bc-turns-meta">
@@ -1391,6 +1397,11 @@ function SpanRow({
             <span>
               {intermediate.length} progress report{intermediate.length === 1 ? '' : 's'}
             </span>
+            {intermediateSegmentsWithErrorCount > 0 && (
+              <span className={styles.progressGroupErrorCount}>
+                {intermediateSegmentsWithErrorCount} with an error
+              </span>
+            )}
           </summary>
           <div className={styles.progressGroupBody}>
             {intermediate.map((seg, i) => (
