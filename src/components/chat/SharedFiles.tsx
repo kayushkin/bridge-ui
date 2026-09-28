@@ -4,18 +4,19 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChatContext, type SessionFile, type ToolResultImage } from '@kayushkin/chat-core'
 import { formatBytes } from '../../toolPayloadPreview'
-import { mayDrawAsImage, textPreviewKind, type TextPreviewKind } from '../../sessionFileAttachments'
+import { mayDrawAsImage, mayPlayAsVideo, textPreviewKind, type TextPreviewKind } from '../../sessionFileAttachments'
 
 /**
- * Images and files in the chat: an image viewer, a card for a file shared into the
- * session, and the strip of images a tool result carried.
+ * Images, videos and files in the chat: an image viewer, a card for a file shared into
+ * the session, and the strip of images a tool result carried.
  *
  * Every byte comes from the bridge through the host's proxy — a shared file from
  * file-store (`ApiClient.sessionFileContentUrl`), a settled tool image from log-store
  * (`ApiClient.toolResultImageUrl`) — or, for a tool image folded live, from the event
  * itself. Both servers send `nosniff` and a sandbox CSP; this layer adds nothing and
  * decides nothing about which types are safe, it only tries to draw what claims to be
- * an image and falls back to a link when the browser cannot.
+ * an image, or play what claims to be a video, and falls back to a link when the
+ * browser cannot.
  */
 
 /** A full-window view of one image. Escape or a click outside the image closes it. */
@@ -127,22 +128,33 @@ function TextFilePreview({ file, kind }: { file: SessionFile; kind: TextPreviewK
 }
 
 /** One file shared into the session: drawn when it is an image the server serves
- *  inline, otherwise its name and size as a download link, with a preview to unfold
- *  when it is text. */
+ *  inline, played when it is such a video, and always its name and size as a download
+ *  link, with a preview to unfold when it is text. */
 export function SharedFileCard({ file }: { file: SessionFile }) {
   const { api } = useChatContext()
   const [undrawable, setUndrawable] = useState(false)
   const inlineSrc = api.sessionFileContentUrl(file.session_id, file.file_id, { inline: true })
   const downloadHref = api.sessionFileContentUrl(file.session_id, file.file_id)
   const drawn = mayDrawAsImage(file.media_type) && !undrawable
+  const played = mayPlayAsVideo(file.media_type) && !undrawable
   const previewKind = textPreviewKind(file)
   return (
     <div className="bc-shared-file" data-file-id={file.file_id}>
       {drawn ? (
         <ImageThumbnail src={inlineSrc} alt={file.filename} onUndrawable={() => setUndrawable(true)} />
       ) : null}
+      {played ? (
+        <video
+          className="bc-shared-file-video"
+          src={inlineSrc}
+          controls
+          preload="metadata"
+          aria-label={file.filename}
+          onError={() => setUndrawable(true)}
+        />
+      ) : null}
       <a className="bc-shared-file-link" href={downloadHref} download={file.filename} title={file.path}>
-        <span aria-hidden>{drawn ? '🖼' : '📄'}</span>
+        <span aria-hidden>{drawn ? '🖼' : played ? '🎬' : '📄'}</span>
         <span className="bc-shared-file-name">{file.filename}</span>
         <span className="bc-shared-file-size">{formatBytes(file.size_bytes)}</span>
       </a>

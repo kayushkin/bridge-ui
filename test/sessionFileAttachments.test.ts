@@ -3,6 +3,7 @@ import type { SessionFile } from '@kayushkin/chat-core'
 import {
   filesFromPaste,
   mayDrawAsImage,
+  mayPlayAsVideo,
   messageWithAttachedFiles,
   nameForPastedFile,
   textPreviewKind,
@@ -45,6 +46,13 @@ describe('mayDrawAsImage', () => {
   it('tries any image type and nothing else', () => {
     expect(mayDrawAsImage('image/webp')).toBe(true)
     expect(mayDrawAsImage('application/pdf')).toBe(false)
+  })
+})
+
+describe('mayPlayAsVideo', () => {
+  it('tries any video type and nothing else', () => {
+    expect(mayPlayAsVideo('video/webm')).toBe(true)
+    expect(mayPlayAsVideo('image/webp')).toBe(false)
   })
 })
 

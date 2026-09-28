@@ -40,6 +40,13 @@ export function mayDrawAsImage(mediaType: string): boolean {
   return mediaType.startsWith('image/')
 }
 
+/** Whether a shared file is worth trying to play as a video — a recording of a browser
+ *  run, most often. The same kind of try as `mayDrawAsImage`: a type the server serves
+ *  only as a download fails to play, and the card falls back to the link. */
+export function mayPlayAsVideo(mediaType: string): boolean {
+  return mediaType.startsWith('video/')
+}
+
 /** Files a paste carried, and whether the paste should still insert its text.
  *
  *  A screenshot pastes as a file and no text. Copying an image from a web page pastes
