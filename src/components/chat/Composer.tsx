@@ -90,10 +90,16 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   const [uploading, setUploading] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
 
+  // True while a send from a new chat is creating its session and sharing files into
+  // it. That send moves this pane onto the new session, and the files in the tray are
+  // on their way into it, so the switch below must not drop them.
+  const sendingFromNewChat = useRef(false)
+
   // Attachments belong to the session they were picked for. Switching away drops
   // them rather than sending them into whichever chat is opened next.
   useEffect(() => {
     return () => {
+      if (sendingFromNewChat.current) return
       setAttachments((current) => {
         for (const attachment of current) {
           if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl)
@@ -127,13 +133,10 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
     })
   }
 
-  // A file is shared into an EXISTING session. A new chat has none until its first
-  // message creates it, so attaching waits for that rather than inventing a second
-  // way to create a session.
-  const canAttach = sessionId !== null
-
+  // A file is shared into a session, and a new chat has none until its first send
+  // creates it. The tray holds the files until then; `submit` shares them once the
+  // session exists.
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!canAttach) return
     const { files, keepText } = filesFromPaste({
       files: event.clipboardData.files,
       types: Array.from(event.clipboardData.types),
@@ -143,7 +146,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   }
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
-    if (!canAttach || event.dataTransfer.files.length === 0) return
+    if (event.dataTransfer.files.length === 0) return
     event.preventDefault()
     addFiles(Array.from(event.dataTransfer.files), false)
   }
@@ -244,37 +247,49 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
       }
       onFailedAction(null)
     }
-    if (attachments.length === 0 || !sessionId) {
-      send(draft)
+    if (attachments.length === 0) {
+      await send(draft)
       return
     }
-    // Upload first, then send one message naming every file. A failed upload sends
-    // nothing and keeps the draft and the tray: half the files and a message that
-    // names only some of them is worse than a second try.
+    // Share first, then send one message naming every file. The files go into the
+    // session the send targets, which on a new chat exists only once `send` has
+    // created it — so the sharing runs inside `send`, as its `prepareMessage`. A
+    // failed share sends nothing and keeps the draft and the tray: half the files and
+    // a message that names only some of them is worse than a second try.
+    const toShare = attachments
+    const typed = draft
     setUploading(true)
     setAttachError(null)
-    const shared: SessionFile[] = []
+    sendingFromNewChat.current = sessionId === null
     try {
-      for (const attachment of attachments) {
-        shared.push(await api.shareSessionFile(sessionId, attachment.file, attachment.name))
-      }
-    } catch (error) {
-      const sharedCount = shared.length
-      setAttachError(
-        `${error instanceof Error ? error.message : String(error)}` +
-          (sharedCount > 0 ? ` — ${sharedCount} of ${attachments.length} were shared before it failed, and nothing was sent` : ''),
-      )
-      // The ones that did go up are in the session already; keep only the rest.
-      setAttachments((current) => current.slice(sharedCount))
+      await send(typed, {
+        prepareMessage: async (targetSessionId) => {
+          const shared: SessionFile[] = []
+          try {
+            for (const attachment of toShare) {
+              shared.push(await api.shareSessionFile(targetSessionId, attachment.file, attachment.name))
+            }
+          } catch (error) {
+            const sharedCount = shared.length
+            setAttachError(
+              `${error instanceof Error ? error.message : String(error)}` +
+                (sharedCount > 0 ? ` — ${sharedCount} of ${toShare.length} were shared before it failed, and nothing was sent` : ''),
+            )
+            // The ones that did go up are in the session already; keep only the rest.
+            setAttachments((current) => current.slice(sharedCount))
+            throw error
+          }
+          for (const attachment of toShare) {
+            if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl)
+          }
+          setAttachments([])
+          return messageWithAttachedFiles(typed, shared)
+        },
+      })
+    } finally {
+      sendingFromNewChat.current = false
       setUploading(false)
-      return
     }
-    for (const attachment of attachments) {
-      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl)
-    }
-    setAttachments([])
-    setUploading(false)
-    send(messageWithAttachedFiles(draft, shared))
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -285,7 +300,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   }
 
   return (
-    <div className="bc-composer-wrap" onDragOver={(event) => canAttach && event.preventDefault()} onDrop={onDrop}>
+    <div className="bc-composer-wrap" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
       {/* No status row here anymore: paused/stopped/disconnected/error render in the
           turns pane's SessionStatusLine — one slot, one style, no second thing popping
           layout above the composer. The attachment tray is the exception: an upload
@@ -331,9 +346,9 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
           type="button"
           className="bc-composer-attach"
           onClick={() => filePicker.current?.click()}
-          disabled={!canAttach || uploading}
+          disabled={uploading}
           aria-label="Attach files"
-          title={canAttach ? 'Attach files — or paste or drop them here' : 'Send a first message to start the chat, then attach files'}
+          title="Attach files — or paste or drop them here"
         >
           <AttachIcon />
         </button>
