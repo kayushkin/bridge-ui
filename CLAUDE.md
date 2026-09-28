@@ -19,11 +19,12 @@ These sections are stored in agent-store as a project prompt collection and rend
 The pages, by group, with the config field that makes each available:
 
 - **Work** — Chat (`end`), Sessions, Kanban (`kanbanStoreBasePath`), Board settings (routed, not listed), Card (`/:cardId`, routed, not listed), Email tickets (`kanbanStoreBasePath` and `mailBasePath`; each email ticket beside the email its `source_entity_ref` names), Orchestrator (`producerBasePath`), Previews (`previewsBasePath`; the dev servers agents are running, each in a frame, `?port=` picking one).
+- **Messages** — Discord (`multichatBasePath`; `/messages/discord`, three tabs chosen by `?tab=`: the Discord message log from multichat's `GET /message-log`, deleted messages with their text and edit history, and the bridge's status from `GET /discord/status`, with a logged-out account or a channel `@admin` has not joined called out at the top). Read-only.
 - **Agents** — Instances, Agents, Files, Skills (`skillStoreBasePath`), Tools (`toolStoreBasePath`), Bundles (`bundleStoreBasePath`), Hooks, Inbound rules (`multichatBasePath`).
 - **Access** — Principals (`principalStoreBasePath`), Grants (`grantStoreBasePath`), Permissions (`permissionStoreBasePath`), Auth.
 - **System** — Settings, Usage, Effective config, Service inventory (`showServiceInventory`), Conformance (`showConformance`).
 
-A page that is not available is **still routed**, so a stale link lands on a page that says what is missing rather than on nothing; it is only left out of the navigation. `PAGE_GROUPS` is the group order: Work, Agents, Access, System, Personal. Personal holds no page of this library's own — it is there for the host's pages.
+A page that is not available is **still routed**, so a stale link lands on a page that says what is missing rather than on nothing; it is only left out of the navigation. `PAGE_GROUPS` is the group order: Work, Messages, Agents, Access, System, Personal. Personal holds no page of this library's own — it is there for the host's pages.
 
 ## The two-row navigation and the host's slots
 
@@ -51,7 +52,7 @@ A narrower scope overrides a wider one: session over board over instance over ha
 
 **The rule that turns a form into a request body, or a store's answer into what the page shows, goes in a plain module under `src/`, not in the component** — because `npm test` covers `test/**/*.test.ts` and nothing renders a component there. Put the logic in the module, keep the component to rendering and fetching, and the rule gets a test.
 
-The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `kanbanBoardSettings.ts`, `kanbanTagRules.ts`, `messageTriggers.ts`, `effectiveConfigQuery.ts` (the effective-config dry run whose inputs live in the URL), `promptSource.ts`, `grantResources.ts`, `principalAvailability.ts`, `sessionSummaryPages.ts`, `toolPayloadPreview.ts`, `agentDispatch.ts`, `sessionFileAttachments.ts` (the message a send with attached files carries, pasted-file names, paste handling), `servicesClient.ts` and `kanbanStoreClient.ts`. `test/pages.test.ts` covers the registry itself — `navEntriesFor` and `groupForPath` — and `test/settingsSection.test.ts` the save frame.
+The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `kanbanBoardSettings.ts`, `kanbanTagRules.ts`, `messageTriggers.ts`, `effectiveConfigQuery.ts` (the effective-config dry run whose inputs live in the URL), `promptSource.ts`, `grantResources.ts`, `principalAvailability.ts`, `sessionSummaryPages.ts`, `toolPayloadPreview.ts`, `agentDispatch.ts`, `sessionFileAttachments.ts` (the message a send with attached files carries, pasted-file names, paste handling), `servicesClient.ts`, `kanbanStoreClient.ts` and `discordLog.ts` (the Discord page's log query, paging by `before`, filter options from the bridge status, edit history, and what counts as a bridge problem). `test/pages.test.ts` covers the registry itself — `navEntriesFor` and `groupForPath` — and `test/settingsSection.test.ts` the save frame.
 
 ## Generated store types, never hand copies
 

@@ -26,18 +26,21 @@ import { BridgeServiceSettings } from './components/BridgeServiceSettings'
 import { BridgeHooks } from './components/BridgeHooks'
 import { BridgeInboundRules } from './components/BridgeInboundRules'
 import { BridgePreviews } from './components/BridgePreviews'
+import { BridgeDiscord } from './components/BridgeDiscord'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
  *
  *  Pages are grouped by what the person is doing, not by which service answers:
  *  - Work: the sessions and cards being worked, and the chat that drives them.
+ *  - Messages: the operator's own conversations with people, through multichat's
+ *    bridges.
  *  - Agents: what runs — instances and machines, agent identities, the prompt,
  *    and the skills, tools and bundles they are given.
  *  - Access: who may do what — principals, grants, permission rules, credentials.
  *  - System: the host itself — settings, usage, its services, conformance.
  *  - Personal: pages the host brings that are about the operator, not the agents. */
-export type PageGroupKey = 'work' | 'agents' | 'access' | 'system' | 'personal'
+export type PageGroupKey = 'work' | 'messages' | 'agents' | 'access' | 'system' | 'personal'
 
 export interface PageGroup {
   key: PageGroupKey
@@ -46,6 +49,7 @@ export interface PageGroup {
 
 export const PAGE_GROUPS: readonly PageGroup[] = [
   { key: 'work', label: 'Work' },
+  { key: 'messages', label: 'Messages' },
   { key: 'agents', label: 'Agents' },
   { key: 'access', label: 'Access' },
   { key: 'system', label: 'System' },
@@ -94,6 +98,10 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },
+  // Messages
+  // The Discord message log, deleted messages with their text, and the bridge's
+  // status. Read-only: GET /message-log and GET /discord/status.
+  { route: 'discord', label: 'Discord', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeDiscord },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },
