@@ -2,9 +2,9 @@ import type {
   DiscordBridgeStatus, DiscordBridgedChannel, DiscordBridgedServer, LoggedMessage, MessageLogPage,
 } from '@kayushkin/multichat-types'
 
-/** The Discord page reads two multichat routes through the host's proxy. Both
- *  are GETs; nothing on the page writes. */
-export const DISCORD_ROUTES_CALLED = ['GET /message-log', 'GET /discord/status'] as const
+/** The Discord page reads these multichat routes through the host's proxy.
+ *  All are GETs; nothing on the page writes. */
+export const DISCORD_ROUTES_CALLED = ['GET /message-log', 'GET /discord/status', 'GET /media/{server_name}/{media_id}'] as const
 
 /** multichat's platform key for Discord, one of `GET /inbound-platforms`. */
 export const DISCORD_PLATFORM = 'discord'
@@ -60,13 +60,15 @@ export function nextPageBefore(messages: readonly LoggedMessage[], limit: number
   return messages[messages.length - 1].sent_at
 }
 
-/** Joins an older page onto what is shown, and its edits onto the edits map.
- *  A message already shown is not shown twice. */
+/** Joins an older page onto what is shown, and its edits and reactions onto
+ *  the maps. A message already shown is not shown twice: rows are matched by
+ *  the log's own `id`, since an archive row has no event id. */
 export function appendMessageLogPage(shown: MessageLogPage, older: MessageLogPage): MessageLogPage {
-  const seen = new Set(shown.messages.map(m => m.event_id))
+  const seen = new Set(shown.messages.map(m => m.id))
   return {
-    messages: [...shown.messages, ...older.messages.filter(m => !seen.has(m.event_id))],
+    messages: [...shown.messages, ...older.messages.filter(m => !seen.has(m.id))],
     edits: { ...shown.edits, ...older.edits },
+    reactions: { ...shown.reactions, ...older.reactions },
   }
 }
 
@@ -97,21 +99,33 @@ export function withServer(filters: MessageLogFilters, status: DiscordBridgeStat
   return { ...filters, serverID, roomID: keepRoom ? filters.roomID : '' }
 }
 
-/** One version of a message's text: the original as sent, then each edit. */
+/** One version of a message: the original as sent, then each edit. */
 export interface MessageVersion {
-  eventID: string
-  body: string
+  /** The row the version's text is on: the original, or the edit's own row. */
+  message: LoggedMessage
   at: string
   isOriginal: boolean
 }
 
-/** A message's text as it stood over time, oldest first. The log keeps the
- *  original row's body as first sent, and every edit as its own row. */
+/** A message as it stood over time, oldest first. The log keeps the original
+ *  row as first sent, and every edit as its own row under `edits`. */
 export function versionsOf(message: LoggedMessage, edits: MessageLogPage['edits']): MessageVersion[] {
+  const own = message.event_id ? edits[message.event_id] ?? [] : []
   return [
-    { eventID: message.event_id, body: message.body, at: message.sent_at, isOriginal: true },
-    ...(edits[message.event_id] ?? []).map(e => ({ eventID: e.event_id, body: e.body, at: e.sent_at, isOriginal: false })),
+    { message, at: message.sent_at, isOriginal: true },
+    ...own.map(e => ({ message: e, at: e.sent_at, isOriginal: false })),
   ]
+}
+
+/** The text a message reads as now: its newest edit's, or its own. */
+export function currentVersionOf(message: LoggedMessage, edits: MessageLogPage['edits']): LoggedMessage {
+  const versions = versionsOf(message, edits)
+  return versions[versions.length - 1].message
+}
+
+/** The Discord channels the bridge status names, for the renderers' `#name`. */
+export function bridgedChannelsOf(status: DiscordBridgeStatus | null): DiscordBridgedChannel[] {
+  return (status?.bridged_servers ?? []).flatMap(server => server.channels)
 }
 
 /** Who sent it, as the log names them. */
@@ -128,7 +142,7 @@ export function whereLabel(message: LoggedMessage): string {
 
 /** A message the log caught only after it was deleted has no text. */
 export function deletedBeforeRead(message: LoggedMessage): boolean {
-  return message.redacted_at !== null && message.body === ''
+  return message.redacted_at !== null && message.body === '' && message.media_url === ''
 }
 
 /** Discord's announcement channel type (discordgo.ChannelTypeGuildNews);

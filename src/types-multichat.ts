@@ -16,6 +16,8 @@ export interface MultichatUnifiedContact {
   identities: MultichatContactIdentity[]
 }
 
+import type { MessageReactionGroup } from '@kayushkin/multichat-types'
+
 // The Messages pages (Conversations, Search, Contacts) read the records below.
 // They are hand-written for the same reason: the conversation, message and page
 // records are structs in multichat's internal/matrix/client.go, which tygo.yaml
@@ -53,6 +55,15 @@ export interface MultichatMessage {
   timestamp: number
   /** Sent by our own account on that app. Omitted when false. */
   is_me?: boolean
+  /** `org.matrix.custom.html` when `formatted_body` is Matrix HTML, else "". */
+  format?: string
+  formatted_body?: string
+  /** The `mxc://` URI of an image, file or video message, else "". */
+  media_url?: string
+  media_mimetype?: string
+  reply_to_event_id?: string
+  /** Reactions logged since multichat's reaction log began, grouped by key. */
+  reactions?: MessageReactionGroup[] | null
 }
 
 /** `GET {multichatBasePath}/conversations/{room_id}/messages?limit=&from=` —
@@ -108,3 +119,4 @@ export interface MultichatTag {
  *  identity, keyed by the Matrix user id a tag was put on. An identity with no
  *  tag is absent. */
 export type MultichatContactTagMap = Record<string, MultichatTag[]>
+

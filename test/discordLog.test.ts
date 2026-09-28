@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscordBridgeStatus, DiscordBridgedChannel, LoggedMessage, MessageLogPage } from '@kayushkin/multichat-types'
 import {
-  EMPTY_MESSAGE_LOG_FILTERS, MESSAGE_LOG_PAGE_SIZE, appendMessageLogPage, bridgeProblems, channelLabel, channelOptions,
-  channelProblems, deletedBeforeRead, discordTabOf, messageLogQuery, nextPageBefore, serverTotals, versionsOf, whereLabel,
-  withServer,
+  EMPTY_MESSAGE_LOG_FILTERS, MESSAGE_LOG_PAGE_SIZE, appendMessageLogPage, bridgeProblems, bridgedChannelsOf, channelLabel,
+  channelOptions, channelProblems, currentVersionOf, deletedBeforeRead, discordTabOf, messageLogQuery, nextPageBefore,
+  serverTotals, versionsOf, whereLabel, withServer,
 } from '../src/discordLog'
 
+let nextLogID = 1
 const message = (overrides: Partial<LoggedMessage> = {}): LoggedMessage => ({
+  id: nextLogID++, source: 'matrix', discord_message_id: '', format: '', formatted_body: '', media_url: '',
+  media_mimetype: '', reply_to_event_id: '',
   event_id: '$one', room_id: '!general:x', room_name: '#general', platform: 'discord',
   network_id: '900', network_name: 'Reno', channel_id: '1001', channel_name: '#general',
   channel_external_url: 'https://discord.com/channels/900/1001',
@@ -68,12 +71,24 @@ describe('paging', () => {
     expect(nextPageBefore([], 3)).toBeNull()
   })
 
-  it('appends an older page without repeating a message and keeps both pages\' edits', () => {
-    const shown: MessageLogPage = { messages: [message({ event_id: '$a' })], edits: { $a: [message({ event_id: '$a-edit' })] } }
-    const older: MessageLogPage = { messages: [message({ event_id: '$a' }), message({ event_id: '$b' })], edits: { $b: [message({ event_id: '$b-edit' })] } }
+  it('appends an older page without repeating a message and keeps both pages\' edits and reactions', () => {
+    const a = message({ event_id: '$a' })
+    const thumbs = { key: '\u{1F44D}', shortcode: '', count: 1, sender_display_names: [] }
+    const shown: MessageLogPage = { messages: [a], edits: { $a: [message({ event_id: '$a-edit' })] }, reactions: { $a: [thumbs] } }
+    const older: MessageLogPage = {
+      messages: [a, message({ event_id: '$b' })], edits: { $b: [message({ event_id: '$b-edit' })] }, reactions: { $b: [thumbs] },
+    }
     const joined = appendMessageLogPage(shown, older)
     expect(joined.messages.map(m => m.event_id)).toEqual(['$a', '$b'])
     expect(Object.keys(joined.edits).sort()).toEqual(['$a', '$b'])
+    expect(Object.keys(joined.reactions ?? {}).sort()).toEqual(['$a', '$b'])
+  })
+
+  it('tells archive rows apart by the log id, since they carry no event id', () => {
+    const first = message({ event_id: '', source: 'discord-archive', discord_message_id: '11' })
+    const second = message({ event_id: '', source: 'discord-archive', discord_message_id: '12' })
+    const joined = appendMessageLogPage({ messages: [first], edits: {}, reactions: {} }, { messages: [first, second], edits: {}, reactions: {} })
+    expect(joined.messages.map(m => m.discord_message_id)).toEqual(['11', '12'])
   })
 })
 
@@ -95,14 +110,29 @@ describe('a deleted message', () => {
   it('shows its text as first sent, then each edit in order', () => {
     const original = message({ event_id: '$m', body: 'first', redacted_at: '2026-09-28T09:00:00Z' })
     const edits = { $m: [message({ event_id: '$e1', body: 'second', sent_at: '2026-09-28T08:00:00Z', replaces_event_id: '$m' })] }
-    expect(versionsOf(original, edits).map(v => [v.body, v.isOriginal])).toEqual([['first', true], ['second', false]])
+    expect(versionsOf(original, edits).map(v => [v.message.body, v.isOriginal])).toEqual([['first', true], ['second', false]])
     expect(versionsOf(original, {})).toHaveLength(1)
+  })
+
+  it('reads as its newest edit, and an archive row with no event id has no edits', () => {
+    const original = message({ event_id: '$m', body: 'first' })
+    const edit = message({ event_id: '$e1', body: 'second', replaces_event_id: '$m' })
+    expect(currentVersionOf(original, { $m: [edit] }).body).toBe('second')
+    expect(currentVersionOf(original, {}).body).toBe('first')
+    const archived = message({ event_id: '', source: 'discord-archive', discord_message_id: '5' })
+    expect(versionsOf(archived, { '': [edit] })).toHaveLength(1)
+  })
+
+  it('lists every bridged channel for the renderers to name', () => {
+    expect(bridgedChannelsOf(status()).map(c => c.discord_channel_id)).toEqual(['1001', '1002', '1003', '2001'])
+    expect(bridgedChannelsOf(null)).toEqual([])
   })
 
   it('knows when the log caught it only after it was gone', () => {
     expect(deletedBeforeRead(message({ body: '', redacted_at: '2026-09-28T09:00:00Z' }))).toBe(true)
     expect(deletedBeforeRead(message({ body: 'kept', redacted_at: '2026-09-28T09:00:00Z' }))).toBe(false)
     expect(deletedBeforeRead(message({ body: '' }))).toBe(false)
+    expect(deletedBeforeRead(message({ body: '', media_url: 'mxc://s/i', redacted_at: '2026-09-28T09:00:00Z' }))).toBe(false)
   })
 
   it('names where it was from the bridge state logged with it', () => {

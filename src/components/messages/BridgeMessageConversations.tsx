@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import type { DiscordBridgeStatus } from '@kayushkin/multichat-types'
+import { bridgedChannelsOf, DISCORD_PLATFORM } from '../../discordLog'
+import { insertAtSelection } from '../../emojiPicker'
+import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messageBody'
 import {
   conversationMessagesPath, conversationPlatforms, conversationSendPath, conversationTags, filterConversations,
-  mergeNewestMessages, messageText, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
+  mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
 } from '../../multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage, MultichatSendAnswer,
 } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChips } from './messagesShared'
+import { MessageContent, ReactionChips } from './MessageContent'
+import { EmojiPickerButton } from './EmojiPicker'
 import styles from './Messages.module.css'
 
 const CONVERSATIONS_POLL_MS = 30_000
@@ -142,6 +148,10 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
+  const composer = useRef<HTMLTextAreaElement | null>(null)
+  /** Where the cursor goes after an emoji is put in, applied once the draft redraws. */
+  const pendingCursor = useRef<number | null>(null)
+  const discordNames = useDiscordNames(conversation, messages)
   /** What the next redraw of the list does to the scroll position: go to the
    *  newest message, keep the reader's distance from the bottom (an older page
    *  went in above), or nothing. */
@@ -214,6 +224,23 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
     }
   }
 
+  useLayoutEffect(() => {
+    const el = composer.current
+    if (!el || pendingCursor.current === null) return
+    el.focus()
+    el.setSelectionRange(pendingCursor.current, pendingCursor.current)
+    pendingCursor.current = null
+  }, [draft])
+
+  /** Puts an emoji where the cursor is (or over the selection). It only
+   *  changes the text box; sending is still the person's Enter or Send. */
+  const insertEmoji = (emoji: string) => {
+    const el = composer.current
+    const next = insertAtSelection(draft, el?.selectionStart ?? draft.length, el?.selectionEnd ?? draft.length, emoji)
+    pendingCursor.current = next.cursor
+    setDraft(next.text)
+  }
+
   const send = async () => {
     const result = sendMessageBodyOf(draft)
     if (!result.ok) { setSendError(result.error); return }
@@ -250,13 +277,17 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
                 <span className={styles.sender} title={message.sender}>{message.is_me ? 'You' : message.sender_name || message.sender}</span>
                 <span className={styles.time}>{messageTimeLabel(message.timestamp)}</span>
               </div>
-              <div className={styles.messageBody}>{messageText(message)}</div>
+              <div className={styles.messageBody}>
+                <MessageContent message={message} messageType={message.msg_type} discordNames={discordNames} />
+              </div>
+              <ReactionChips reactions={message.reactions} />
             </div>
           ))
         )}
       </div>
       <div className={styles.composer}>
-        <textarea className={styles.input} rows={2} value={draft} disabled={sending}
+        <EmojiPickerButton onPick={insertEmoji} disabled={sending} />
+        <textarea ref={composer} className={styles.input} rows={2} value={draft} disabled={sending}
           placeholder={`Message ${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''} — Enter sends, Shift+Enter is a new line`}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => {
@@ -269,4 +300,28 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
       {sendError && <pre className={styles.error}>{sendError}</pre>}
     </div>
   )
+}
+
+/** Names for the Discord tokens a Discord room's messages can still carry
+ *  (a channel mention the bridge leaves as `<#id>`): channels from the bridge
+ *  status, read once when a Discord room opens, and users from the room's own
+ *  senders. Other apps get none. A failed status read only leaves channel ids
+ *  unnamed, so it is logged rather than shown over the thread. */
+function useDiscordNames(conversation: MultichatConversation, messages: MultichatMessage[] | null): DiscordNames {
+  const { read } = useMultichat()
+  const isDiscord = conversation.platform === DISCORD_PLATFORM
+  const [status, setStatus] = useState<DiscordBridgeStatus | null>(null)
+  useEffect(() => {
+    if (!isDiscord) return
+    let cancelled = false
+    read<DiscordBridgeStatus>('/discord/status')
+      .then(answer => { if (!cancelled) setStatus(answer) })
+      .catch(err => console.error('Discord channel names are not available:', err))
+    return () => { cancelled = true }
+  }, [isDiscord, read])
+  return useMemo(() => {
+    if (!isDiscord) return NO_DISCORD_NAMES
+    const senders = (messages ?? []).map(m => ({ sender_user_id: m.sender, sender_display_name: m.sender_name ?? '' }))
+    return discordNamesOf(bridgedChannelsOf(status), senders)
+  }, [isDiscord, status, messages])
 }

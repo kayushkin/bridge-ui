@@ -57,9 +57,14 @@ tr.rowAlert td { color: var(--text); }
 .channel:hover { text-decoration: underline; }
 .body {
   margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--bg); color: var(--text);
-  font-family: inherit; font-size: 0.9em; white-space: pre-wrap; word-break: break-word;
+  font-size: 0.9em; overflow-wrap: anywhere; min-width: 0;
 }
 .flag { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.85em; color: var(--text-muted); }
+.flagButton {
+  font: inherit; font-size: 0.85em; padding: 1px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--border); background: none; color: var(--text-muted);
+}
+.flagButton:hover, .flagButton[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
 .flagWarning { border-color: var(--warning); color: var(--warning); }
 .flagAlert { border-color: var(--error); color: var(--error); font-weight: 600; }
 .flagGood { border-color: var(--success); color: var(--success); }

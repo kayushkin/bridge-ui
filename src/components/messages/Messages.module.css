@@ -81,8 +81,8 @@ a.name:hover { text-decoration: underline; }
 .messageHead { display: flex; align-items: baseline; gap: 10px; font-size: 0.75em; margin-bottom: 2px; }
 .sender { color: var(--info); font-weight: 600; }
 .messageMine .sender { color: var(--accent); }
-.messageBody { font-size: 0.9em; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
-.composer { display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); }
+.messageBody { font-size: 0.9em; color: var(--text); overflow-wrap: anywhere; min-width: 0; }
+.composer { position: relative; display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); }
 .composer > textarea.input { flex: 1; resize: vertical; }
 .thread > .error:last-child { margin: 0 10px 8px; }
 
@@ -113,3 +113,67 @@ a.name:hover { text-decoration: underline; }
 .identities { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px; border-top: 1px solid var(--border-subtle); }
 .identity { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 8px; }
 .identity > .tagRow { grid-column: 1 / -1; }
+
+/* A message's content (MessageContent), on Conversations and the Discord page.
+   Plain text keeps its newlines; formatted text is laid out by its own tags. */
+.plainText { white-space: pre-wrap; overflow-wrap: anywhere; }
+.richText { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.richText > :first-child { margin-top: 0; }
+.richText > :last-child { margin-bottom: 0; }
+.richText :is(p, ul, ol, blockquote, pre, table, details) { margin: 0.35em 0; }
+.richText :is(h1, h2, h3, h4, h5, h6) { margin: 0.4em 0 0.2em; line-height: 1.25; color: var(--text); }
+.richText h1 { font-size: 1.3em; }
+.richText h2 { font-size: 1.18em; }
+.richText h3 { font-size: 1.08em; }
+.richText :is(h4, h5, h6) { font-size: 1em; }
+.richText :is(ul, ol) { padding-left: 1.4em; }
+.richText blockquote { padding-left: 0.7em; border-left: 3px solid var(--border); color: var(--text-muted); }
+.richText code { font-family: var(--font-mono, monospace); font-size: 0.9em; padding: 0 3px; border-radius: 3px; background: var(--bg-surface); }
+.richText pre { padding: 6px 8px; border-radius: 6px; background: var(--bg-surface); overflow-x: auto; white-space: pre; }
+.richText pre code { padding: 0; background: none; }
+.richText a { color: var(--accent); }
+.richText table { border-collapse: collapse; }
+.richText :is(th, td) { border: 1px solid var(--border); padding: 2px 6px; }
+.richText hr { border: none; border-top: 1px solid var(--border); }
+.inlineEmoji { height: 1.375em; width: auto; vertical-align: -0.3em; object-fit: contain; }
+.inlineImage { max-width: 100%; max-height: 320px; height: auto; vertical-align: middle; }
+.mention { padding: 0 3px; border-radius: 4px; color: var(--accent); background: var(--bg-surface); font-weight: 500; }
+.spoiler { background: var(--text); color: transparent; border-radius: 3px; transition: color 0.1s; }
+.spoiler:hover, .spoiler:focus { background: var(--bg-surface); color: inherit; }
+.imageLink { display: inline-block; line-height: 0; }
+.messageImage {
+  max-width: min(100%, 360px); max-height: 270px; width: auto; height: auto;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface);
+}
+
+/* Reactions under a message. */
+.reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.reactionChip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 0.8em; line-height: 1.5;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg-surface); color: var(--text); cursor: default;
+}
+.reactionImage { height: 1.25em; width: auto; object-fit: contain; }
+.reactionText { font-size: 1.1em; }
+.reactionCount { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* The composer's emoji picker: a button beside the text box, and a panel
+   above it. */
+.emojiPickerWrap { position: static; }
+.emojiButton {
+  font-size: 1.2em; line-height: 1; padding: 5px 7px; cursor: pointer;
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+}
+.emojiButton:hover, .emojiButton[aria-expanded="true"] { border-color: var(--accent); }
+.emojiPanel {
+  position: absolute; bottom: calc(100% + 4px); left: 10px; z-index: 20;
+  width: min(360px, calc(100% - 20px)); height: 320px; display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+.emojiGroups { flex: 1; min-height: 0; overflow-y: auto; }
+.emojiGroupName { position: sticky; top: 0; padding: 4px 2px; font-size: 0.72em; color: var(--text-muted); background: var(--bg); }
+.emojiGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); }
+.emojiCell {
+  font-size: 1.35em; line-height: 1; padding: 5px 0; cursor: pointer;
+  background: none; border: none; border-radius: 6px;
+}
+.emojiCell:hover, .emojiCell:focus-visible { background: var(--bg-surface); outline: none; }

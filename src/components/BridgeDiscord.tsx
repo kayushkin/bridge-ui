@@ -3,10 +3,13 @@ import { useSearchParams } from 'react-router-dom'
 import type { DiscordBridgeStatus, DiscordBridgedServer, LoggedMessage, MessageLogPage } from '@kayushkin/multichat-types'
 import { useBridgeConfig } from '../context'
 import {
-  DISCORD_TABS, EMPTY_MESSAGE_LOG_FILTERS, appendMessageLogPage, bridgeProblems, channelLabel, channelOptions, channelProblems,
-  deletedBeforeRead, discordTabOf, messageLogQuery, nextPageBefore, senderLabel, serverOptions, serverTotals,
+  DISCORD_TABS, EMPTY_MESSAGE_LOG_FILTERS, appendMessageLogPage, bridgeProblems, bridgedChannelsOf, channelLabel, channelOptions,
+  channelProblems, currentVersionOf, deletedBeforeRead, discordTabOf, messageLogQuery, nextPageBefore, senderLabel, serverOptions, serverTotals,
   versionsOf, whereLabel, withServer, type DiscordTab, type MessageLogFilters,
 } from '../discordLog'
+import { discordNamesOf, type DiscordNames } from '../messageBody'
+import { reactionsOfLoggedMessage } from '../messageReactions'
+import { MessageContent, ReactionChips } from './messages/MessageContent'
 import styles from './BridgeDiscord.module.css'
 
 /**
@@ -106,6 +109,7 @@ function MessageLogTab({ deletedOnly, status, statusError, read }: {
 
   const servers = useMemo(() => serverOptions(status), [status])
   const channels = useMemo(() => channelOptions(status, filters.serverID), [status, filters.serverID])
+  const discordNames = useMemo(() => discordNamesOf(bridgedChannelsOf(status), page?.messages ?? []), [status, page])
 
   return (
     <section className={styles.section}>
@@ -138,8 +142,8 @@ function MessageLogTab({ deletedOnly, status, statusError, read }: {
       {page && page.messages.length > 0 && (
         <ul className={styles.list}>
           {page.messages.map(message => deletedOnly
-            ? <DeletedMessageRow key={message.event_id} message={message} edits={page.edits} />
-            : <MessageRow key={message.event_id} message={message} edits={page.edits} />)}
+            ? <DeletedMessageRow key={message.id} message={message} page={page} discordNames={discordNames} />
+            : <MessageRow key={message.id} message={message} page={page} discordNames={discordNames} />)}
         </ul>
       )}
       {busy && <div className={styles.muted}>Loading…</div>}
@@ -150,29 +154,45 @@ function MessageLogTab({ deletedOnly, status, statusError, read }: {
   )
 }
 
-function MessageRow({ message, edits }: { message: LoggedMessage; edits: MessageLogPage['edits'] }) {
-  const versions = versionsOf(message, edits)
+interface RowProps {
+  message: LoggedMessage
+  page: MessageLogPage
+  discordNames: DiscordNames
+}
+
+/** A message as it reads now — its newest edit, when it has one — with
+ *  "edited" opening the versions it went through. Edits are not rows of their
+ *  own: multichat lists them only under the message they edit. */
+function MessageRow({ message, page, discordNames }: RowProps) {
+  const versions = versionsOf(message, page.edits)
+  const [showVersions, setShowVersions] = useState(false)
   const deleted = message.redacted_at !== null
-  const edit = message.replaces_event_id !== ''
+  const current = currentVersionOf(message, page.edits)
   return (
-    <li className={`${styles.row} ${deleted ? styles.rowDeleted : ''}`} data-event-id={message.event_id}>
+    <li className={`${styles.row} ${deleted ? styles.rowDeleted : ''}`} data-log-id={message.id} data-event-id={message.event_id || undefined}>
       <div className={styles.rowHead}>
         <span className={styles.sender} title={message.sender_user_id}>{senderLabel(message)}</span>
         <ChannelLink message={message} />
         <time className={styles.muted} dateTime={message.sent_at}>{new Date(message.sent_at).toLocaleString()}</time>
-        {edit && <span className={styles.flag} title={`Edits ${message.replaces_event_id}`}>edit</span>}
-        {versions.length > 1 && <span className={styles.flag}>edited {versions.length - 1}×</span>}
+        {versions.length > 1 && (
+          <button type="button" className={styles.flagButton} aria-expanded={showVersions}
+            title={`Last edited ${new Date(current.sent_at).toLocaleString()}`} onClick={() => setShowVersions(v => !v)}>
+            edited{versions.length > 2 ? ` ${versions.length - 1}×` : ''}
+          </button>
+        )}
         {deleted && <span className={`${styles.flag} ${styles.flagWarning}`}>deleted {new Date(message.redacted_at!).toLocaleString()}</span>}
+        {message.source === 'discord-archive' && <span className={styles.flag} title="Imported from Discord's history, not logged live">archive</span>}
       </div>
-      <MessageBody message={message} />
+      {showVersions ? <VersionList versions={versions} discordNames={discordNames} /> : <LogMessageBody message={current} discordNames={discordNames} />}
+      <ReactionChips reactions={reactionsOfLoggedMessage(message, page.reactions)} />
     </li>
   )
 }
 
-function DeletedMessageRow({ message, edits }: { message: LoggedMessage; edits: MessageLogPage['edits'] }) {
-  const versions = versionsOf(message, edits)
+function DeletedMessageRow({ message, page, discordNames }: RowProps) {
+  const versions = versionsOf(message, page.edits)
   return (
-    <li className={`${styles.row} ${styles.rowDeleted}`} data-event-id={message.event_id}>
+    <li className={`${styles.row} ${styles.rowDeleted}`} data-log-id={message.id} data-event-id={message.event_id || undefined}>
       <div className={styles.rowHead}>
         <span className={styles.sender} title={message.sender_user_id}>{senderLabel(message)}</span>
         <ChannelLink message={message} />
@@ -181,29 +201,32 @@ function DeletedMessageRow({ message, edits }: { message: LoggedMessage; edits: 
         <dt>Sent</dt><dd><time dateTime={message.sent_at}>{new Date(message.sent_at).toLocaleString()}</time></dd>
         <dt>Deleted</dt><dd><time dateTime={message.redacted_at ?? ''}>{message.redacted_at ? new Date(message.redacted_at).toLocaleString() : '—'}</time></dd>
       </dl>
-      {versions.length > 1 ? (
-        <ol className={styles.versions}>
-          {versions.map(v => (
-            <li key={v.eventID}>
-              <span className={styles.muted}>{v.isOriginal ? 'first sent' : 'edited'} {new Date(v.at).toLocaleString()}</span>
-              <pre className={styles.body}>{v.body}</pre>
-            </li>
-          ))}
-        </ol>
-      ) : <MessageBody message={message} />}
-      {message.replaces_event_id && <span className={styles.muted}>This is an edit of {message.replaces_event_id}.</span>}
-      <span className={styles.id}>{message.event_id} · deleted by {message.redacted_by_user_id || 'unknown'} (on Discord the bridge relays every delete)</span>
+      {versions.length > 1 ? <VersionList versions={versions} discordNames={discordNames} /> : <LogMessageBody message={message} discordNames={discordNames} />}
+      <ReactionChips reactions={reactionsOfLoggedMessage(message, page.reactions)} />
+      <span className={styles.id}>{message.event_id || `Discord message ${message.discord_message_id}`} · deleted by {message.redacted_by_user_id || 'unknown'} (on Discord the bridge relays every delete)</span>
     </li>
   )
 }
 
-function MessageBody({ message }: { message: LoggedMessage }) {
+function VersionList({ versions, discordNames }: { versions: ReturnType<typeof versionsOf>; discordNames: DiscordNames }) {
+  return (
+    <ol className={styles.versions}>
+      {versions.map(v => (
+        <li key={v.message.id}>
+          <span className={styles.muted}>{v.isOriginal ? 'first sent' : 'edited'} {new Date(v.at).toLocaleString()}</span>
+          <LogMessageBody message={v.message} discordNames={discordNames} />
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function LogMessageBody({ message, discordNames }: { message: LoggedMessage; discordNames: DiscordNames }) {
   if (deletedBeforeRead(message)) return <div className={styles.muted}>No text: it was deleted before multichat read it.</div>
   return (
-    <>
-      <pre className={styles.body}>{message.body}</pre>
-      {message.message_type !== 'm.text' && <span className={styles.muted}>{message.message_type}</span>}
-    </>
+    <div className={styles.body}>
+      <MessageContent message={message} messageType={message.message_type} discordNames={discordNames} />
+    </div>
   )
 }
 

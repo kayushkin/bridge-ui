@@ -4,7 +4,7 @@ import { groupForPath, navEntriesFor } from '../src/pages'
 import {
   MESSAGE_PAGE_SIZE, contactListPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, conversationMessagesPath,
   conversationPlatforms, conversationSendPath, conversationTags, filterContacts, filterConversations, highlightSegments,
-  mergeNewestMessages, messageText, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
+  mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
   searchPath, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
 } from '../src/multichatMessages'
 import type {
@@ -68,9 +68,11 @@ describe('merging pages', () => {
     expect(sameMessages([message('a', 1)], [message('a', 1), message('b', 2)])).toBe(false)
   })
 
-  it('names the kind of file a message carries', () => {
-    expect(messageText(message('x', 1, { msg_type: 'm.image', body: 'photo.jpg' }))).toBe('[image] photo.jpg')
-    expect(messageText(message('x', 1, { msg_type: 'm.notice', body: 'hello' }))).toBe('hello')
+  it('counts a changed reaction as a change, so the poll redraws it', () => {
+    const thumbs = { key: '\u{1F44D}', shortcode: '', count: 1, sender_display_names: ['Ann'] }
+    expect(sameMessages([message('a', 1, { reactions: [thumbs] })], [message('a', 1, { reactions: [thumbs] })])).toBe(true)
+    expect(sameMessages([message('a', 1)], [message('a', 1, { reactions: [thumbs] })])).toBe(false)
+    expect(sameMessages([message('a', 1, { reactions: [thumbs] })], [message('a', 1, { reactions: [{ ...thumbs, count: 2 }] })])).toBe(false)
   })
 })
 

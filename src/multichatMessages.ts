@@ -29,6 +29,10 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /contacts/tags/bulk',
   'POST /contacts/tags',
   'DELETE /contacts/tags',
+  // Images, custom emoji and custom reactions, loaded by <img> (MessageContent).
+  'GET /media/{server_name}/{media_id}',
+  // Channel names for a Discord room's `<#id>` tokens.
+  'GET /discord/status',
 ]
 
 const roomSegment = (roomID: string) => encodeURIComponent(roomID)
@@ -78,22 +82,16 @@ export function mergeNewestMessages(shown: readonly MultichatMessage[], newest: 
   return [...kept, ...newest]
 }
 
-/** Whether two message lists show the same messages in the same order, so a
- *  poll that brought nothing new does not redraw the room. */
+/** Whether two message lists show the same messages in the same order with
+ *  the same reactions, so a poll that brought nothing new does not redraw the
+ *  room, and one that brought only a reaction does. */
 export function sameMessages(a: readonly MultichatMessage[], b: readonly MultichatMessage[]): boolean {
-  return a.length === b.length && a.every((message, index) => message.event_id === b[index].event_id)
+  return a.length === b.length && a.every((message, index) =>
+    message.event_id === b[index].event_id && reactionSignature(message) === reactionSignature(b[index]))
 }
 
-/** What a message shows as its text: the body, or for a file or image, which
- *  kind of file it was and its name — the file itself is not fetched. */
-export function messageText(message: MultichatMessage): string {
-  switch (message.msg_type) {
-    case 'm.image': return `[image] ${message.body}`
-    case 'm.video': return `[video] ${message.body}`
-    case 'm.audio': return `[audio] ${message.body}`
-    case 'm.file': return `[file] ${message.body}`
-    default: return message.body
-  }
+function reactionSignature(message: MultichatMessage): string {
+  return (message.reactions ?? []).map(r => `${r.key}\u0000${r.count}\u0000${(r.sender_display_names ?? []).join('\u0001')}`).join('\u0002')
 }
 
 /** The apps the conversations are on, each once, sorted. */
