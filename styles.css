@@ -650,6 +650,65 @@
    removed when that animation ends. */
 .bc-composer-sent { display: none; }
 
+/* The conductor (`ConductorDock`): the orchestrator at the foot of the sidebar, with
+   `data-state` = conducting | busy | alert | trouble | resting | offline. Here it is the
+   🎬 and a dot in the state's colour; a host theme with a character hides the emoji and
+   draws `.bc-conductor-mascot` instead. */
+.bc-conductor {
+  position: relative;
+  flex: none;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.bc-conductor-row { display: flex; align-items: center; gap: 8px; }
+.bc-conductor-crab {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; padding: 0;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: transparent; cursor: pointer; font-size: 20px;
+}
+.bc-conductor-crab:hover { border-color: var(--accent); }
+.bc-conductor-mascot { display: none; }
+.bc-conductor-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.bc-conductor-status { display: flex; align-items: center; gap: 6px; font-size: 0.78em; color: var(--text-muted); min-width: 0; }
+.bc-conductor-status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-conductor-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+.bc-conductor[data-state="busy"] .bc-conductor-dot { background: #22c55e; animation: bc-pulse-anim 1s ease-in-out infinite; }
+.bc-conductor[data-state="alert"] .bc-conductor-dot { background: #f59e0b; }
+.bc-conductor[data-state="trouble"] .bc-conductor-dot,
+.bc-conductor[data-state="offline"] .bc-conductor-dot { background: #ef4444; }
+.bc-conductor[data-state="resting"] .bc-conductor-dot { background: #888; }
+.bc-conductor-needs {
+  padding: 0; border: none; background: none; cursor: pointer;
+  color: #f59e0b; font: inherit; font-weight: 600; text-decoration: underline;
+}
+.bc-conductor-ask { display: flex; }
+.bc-conductor-input {
+  flex: 1; min-width: 0; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 0.85em;
+}
+.bc-conductor-input:focus { outline: none; border-color: var(--accent); }
+/* The reply rises above the dock, out of the column's flow, so the list does not jump. */
+.bc-conductor-reply {
+  position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); z-index: 20;
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-elevated, var(--bg-surface)); box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  font-size: 0.85em;
+}
+.bc-conductor-reply[data-kind="error"] { border-color: #ef4444; }
+.bc-conductor-reply-text {
+  flex: 1; min-width: 0; padding: 0; border: none; background: none; cursor: pointer;
+  color: var(--text); font: inherit; text-align: left; white-space: pre-wrap;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
+}
+.bc-conductor-reply-waiting { flex: 1; color: var(--text-muted); font-style: italic; }
+.bc-conductor-reply-close { flex: none; padding: 0 2px; border: none; background: none; color: var(--text-muted); cursor: pointer; }
+
 .bc-turns-body {
   flex: 1;
   overflow-y: auto;

@@ -19,6 +19,7 @@ import { useBridgeInstances } from '../../useBridgeInstances'
 import { useBridgeMachines } from '../../useBridgeMachines'
 import { EditableName } from './EditableName'
 import { ProducerRow } from './ProducerRow'
+import { ConductorDock } from './ConductorDock'
 import { StatusDot } from './StatusDot'
 import { isArchivedFolder } from './bridgeAdapters'
 import {
@@ -996,6 +997,13 @@ export default function Sidebar({
         <div className={styles.sidebarError} role="alert">
           {folderError || actionError}
         </div>
+      )}
+
+      {/* The orchestrator as a conductor, pinned to the foot of the column: what it is
+          doing, what needs you, and a field to ask it something from any chat. Last in
+          the column, so the list above takes the height and this never scrolls away. */}
+      {producerBasePath && (
+        <ConductorDock onOpenOrchestrator={onOpenOrchestrator} onOpenSignalsPage={onOpenSignalsPage} />
       )}
 
       {/* The context menu lives OUTSIDE the VList: it is positioned in viewport
