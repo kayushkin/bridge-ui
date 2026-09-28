@@ -335,7 +335,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
           aria-label="Attach files"
           title={canAttach ? 'Attach files — or paste or drop them here' : 'Send a first message to start the chat, then attach files'}
         >
-          +
+          <AttachIcon />
         </button>
         {/* The textarea stays editable while disconnected: only the send is impossible,
             and disabling the box would throw away a draft over a reconnect that usually
@@ -352,8 +352,9 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
         />
         <div className="bc-composer-actions">
           <button
-            className="bc-composer-btn"
+            className="bc-composer-btn bc-composer-send"
             onClick={() => void submit()}
+            aria-label={uploading ? 'Sharing…' : 'Send'}
             disabled={(!draft.trim() && attachments.length === 0) || !connected || interrupting || sending || uploading}
             title={
               !connected
@@ -363,7 +364,8 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
                   : 'Send'
             }
           >
-            {uploading ? 'Sharing…' : 'Send'}
+            <SendIcon />
+            <span className="bc-composer-btn-label">{uploading ? 'Sharing…' : 'Send'}</span>
           </button>
           {turnRunning && (
             <button
@@ -371,8 +373,10 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
               onClick={() => void doStop()}
               disabled={interrupting}
               title="Interrupt the running turn"
+              aria-label={interrupting ? 'Stopping…' : 'Stop'}
             >
-              {interrupting ? 'Stopping…' : 'Stop'}
+              <StopIcon />
+              <span className="bc-composer-btn-label">{interrupting ? 'Stopping…' : 'Stop'}</span>
             </button>
           )}
           {/* Resume sits BESIDE Send rather than replacing it, for the same reason Stop
@@ -386,12 +390,50 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
               onClick={() => void doResume()}
               disabled={resuming}
               title="Start this session's harness process again"
+              aria-label={resuming ? 'Resuming…' : 'Resume'}
             >
-              {resuming ? 'Resuming…' : 'Resume'}
+              <ResumeIcon />
+              <span className="bc-composer-btn-label">{resuming ? 'Resuming…' : 'Resume'}</span>
             </button>
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+// Each action button carries an icon and a word. The stylesheet shows the word on a
+// wide screen and only the icon on a phone, where the text box needs the width.
+const composerIconProps = { className: 'bc-composer-btn-icon', viewBox: '0 0 24 24', 'aria-hidden': true } as const
+
+function AttachIcon() {
+  return (
+    <svg {...composerIconProps} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+function SendIcon() {
+  return (
+    <svg {...composerIconProps} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg {...composerIconProps} fill="currentColor">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2" />
+    </svg>
+  )
+}
+
+function ResumeIcon() {
+  return (
+    <svg {...composerIconProps} fill="currentColor">
+      <path d="M8 5.5v13l10.5-6.5z" />
+    </svg>
   )
 }

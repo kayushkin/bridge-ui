@@ -5963,3 +5963,129 @@
 }
 .bc-image-viewer-action:hover { border-color: #fff; }
 .bc-image-viewer-image { max-width: 100%; max-height: calc(100% - 48px); object-fit: contain; cursor: default; }
+
+/* ===== Composer buttons: icon and word ===== */
+/* Each composer action carries an icon and a word (Composer.tsx). A wide screen
+   shows the word, as it always did; the phone rules below show only the icon. */
+.bc-composer-btn-icon { display: none; width: 18px; height: 18px; flex-shrink: 0; }
+.bc-composer-attach .bc-composer-btn-icon { display: block; width: 20px; height: 20px; margin: auto; }
+.bc-composer-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* ===== Phones (640px and under, the width `MOBILE_BREAKPOINT` switches at) =====
+   Last in the file on purpose: the themed rules above have the same specificity,
+   so a phone rule placed before them loses. */
+@media (max-width: 640px) {
+  /* The shell's two rows. Less padding so more tabs fit, and a fade at the right
+     edge so a row that scrolls looks like one. */
+  .bridge-shell-bar { padding: 0 8px; gap: 2px; min-height: 44px; }
+  .bridge-shell-start { padding-right: 8px; margin-right: 2px; }
+  .bridge-shell-end { padding-left: 4px; }
+  .bridge-nav { padding: 0 4px; scrollbar-width: none; }
+  .bridge-nav::-webkit-scrollbar { display: none; }
+  .bridge-nav-groups,
+  .bridge-nav-pages {
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  .bridge-tab { padding: 10px 9px; }
+  .bridge-group-tab { font-size: 0.82em; }
+  .bridge-nav-pages .bridge-tab { padding: 8px 10px; font-size: 0.82em; }
+  .bridge-content { padding: 10px; }
+
+  /* The composer is one rounded field: the attach button, the text, and a round
+     send button all inside it. Before, the `+` box and a 96px Send button stood
+     beside the text box and left it half the width of a 390px screen. */
+  .bc-composer,
+  .bc-minimal .bc-composer {
+    margin: 6px 8px;
+    margin-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    padding: 4px;
+    gap: 2px;
+    align-items: flex-end;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--bg-surface);
+    box-shadow: none;
+  }
+  .bc-composer:focus-within { border-color: var(--accent); }
+  .bc-composer-input,
+  .bc-composer-input:focus {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 8px 6px;
+    min-height: 36px;
+    max-height: 40vh;
+    /* The field around it shows focus; an outline on the text alone draws a box in a box. */
+    outline: none;
+    /* 16px is the size below which iOS Safari zooms the page when a field gets focus. */
+    font-size: 16px;
+    line-height: 1.35;
+  }
+  .bc-composer-attach {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+  }
+  .bc-composer-actions { gap: 4px; }
+  .bc-composer-btn,
+  .bc-composer-btn:hover {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transform: none;
+    box-shadow: none;
+  }
+  .bc-composer-btn-icon { display: block; }
+  .bc-composer-btn-label { display: none; }
+  .bc-attach-tray { padding: 6px 10px 0; }
+
+  /* Sessions page: the state counts go under the title instead of squeezing it,
+     and a row drops the instance so the session's name gets the width. */
+  .bs-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .bs-counts { flex-wrap: wrap; gap: 4px 10px; }
+  .bs-row { gap: 8px; padding: 10px 8px; }
+  .bs-row-instance { display: none; }
+  .bs-row-tokens, .bs-row-time { min-width: 0; }
+
+  /* The drawer's session list sits inside the drawer, so the button that
+     collapses the list beside the chat has nothing to do there. */
+  .bc-mc-drawer .bc-sidebar-collapse-btn { display: none; }
+}
+
+/* The shell's pages, in the session drawer (SessionDrawer.tsx): folded to one
+   line at the foot of the drawer, opened to a short list of links. */
+.bc-mc-drawer-pages {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  max-height: 40%;
+  overflow-y: auto;
+}
+.bc-mc-drawer-pages-summary {
+  padding: 12px 14px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.bc-mc-drawer-pages-body { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 12px; }
+.bc-mc-drawer-pages-group { display: flex; flex-direction: column; gap: 4px; }
+.bc-mc-drawer-pages-group-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+.bc-mc-drawer-pages-links { display: flex; flex-wrap: wrap; gap: 5px; }
+.bc-mc-drawer-page {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.8em;
+  -webkit-user-drag: none;
+}
+.bc-mc-drawer-page-active { border-color: var(--accent); color: var(--accent); }

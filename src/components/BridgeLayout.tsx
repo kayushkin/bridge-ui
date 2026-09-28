@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { PAGE_GROUPS, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
 import { useMinimalChrome } from './minimal/MinimalChromeContext'
+import { ShellNavigationContext } from './shellNavigation'
 
 interface BridgeLayoutProps {
   /** If true, include the Conformance page. Default: true. */
@@ -46,13 +48,34 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
   const matched = groupForPath(pathname, config.routes, hostPages)
   const activeGroup: PageGroupKey | null = matched && groups.some(g => g.key === matched) ? matched : (groups[0]?.key ?? null)
   const pages: NavEntry[] = entries.filter(e => e.group === activeGroup)
+  const entriesKey = entries.map(e => e.to).join('|')
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the routes, not on the arrays built each render
+  const shellNavigation = useMemo(() => ({ groups, entries }), [entriesKey])
+
+  // Both rows scroll sideways when their tabs do not fit, which on a phone is
+  // always. Without this the active tab can sit past the right edge — a Personal
+  // page showed "Work Agents Acc…" with nothing marked — so the row is scrolled to
+  // show it. Only the row moves: `scrollIntoView` would scroll the page too.
+  const groupRow = useRef<HTMLElement>(null)
+  const pageRow = useRef<HTMLElement>(null)
+  useEffect(() => {
+    for (const row of [groupRow.current, pageRow.current]) {
+      const active = row?.querySelector<HTMLElement>('.bridge-tab-active')
+      if (!row || !active) continue
+      const left = active.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft
+      if (left < row.scrollLeft || left + active.offsetWidth > row.scrollLeft + row.clientWidth) {
+        row.scrollLeft = left - (row.clientWidth - active.offsetWidth) / 2
+      }
+    }
+  }, [pathname, chromeTakenOver])
 
   return (
+    <ShellNavigationContext.Provider value={shellNavigation}>
     <div className={`bridge-layout ${chromeTakenOver ? 'bridge-layout-minimal' : ''}`}>
       {!chromeTakenOver && <>
         <header className="bridge-shell-bar">
         {navStart && <div className="bridge-shell-slot bridge-shell-start">{navStart}</div>}
-        <nav className="bridge-nav bridge-nav-groups" aria-label="Sections">
+        <nav ref={groupRow} className="bridge-nav bridge-nav-groups" aria-label="Sections">
           {groups.map(g => {
             const first = entries.find(e => e.group === g.key)!
             return (
@@ -70,7 +93,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
         </nav>
         {navEnd && <div className="bridge-shell-slot bridge-shell-end">{navEnd}</div>}
         </header>
-        <nav className="bridge-nav bridge-nav-pages" aria-label={`${groups.find(g => g.key === activeGroup)?.label ?? ''} pages`}>
+        <nav ref={pageRow} className="bridge-nav bridge-nav-pages" aria-label={`${groups.find(g => g.key === activeGroup)?.label ?? ''} pages`}>
           {pages.map(t => (
             <NavLink
               key={t.to}
@@ -88,5 +111,6 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
         <Outlet />
       </div>
     </div>
+    </ShellNavigationContext.Provider>
   )
 }
