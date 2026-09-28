@@ -3,7 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { CardDetail } from './BridgeKanban'
 import { useBridgeConfig } from '../context'
 import { useKanban, type AssignmentOutcome } from '../useKanban'
-import type { CardAssignment, CardLink, CardView, Placement } from '@kayushkin/kanban-store-types'
+import type {
+  CardAssignment,
+  CardDetail as KanbanCardDetail,
+  CardLink,
+  CardView,
+  Placement,
+} from '@kayushkin/kanban-store-types'
 import type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
 
 /**
@@ -49,6 +55,9 @@ export function BridgeCardPage() {
   const [placement, setPlacement] = useState<Placement | null>(null)
   const [links, setLinks] = useState<CardLink[]>([])
   const [assignments, setAssignments] = useState<CardAssignment[]>([])
+  // The card's shared work state across every board it sits on, as kanban-store
+  // reports it on GET /api/cards/{id}.
+  const [workState, setWorkState] = useState<Pick<CardView, 'work_state' | 'work_state_source'>>({ work_state: null })
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading')
 
   // ⚠️ Depend on `listCardLinks`, never on the whole `k` object. useKanban
@@ -83,10 +92,11 @@ export function BridgeCardPage() {
       setState('loading')
     }
     try {
-      const [itemRes, placementsRes, loadedAssignments] = await Promise.all([
+      const [itemRes, placementsRes, loadedAssignments, cardRes] = await Promise.all([
         fetchFn(`${noteboardBasePath}/api/items/${encodeURIComponent(cardId)}`),
         fetchFn(`${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardId)}/placements`),
         loadAssignments(),
+        fetchFn(`${kanbanStoreBasePath}/api/cards/${encodeURIComponent(cardId)}`),
       ])
       // The ITEM decides whether this card exists. A card with no placement is
       // still a card — an unfiled todo — but a card with no item is a dead link.
@@ -102,8 +112,14 @@ export function BridgeCardPage() {
       const rawPlacements: unknown = placementsRes.ok ? await placementsRes.json() : null
       const placements: Placement[] = Array.isArray(rawPlacements) ? rawPlacements : []
 
+      // 404 is kanban-store's answer for a card on no board, which has no shared work
+      // state; anything else that is not 2xx is a read that failed, not an absence.
+      if (!cardRes.ok && cardRes.status !== 404) throw new Error(`card HTTP ${cardRes.status}`)
+      const detail: KanbanCardDetail | null = cardRes.ok ? await cardRes.json() : null
+
       setItem(loadedItem)
       setPlacement(placements[0] ?? null)
+      setWorkState({ work_state: detail?.work_state ?? null, work_state_source: detail?.work_state_source })
       setLinks(await listCardLinks(cardId))
       setAssignments(loadedAssignments)
       setState('ready')
@@ -151,6 +167,7 @@ export function BridgeCardPage() {
     item,
     links,
     assignments,
+    ...workState,
   }
 
   return (
