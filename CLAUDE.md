@@ -19,11 +19,12 @@ These sections are stored in agent-store as a project prompt collection and rend
 The pages, by group, with the config field that makes each available:
 
 - **Work** — Chat (`end`), Sessions, Kanban (`kanbanStoreBasePath`), Board settings (routed, not listed), Card (`/:cardId`, routed, not listed), Email tickets (`kanbanStoreBasePath` and `mailBasePath`; each email ticket beside the email its `source_entity_ref` names), Orchestrator (`producerBasePath`), Previews (`previewsBasePath`; the dev servers agents are running, each in a frame, `?port=` picking one).
+- **Messages** — Conversations (`/messages`, `end`; `?room=` opens one to read, page back through and send into), Search (`/messages/search`, `?q=`) and Contacts (`/messages/contacts`, with multichat's tags), all gated on `multichatBasePath`. The host's proxy must forward every route `MULTICHAT_ROUTES_CALLED` in `src/multichatMessages.ts` lists; a send there reaches a real person.
 - **Agents** — Instances, Agents, Files, Skills (`skillStoreBasePath`), Tools (`toolStoreBasePath`), Bundles (`bundleStoreBasePath`), Hooks, Inbound rules (`multichatBasePath`).
 - **Access** — Principals (`principalStoreBasePath`), Grants (`grantStoreBasePath`), Permissions (`permissionStoreBasePath`), Auth.
 - **System** — Settings, Usage, Effective config, Service inventory (`showServiceInventory`), Conformance (`showConformance`).
 
-A page that is not available is **still routed**, so a stale link lands on a page that says what is missing rather than on nothing; it is only left out of the navigation. `PAGE_GROUPS` is the group order: Work, Agents, Access, System, Personal. Personal holds no page of this library's own — it is there for the host's pages.
+A page that is not available is **still routed**, so a stale link lands on a page that says what is missing rather than on nothing; it is only left out of the navigation. `PAGE_GROUPS` is the group order: Work, Messages, Agents, Access, System, Personal. Personal holds no page of this library's own — it is there for the host's pages.
 
 ## The two-row navigation and the host's slots
 
@@ -51,7 +52,7 @@ A narrower scope overrides a wider one: session over board over instance over ha
 
 **The rule that turns a form into a request body, or a store's answer into what the page shows, goes in a plain module under `src/`, not in the component** — because `npm test` covers `test/**/*.test.ts` and nothing renders a component there. Put the logic in the module, keep the component to rendering and fetching, and the rule gets a test.
 
-The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `kanbanBoardSettings.ts`, `kanbanTagRules.ts`, `messageTriggers.ts`, `effectiveConfigQuery.ts` (the effective-config dry run whose inputs live in the URL), `promptSource.ts`, `grantResources.ts`, `principalAvailability.ts`, `sessionSummaryPages.ts`, `toolPayloadPreview.ts`, `agentDispatch.ts`, `sessionFileAttachments.ts` (the message a send with attached files carries, pasted-file names, paste handling), `servicesClient.ts` and `kanbanStoreClient.ts`. `test/pages.test.ts` covers the registry itself — `navEntriesFor` and `groupForPath` — and `test/settingsSection.test.ts` the save frame.
+The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `kanbanBoardSettings.ts`, `kanbanTagRules.ts`, `messageTriggers.ts`, `effectiveConfigQuery.ts` (the effective-config dry run whose inputs live in the URL), `promptSource.ts`, `grantResources.ts`, `principalAvailability.ts`, `sessionSummaryPages.ts`, `toolPayloadPreview.ts`, `agentDispatch.ts`, `sessionFileAttachments.ts` (the message a send with attached files carries, pasted-file names, paste handling), `servicesClient.ts`, `kanbanStoreClient.ts` and `multichatMessages.ts` (the Messages pages' paths, send body, page merging, search ordering and highlighting, contact and tag filters). `test/pages.test.ts` covers the registry itself — `navEntriesFor` and `groupForPath` — and `test/settingsSection.test.ts` the save frame.
 
 ## Generated store types, never hand copies
 
@@ -59,7 +60,7 @@ The ones that exist: `bundleDraft.ts`, `hookDraft.ts`, `inboundRuleDraft.ts`, `k
 
 A vocabulary the store serves is **derived from the record field**, not written out as a union: `GrantResourceType = Grant['resource_type']`, `PrincipalKind` the same way.
 
-Two types are still hand-written, each with the reason in its file: `src/types-mailstack.ts` (`MailMessage`, deliberately partial — `body_html` is left out so no caller here can render an attacker-controlled body) and `src/types-multichat.ts` (multichat's unified contact list, which its router assembles from unnamed types, so tygo has nothing to render).
+Two types are still hand-written, each with the reason in its file: `src/types-mailstack.ts` (`MailMessage`, deliberately partial — `body_html` is left out so no caller here can render an attacker-controlled body) and `src/types-multichat.ts` (multichat's unified contact list, search answer and tags, which its router assembles from unnamed types, so tygo has nothing to render; and its conversation, message and message-page records, which are named structs in `internal/matrix/client.go` that multichat's `tygo.yaml` does not render yet — render them there and these copies go).
 
 Because each package is consumed through the store's main clone, **a store whose `ts/package.json` is missing breaks `tsc` here, loudly** — check the sibling repo before blaming this one.
 

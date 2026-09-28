@@ -15,3 +15,96 @@ export interface MultichatUnifiedContact {
   display_name: string
   identities: MultichatContactIdentity[]
 }
+
+// The Messages pages (Conversations, Search, Contacts) read the records below.
+// They are hand-written for the same reason: the conversation, message and page
+// records are structs in multichat's internal/matrix/client.go, which tygo.yaml
+// does not render (it renders only internal/db/inbound.go), and the search, tag
+// and tag-map answers are unnamed types built inside its router. Each comment
+// names the Go source, so the day multichat renders them these copies go.
+
+/** `GET {multichatBasePath}/conversations` — matrix.Conversation. Sorted by
+ *  last activity, newest first. */
+export interface MultichatConversation {
+  room_id: string
+  name: string
+  topic?: string
+  avatar_url?: string
+  member_count: number
+  /** Every joined member but us; the keys of the contact tag map. */
+  member_ids?: string[]
+  platform?: string
+  /** Unix milliseconds; 0 when the room has no message yet. */
+  last_activity: number
+  last_message?: string
+}
+
+/** One message in a room — matrix.Message. `msg_type` is Matrix's `msgtype`
+ *  (`m.text`, `m.image`, `m.file`…); for a file, `body` is its file name. */
+export interface MultichatMessage {
+  event_id: string
+  /** The Matrix user id of the sender, a bridge puppet or our own account. */
+  sender: string
+  /** Absent when Synapse had no display name for the sender. */
+  sender_name?: string
+  body: string
+  msg_type: string
+  /** Unix milliseconds. */
+  timestamp: number
+  /** Sent by our own account on that app. Omitted when false. */
+  is_me?: boolean
+}
+
+/** `GET {multichatBasePath}/conversations/{room_id}/messages?limit=&from=` —
+ *  matrix.MessagePage. `messages` is oldest first; `end` is the token to pass
+ *  as `from` for the page before this one. */
+export interface MultichatMessagePage {
+  messages: MultichatMessage[] | null
+  end?: string
+  has_more: boolean
+}
+
+/** `POST {multichatBasePath}/conversations/{room_id}/send` answers this. */
+export interface MultichatSendAnswer {
+  event_id: string
+}
+
+/** One hit of `GET {multichatBasePath}/search?q=` (searchHandler's Result). */
+export interface MultichatSearchHit {
+  room_id: string
+  room_name: string
+  platform: string
+  sender_name: string
+  body: string
+  timestamp: number
+  event_id: string
+}
+
+/** Hits grouped by room (searchHandler's Group). Groups arrive in no order. */
+export interface MultichatSearchGroup {
+  room_id: string
+  room_name: string
+  platform: string
+  results: MultichatSearchHit[] | null
+}
+
+/** `GET {multichatBasePath}/search?q=`. `query` is the term as multichat
+ *  matched it: trimmed and lower-cased. The answer also carries
+ *  `load_results`, left over from a freight demo, which nothing here reads. */
+export interface MultichatSearchAnswer {
+  query: string
+  total: number
+  groups: MultichatSearchGroup[] | null
+}
+
+/** `GET {multichatBasePath}/tags` — one tag (tagsHandler's Tag). */
+export interface MultichatTag {
+  id: number
+  name: string
+  color: string
+}
+
+/** `GET {multichatBasePath}/contacts/tags/bulk` — the tags on each contact
+ *  identity, keyed by the Matrix user id a tag was put on. An identity with no
+ *  tag is absent. */
+export type MultichatContactTagMap = Record<string, MultichatTag[]>

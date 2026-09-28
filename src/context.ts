@@ -51,6 +51,14 @@ export interface BridgeRoutes {
   card: string
   /** Every ticket that came from an email, and the email it came from. */
   emailTickets: string
+  /** multichat's conversations, one open to read and answer (`?room=<room_id>`).
+   *  Needs `multichatBasePath`. Its own path is a prefix of the other two
+   *  Messages pages, so its tab is `end`. */
+  messageConversations: string
+  /** Search across the messages of every multichat conversation (`?q=`). */
+  messageSearch: string
+  /** multichat's contacts, merged across apps, and the tags on them. */
+  messageContacts: string
   /** The dev servers agents are running, each shown in a frame. `?port=<n>`
    *  opens the one listening on that port. Needs `previewsBasePath`. */
   previews: string
@@ -88,6 +96,9 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   orchestrator: '/orchestrator',
   card: '/card',
   emailTickets: '/email-tickets',
+  messageConversations: '/messages',
+  messageSearch: '/messages/search',
+  messageContacts: '/messages/contacts',
   previews: '/previews',
   notes: '',
 }
@@ -153,8 +164,11 @@ export interface BridgeConfig {
    * offering none. */
   mailBasePath: string
   /** Base path for multichat's API as the host proxies it (dash:
-   * "/api/multichat", which carries the inbound-rule routes and the contact
-   * list and nothing that sends). If empty, the Inbound rules tab is hidden. */
+   * "/api/multichat", which forwards only the routes it names). Inbound rules
+   * reads the inbound-rule routes and the contact list; the Messages pages call
+   * the routes `MULTICHAT_ROUTES_CALLED` in `src/multichatMessages.ts` lists,
+   * including a send that reaches a real person. If empty, Inbound rules and
+   * the Messages group are hidden. */
   multichatBasePath: string
   /** Base paths the host proxies seven more services at, read only by the
    * service settings page, which asks `{base}/settings`. dash: scheduler

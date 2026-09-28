@@ -5,6 +5,9 @@ import { BridgeInstances } from './components/BridgeInstances'
 import { BridgeSessions } from './components/BridgeSessions'
 import { BridgeAuth } from './components/BridgeAuth'
 import { BridgeUsage } from './components/BridgeUsage'
+import { BridgeMessageConversations } from './components/messages/BridgeMessageConversations'
+import { BridgeMessageSearch } from './components/messages/BridgeMessageSearch'
+import { BridgeMessageContacts } from './components/messages/BridgeMessageContacts'
 import { BridgeSettings } from './components/BridgeSettings'
 import { BridgeAgents } from './components/BridgeAgents'
 import { BridgeFiles } from './components/BridgeFiles'
@@ -32,12 +35,14 @@ import { BridgePreviews } from './components/BridgePreviews'
  *
  *  Pages are grouped by what the person is doing, not by which service answers:
  *  - Work: the sessions and cards being worked, and the chat that drives them.
+ *  - Messages: the operator's own conversations with people, through multichat's
+ *    bridges — reading, answering, searching, and the contacts and their tags.
  *  - Agents: what runs — instances and machines, agent identities, the prompt,
  *    and the skills, tools and bundles they are given.
  *  - Access: who may do what — principals, grants, permission rules, credentials.
  *  - System: the host itself — settings, usage, its services, conformance.
  *  - Personal: pages the host brings that are about the operator, not the agents. */
-export type PageGroupKey = 'work' | 'agents' | 'access' | 'system' | 'personal'
+export type PageGroupKey = 'work' | 'messages' | 'agents' | 'access' | 'system' | 'personal'
 
 export interface PageGroup {
   key: PageGroupKey
@@ -46,6 +51,7 @@ export interface PageGroup {
 
 export const PAGE_GROUPS: readonly PageGroup[] = [
   { key: 'work', label: 'Work' },
+  { key: 'messages', label: 'Messages' },
   { key: 'agents', label: 'Agents' },
   { key: 'access', label: 'Access' },
   { key: 'system', label: 'System' },
@@ -94,6 +100,11 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },
+  // Messages — multichat's inbox. Conversations sits at the prefix of the
+  // other two, so its tab is `end`.
+  { route: 'messageConversations', label: 'Conversations', group: 'messages', listed: true, end: true, available: c => !!c.multichatBasePath, component: BridgeMessageConversations },
+  { route: 'messageSearch', label: 'Search', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessageSearch },
+  { route: 'messageContacts', label: 'Contacts', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessageContacts },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },

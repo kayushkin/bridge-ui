@@ -1,0 +1,244 @@
+// The pure rules of the Messages pages (Conversations, Search, Contacts): the
+// multichat paths they call, the bodies they send, and how multichat's answers
+// are merged, filtered and ordered for display. The components only fetch and
+// draw; everything here is covered by test/multichatMessages.test.ts.
+//
+// Every path is relative to `multichatBasePath`, which the host proxies (dash:
+// `/api/multichat`). `MULTICHAT_ROUTES_CALLED` lists them all, because dash
+// forwards only the multichat routes it names.
+
+import type {
+  MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage,
+  MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
+} from './types-multichat'
+
+/** How many messages one page asks for. multichat takes 1–200. */
+export const MESSAGE_PAGE_SIZE = 50
+
+/** Every multichat route the Messages pages call, as `METHOD path`, for the
+ *  host's proxy allowlist. `{room_id}` is one URL-encoded path segment. */
+export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
+  'GET /conversations',
+  'GET /conversations/{room_id}/messages',
+  'POST /conversations/{room_id}/send',
+  'GET /search',
+  'GET /contacts/unified',
+  'GET /tags',
+  'POST /tags',
+  'DELETE /tags',
+  'GET /contacts/tags/bulk',
+  'POST /contacts/tags',
+  'DELETE /contacts/tags',
+]
+
+const roomSegment = (roomID: string) => encodeURIComponent(roomID)
+
+/** One page of a room's messages. Without `from`, the newest page; with it, the
+ *  page before the one whose `end` it was. */
+export function conversationMessagesPath(roomID: string, from?: string | null): string {
+  const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_SIZE) })
+  if (from) query.set('from', from)
+  return `/conversations/${roomSegment(roomID)}/messages?${query.toString()}`
+}
+
+export function conversationSendPath(roomID: string): string {
+  return `/conversations/${roomSegment(roomID)}/send`
+}
+
+export type WireBodyResult<T> = { ok: true; body: T } | { ok: false; error: string }
+
+/** The body of a send. Surrounding blank lines and spaces are dropped; a
+ *  message with nothing else is refused here, as multichat would refuse it. */
+export function sendMessageBodyOf(text: string): WireBodyResult<{ body: string }> {
+  const body = text.trim()
+  if (!body) return { ok: false, error: 'Nothing to send.' }
+  return { ok: true, body: { body } }
+}
+
+/** The messages of a page, oldest first; multichat sends `null` for none. */
+export function pageMessages(page: MultichatMessagePage): MultichatMessage[] {
+  return page.messages ?? []
+}
+
+/** An older page put in front of what is shown. A message on both sides — a
+ *  page boundary that moved while the reader scrolled — is kept once. */
+export function prependOlderMessages(shown: readonly MultichatMessage[], older: readonly MultichatMessage[]): MultichatMessage[] {
+  const shownIDs = new Set(shown.map(message => message.event_id))
+  return [...older.filter(message => !shownIDs.has(message.event_id)), ...shown]
+}
+
+/** The newest page merged into what is shown, for the poll: every shown
+ *  message older than the newest page is kept (the reader may have loaded
+ *  pages further back), and the newest page replaces the rest. */
+export function mergeNewestMessages(shown: readonly MultichatMessage[], newest: readonly MultichatMessage[]): MultichatMessage[] {
+  if (newest.length === 0) return [...shown]
+  const newestIDs = new Set(newest.map(message => message.event_id))
+  const oldestNewestTimestamp = newest[0].timestamp
+  const kept = shown.filter(message => !newestIDs.has(message.event_id) && message.timestamp < oldestNewestTimestamp)
+  return [...kept, ...newest]
+}
+
+/** Whether two message lists show the same messages in the same order, so a
+ *  poll that brought nothing new does not redraw the room. */
+export function sameMessages(a: readonly MultichatMessage[], b: readonly MultichatMessage[]): boolean {
+  return a.length === b.length && a.every((message, index) => message.event_id === b[index].event_id)
+}
+
+/** What a message shows as its text: the body, or for a file or image, which
+ *  kind of file it was and its name — the file itself is not fetched. */
+export function messageText(message: MultichatMessage): string {
+  switch (message.msg_type) {
+    case 'm.image': return `[image] ${message.body}`
+    case 'm.video': return `[video] ${message.body}`
+    case 'm.audio': return `[audio] ${message.body}`
+    case 'm.file': return `[file] ${message.body}`
+    default: return message.body
+  }
+}
+
+/** The apps the conversations are on, each once, sorted. */
+export function conversationPlatforms(conversations: readonly MultichatConversation[]): string[] {
+  return [...new Set(conversations.map(conversation => conversation.platform ?? '').filter(Boolean))].sort()
+}
+
+export interface ConversationFilter {
+  /** Empty means every app. */
+  platform: string
+  /** Matched, in any case, against the room name and its last message. */
+  text: string
+}
+
+export function filterConversations(conversations: readonly MultichatConversation[], filter: ConversationFilter): MultichatConversation[] {
+  const text = filter.text.trim().toLowerCase()
+  return conversations.filter(conversation => {
+    if (filter.platform && conversation.platform !== filter.platform) return false
+    if (!text) return true
+    return conversation.name.toLowerCase().includes(text) || (conversation.last_message ?? '').toLowerCase().includes(text)
+  })
+}
+
+/** The tags on the people in a room: every tag on any member's identity, once
+ *  each, by name. */
+export function conversationTags(conversation: MultichatConversation, tagMap: MultichatContactTagMap): MultichatTag[] {
+  return uniqueTagsSorted((conversation.member_ids ?? []).flatMap(userID => tagMap[userID] ?? []))
+}
+
+function uniqueTagsSorted(tags: readonly MultichatTag[]): MultichatTag[] {
+  const byID = new Map<number, MultichatTag>()
+  for (const tag of tags) byID.set(tag.id, tag)
+  return [...byID.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** `/search?q=`, or null when there is nothing to search for (multichat
+ *  answers 400 to an empty term). */
+export function searchPath(query: string): string | null {
+  const term = query.trim()
+  if (!term) return null
+  return `/search?${new URLSearchParams({ q: term }).toString()}`
+}
+
+/** multichat's search groups, newest first: each group's hits newest first,
+ *  and the groups by their newest hit. multichat sends them in map order. */
+export function orderedSearchGroups(answer: MultichatSearchAnswer): (MultichatSearchGroup & { results: MultichatSearchHit[] })[] {
+  const groups = (answer.groups ?? []).map(group => ({
+    ...group,
+    results: [...(group.results ?? [])].sort((a, b) => b.timestamp - a.timestamp),
+  }))
+  const newest = (group: { results: MultichatSearchHit[] }) => group.results[0]?.timestamp ?? 0
+  return groups.sort((a, b) => newest(b) - newest(a))
+}
+
+export interface HighlightSegment {
+  text: string
+  match: boolean
+}
+
+/** `text` cut into the parts that match `term`, in any case, and the parts
+ *  between, so the matches can be marked. The term is matched as plain text,
+ *  never as a pattern. */
+export function highlightSegments(text: string, term: string): HighlightSegment[] {
+  const needle = term.trim().toLowerCase()
+  if (!needle) return [{ text, match: false }]
+  const haystack = text.toLowerCase()
+  const segments: HighlightSegment[] = []
+  let at = 0
+  for (let found = haystack.indexOf(needle, at); found !== -1; found = haystack.indexOf(needle, at)) {
+    if (found > at) segments.push({ text: text.slice(at, found), match: false })
+    segments.push({ text: text.slice(found, found + needle.length), match: true })
+    at = found + needle.length
+  }
+  if (at < text.length) segments.push({ text: text.slice(at), match: false })
+  return segments
+}
+
+/** The apps a contact is on, each once, sorted. */
+export function contactPlatforms(contact: MultichatUnifiedContact): string[] {
+  return [...new Set(contact.identities.map(identity => identity.platform))].sort()
+}
+
+/** Every tag on any of a contact's identities, once each, by name. A tag sits
+ *  on one identity — one Matrix user id — not on the merged contact. */
+export function contactTags(contact: MultichatUnifiedContact, tagMap: MultichatContactTagMap): MultichatTag[] {
+  return uniqueTagsSorted(contact.identities.flatMap(identity => tagMap[identity.user_id] ?? []))
+}
+
+export interface ContactFilter {
+  /** Matched, in any case, against the display name and every user id. */
+  text: string
+  /** Empty means every app. */
+  platform: string
+  /** Null means any tag or none. */
+  tagID: number | null
+  /** Only contacts multichat found on more than one app. */
+  onSeveralApps: boolean
+}
+
+export function filterContacts(contacts: readonly MultichatUnifiedContact[], tagMap: MultichatContactTagMap, filter: ContactFilter): MultichatUnifiedContact[] {
+  const text = filter.text.trim().toLowerCase()
+  return contacts.filter(contact => {
+    const platforms = contactPlatforms(contact)
+    if (filter.onSeveralApps && platforms.length < 2) return false
+    if (filter.platform && !platforms.includes(filter.platform)) return false
+    if (filter.tagID !== null && !contactTags(contact, tagMap).some(tag => tag.id === filter.tagID)) return false
+    if (!text) return true
+    return contact.display_name.toLowerCase().includes(text)
+      || contact.identities.some(identity => identity.user_id.toLowerCase().includes(text))
+  })
+}
+
+/** The apps any contact is on, each once, sorted. */
+export function contactListPlatforms(contacts: readonly MultichatUnifiedContact[]): string[] {
+  return [...new Set(contacts.flatMap(contactPlatforms))].sort()
+}
+
+/** The body of `POST /tags`. No colour is sent, so multichat picks its own. */
+export function tagCreateBodyOf(name: string, existing: readonly MultichatTag[]): WireBodyResult<{ name: string }> {
+  const trimmed = name.trim()
+  if (!trimmed) return { ok: false, error: 'A tag needs a name.' }
+  if (existing.some(tag => tag.name === trimmed)) return { ok: false, error: `There is already a tag named "${trimmed}".` }
+  return { ok: true, body: { name: trimmed } }
+}
+
+export function tagDeletePath(tagID: number): string {
+  return `/tags?${new URLSearchParams({ id: String(tagID) }).toString()}`
+}
+
+/** The body of `POST /contacts/tags`: one tag onto one identity. */
+export function contactTagAssignBody(userID: string, tagID: number): { contact_user_id: string; tag_id: number } {
+  return { contact_user_id: userID, tag_id: tagID }
+}
+
+export function contactTagRemovePath(userID: string, tagID: number): string {
+  return `/contacts/tags?${new URLSearchParams({ contact: userID, tag: String(tagID) }).toString()}`
+}
+
+/** When a message or conversation was last active: the time alone for today,
+ *  the date and time otherwise. */
+export function messageTimeLabel(timestamp: number, now: Date = new Date()): string {
+  const when = new Date(timestamp)
+  const time = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (when.toDateString() === now.toDateString()) return time
+  const sameYear = when.getFullYear() === now.getFullYear()
+  const date = when.toLocaleDateString([], sameYear ? { month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' })
+  return `${date} ${time}`
+}
