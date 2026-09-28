@@ -30,6 +30,7 @@ import SessionStatusLine, {
   type ComposerStatus,
 } from './SessionStatusLine'
 import styles from './Chat.module.css'
+import { useBeforePaintEffect } from '../../useBeforePaintEffect'
 import { SharedFileCard, ToolResultImageStrip } from './SharedFiles'
 import { SessionActionEntry, SessionActionsContext } from './SessionActions'
 
@@ -100,6 +101,11 @@ function remarkPluginsFor(patterns: readonly string[] | null): MdPlugins {
  *  tool call that legitimately emits nothing for minutes. Hiding the user's answer
  *  needs more confidence than drawing a spinner does, so only this use is bounded. */
 const PROVISIONAL_NARRATION_MS = 5000
+
+/** One key for the status slot in every branch the pane renders, so React keeps the
+ *  same slot when "Loading…" gives way to the transcript, rather than removing it and
+ *  drawing it again. */
+const STATUS_SLOT_KEY = 'status-slot'
 
 interface TurnListProps {
   sessionId: string | null
@@ -501,8 +507,14 @@ export default function TurnList({
   //  - afterwards we only re-pin when `atBottom`, so scrolling up to read isn't yanked
   //    back down. `entries` changes on every folded event, so an in-place streaming
   //    growth of the trailing turn (which leaves `turns` length unchanged) still sticks.
+  //
+  // Before paint, not after: when the page of history lands on top of the one cached
+  // turn a reload paints first, the list grows upward from scroll offset 0. Scrolled
+  // after paint, the reader saw the top of the conversation for a frame and the final
+  // reply vanish and come back — measured 2026-09-28, rows added, windowed out and
+  // re-added 60–115ms apart on 3 of 9 reloads.
   const settledSession = useRef<string | null>(null)
-  useEffect(() => {
+  useBeforePaintEffect(() => {
     if (!sessionId) return
     const h = listRef.current
     if (!h || items.length === 0 || lastChildIndex < 0) return
@@ -564,7 +576,7 @@ export default function TurnList({
   // No linger spacer here either. The spacer holds a TRANSCRIPT still when the slot
   // empties under it, and these branches have no transcript to hold.
   const emptyStateStatus = statusVisible ? (
-    <SessionStatusLine status={status} onOpenSession={select} />
+    <SessionStatusLine key={STATUS_SLOT_KEY} status={status} onOpenSession={select} />
   ) : null
 
   if (loading && turns.length === 0) {
@@ -667,7 +679,7 @@ export default function TurnList({
           user's own wheel/touch scroll (handlers on the pane root above) or when the
           next status fills the slot. */}
       {statusVisible ? (
-        <SessionStatusLine status={status} onOpenSession={select} />
+        <SessionStatusLine key={STATUS_SLOT_KEY} status={status} onOpenSession={select} />
       ) : lingerSpacer ? (
         <div className={STATUS_SPACER_CLASSNAME} aria-hidden />
       ) : null}

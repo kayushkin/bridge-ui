@@ -70,6 +70,31 @@ function isLiveState(state: string): boolean {
   return isRunningState(state) || state === 'awaiting_permission'
 }
 
+/** How long a page's FIRST connection may take before the slot says "connecting".
+ *
+ *  Every page load starts unconnected, and the stream usually opens within half a
+ *  second. Saying so drew the slot and took it away again before the session's own
+ *  status arrived to fill it — measured 2026-09-28 on 9 of 9 reloads: "connecting"
+ *  at ~430ms, gone at ~460ms, the real status back at ~670ms, each one a jump in the
+ *  transcript above it. A first connection slower than this is worth reporting; a
+ *  lost connection (after one was open) is reported at once. */
+const FIRST_CONNECTION_GRACE_MS = 2000
+
+/** Whether an unopened connection should be reported: always once this page has had
+ *  an open connection, and before that only after `FIRST_CONNECTION_GRACE_MS`. */
+function useConnectionWaitIsWorthReporting(connectionIsOpen: boolean): boolean {
+  const [connectionHasBeenOpen, setConnectionHasBeenOpen] = useState(connectionIsOpen)
+  // State adjusted during render, React's pattern for state derived from a prop's
+  // history: it re-renders once, before anything is painted.
+  if (connectionIsOpen && !connectionHasBeenOpen) setConnectionHasBeenOpen(true)
+  const [firstConnectionGraceIsOver, setFirstConnectionGraceIsOver] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setFirstConnectionGraceIsOver(true), FIRST_CONNECTION_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [])
+  return connectionHasBeenOpen || firstConnectionGraceIsOver
+}
+
 /**
  * Decide the slot's content. Browser-local facts first (see the header), then the
  * server's status read straight through.
@@ -87,6 +112,7 @@ export function useStatusSlotContent(
   const status = useSessionStatus(sessionId)
   const todo = useInProgressTodo(sessionId)
   const connState = useConnState()
+  const connectionWaitIsWorthReporting = useConnectionWaitIsWorthReporting(connState === 'open')
   if (composerStatus.error) {
     const prefix =
       composerStatus.failedAction === 'stop'
@@ -99,6 +125,8 @@ export function useStatusSlotContent(
   // 'open' is the only state in which updates are actually flowing (the Composer's
   // own send gate uses the same test).
   if (connState !== 'open') {
+    // Nothing to say yet: the page has only just started connecting.
+    if (!connectionWaitIsWorthReporting) return null
     return {
       kind: 'disconnected',
       text:
