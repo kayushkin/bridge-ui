@@ -644,6 +644,11 @@
 /* The status slot's mascot hook (`SessionStatusLine`): empty and hidden here. A host
    theme with a character shows it, picking a drawing by the slot's `data-mood`. */
 .bc-status-mascot { display: none; }
+/* The composer's sent-message hook (`Composer`): the text the last send took out of
+   the box, carrying `--sent-left/-top/-width/-height` (where the box stood in
+   `.bc-composer-wrap`). Hidden here; a host theme may animate it leaving, and it is
+   removed when that animation ends. */
+.bc-composer-sent { display: none; }
 
 .bc-turns-body {
   flex: 1;

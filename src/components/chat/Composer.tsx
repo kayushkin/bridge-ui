@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ClipboardEvent,
+  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
 } from 'react'
@@ -11,6 +12,7 @@ import { useChatContext, useConnState, type SessionFile, type useComposer } from
 import { composerAutoGrowHeightPx } from './composerAutoGrow'
 import { filesFromPaste, messageWithAttachedFiles, nameForPastedFile } from '../../sessionFileAttachments'
 import { formatBytes } from '../../toolPayloadPreview'
+import { sentBubblePlacement, sentBubbleText } from '../../composerSentBubble'
 
 /** A file waiting in the composer to go out with the next send. `previewUrl` is an
  *  object URL for an image, revoked when the file leaves the tray. */
@@ -22,6 +24,7 @@ interface PendingAttachment {
 }
 
 let nextAttachmentKey = 0
+let nextSentBubbleKey = 0
 
 interface ComposerProps {
   sessionId: string | null
@@ -89,6 +92,21 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
+  // The message the last send took out of the box, for a host theme to animate leaving
+  // (`.bc-composer-sent`, hidden by bridge-ui's stylesheet). It goes when its animation
+  // ends, or is replaced by the next send's.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [sentBubble, setSentBubble] = useState<{ key: number; text: string; placement: Record<string, string> } | null>(null)
+  const showSentBubble = (text: string) => {
+    const textBox = ref.current
+    const wrapper = wrapRef.current
+    if (!textBox || !wrapper) return
+    setSentBubble({
+      key: nextSentBubbleKey++,
+      text,
+      placement: sentBubblePlacement(textBox.getBoundingClientRect(), wrapper.getBoundingClientRect()),
+    })
+  }
 
   // True while a send from a new chat is creating its session and sharing files into
   // it. That send moves this pane onto the new session, and the files in the tray are
@@ -248,6 +266,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
       onFailedAction(null)
     }
     if (attachments.length === 0) {
+      showSentBubble(sentBubbleText(draft, []))
       await send(draft)
       return
     }
@@ -258,6 +277,7 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
     // a message that names only some of them is worse than a second try.
     const toShare = attachments
     const typed = draft
+    showSentBubble(sentBubbleText(typed, toShare.map((attachment) => attachment.name)))
     setUploading(true)
     setAttachError(null)
     sendingFromNewChat.current = sessionId === null
@@ -300,7 +320,20 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   }
 
   return (
-    <div className="bc-composer-wrap" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
+    <div ref={wrapRef} className="bc-composer-wrap" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
+      {sentBubble && (
+        <div
+          key={sentBubble.key}
+          className="bc-composer-sent"
+          aria-hidden
+          style={sentBubble.placement as CSSProperties}
+          onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget) setSentBubble(null)
+          }}
+        >
+          {sentBubble.text}
+        </div>
+      )}
       {/* No status row here anymore: paused/stopped/disconnected/error render in the
           turns pane's SessionStatusLine — one slot, one style, no second thing popping
           layout above the composer. The attachment tray is the exception: an upload
