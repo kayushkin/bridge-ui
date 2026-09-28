@@ -12,6 +12,7 @@ import {
   REF_TRANSCRIPT_TURNS,
 } from '@kayushkin/chat-core';
 import { SessionSignals } from './SessionSignals';
+import { SessionActionInText } from './SessionActions';
 
 /** Props for the {@link RefChip} renderer. When used as a ReactMarkdown custom
  *  component the mdast hProperties (`kind` / `refId`) arrive as props; rehype may
@@ -72,6 +73,10 @@ export function RefChip(props: RefChipProps): JSX.Element {
     return (
       <SessionRefChip refId={refId} className={props.className} onActivate={props.onActivate} />
     );
+  }
+  if (kind === 'action') {
+    // A button this session's agent offered and placed here by writing its id.
+    return <SessionActionInText actionId={refId} />;
   }
   if (kind === 'uuid') {
     return (

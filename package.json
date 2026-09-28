@@ -24,7 +24,7 @@
     "start": "vite --config standalone/vite.config.ts",
     "build:standalone": "vite build --config standalone/vite.config.ts",
     "test": "vitest run",
-    "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs"
+    "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --alias:react=./node_modules/react --alias:react-dom=./node_modules/react-dom --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs"
   },
   "dependencies": {
     "@kayushkin/bundle-store-types": "file:../bundle-store/ts",

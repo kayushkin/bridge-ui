@@ -10,7 +10,7 @@ import { Fragment,
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions } from '@kayushkin/chat-core'
+import { useTurns, remarkRefChips, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import type { Entry, SessionAction, SessionFile, Turn } from '@kayushkin/chat-core'
 import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
@@ -277,9 +277,13 @@ export default function TurnList({
   // Memoized: a fresh object here would re-render every mounted tool card on every
   // folded event, and the cards are the most expensive rows in the pane.
   const toolContextValue = useMemo(() => ({ sessionId: sessionId ?? '' }), [sessionId])
-  // A session action's button sits at its offer, and reads its state from the newest
-  // of its records, which arrive as later entries.
-  const newestActions = useMemo(() => newestSessionActions(Object.values(entries)), [entries])
+  // A session action's button sits where the agent wrote its id, or at its offer when
+  // it wrote none, and reads its state from the newest of its records, which arrive as
+  // later entries.
+  const sessionActions = useMemo(() => {
+    const all = Object.values(entries)
+    return { newest: newestSessionActions(all), placedInProse: sessionActionIdsPlacedInProse(all) }
+  }, [entries])
 
   const listRef = useRef<VListHandle>(null)
   const [atBottom, setAtBottom] = useState(true)
@@ -602,7 +606,7 @@ export default function TurnList({
           for `/sessions//tools/...` and quietly draw a card with no diff — which looks
           exactly like a tool that changed nothing. */}
       <ToolContext.Provider value={toolContextValue}>
-      <SessionActionsContext.Provider value={newestActions}>
+      <SessionActionsContext.Provider value={sessionActions}>
       <VList ref={listRef} className="bc-turns-body" onScroll={onScroll}>
         {more ? (
           <button key="__older__" className={styles.loadOlder} onClick={loadOlder}>

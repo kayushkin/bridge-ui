@@ -50,7 +50,8 @@ import { SplitDragHandle } from '../src/components/chat/SplitDragHandle.tsx'
 import {
   EVEN_SPLIT_GROW_UNITS, MINIMUM_PANE_PIXELS, measureSplitDragGeometry, splitGrowUnitsAfterDrag,
 } from '../src/components/chat/splitDragGeometry.ts'
-import { groupSignalsByRequest } from '@kayushkin/chat-core'
+import { groupSignalsByRequest, ChatContext } from '@kayushkin/chat-core'
+import { SessionActionEntry, SessionActionInText, SessionActionsContext } from '../src/components/chat/SessionActions.tsx'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -1637,6 +1638,38 @@ function signalGroupingChecks() {
     check('a derived signal cannot collide with a real request pair',
       groups.length === 2, `got ${groups.length}`)
   }
+}
+
+// --- session actions: a button placed in the agent's reply ------------------
+console.log('Session actions')
+{
+  const offered = {
+    action_id: 'session_action_000007', session_id: 'br_1', state: 'offered',
+    offer: { label: 'Deploy dash', type: 'deploy', repo_id: 15 },
+    command: 'run `bash -l -c ./deploy.sh` in /repos/dash (repo-store repo 15, dash)',
+    offered_at: '2026-09-28T12:00:00Z',
+  }
+  const inSession = (value, child) => h(ChatContext.Provider, { value: { api: {} } },
+    h(SessionActionsContext.Provider, { value }, child))
+  const known = { newest: new Map([[offered.action_id, offered]]), placedInProse: new Set([offered.action_id]) }
+
+  const placed = renderToStaticMarkup(inSession(known, h(SessionActionInText, { actionId: offered.action_id })))
+  check('an id this session offered is drawn as its button, labelled by the agent',
+    placed.includes('bc-session-action-button') && placed.includes('Deploy dash'), placed)
+  check('and it is phrasing content, so it can sit in a paragraph',
+    !/<(div|details|pre|p)[\s>]/.test(placed), placed)
+
+  const stranger = renderToStaticMarkup(inSession(known, h(SessionActionInText, { actionId: 'session_action_000099' })))
+  check('an id this session did not offer stays text: text cannot make a button',
+    stranger === 'session_action_000099', stranger)
+  const outside = renderToStaticMarkup(h(SessionActionInText, { actionId: offered.action_id }))
+  check('outside a session turn list an id stays text', outside === offered.action_id, outside)
+
+  const atOffer = renderToStaticMarkup(inSession(known, h(SessionActionEntry, { action: offered })))
+  check('an offer the agent placed in its reply draws nothing where it was offered', atOffer === '', atOffer)
+  const unplaced = renderToStaticMarkup(inSession({ ...known, placedInProse: new Set() }, h(SessionActionEntry, { action: offered })))
+  check('an offer the agent never placed is drawn where it was offered',
+    unplaced.includes('bc-session-action-button'), unplaced)
 }
 
 // --- no raw NUL bytes in source -------------------------------------------

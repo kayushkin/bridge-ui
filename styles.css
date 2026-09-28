@@ -5949,45 +5949,52 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-shared-file-preview-note { color: var(--text-muted); }
 .bc-shared-file-preview-error { color: var(--error, #e57373); }
 
-/* Session actions: a button the agent put in the chat, and the steps of its run
-   (src/components/chat/SessionActions.tsx). */
+/* Session actions: a button the agent put in the chat, drawn in its reply where it
+   wrote the action's id, and the steps of its run (src/components/chat/SessionActions.tsx).
+   Every part is a span or a button so it can sit inside a paragraph; the parts that need
+   a line of their own take the whole width of the wrapping row. */
 .bc-session-action {
-  display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding: 8px 10px;
-  border: 1px solid var(--bc-edge, var(--border)); border-radius: 8px; font-size: 0.9em;
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  max-width: 100%; vertical-align: middle; margin: 2px 0;
 }
-.bc-session-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .bc-session-action-button {
-  padding: 5px 12px; border-radius: 6px; border: 1px solid var(--accent);
+  padding: 3px 12px; border-radius: 6px; border: 1px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text);
   font: inherit; font-weight: 600; cursor: pointer;
 }
 .bc-session-action-button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 .bc-session-action-button:disabled { cursor: default; opacity: 0.7; }
+.bc-session-action-what {
+  padding: 0 2px; border: 0; background: transparent; color: var(--text-muted);
+  font: inherit; font-size: 0.8em; cursor: pointer;
+}
+.bc-session-action-what:hover { color: var(--text); text-decoration: underline; }
 .bc-session-action-confirm { display: inline-flex; align-items: center; gap: 6px; }
-.bc-session-action-confirm-question { color: var(--text-muted); }
+.bc-session-action-confirm-question { color: var(--text-muted); font-size: 0.9em; }
 .bc-session-action-confirm-yes, .bc-session-action-confirm-no {
-  padding: 3px 10px; border-radius: 6px; font: inherit; cursor: pointer;
+  padding: 2px 10px; border-radius: 6px; font: inherit; font-size: 0.9em; cursor: pointer;
   border: 1px solid var(--border); background: transparent; color: var(--text);
 }
 .bc-session-action-confirm-yes { border-color: var(--accent); background: var(--accent); color: var(--accent-on, var(--bg)); }
 .bc-session-action-confirm-yes:disabled, .bc-session-action-confirm-no:disabled { opacity: 0.6; cursor: default; }
-.bc-session-action-status { color: var(--text-muted); }
+.bc-session-action-status { color: var(--text-muted); font-size: 0.9em; }
 .bc-session-action-succeeded .bc-session-action-status { color: var(--success, #6fcf97); }
 .bc-session-action-failed .bc-session-action-status,
 .bc-session-action-outcome_unknown .bc-session-action-status { color: var(--error, #e57373); }
-.bc-session-action-detail > summary { cursor: pointer; color: var(--text-muted); user-select: none; font-size: 0.9em; }
-.bc-session-action-command {
-  margin-top: 4px; padding: 6px 8px; border-radius: 6px; font-family: var(--font-mono, monospace);
-  font-size: 0.9em; white-space: pre-wrap; overflow-wrap: anywhere;
+.bc-session-action-command, .bc-session-action-output {
+  display: block; flex-basis: 100%; padding: 6px 8px; border-radius: 6px;
+  font-family: var(--font-mono, monospace); font-size: 0.85em;
+  white-space: pre-wrap; overflow-wrap: anywhere;
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
-.bc-session-action-output {
-  max-height: 40vh; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px;
-  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85em;
-  border: 1px solid var(--bc-edge, var(--border));
+.bc-session-action-output { max-height: 40vh; overflow: auto; }
+.bc-session-action-outcome {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; flex-basis: 100%;
+  color: var(--text-muted); font-size: 0.85em;
 }
-.bc-session-action-outcome { color: var(--text-muted); }
-.bc-session-action-refusal, .bc-session-action-error { color: var(--error, #e57373); overflow-wrap: anywhere; }
+.bc-session-action-refusal, .bc-session-action-error {
+  display: block; flex-basis: 100%; color: var(--error, #e57373); overflow-wrap: anywhere; font-size: 0.9em;
+}
 .bc-session-action-step { margin: 2px 0; color: var(--text-muted); font-size: 0.85em; }
 .bc-session-action-step.bc-session-action-failed,
 .bc-session-action-step.bc-session-action-outcome_unknown { color: var(--error, #e57373); }
