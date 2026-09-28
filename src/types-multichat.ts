@@ -62,6 +62,9 @@ export interface MultichatMessage {
   media_url?: string
   media_mimetype?: string
   reply_to_event_id?: string
+  /** Set on an edit: the message it edits. The edit's body and formatting
+   *  are the edited content, so `foldEdits` can put them on the original. */
+  replaces_event_id?: string
   /** Reactions logged since multichat's reaction log began, grouped by key. */
   reactions?: MessageReactionGroup[] | null
 }

@@ -240,3 +240,66 @@ export function messageTimeLabel(timestamp: number, now: Date = new Date()): str
   const date = when.toLocaleDateString([], sameYear ? { month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' })
   return `${date} ${time}`
 }
+
+/** A message as the room shows it: an edited message carries its newest
+ *  edit's content and is marked edited, and the edit events themselves are
+ *  not shown. */
+export type ShownMessage = MultichatMessage & { edited: boolean }
+
+/** Folds edits into the messages they edit. multichat lists an edit as its
+ *  own event with `replaces_event_id` and the edited content; each original
+ *  takes the content of its newest edit and keeps its own id, time, sender and
+ *  reactions (a reaction points at the original). An edit whose original is
+ *  not loaded — it is on an older page — is shown by itself, marked edited. */
+export function foldEdits(messages: readonly MultichatMessage[]): ShownMessage[] {
+  const loadedIDs = new Set(messages.map(message => message.event_id))
+  const newestEditOf = new Map<string, MultichatMessage>()
+  for (const message of messages) {
+    const original = message.replaces_event_id
+    if (!original) continue
+    const known = newestEditOf.get(original)
+    if (!known || message.timestamp >= known.timestamp) newestEditOf.set(original, message)
+  }
+  const shown: ShownMessage[] = []
+  for (const message of messages) {
+    const original = message.replaces_event_id
+    if (original) {
+      if (!loadedIDs.has(original) && newestEditOf.get(original) === message) shown.push({ ...message, edited: true })
+      continue
+    }
+    const edit = newestEditOf.get(message.event_id)
+    if (!edit) {
+      shown.push({ ...message, edited: false })
+      continue
+    }
+    shown.push({
+      ...message,
+      body: edit.body,
+      msg_type: edit.msg_type,
+      format: edit.format,
+      formatted_body: edit.formatted_body,
+      media_url: edit.media_url,
+      media_mimetype: edit.media_mimetype,
+      edited: true,
+    })
+  }
+  return shown
+}
+
+/** A conversation's last message as one line of plain text for the list.
+ *  Discord bridges send the markdown source as the body, so the list showed
+ *  `### Jazz Night … **Going**`; this drops the markers and turns Discord's
+ *  `<:name:id>` emoji, `<#id>` channels and `<@id>` people into readable text. */
+export function conversationPreviewText(lastMessage: string): string {
+  return lastMessage
+    .replace(/<a?:(\w+):\d+>/g, ':$1:')
+    .replace(/<#\d+>/g, '#channel')
+    .replace(/<@&\d+>/g, '@role')
+    .replace(/<@!?\d+>/g, '@someone')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/(\*\*|__|~~|\|\|)/g, '')
+    .replace(/`+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}

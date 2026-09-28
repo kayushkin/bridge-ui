@@ -5,7 +5,7 @@ import {
   MESSAGE_PAGE_SIZE, contactListPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, conversationMessagesPath,
   conversationPlatforms, conversationSendPath, conversationTags, filterContacts, filterConversations, highlightSegments,
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
-  searchPath, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
+  searchPath, foldEdits, conversationPreviewText, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
 } from '../src/multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatTag, MultichatUnifiedContact,
@@ -220,5 +220,39 @@ describe('the Messages group in the registry', () => {
     expect(groupForPath('/messages/contacts', DEFAULT_BRIDGE_ROUTES)).toBe('messages')
     const conversations = navEntriesFor(config('/api/multichat'), flags).find(e => e.label === 'Conversations')
     expect(conversations?.end).toBe(true)
+  })
+})
+
+describe('foldEdits', () => {
+  const edited = (event_id: string, timestamp: number, body: string, replaces_event_id = ''): MultichatMessage => ({
+    event_id, sender: '@discord_1:x', body, msg_type: 'm.text', timestamp, replaces_event_id,
+    format: 'org.matrix.custom.html', formatted_body: `<p>${body}</p>`,
+    reactions: event_id === '$post' ? [{ key: '❤️', shortcode: '', count: 1, sender_display_names: ['Kai'] }] : [],
+  })
+  it('shows an edited message once, with its newest edit and its own reactions', () => {
+    const shown = foldEdits([
+      edited('$post', 1, 'Going (3)'),
+      edited('$other', 2, 'hi'),
+      edited('$edit2', 4, 'Going (5)', '$post'),
+      edited('$edit1', 3, 'Going (4)', '$post'),
+    ])
+    expect(shown.map(m => [m.event_id, m.body, m.edited])).toEqual([['$post', 'Going (5)', true], ['$other', 'hi', false]])
+    expect(shown[0].formatted_body).toBe('<p>Going (5)</p>')
+    expect(shown[0].timestamp).toBe(1)
+    expect(shown[0].reactions?.[0].key).toBe('❤️')
+  })
+  it('shows the newest edit alone when its original is on an older page', () => {
+    const shown = foldEdits([edited('$edit1', 3, 'Going (4)', '$post'), edited('$edit2', 4, 'Going (5)', '$post')])
+    expect(shown.map(m => [m.event_id, m.body, m.edited])).toEqual([['$edit2', 'Going (5)', true]])
+  })
+})
+
+describe('conversationPreviewText', () => {
+  it('reads Discord markdown as one plain line', () => {
+    expect(conversationPreviewText('### Jazz Night at Lo-Bar!\n📍 Lo-Bar <#1554134165673353317>\n✅ **Going** (5): <@123> <:laugh:1366054428427157645>'))
+      .toBe('Jazz Night at Lo-Bar! 📍 Lo-Bar #channel ✅ Going (5): @someone :laugh:')
+  })
+  it('leaves plain text alone', () => {
+    expect(conversationPreviewText('Sure, that sounds good')).toBe('Sure, that sounds good')
   })
 })

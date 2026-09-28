@@ -6,7 +6,7 @@ import { insertAtSelection } from '../../emojiPicker'
 import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messageBody'
 import {
   conversationMessagesPath, conversationPlatforms, conversationSendPath, conversationTags, filterConversations,
-  mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
+  conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
 } from '../../multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage, MultichatSendAnswer,
@@ -114,7 +114,7 @@ export function BridgeMessageConversations() {
                       {conversation.member_count > 2 && <span className={styles.muted}>{conversation.member_count} members</span>}
                       <TagChips tags={conversationTags(conversation, tagMap)} />
                     </span>
-                    {conversation.last_message && <span className={styles.preview}>{conversation.last_message}</span>}
+                    {conversation.last_message && <span className={styles.preview}>{conversationPreviewText(conversation.last_message)}</span>}
                   </button>
                 </li>
               ))}
@@ -270,12 +270,13 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
           </button>
         )}
         {!messages ? (error ? null : <div className={styles.empty}>Loading…</div>) : (
-          messages.length === 0 ? <div className={styles.empty}>No messages.</div> : messages.map(message => (
+          messages.length === 0 ? <div className={styles.empty}>No messages.</div> : foldEdits(messages).map(message => (
             <div key={message.event_id} data-event-id={message.event_id}
               className={`${styles.message} ${message.is_me ? styles.messageMine : ''}`}>
               <div className={styles.messageHead}>
                 <span className={styles.sender} title={message.sender}>{message.is_me ? 'You' : message.sender_name || message.sender}</span>
                 <span className={styles.time}>{messageTimeLabel(message.timestamp)}</span>
+                {message.edited && <span className={styles.time}>edited</span>}
               </div>
               <div className={styles.messageBody}>
                 <MessageContent message={message} messageType={message.msg_type} discordNames={discordNames} />
