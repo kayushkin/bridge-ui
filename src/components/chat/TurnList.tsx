@@ -14,6 +14,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTurns, remarkRefChips, useResolvableIdPatterns, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
+import { FileMentionPlaceContext } from './FileRefChip'
 import type { Entry, SessionAction, SessionFile, Turn } from '@kayushkin/chat-core'
 import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
 import { isToolRunning, toToolEvent } from './toolEvents'
@@ -1374,6 +1375,7 @@ function SegmentContent({
                 text={it.prose}
                 markdown={markdown}
                 onActivateSessionRef={onActivateSessionRef}
+                writtenAt={it.ts}
               />
             )}
             {it.errors.map((e) => (
@@ -1499,11 +1501,17 @@ const ProseBody = memo(function ProseBody({
   text,
   markdown,
   onActivateSessionRef,
+  writtenAt,
 }: {
   text: string
   markdown: boolean
   onActivateSessionRef: (kind: string, refId: string) => void
+  /** When the message was written; a file chip in it says so when the file changed
+   *  after this. */
+  writtenAt: string
 }) {
+  const { sessionId } = useToolContext()
+  const fileMentionPlace = useMemo(() => ({ sessionId, writtenAt }), [sessionId, writtenAt])
   const components = useMemo(
     () =>
       ({
@@ -1520,9 +1528,11 @@ const ProseBody = memo(function ProseBody({
   if (!markdown) return <div className="bc-turns-text">{text}</div>
   return (
     <div className={`bc-turns-text bc-turns-md ${styles.vibeProse}`}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
-        {text}
-      </ReactMarkdown>
+      <FileMentionPlaceContext.Provider value={fileMentionPlace}>
+        <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+          {text}
+        </ReactMarkdown>
+      </FileMentionPlaceContext.Provider>
     </div>
   )
 })
@@ -1557,7 +1567,7 @@ function EntryBody({
     case 'text':
       return (
         <>
-          <ProseBody text={entry.text ?? ''} markdown={markdown} onActivateSessionRef={onActivateSessionRef} />
+          <ProseBody text={entry.text ?? ''} markdown={markdown} onActivateSessionRef={onActivateSessionRef} writtenAt={entry.ts} />
           {entry.recovered && (
             <span className={styles.recoveredMarker}>↻ recovered after stream interruption</span>
           )}
@@ -1621,13 +1631,13 @@ function EntryBody({
       // never its raw JSON envelope. The Raw audit view shows the envelope.
       if (view === 'turns') {
         return !turnHasText && entry.text ? (
-          <ProseBody text={entry.text} markdown={markdown} onActivateSessionRef={onActivateSessionRef} />
+          <ProseBody text={entry.text} markdown={markdown} onActivateSessionRef={onActivateSessionRef} writtenAt={entry.ts} />
         ) : null
       }
       return (
         <>
           {entry.text ? (
-            <ProseBody text={entry.text} markdown={markdown} onActivateSessionRef={onActivateSessionRef} />
+            <ProseBody text={entry.text} markdown={markdown} onActivateSessionRef={onActivateSessionRef} writtenAt={entry.ts} />
           ) : null}
           {entry.raw !== undefined && <CappedText className={styles.entryPre} text={stringify(entry.raw)} />}
         </>

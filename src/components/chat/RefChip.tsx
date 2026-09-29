@@ -15,6 +15,7 @@ import {
 } from '@kayushkin/chat-core';
 import { SessionSignals } from './SessionSignals';
 import { SessionActionInText } from './SessionActions';
+import { FileRefChip } from './FileRefChip';
 
 /** Props for the {@link RefChip} renderer. When used as a ReactMarkdown custom
  *  component the mdast hProperties (`kind` / `refId`) arrive as props; rehype may
@@ -75,6 +76,10 @@ export function RefChip(props: RefChipProps): JSX.Element {
     return (
       <SessionRefChip refId={refId} className={props.className} onActivate={props.onActivate} />
     );
+  }
+  if (kind === 'file') {
+    // A code span naming a file; plain code unless the session's tools named it.
+    return <FileRefChip mentionText={refId} className={props.className} />;
   }
   if (kind === 'action') {
     // A button this session's agent offered and placed here by writing its id.
