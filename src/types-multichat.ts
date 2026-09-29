@@ -33,12 +33,24 @@ export interface MultichatConversation {
   topic?: string
   avatar_url?: string
   member_count: number
-  /** Every joined member but us; the keys of the contact tag map. */
-  member_ids?: string[]
+  /** Every joined member but us and the bridge bots; their user ids are the
+   *  keys of the contact tag map. */
+  members?: MultichatConversationMember[]
+  /** The room has no name of its own, so `name` is its members' display
+   *  names joined with ", ". */
+  named_after_members?: boolean
   platform?: string
   /** Unix milliseconds; 0 when the room has no message yet. */
   last_activity: number
   last_message?: string
+}
+
+/** One person in a room — matrix.ConversationMember. `display_name` is the
+ *  one their member event carries in that room, without the bridge's suffix;
+ *  absent when it has none. */
+export interface MultichatConversationMember {
+  user_id: string
+  display_name?: string
 }
 
 /** One message in a room — matrix.Message. `msg_type` is Matrix's `msgtype`

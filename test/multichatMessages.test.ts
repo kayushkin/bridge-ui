@@ -3,7 +3,7 @@ import { DEFAULT_BRIDGE_ROUTES, type BridgeConfig } from '../src/context'
 import { groupForPath, navEntriesFor } from '../src/pages'
 import {
   MESSAGE_PAGE_SIZE, contactListPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, conversationMessagesPath,
-  conversationPlatforms, conversationSendPath, conversationTags, filterContacts, filterConversations, highlightSegments,
+  conversationPlatforms, conversationSendPath, conversationShownName, conversationTags, filterContacts, filterConversations, highlightSegments,
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
   searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
 } from '../src/multichatMessages'
@@ -82,7 +82,7 @@ const tag = (id: number, name: string): MultichatTag => ({ id, name, color: '#f5
 
 describe('the conversation list', () => {
   const conversations = [
-    conversation('!1', 'Alvaro Lopez', { platform: 'whatsapp', last_message: 'Invoice attached', member_ids: ['@whatsapp_1', '@meta_1'] }),
+    conversation('!1', 'Alvaro Lopez', { platform: 'whatsapp', last_message: 'Invoice attached', members: [{ user_id: '@whatsapp_1', display_name: 'Alvaro Lopez' }, { user_id: '@meta_1', display_name: 'Ana Ruiz' }] }),
     conversation('!2', '#food', { platform: 'discord', last_message: 'Where is this?' }),
     conversation('!3', 'No platform yet'),
   ]
@@ -96,6 +96,21 @@ describe('the conversation list', () => {
     expect(filterConversations(conversations, { platform: '', text: 'INVOICE' }).map(c => c.room_id)).toEqual(['!1'])
     expect(filterConversations(conversations, { platform: '', text: ' food ' }).map(c => c.room_id)).toEqual(['!2'])
     expect(filterConversations(conversations, { platform: '', text: '' })).toHaveLength(3)
+  })
+
+  it("matches a member's name even when the room name leaves it out", () => {
+    expect(filterConversations(conversations, { platform: '', text: 'ruiz' }).map(c => c.room_id)).toEqual(['!1'])
+  })
+
+  it('shows a room named after its members by the first three and a count of the rest', () => {
+    const member = (n: number) => ({ user_id: `@meta_${n}`, display_name: `Person ${n}` })
+    const named = (count: number) => conversation('!g', 'unused', {
+      named_after_members: true, members: Array.from({ length: count }, (_, i) => member(i + 1)),
+    })
+    expect(conversationShownName({ ...named(3), name: 'Person 1, Person 2, Person 3' })).toBe('Person 1, Person 2, Person 3')
+    expect(conversationShownName(named(4))).toBe('Person 1, Person 2, Person 3 and 1 other')
+    expect(conversationShownName(named(6))).toBe('Person 1, Person 2, Person 3 and 3 others')
+    expect(conversationShownName({ ...named(6), named_after_members: false, name: 'Book club' })).toBe('Book club')
   })
 
   it("gathers a room's tags from its members' identities, once each, by name", () => {

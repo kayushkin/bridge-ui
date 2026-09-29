@@ -5,7 +5,7 @@ import { bridgedChannelsOf, DISCORD_PLATFORM } from '../../discordLog'
 import { insertAtSelection } from '../../emojiPicker'
 import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messageBody'
 import {
-  conversationMessagesPath, conversationPlatforms, conversationSendPath, conversationTags, filterConversations,
+  conversationMessagesPath, conversationPlatforms, conversationSendPath, conversationShownName, conversationTags, filterConversations,
   conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
   reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
 } from '../../multichatMessages'
@@ -92,7 +92,7 @@ export function BridgeMessageConversations() {
         <div className={styles.columns}>
           <div className={styles.listColumn}>
             <div className={styles.filters}>
-              <input className={styles.input} type="search" value={text} placeholder="Filter by name or last message"
+              <input className={styles.input} type="search" value={text} placeholder="Filter by name, member or last message"
                 onChange={e => setText(e.target.value)} />
               <select className={styles.input} value={platform} onChange={e => setPlatform(e.target.value)}>
                 <option value="">Every app ({conversations.length})</option>
@@ -109,7 +109,7 @@ export function BridgeMessageConversations() {
                     className={`${styles.row} ${styles.rowPick} ${conversation.room_id === roomID ? styles.rowSelected : ''}`}
                     onClick={() => pick(conversation.room_id)}>
                     <span className={styles.rowHead}>
-                      <span className={styles.name}>{conversation.name}</span>
+                      <span className={styles.name} title={conversation.name}>{conversationShownName(conversation)}</span>
                       {conversation.last_activity > 0 && <span className={styles.time}>{messageTimeLabel(conversation.last_activity)}</span>}
                     </span>
                     <span className={styles.rowMeta}>
@@ -299,9 +299,9 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
   return (
     <div className={styles.thread}>
       <div className={styles.threadBar}>
-        <span className={styles.name}>{conversation.name}</span>
+        <span className={styles.name} title={conversation.name}>{conversationShownName(conversation)}</span>
         {conversation.platform && <span className={styles.platform}>{conversation.platform}</span>}
-        <span className={styles.muted}>{conversation.member_count} members</span>
+        <MemberList conversation={conversation} />
         <code className={styles.roomID} title="Matrix room id">{roomID}</code>
       </div>
       {error && <pre className={styles.error}>{error}</pre>}
@@ -356,6 +356,24 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
       {sendError && <pre className={styles.error}>{sendError}</pre>}
       {reactionError && <pre className={styles.error}>{reactionError}</pre>}
     </div>
+  )
+}
+
+/** The room's member count, which opens to list every member but us: their
+ *  display name, and their Matrix user id on hover. */
+function MemberList({ conversation }: { conversation: MultichatConversation }) {
+  const members = conversation.members ?? []
+  const count = <>{conversation.member_count} members</>
+  if (members.length === 0) return <span className={styles.muted}>{count}</span>
+  return (
+    <details className={styles.memberList}>
+      <summary className={styles.muted}>{count}</summary>
+      <ul>
+        {members.map(member => (
+          <li key={member.user_id} title={member.user_id}>{member.display_name || <code>{member.user_id}</code>}</li>
+        ))}
+      </ul>
+    </details>
   )
 }
 

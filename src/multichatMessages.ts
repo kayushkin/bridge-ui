@@ -123,7 +123,8 @@ export function conversationPlatforms(conversations: readonly MultichatConversat
 export interface ConversationFilter {
   /** Empty means every app. */
   platform: string
-  /** Matched, in any case, against the room name and its last message. */
+  /** Matched, in any case, against the room name, its members' names and its
+   *  last message. */
   text: string
 }
 
@@ -132,14 +133,31 @@ export function filterConversations(conversations: readonly MultichatConversatio
   return conversations.filter(conversation => {
     if (filter.platform && conversation.platform !== filter.platform) return false
     if (!text) return true
-    return conversation.name.toLowerCase().includes(text) || (conversation.last_message ?? '').toLowerCase().includes(text)
+    return conversation.name.toLowerCase().includes(text)
+      || (conversation.members ?? []).some(member => (member.display_name ?? '').toLowerCase().includes(text))
+      || (conversation.last_message ?? '').toLowerCase().includes(text)
   })
+}
+
+/** How many members a room named after its members names before it counts
+ *  the rest. */
+export const NAMED_MEMBERS_SHOWN = 3
+
+/** The name to show for a room. A room named after more than
+ *  NAMED_MEMBERS_SHOWN members shows the first ones and counts the rest, as
+ *  Messenger does; any other room shows its name as multichat gives it. */
+export function conversationShownName(conversation: MultichatConversation): string {
+  if (!conversation.named_after_members) return conversation.name
+  const names = (conversation.members ?? []).flatMap(member => member.display_name ? [member.display_name] : [])
+  if (names.length <= NAMED_MEMBERS_SHOWN) return conversation.name
+  const others = names.length - NAMED_MEMBERS_SHOWN
+  return `${names.slice(0, NAMED_MEMBERS_SHOWN).join(', ')} and ${others} ${others === 1 ? 'other' : 'others'}`
 }
 
 /** The tags on the people in a room: every tag on any member's identity, once
  *  each, by name. */
 export function conversationTags(conversation: MultichatConversation, tagMap: MultichatContactTagMap): MultichatTag[] {
-  return uniqueTagsSorted((conversation.member_ids ?? []).flatMap(userID => tagMap[userID] ?? []))
+  return uniqueTagsSorted((conversation.members ?? []).flatMap(member => tagMap[member.user_id] ?? []))
 }
 
 function uniqueTagsSorted(tags: readonly MultichatTag[]): MultichatTag[] {
