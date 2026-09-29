@@ -7,6 +7,11 @@ import { Bridge } from '@kayushkin/bridge-ui'
 // lets bridge-ui render correctly with no host app providing a palette.
 import '../theme.css'
 import '../styles.css'
+import '../zine.css'
+
+// `?theme=zine` or `?theme=light` picks a skin; with neither, theme.css's dark one.
+const theme = new URLSearchParams(location.search).get('theme')
+if (theme) document.documentElement.dataset.theme = theme
 
 // Auth'd fetch — standalone has no cookie/token layer of its own, so we just
 // forward credentials. Point it at a real bridge by setting VITE_BRIDGE_BASE

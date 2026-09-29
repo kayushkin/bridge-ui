@@ -16,7 +16,7 @@ Peer dependencies (host app must provide):
 - `react-dom` ≥ 18
 - `react-router-dom` ≥ 6
 
-The library is ESM-only (`"type": "module"`) and ships two stylesheets:
+The library is ESM-only (`"type": "module"`) and ships three stylesheets:
 
 - `@kayushkin/bridge-ui/styles.css` — component styles (always import this). It only
   *consumes* theme variables (`--bg`, `--bg-surface`, `--border`, `--text`, `--accent`,
@@ -26,6 +26,13 @@ The library is ESM-only (`"type": "module"`) and ships two stylesheets:
   defaults. Import it to get a working look with zero config. Hosts that already define
   their own palette (dash does) should **skip** it and set the same variables at
   `:root` to override.
+- `@kayushkin/bridge-ui/zine.css` — **optional** second skin: a two-ink risograph print
+  (cream paper, navy ink, orange and pink, halftone dots) with a painted crab mascot. Import
+  it after `styles.css` and put `data-theme="zine"` on a parent element. It sets the same
+  variables, loads its own fonts, and draws its pictures from `zine/` in this package, so a
+  bundler that rebases CSS `url()`s (Vite does) needs nothing more. A host page title gets
+  its pink headline by carrying class `page-title`; a host can use a picture itself with
+  `import star from '@kayushkin/bridge-ui/zine/star.png'`.
 
 ## Usage
 
@@ -188,14 +195,15 @@ npm run build    # tsc → dist/, then scripts/copy-css.mjs puts every src/**/*.
 npm run dev      # tsc --watch
 ```
 
-`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. tsc emits no CSS, so the build copies every stylesheet under `src/` into `dist/` at the same path — the chat's `Chat.module.css` included — and the consumer's bundler resolves the relative import as it would in a source tree. The published package contains `dist/`, `styles.css`, and `theme.css` only (`files` field in `package.json`). `dist/` is not committed: `npm install` builds it (`prepare`), and a host's deploy rebuilds every linked library before bundling.
+`tsconfig.json` emits ESM (`module: ESNext`) with declarations and source maps into `dist/`. tsc emits no CSS, so the build copies every stylesheet under `src/` into `dist/` at the same path — the chat's `Chat.module.css` included — and the consumer's bundler resolves the relative import as it would in a source tree. The published package contains `dist/`, `styles.css`, `theme.css`, `zine.css` and the `zine/` pictures only (`files` field in `package.json`). `dist/` is not committed: `npm install` builds it (`prepare`), and a host's deploy rebuilds every linked library before bundling.
 
 ## Standalone launcher
 
 A minimal Vite app under `standalone/` runs the full UI on its own — useful for
 developing the library or driving a bare llm-bridge-server without a host app. It mounts
 `<Bridge>` at the root against `src/` directly (no prior build needed) and imports both
-`theme.css` and `styles.css`, so it's fully styled out of the box.
+`theme.css`, `styles.css` and `zine.css`, so it's fully styled out of the box; add
+`?theme=zine` (or `?theme=light`) to the URL to switch skins.
 
 ```bash
 npm install

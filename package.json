@@ -10,12 +10,16 @@
       "default": "./dist/index.js"
     },
     "./styles.css": "./styles.css",
-    "./theme.css": "./theme.css"
+    "./theme.css": "./theme.css",
+    "./zine.css": "./zine.css",
+    "./zine/*": "./zine/*"
   },
   "files": [
     "dist",
     "styles.css",
-    "theme.css"
+    "theme.css",
+    "zine.css",
+    "zine"
   ],
   "scripts": {
     "prepare": "npm run build",
@@ -27,6 +31,9 @@
     "check": "esbuild scripts/render-check.mjs --bundle --platform=node --format=cjs --alias:react=./node_modules/react --alias:react-dom=./node_modules/react-dom --outfile=node_modules/.cache/bridge-ui-render-check.cjs --log-level=error && node node_modules/.cache/bridge-ui-render-check.cjs"
   },
   "dependencies": {
+    "@fontsource/archivo-black": "^5.3.0",
+    "@fontsource/nunito": "^5.3.0",
+    "@fontsource/space-mono": "^5.3.0",
     "@kayushkin/bundle-store-types": "file:../bundle-store/ts",
     "@kayushkin/chat-core": "file:../chat-core",
     "@kayushkin/grant-store-types": "file:../grant-store/ts",
