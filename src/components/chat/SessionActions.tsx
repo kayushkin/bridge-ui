@@ -1,13 +1,17 @@
 import { createContext, useContext, useState } from 'react'
 import { useChatContext, type SessionAction } from '@kayushkin/chat-core'
 import {
+  SESSION_ACTION_REVIEW_LABEL,
   SESSION_ACTION_TYPE_LABEL,
+  sessionActionCostText,
   sessionActionIsConfirmable,
+  sessionActionOutputIsMarkdown,
   sessionActionRunBy,
   sessionActionStatusText,
   sessionActionStepText,
 } from '../../sessionActionView'
 import { RefChip } from './RefChip'
+import { ProducerMarkdown } from './producerReferences'
 
 /**
  * Session actions in the chat: a button the agent offered, and a line for each step
@@ -34,10 +38,9 @@ export interface SessionActionsInSession {
 
 /** Empty outside a session's turn list, so an id written anywhere else — a card
  *  panel, another session's text — draws no button. */
-export const SessionActionsContext = createContext<SessionActionsInSession>({
-  newest: new Map(),
-  placedInProse: new Set(),
-})
+const NO_SESSION_ACTIONS: SessionActionsInSession = { newest: new Map(), placedInProse: new Set() }
+
+export const SessionActionsContext = createContext<SessionActionsInSession>(NO_SESSION_ACTIONS)
 
 /** One action entry: the button where it was offered unless the agent placed it in
  *  its reply, and a line for every later step. */
@@ -78,6 +81,8 @@ function SessionActionButton({ action }: { action: SessionAction }) {
     }
   }
 
+  const costText = sessionActionCostText(action)
+  const review = action.review
   return (
     <span className={`bc-session-action bc-session-action-${action.state}`} data-action-id={action.action_id}>
       <button
@@ -89,6 +94,12 @@ function SessionActionButton({ action }: { action: SessionAction }) {
       >
         {action.offer.label}
       </button>
+      {costText && <span className="bc-session-action-cost">{costText}</span>}
+      {review && (
+        <span className={`bc-session-action-review bc-session-action-review-${review.verdict}`} title={review.reasons}>
+          {SESSION_ACTION_REVIEW_LABEL[review.verdict]}
+        </span>
+      )}
       <button
         type="button"
         className="bc-session-action-what"
@@ -116,29 +127,42 @@ function SessionActionButton({ action }: { action: SessionAction }) {
           </button>
         </span>
       )}
-      {!confirmable && <span className="bc-session-action-status">{sessionActionStatusText(action)}</span>}
+      {action.state !== 'offered' && <span className="bc-session-action-status">{sessionActionStatusText(action)}</span>}
       {showingCommand && <code className="bc-session-action-command">{action.command}</code>}
+      {review && (showingCommand || review.verdict !== 'approve') && (
+        <span className={`bc-session-action-review-reasons bc-session-action-review-${review.verdict}`}>
+          {review.verdict === 'reject' ? 'This command cannot be run. ' : ''}
+          {review.reasons} <span className="bc-session-action-review-model">— {review.model}</span>
+        </span>
+      )}
       {refusal && <span className="bc-session-action-refusal">{refusal}</span>}
-      {!confirmable && <SessionActionOutcome action={action} />}
+      {action.state !== 'offered' && <SessionActionOutcome action={action} />}
     </span>
   )
 }
 
-/** Who ran it, and what came back. */
+/** Actions whose output is what the person pressed the button for, shown open; the
+ *  rest keep their output — a deploy log, the scheduler's reply — behind a toggle. */
+const OUTPUT_IS_THE_RESULT: ReadonlySet<SessionAction['offer']['type']> = new Set(['run_command', 'model_call', 'background_agent'])
+
+/** Who ran it, the session it started, and what came back. */
 function SessionActionOutcome({ action }: { action: SessionAction }) {
   const [showingOutput, setShowingOutput] = useState(false)
+  const outputIsTheResult = OUTPUT_IS_THE_RESULT.has(action.offer.type)
   return (
     <span className="bc-session-action-outcome">
       <span>
         Confirmed by <code>{sessionActionRunBy(action)}</code>
         {action.result_session_id && (
           <>
-            {' '}· session <RefChip kind="session" refId={action.result_session_id} />
+            {' '}· {action.state === 'running' ? 'working in' : 'session'}{' '}
+            <RefChip kind="session" refId={action.result_session_id} />
           </>
         )}
       </span>
       {action.error && <span className="bc-session-action-error">{action.error}</span>}
-      {action.output && (
+      {action.output && outputIsTheResult && <SessionActionResult action={action} />}
+      {action.output && !outputIsTheResult && (
         <>
           <button
             type="button"
@@ -151,6 +175,22 @@ function SessionActionOutcome({ action }: { action: SessionAction }) {
           {showingOutput && <span className="bc-session-action-output">{action.output}</span>}
         </>
       )}
+    </span>
+  )
+}
+
+/** The output as the result the button was pressed for. Markdown goes through the same
+ *  renderer as the orchestrator's prose, with ids as chips — except a session action
+ *  id, which stays text: output is not the agent's reply, so it places no button. */
+function SessionActionResult({ action }: { action: SessionAction }) {
+  if (!sessionActionOutputIsMarkdown(action)) {
+    return <span className="bc-session-action-output">{action.output}</span>
+  }
+  return (
+    <span className="bc-session-action-result">
+      <SessionActionsContext.Provider value={NO_SESSION_ACTIONS}>
+        <ProducerMarkdown text={action.output ?? ''} />
+      </SessionActionsContext.Provider>
     </span>
   )
 }

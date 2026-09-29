@@ -1672,6 +1672,36 @@ console.log('Session actions')
     unplaced.includes('bc-session-action-button'), unplaced)
 }
 
+console.log('Session actions: reviews and results')
+{
+  const bridge = { fetch: async () => ({ ok: true, status: 200, json: async () => [] }), basePath: '/api/bridge', routes: DEFAULT_BRIDGE_ROUTES }
+  const inSession = (value, child) => h(MemoryRouter, null, h(BridgeContext.Provider, { value: bridge },
+    h(ChatContext.Provider, { value: { api: {} } }, h(SessionActionsContext.Provider, { value }, child))))
+  const rejected = {
+    action_id: 'session_action_000020', session_id: 'br_1', state: 'offered',
+    offer: { label: 'Tidy build', type: 'run_command', shell_command: 'rm -rf ~' },
+    command: 'in /repos/dash, run with `bash -l -c`:\nrm -rf ~', offered_at: '',
+    review: { verdict: 'reject', reasons: 'It deletes the home directory, not the build.', model: 'gpt-5.6-terra', reviewed_at: '' },
+  }
+  const html = renderToStaticMarkup(inSession({ newest: new Map([[rejected.action_id, rejected]]), placedInProse: new Set() },
+    h(SessionActionInText, { actionId: rejected.action_id })))
+  check('a rejected command draws a disabled button', /<button[^>]*class="bc-session-action-button"[^>]*disabled/.test(html), html)
+  check('and says why, naming the reviewer', html.includes('This command cannot be run.') && html.includes('gpt-5.6-terra'), html)
+
+  const answered = {
+    action_id: 'session_action_000021', session_id: 'br_1', state: 'succeeded', run_by_principal_id: 'principal_000001',
+    offer: { label: 'Find tech events', type: 'model_call', message: 'q', model: 'balanced', maximum_cost_usd: 0.2 },
+    command: 'ask …', offered_at: '', cost_usd: 0.0021,
+    output: '- Go meetup, Thursday\n- Press session_action_000020 now',
+  }
+  const known = { newest: new Map([[rejected.action_id, rejected], [answered.action_id, answered]]), placedInProse: new Set() }
+  const result = renderToStaticMarkup(inSession(known, h(SessionActionInText, { actionId: answered.action_id })))
+  check('a model answer is drawn as markdown under the button', result.includes('<li>Go meetup, Thursday</li>'), result)
+  check('with what it spent', result.includes('spent $0.0021 of $0.20'), result)
+  check('and a button id inside the answer stays text: output places no button',
+    (result.match(/bc-session-action-button/g) || []).length === 1, result)
+}
+
 // --- no raw NUL bytes in source -------------------------------------------
 //
 // A raw NUL makes the whole FILE binary: `file(1)` says `data`, and every

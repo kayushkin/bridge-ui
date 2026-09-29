@@ -10,14 +10,42 @@ import type { SessionAction, SessionActionType } from '@kayushkin/chat-core'
 export const SESSION_ACTION_TYPE_LABEL: Record<SessionActionType, string> = {
   deploy: 'Deploy',
   run_scheduler_job: 'Run a scheduler job',
+  run_command: 'Run a command',
+  model_call: 'Ask a model',
+  background_agent: 'Start a background agent',
   send_message: 'Send a message here',
   fork_and_send: 'Fork this session and send',
   new_session_and_send: 'Start a new session and send',
 }
 
-/** The button can be pressed only while the action waits for its one run. */
+/** The button can be pressed only while the action waits for its one run, and never
+ *  when its reviewer rejected its command. */
 export function sessionActionIsConfirmable(action: SessionAction): boolean {
-  return action.state === 'offered'
+  return action.state === 'offered' && action.review?.verdict !== 'reject'
+}
+
+/** Whether the output is drawn as markdown: a model's answer always is, a command's
+ *  when the agent said so. */
+export function sessionActionOutputIsMarkdown(action: SessionAction): boolean {
+  if (action.offer.type === 'model_call' || action.offer.type === 'background_agent') return true
+  return action.offer.result_format === 'markdown'
+}
+
+/** What the button may spend and, once it ran, what it did spend, e.g. "up to $0.20" or
+ *  "spent $0.0021 of $0.20". Empty for an action that spends nothing. */
+export function sessionActionCostText(action: SessionAction): string {
+  const limit = action.offer.maximum_cost_usd
+  if (!limit) return ''
+  const limitText = `$${limit.toFixed(2)}`
+  if (action.cost_usd) return `spent $${action.cost_usd.toFixed(4)} of ${limitText}`
+  return `up to ${limitText}`
+}
+
+/** The reviewer's verdict in a word, for the badge beside the button. */
+export const SESSION_ACTION_REVIEW_LABEL: Record<NonNullable<SessionAction['review']>['verdict'], string> = {
+  approve: 'Reviewed: fine',
+  caution: 'Reviewed: read first',
+  reject: 'Reviewed: rejected',
 }
 
 /** Who ran it: principal-store's id of the person, or the internal service when no

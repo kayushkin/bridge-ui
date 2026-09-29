@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionAction } from '@kayushkin/chat-core'
 import {
+  sessionActionCostText,
   sessionActionIsConfirmable,
+  sessionActionOutputIsMarkdown,
   sessionActionRunBy,
   sessionActionStatusText,
   sessionActionStepText,
@@ -39,5 +41,27 @@ describe('a session action in the chat', () => {
       'Deploy dash — failed: deploy.sh failed: exit status 1',
     )
     expect(sessionActionStatusText(action({ state: 'outcome_unknown' }))).toBe('Outcome unknown')
+  })
+})
+
+describe('the richer kinds of button', () => {
+  it('cannot be pressed when its reviewer rejected its command', () => {
+    const command = action({ offer: { label: 'Tidy', type: 'run_command', shell_command: 'rm -rf build' } })
+    expect(sessionActionIsConfirmable({ ...command, review: { verdict: 'caution', reasons: 'deletes build', model: 'm', reviewed_at: '' } })).toBe(true)
+    expect(sessionActionIsConfirmable({ ...command, review: { verdict: 'reject', reasons: 'deletes too much', model: 'm', reviewed_at: '' } })).toBe(false)
+  })
+
+  it('draws a model answer as markdown, and a command output only when the agent said so', () => {
+    expect(sessionActionOutputIsMarkdown(action({ offer: { label: 'Ask', type: 'model_call', message: 'q', model: 'm', maximum_cost_usd: 0.2 } }))).toBe(true)
+    expect(sessionActionOutputIsMarkdown(action({ offer: { label: 'Go', type: 'background_agent', message: 'q', maximum_cost_usd: 2 } }))).toBe(true)
+    expect(sessionActionOutputIsMarkdown(action({ offer: { label: 'List', type: 'run_command', shell_command: 'ls' } }))).toBe(false)
+    expect(sessionActionOutputIsMarkdown(action({ offer: { label: 'List', type: 'run_command', shell_command: 'ls', result_format: 'markdown' } }))).toBe(true)
+  })
+
+  it('says what it may spend, then what it spent', () => {
+    const ask = action({ offer: { label: 'Ask', type: 'model_call', message: 'q', model: 'm', maximum_cost_usd: 0.2 } })
+    expect(sessionActionCostText(ask)).toBe('up to $0.20')
+    expect(sessionActionCostText({ ...ask, state: 'succeeded', cost_usd: 0.0021 })).toBe('spent $0.0021 of $0.20')
+    expect(sessionActionCostText(action())).toBe('')
   })
 })

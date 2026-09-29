@@ -6175,6 +6175,21 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-session-action-refusal, .bc-session-action-error {
   display: block; flex-basis: 100%; color: var(--error, #e57373); overflow-wrap: anywhere; font-size: 0.9em;
 }
+.bc-session-action-cost { color: var(--text-muted); font-size: 0.8em; }
+.bc-session-action-review {
+  padding: 0 6px; border-radius: 999px; font-size: 0.75em; border: 1px solid var(--border); color: var(--text-muted);
+}
+.bc-session-action-review.bc-session-action-review-approve { border-color: var(--success, #6fcf97); color: var(--success, #6fcf97); }
+.bc-session-action-review.bc-session-action-review-caution { border-color: var(--warning, #cfcf6f); color: var(--warning, #cfcf6f); }
+.bc-session-action-review.bc-session-action-review-reject { border-color: var(--error, #e57373); color: var(--error, #e57373); }
+.bc-session-action-review-reasons { display: block; flex-basis: 100%; font-size: 0.85em; color: var(--text-muted); }
+.bc-session-action-review-reasons.bc-session-action-review-caution { color: var(--warning, #cfcf6f); }
+.bc-session-action-review-reasons.bc-session-action-review-reject { color: var(--error, #e57373); }
+.bc-session-action-review-model { opacity: 0.7; }
+.bc-session-action-result {
+  display: block; flex-basis: 100%; max-height: 60vh; overflow: auto; padding: 6px 10px; border-radius: 6px;
+  border: 1px solid var(--bc-edge, var(--border)); font-size: 0.95em;
+}
 .bc-session-action-step { margin: 2px 0; color: var(--text-muted); font-size: 0.85em; }
 .bc-session-action-step.bc-session-action-failed,
 .bc-session-action-step.bc-session-action-outcome_unknown { color: var(--error, #e57373); }
