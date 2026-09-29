@@ -693,13 +693,15 @@
 [data-theme="zine"] .bc-new-session-btn { border-radius: 4px 0 0 4px; border-right-width: 1px; }
 [data-theme="zine"] .bc-new-session-caret-btn { border-radius: 0 4px 4px 0; border-left: 1px dashed var(--zine-cream); background: var(--zine-orange-dark); }
 [data-theme="zine"] .bc-new-session-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--zine-ink); }
-[data-theme="zine"] .bc-sidebar-collapse-btn {
+[data-theme="zine"] .bc-sidebar-collapse-btn,
+[data-theme="zine"] .bc-sidebar-page-btn {
   border: 2px solid var(--zine-ink);
   border-radius: 3px;
   background: var(--zine-cream);
   color: var(--zine-ink);
   box-shadow: 2px 2px 0 var(--zine-ink);
 }
+[data-theme="zine"] .bc-sidebar-page-btn-selected { background: var(--zine-ink); color: var(--zine-cream); }
 [data-theme="zine"] .bc-producer {
   border: 2px solid var(--zine-ink);
   border-radius: 3px;

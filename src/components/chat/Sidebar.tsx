@@ -896,6 +896,31 @@ export default function Sidebar({
         {/* Same slot bridge-ui gives it (`SessionList.tsx:463`): the last child of
             `bc-new-session`, which is a flex row whose `bc-new-session-wrap` takes the
             remaining width, so the button sits hard against the sidebar's right edge. */}
+        {/* The work graph and projects pages, as small buttons beside "+ New" rather
+            than rows styled like sessions. Each is drawn only when the host proxies its
+            store. */}
+        {workGraphStoreBasePath && (
+          <button
+            className={`bc-sidebar-page-btn ${workGraphOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
+            onClick={onOpenWorkGraph}
+            aria-current={workGraphOpen || undefined}
+            title="Work graph: each repo's commit graph, coloured by the agent session that made each commit"
+            aria-label="Work graph"
+          >
+            ⎇
+          </button>
+        )}
+        {projectStore.enabled && (
+          <button
+            className={`bc-sidebar-page-btn ${projectsOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
+            onClick={() => onOpenProjects(null)}
+            aria-current={projectsOpen || undefined}
+            title="Projects: what each is for, its open cards, branches, deploys and filed sessions"
+            aria-label="Projects"
+          >
+            ▦
+          </button>
+        )}
         <button
           className="bc-sidebar-collapse-btn"
           onClick={onToggleCollapse}
@@ -918,38 +943,6 @@ export default function Sidebar({
           onOpen={onOpenOrchestrator}
           selected={orchestratorOpen}
         />
-      )}
-
-      {/* The work graph, pinned under the Orchestrator with a session row's own
-          classes. Drawn only when the host proxies work-graph-store. */}
-      {workGraphStoreBasePath && (
-        <div className={`bc-session-item ${workGraphOpen ? 'bc-session-item-selected' : ''}`}>
-          <button
-            className="bc-session-item-main"
-            onClick={onOpenWorkGraph}
-            aria-current={workGraphOpen || undefined}
-            title="Each repo's commit graph, coloured by the agent session that made each commit"
-          >
-            <span className="bc-session-harness" aria-hidden>⎇</span>
-            <span className="bc-session-label">Work graph</span>
-          </button>
-        </div>
-      )}
-
-      {/* The projects, pinned under the work graph with the same classes. Drawn only
-          when the host proxies project-store. */}
-      {projectStore.enabled && (
-        <div className={`bc-session-item ${projectsOpen ? 'bc-session-item-selected' : ''}`}>
-          <button
-            className="bc-session-item-main"
-            onClick={() => onOpenProjects(null)}
-            aria-current={projectsOpen || undefined}
-            title="Every project: what it is for, its open cards, branches, deploys and filed sessions"
-          >
-            <span className="bc-session-harness" aria-hidden>▦</span>
-            <span className="bc-session-label">Projects</span>
-          </button>
-        </div>
       )}
 
       <div className="bc-session-search">
