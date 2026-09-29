@@ -183,22 +183,9 @@ export interface SessionProjectGroup {
   /** "Parent › Child", or "Not filed". */
   label: string
   sessions: SessionSummary[]
-  /** The sum of the spend the rows report, and how many rows reported none. */
-  spendUsd: number
-  sessionsWithoutSpend: number
 }
 
 export const NOT_FILED_LABEL = 'Not filed'
-
-function spendOf(sessions: readonly SessionSummary[]): { spendUsd: number; sessionsWithoutSpend: number } {
-  let spendUsd = 0
-  let sessionsWithoutSpend = 0
-  for (const session of sessions) {
-    if (typeof session.spendUsd === 'number') spendUsd += session.spendUsd
-    else sessionsWithoutSpend += 1
-  }
-  return { spendUsd, sessionsWithoutSpend }
-}
 
 /**
  * Regroup the sidebar's sessions under the projects they are filed under.
@@ -239,10 +226,10 @@ export function groupSessionsByProject(
   for (const { project } of projectTree(projects)) {
     const list = byProject.get(project.id)
     if (!list) continue
-    groups.push({ key: project.id, project, label: projectPathName(project, projectsById), sessions: list, ...spendOf(list) })
+    groups.push({ key: project.id, project, label: projectPathName(project, projectsById), sessions: list })
   }
   if (notFiled.length > 0) {
-    groups.push({ key: '', project: null, label: NOT_FILED_LABEL, sessions: notFiled, ...spendOf(notFiled) })
+    groups.push({ key: '', project: null, label: NOT_FILED_LABEL, sessions: notFiled })
   }
   return groups
 }

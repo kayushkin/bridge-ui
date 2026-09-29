@@ -27,14 +27,15 @@ import {
   loadCollapsedProjectGroups,
   loadFiltersOpen,
   loadGroupByProject,
+  loadHideArchived,
   saveCollapsedFolders,
   saveCollapsedProjectGroups,
   saveFiltersOpen,
   saveGroupByProject,
+  saveHideArchived,
 } from './sidebarPersistence'
 import { useProjectStore } from '../../useProjectStore'
 import { groupSessionsByProject } from '../../projects'
-import { formatCost } from '../../utils'
 import { FolderQuestionRollupMarker, SessionQuestionMarker } from './QuestionMarkers'
 import { isSessionAwaitingHuman } from './sessionAwaitingHuman'
 import { useSessionsWithOpenQuestion } from './sessionsWithOpenQuestion'
@@ -152,7 +153,7 @@ export default function Sidebar({
   projectsOpen,
 }: SidebarProps) {
   const {
-    groups,
+    groups: allGroups,
     loading,
     facets,
     moreSessions,
@@ -220,6 +221,20 @@ export default function Sidebar({
   // rehydrates — see sidebarPersistence.ts for why these are chat's own keys.
   const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(loadCollapsedFolders)
+
+  // "Hide archived" drops the Archive folder before anything reads the list, so the
+  // folder view, the project groups and every count agree. Archived is a folder fact
+  // (see `isArchivedFolder`), so dropping that folder drops every archived session.
+  const [hideArchived, setHideArchivedState] = useState(loadHideArchived)
+  const toggleHideArchived = useCallback(() => {
+    const next = !hideArchived
+    saveHideArchived(next)
+    setHideArchivedState(next)
+  }, [hideArchived])
+  const groups = useMemo(
+    () => (hideArchived ? allGroups.filter((g) => !isArchivedFolder(g.folder)) : allGroups),
+    [hideArchived, allGroups],
+  )
 
   // Grouping by project. The toggle and each project group's collapse are read back
   // in the initialiser like the folders above. The projects and every filed session
@@ -624,10 +639,7 @@ export default function Sidebar({
               <span className="bc-folder-chevron">{collapsed ? '▸' : '▾'}</span>
               <span className="bc-folder-icon">{pg.project ? '▦' : '·'}</span>
               <span className="bc-folder-name">{pg.label}</span>
-              <span className="bc-folder-count">
-                {pg.sessions.length}
-                {pg.spendUsd > 0 && ` · ${formatCost(pg.spendUsd)}`}
-              </span>
+              <span className="bc-folder-count">{pg.sessions.length}</span>
             </button>
             {pg.project && (
               <button
@@ -998,19 +1010,25 @@ export default function Sidebar({
         </div>
       )}
 
-      {projectStore.enabled && (
-        <div className={styles.groupByProjectRow}>
-          <label className={styles.groupByProjectToggle}>
-            <input type="checkbox" checked={groupByProject} onChange={toggleGroupByProject} />
-            Group by project
-          </label>
-          {groupByProject && projectStore.error && (
-            <span className={styles.groupByProjectError} title={projectStore.error}>
-              project-store did not answer, so the list shows folders: {projectStore.error}
-            </span>
+      <div className={styles.sidebarToggleRow}>
+        <div className={styles.sidebarToggles}>
+          {projectStore.enabled && (
+            <label className={styles.sidebarToggle}>
+              <input type="checkbox" checked={groupByProject} onChange={toggleGroupByProject} />
+              Group by project
+            </label>
           )}
+          <label className={styles.sidebarToggle}>
+            <input type="checkbox" checked={hideArchived} onChange={toggleHideArchived} />
+            Hide archived
+          </label>
         </div>
-      )}
+        {projectStore.enabled && groupByProject && projectStore.error && (
+          <span className={styles.groupByProjectError} title={projectStore.error}>
+            project-store did not answer, so the list shows folders: {projectStore.error}
+          </span>
+        )}
+      </div>
 
       <div className="bc-inst-filter">
         <button

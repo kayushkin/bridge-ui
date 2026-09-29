@@ -1840,14 +1840,19 @@
 :global(.bc-folder-header):hover .projectGroupOpen,
 .projectGroupOpen:focus-visible { opacity: 1; color: var(--accent); }
 
-.groupByProjectRow {
+.sidebarToggleRow {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 2px 10px 4px;
   font-size: 0.8em;
 }
-.groupByProjectToggle {
+.sidebarToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.sidebarToggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;

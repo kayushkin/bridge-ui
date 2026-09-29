@@ -29,6 +29,7 @@ const FILTERS_OPEN_KEY = chatKey('filters-open')
 const INBOX_OPEN_KEY = chatKey('inbox-open')
 const GROUP_BY_PROJECT_KEY = chatKey('group-by-project')
 const PROJECT_GROUP_COLLAPSED_KEY = chatKey('project-group-collapsed')
+const HIDE_ARCHIVED_KEY = chatKey('hide-archived')
 const MIGRATED_KEYS: readonly string[] = [
   SIDEBAR_COLLAPSED_KEY, FOLDER_COLLAPSED_KEY, FILTERS_OPEN_KEY, INBOX_OPEN_KEY,
   GROUP_BY_PROJECT_KEY, PROJECT_GROUP_COLLAPSED_KEY,
@@ -206,6 +207,28 @@ export function saveGroupByProject(on: boolean): void {
   if (!store) return
   try {
     store.setItem(GROUP_BY_PROJECT_KEY, String(on))
+  } catch {
+    // As above — losing the preference is not worth losing the interaction.
+  }
+}
+
+/** Whether the list leaves out archived sessions. Defaults to OFF, so nothing the
+ *  user had on screen disappears until they ask. */
+export function loadHideArchived(): boolean {
+  const store = storage()
+  if (!store) return false
+  try {
+    return store.getItem(HIDE_ARCHIVED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function saveHideArchived(on: boolean): void {
+  const store = storage()
+  if (!store) return
+  try {
+    store.setItem(HIDE_ARCHIVED_KEY, String(on))
   } catch {
     // As above — losing the preference is not worth losing the interaction.
   }

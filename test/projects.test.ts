@@ -102,11 +102,11 @@ describe('groupSessionsByProject — the sidebar', () => {
 
   it('groups in tree order, keeps list order inside a group, and puts Not filed last', () => {
     const sessions = [
-      session('br_4', { spendUsd: 1 }),
-      session('br_3', { spendUsd: 2 }),
-      session('br_1', { spendUsd: 0.5 }),
+      session('br_4'),
+      session('br_3'),
+      session('br_1'),
       session('br_2'),
-      session('br_5', { spendUsd: 3 }),
+      session('br_5'),
     ]
     const groups = groupSessionsByProject(sessions, links, ALL)
     expect(groups.map((g) => [g.key, g.label, g.sessions.map((s) => s.sessionId)])).toEqual([
@@ -115,9 +115,6 @@ describe('groupSessionsByProject — the sidebar', () => {
       ['project_000004', 'LLM bridge platform › Access and gating', ['br_1']],
       ['', NOT_FILED_LABEL, ['br_4', 'br_5']],
     ])
-    const discord = groups[0]
-    expect(discord?.spendUsd).toBe(2)
-    expect(discord?.sessionsWithoutSpend).toBe(1)
   })
 
   it('draws no group for a project with no session on screen, and no Not filed when all are filed', () => {
