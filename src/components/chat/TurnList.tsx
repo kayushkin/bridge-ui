@@ -1,4 +1,5 @@
 import { Fragment,
+  isValidElement,
   memo,
   useCallback,
   useEffect,
@@ -6,6 +7,7 @@ import { Fragment,
   useRef,
   useState,
   type ComponentProps,
+  type ReactNode,
 } from 'react'
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
@@ -106,6 +108,11 @@ const PROVISIONAL_NARRATION_MS = 5000
  *  same slot when "Loading…" gives way to the transcript, rather than removing it and
  *  drawing it again. */
 const STATUS_SLOT_KEY = 'status-slot'
+
+/** A transcript row's React key, which the rows are all given; null for no row. */
+function keyOfRow(row: ReactNode): string | null {
+  return isValidElement(row) ? row.key : null
+}
 
 interface TurnListProps {
   sessionId: string | null
@@ -494,6 +501,30 @@ export default function TurnList({
   // prepended before the turn items, so the last turn's child index is offset by it.
   const lastChildIndex = (more ? 1 : 0) + items.length - 1
 
+  // Whether the transcript's last change added rows ABOVE the ones already drawn —
+  // the page of history landing over the one cached turn a reload paints first, or
+  // "Load older". virtua keeps its distance from the top by default, so such a change
+  // showed the top of the conversation until the rows were measured and the list
+  // scrolled back down: measured 2026-09-28, the rows at the bottom removed and added
+  // again 70ms apart on 3 of 3 reloads, even with the jump to the end run before
+  // paint. `shift` keeps the distance from the end instead, and virtua asks that it
+  // be off for any other change, which is why it follows the last change only.
+  //
+  // Compared by the first and last rows' keys, which are the turn and entry ids the
+  // rows are built from. State adjusted during render, so `shift` reaches the VList in
+  // the same commit as the rows it describes.
+  const firstItemKey = keyOfRow(items[0])
+  const lastItemKey = keyOfRow(items[items.length - 1])
+  const [itemEdges, setItemEdges] = useState({ firstItemKey, lastItemKey, rowsWereAddedAbove: false })
+  if (itemEdges.firstItemKey !== firstItemKey || itemEdges.lastItemKey !== lastItemKey) {
+    setItemEdges({
+      firstItemKey,
+      lastItemKey,
+      rowsWereAddedAbove:
+        lastItemKey !== null && itemEdges.lastItemKey === lastItemKey && itemEdges.firstItemKey !== firstItemKey,
+    })
+  }
+
   const jumpToLatest = useCallback(() => {
     const h = listRef.current
     if (h && lastChildIndex >= 0) h.scrollToIndex(lastChildIndex, { align: 'end' })
@@ -634,7 +665,7 @@ export default function TurnList({
           exactly like a tool that changed nothing. */}
       <ToolContext.Provider value={toolContextValue}>
       <SessionActionsContext.Provider value={sessionActions}>
-      <VList ref={listRef} className="bc-turns-body" onScroll={onScroll}>
+      <VList ref={listRef} className="bc-turns-body" onScroll={onScroll} shift={itemEdges.rowsWereAddedAbove}>
         {more ? (
           <button key="__older__" className={styles.loadOlder} onClick={loadOlder}>
             ↑ Load older messages
