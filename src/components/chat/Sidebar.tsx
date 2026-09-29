@@ -470,6 +470,9 @@ export default function Sidebar({
   }, [facets, filter, machineDisplay, harnessMap])
 
   const activeFilterCount = AXES.reduce((n, a) => n + filter[a].length, 0)
+  // The Filters badge also counts "hide archived", which hides rows like a chip does.
+  // `activeFilterCount` stays chips only: "show all" clears exactly those.
+  const filterBadgeCount = activeFilterCount + (hideArchived ? 1 : 0)
   const searchActive = filter.search.trim() !== ''
   // How many rows the list is actually showing. `groups` IS chat-core's
   // `visibleSessions`, so summing it is the same number `visibleCount` reports —
@@ -896,31 +899,6 @@ export default function Sidebar({
         {/* Same slot bridge-ui gives it (`SessionList.tsx:463`): the last child of
             `bc-new-session`, which is a flex row whose `bc-new-session-wrap` takes the
             remaining width, so the button sits hard against the sidebar's right edge. */}
-        {/* The work graph and projects pages, as small buttons beside "+ New" rather
-            than rows styled like sessions. Each is drawn only when the host proxies its
-            store. */}
-        {workGraphStoreBasePath && (
-          <button
-            className={`bc-sidebar-page-btn ${workGraphOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
-            onClick={onOpenWorkGraph}
-            aria-current={workGraphOpen || undefined}
-            title="Work graph: each repo's commit graph, coloured by the agent session that made each commit"
-            aria-label="Work graph"
-          >
-            ⎇
-          </button>
-        )}
-        {projectStore.enabled && (
-          <button
-            className={`bc-sidebar-page-btn ${projectsOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
-            onClick={() => onOpenProjects(null)}
-            aria-current={projectsOpen || undefined}
-            title="Projects: what each is for, its open cards, branches, deploys and filed sessions"
-            aria-label="Projects"
-          >
-            ▦
-          </button>
-        )}
         <button
           className="bc-sidebar-collapse-btn"
           onClick={onToggleCollapse}
@@ -951,7 +929,9 @@ export default function Sidebar({
           className="bc-session-search-input"
           value={filter.search}
           onChange={(e) => set({ search: e.target.value })}
-          placeholder="Search name or transcript…"
+          placeholder="Search…"
+          title="Search session names and transcripts"
+          aria-label="Search session names and transcripts"
         />
         {/* The list silently shortening was the ONLY feedback a search gave. Nothing
             said a transcript search had been sent, nothing said it had come back, and
@@ -972,6 +952,31 @@ export default function Sidebar({
               ? 'searching…'
               : `${visibleSessionCount} result${visibleSessionCount === 1 ? '' : 's'}`}
           </span>
+        )}
+        {/* The work graph and projects pages, as small buttons at the end of the search
+            row rather than rows styled like sessions. Each is drawn only when the host
+            proxies its store. */}
+        {workGraphStoreBasePath && (
+          <button
+            className={`bc-sidebar-page-btn ${workGraphOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
+            onClick={onOpenWorkGraph}
+            aria-current={workGraphOpen || undefined}
+            title="Work graph: each repo's commit graph, coloured by the agent session that made each commit"
+            aria-label="Work graph"
+          >
+            ⎇
+          </button>
+        )}
+        {projectStore.enabled && (
+          <button
+            className={`bc-sidebar-page-btn ${projectsOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
+            onClick={() => onOpenProjects(null)}
+            aria-current={projectsOpen || undefined}
+            title="Projects: what each is for, its open cards, branches, deploys and filed sessions"
+            aria-label="Projects"
+          >
+            ▦
+          </button>
         )}
       </div>
 
@@ -1003,39 +1008,52 @@ export default function Sidebar({
         </div>
       )}
 
-      <div className={styles.sidebarToggleRow}>
-        <div className={styles.sidebarToggles}>
-          {projectStore.enabled && (
-            <label className={styles.sidebarToggle}>
-              <input type="checkbox" checked={groupByProject} onChange={toggleGroupByProject} />
-              Group by project
-            </label>
-          )}
-          <label className={styles.sidebarToggle}>
-            <input type="checkbox" checked={hideArchived} onChange={toggleHideArchived} />
-            Hide archived
-          </label>
-        </div>
-        {projectStore.enabled && groupByProject && projectStore.error && (
+      {projectStore.enabled && groupByProject && projectStore.error && (
+        <div className={styles.projectStoreErrorRow}>
           <span className={styles.groupByProjectError} title={projectStore.error}>
             project-store did not answer, so the list shows folders: {projectStore.error}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="bc-inst-filter">
         <button
-          className={`bc-filter-toggle ${activeFilterCount > 0 ? 'bc-filter-toggle-active' : ''}`}
+          className={`bc-filter-toggle ${filterBadgeCount > 0 ? 'bc-filter-toggle-active' : ''}`}
           onClick={() => setFiltersOpen((v) => !v)}
           aria-expanded={filtersOpen}
         >
           <span className="bc-filter-chevron">{filtersOpen ? '▾' : '▸'}</span>
           <span className="bc-filter-label">Filters</span>
-          {activeFilterCount > 0 && <span className="bc-filter-badge">{activeFilterCount}</span>}
+          {filterBadgeCount > 0 && <span className="bc-filter-badge">{filterBadgeCount}</span>}
         </button>
 
         {filtersOpen && (
           <div className="bc-inst-filter-body">
+            {/* How the list is shown, as chips in the same row style as the filters
+                below. "hide archived" is counted in the badge, since it hides rows. */}
+            <div className="bc-inst-filter-chips bc-class-filter-row">
+              <span className="bc-class-filter-label">view</span>
+              {projectStore.enabled && (
+                <button
+                  type="button"
+                  className={`bc-inst-chip bc-class-chip ${groupByProject ? 'bc-inst-chip-active' : ''}`}
+                  onClick={toggleGroupByProject}
+                  aria-pressed={groupByProject}
+                  title="Group the list under projects instead of folders"
+                >
+                  <span className="bc-class-chip-name">by project</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className={`bc-inst-chip bc-class-chip ${hideArchived ? 'bc-inst-chip-active' : ''}`}
+                onClick={toggleHideArchived}
+                aria-pressed={hideArchived}
+                title="Leave archived sessions out of the list"
+              >
+                <span className="bc-class-chip-name">hide archived</span>
+              </button>
+            </div>
             {AXES.map((axis) => {
               const opts = axisOptions[axis]
               // Show an axis when it offers a real choice (>1 option) or has an active

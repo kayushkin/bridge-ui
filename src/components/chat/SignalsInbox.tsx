@@ -86,14 +86,6 @@ export default function SignalsInbox({
           <span className={styles.inboxTitle}>Needs you</span>
           <span className={styles.inboxCount}>{waiting}</span>
         </button>
-        <button
-          type="button"
-          className={styles.inboxOpenPage}
-          title="Show every signal in full, in place of the chat"
-          onClick={onOpenSignalsPage}
-        >
-          Open all
-        </button>
       </div>
 
       {/* Reported even while collapsed, because a failed read is why the panel might
@@ -103,6 +95,16 @@ export default function SignalsInbox({
 
       {open && (
         <div className={styles.inboxBody}>
+          {/* Inside the fold rather than beside the ribbon, so the ribbon is one control
+              and the way to the page sits with the cards it shows in full. */}
+          <button
+            type="button"
+            className={styles.inboxOpenPage}
+            title="Show every signal in full, in place of the chat"
+            onClick={onOpenSignalsPage}
+          >
+            Open all on the signals page
+          </button>
           {ordered.map(request => (
             <SignalRequestCard
               // A derived group has no request id, so it is keyed by its one signal's

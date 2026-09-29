@@ -526,14 +526,17 @@
    a session waiting on you gets a pink halftone wash; subagents hang off circuit
    traces. */
 [data-theme="zine"] .bc-folder-header {
-  width: fit-content;
-  margin: 10px 0 4px 10px;
+  /* Full width, like the Filters and Needs you ribbons, so the three read as one set
+     of section labels. A smaller tilt than a short label: across the whole sidebar
+     1.5deg lifts one end several pixels. */
+  width: auto;
+  margin: 10px 8px 4px;
   padding: 3px 12px 3px 8px;
   background: color-mix(in srgb, var(--zine-orange) 30%, var(--zine-cream));
   color: var(--zine-ink-dark);
   font-family: 'Archivo Black', sans-serif;
   letter-spacing: 0.06em;
-  transform: rotate(-1.5deg);
+  transform: rotate(-0.5deg);
   /* torn ends */
   clip-path: polygon(0 12%, 4% 0, 96% 6%, 100% 0, 98% 50%, 100% 100%, 3% 94%, 0 100%, 2% 50%);
 }
@@ -732,7 +735,8 @@
 [data-theme="zine"] .bc-session-search-input:focus { border-color: var(--zine-ink); box-shadow: 3px 3px 0 var(--zine-pink); }
 [data-theme="zine"] .bc-filter-toggle,
 [data-theme="zine"] [aria-label="Signals needing you"] > :first-child button:first-child {
-  width: fit-content;
+  width: calc(100% - 16px);
+  margin: 0 8px;
   padding: 3px 12px 3px 8px;
   background: color-mix(in srgb, var(--zine-ink) 12%, var(--zine-cream));
   color: var(--zine-ink-dark);
@@ -741,12 +745,12 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   font-size: 0.72rem;
-  transform: rotate(1deg);
+  transform: rotate(0.4deg);
   clip-path: polygon(0 10%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
 }
 [data-theme="zine"] [aria-label="Signals needing you"] > :first-child button:first-child {
   background: color-mix(in srgb, var(--zine-pink) 40%, var(--zine-cream));
-  transform: rotate(-1deg);
+  transform: rotate(-0.4deg);
 }
 
 /* ---------- chat: the vibe classifier ----------
