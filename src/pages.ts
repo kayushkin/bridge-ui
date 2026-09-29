@@ -30,6 +30,7 @@ import { BridgeHooks } from './components/BridgeHooks'
 import { BridgeInboundRules } from './components/BridgeInboundRules'
 import { BridgePreviews } from './components/BridgePreviews'
 import { BridgeDiscord } from './components/BridgeDiscord'
+import { BridgeEmoji } from './components/messages/BridgeEmoji'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
@@ -109,6 +110,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The Discord message log, deleted messages with their text, and the bridge's
   // status. Read-only: GET /message-log and GET /discord/status.
   { route: 'discord', label: 'Discord', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeDiscord },
+  // The emoji pickers' favourites and settings, and every bridged server's
+  // custom emoji: GET /emoji and its writes.
+  { route: 'emoji', label: 'Emoji', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeEmoji },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },

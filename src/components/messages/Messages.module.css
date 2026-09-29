@@ -166,25 +166,33 @@ a.name:hover { text-decoration: underline; }
 button.reactionChip { cursor: pointer; font: inherit; font-size: 0.72em; }
 button.reactionChip:hover:not(:disabled) { border-color: var(--accent); }
 button.reactionChip:disabled { cursor: default; opacity: 0.85; }
-/* The react button sits just outside the bubble, beside its bottom corner on
-   the side away from the page edge, and shows while the message is hovered
-   or the button has focus, so it adds no height to a message. The hide waits
-   a moment so the pointer can cross the gap to reach it. */
-.reactButton {
+/* The message tools — the quick-react favourites and the react button — sit
+   just outside the bubble, beside its bottom corner on the side away from the
+   page edge, and show while the message is hovered or a tool has focus, so
+   they add no height to a message. The hide waits a moment so the pointer can
+   cross the gap to reach them. */
+.messageTools {
   position: absolute; bottom: 2px; left: calc(100% + 3px);
-  display: inline-flex; align-items: center; padding: 0 4px; font-size: 0.72em; line-height: 1.5; cursor: pointer;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-muted);
-  /* Hidden, it cannot be clicked either (visibility, not only opacity), so a
-     stray click beside a bubble does not open the picker. */
+  display: inline-flex; align-items: center; gap: 2px; white-space: nowrap;
+  /* Hidden, they cannot be clicked either (visibility, not only opacity), so
+     a stray click beside a bubble does nothing. */
   opacity: 0; visibility: hidden; transition: opacity 0.12s ease 0.25s, visibility 0s linear 0.37s;
 }
-.messageMine .reactButton { left: auto; right: calc(100% + 3px); }
-.message:hover .reactButton, .reactButton:focus-visible, .reactButton[aria-expanded="true"] {
+.messageMine .messageTools { left: auto; right: calc(100% + 3px); flex-direction: row-reverse; }
+.message:hover .messageTools, .messageTools:focus-within, .messageTools:has([aria-expanded="true"]) {
   opacity: 1; visibility: visible; transition-delay: 0s;
 }
-.reactButton:hover:not(:disabled), .reactButton[aria-expanded="true"] { border-color: var(--accent); color: var(--text); }
-/* A touch screen has no hover: keep the button faintly in view there. */
-@media (hover: none) { .reactButton { opacity: 0.5; visibility: visible; } }
+.reactButton, .quickReaction {
+  display: inline-flex; align-items: center; padding: 0 4px; font-size: 0.72em; line-height: 1.5; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text-muted);
+}
+.quickReaction { font-size: 0.8em; color: var(--text); }
+.quickReaction .customEmoji { height: 1.2em; }
+.quickReactionMine { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+.reactButton:hover:not(:disabled), .reactButton[aria-expanded="true"], .quickReaction:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.quickReaction:disabled { cursor: default; opacity: 0.6; }
+/* A touch screen has no hover: keep the tools faintly in view there. */
+@media (hover: none) { .messageTools { opacity: 0.5; visibility: visible; } }
 .emojiPanelHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8em; color: var(--text-muted); }
 .emojiPanelHeading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .emojiPanelClose { background: none; border: none; cursor: pointer; color: var(--text-muted); }
@@ -213,3 +221,37 @@ button.reactionChip:disabled { cursor: default; opacity: 0.85; }
   background: none; border: none; border-radius: 6px;
 }
 .emojiCell:hover, .emojiCell:focus-visible { background: var(--bg-surface); outline: none; }
+
+/* A custom emoji drawn at text size, in pickers and suggestions. */
+.customEmoji { height: 1.1em; width: auto; object-fit: contain; vertical-align: -0.2em; }
+.emojiCell .customEmoji { height: 1em; }
+.emojiPanelFoot { display: flex; justify-content: space-between; gap: 8px; font-size: 0.72em; }
+.emojiPanelFoot a { color: var(--text-muted); }
+
+/* The composer's `:` suggestions, above the text box. */
+.emojiSuggestions {
+  position: absolute; bottom: calc(100% + 4px); left: 10px; z-index: 21; margin: 0; padding: 4px; list-style: none;
+  width: min(340px, calc(100% - 20px)); max-height: 280px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+.emojiSuggestion { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+.emojiSuggestion > .muted:nth-last-child(-n+2) { margin-left: auto; }
+.emojiSuggestion > .muted + .muted { margin-left: 0; }
+.emojiSuggestionActive { background: var(--bg-surface); }
+.emojiSuggestionDisabled { cursor: default; opacity: 0.55; }
+.emojiSuggestionFace { font-size: 1.3em; line-height: 1; min-width: 1.3em; text-align: center; }
+img.emojiSuggestionFace { height: 1.3em; min-width: 0; }
+
+/* The Emoji page. */
+.emojiPageSection { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); }
+.emojiPageHeading { margin: 0; font-size: 1em; }
+.emojiPageHeadingRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.emojiPageHeadingRow > input { max-width: 320px; }
+.emojiSetting { display: flex; align-items: center; gap: 10px; }
+.emojiSetting > input[type="number"] { width: 5em; }
+.emojiToneRow { display: flex; gap: 2px; }
+.emojiCellFavorite { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.emojiFavoriteList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; max-width: 480px; }
+.emojiFavorite { display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 6px; }
+.emojiFavorite:hover { background: var(--bg-surface); }
+.emojiFavoriteButtons { margin-left: auto; display: inline-flex; gap: 2px; }

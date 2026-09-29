@@ -11,6 +11,7 @@ import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage,
   MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
 } from './types-multichat'
+import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
 
 /** How many messages one page asks for. multichat takes 1–200. */
 export const MESSAGE_PAGE_SIZE = 50
@@ -34,8 +35,11 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'DELETE /contacts/tags',
   // Images, custom emoji and custom reactions, loaded by <img> (MessageContent).
   'GET /media/{server_name}/{media_id}',
-  // Channel names for a Discord room's `<#id>` tokens.
+  // Channel names for a Discord room's `<#id>` tokens, and which server's
+  // custom emoji the room is offered.
   'GET /discord/status',
+  // The emoji pickers, the quick-react bar and the Emoji page.
+  ...EMOJI_ROUTES_CALLED,
 ]
 
 const roomSegment = (roomID: string) => encodeURIComponent(roomID)

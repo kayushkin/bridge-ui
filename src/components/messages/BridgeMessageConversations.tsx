@@ -10,6 +10,10 @@ import {
   reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
 } from '../../multichatMessages'
 import { reactionChipAction, withReactionPosted, withReactionTakenBack } from '../../messageReactions'
+import {
+  choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID,
+  searchEmojiChoices, type EmojiChoice,
+} from '../../emojiCatalog'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage, MultichatSendAnswer,
@@ -17,13 +21,19 @@ import type {
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChips } from './messagesShared'
 import { MessageContent, ReactionChips } from './MessageContent'
-import { EmojiPickerButton, EmojiPickerPanel } from './EmojiPicker'
+import { EmojiFace, EmojiPickerButton, EmojiPickerPanel, EmojiSuggestionList, useEmojiChoices, type EmojiSuggestion } from './EmojiPicker'
+import { useEmojiCatalog } from './useEmojiCatalog'
 import styles from './Messages.module.css'
 
 const CONVERSATIONS_POLL_MS = 30_000
 const MESSAGES_POLL_MS = 5_000
 /** Distance from the bottom, in pixels, still counted as reading the newest. */
 const AT_BOTTOM_PX = 40
+/** How many `:` suggestions show at once. */
+const SUGGESTION_LIMIT = 8
+/** Why a custom emoji cannot be picked into a message. */
+const CUSTOM_EMOJI_IN_MESSAGE_REASON =
+  'The Discord bridge cannot send a custom emoji inside a message. Start the message with +: to react with it instead.'
 
 /**
  * Every conversation multichat's bridges carry — WhatsApp, Telegram, Signal,
@@ -158,7 +168,16 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
   const composer = useRef<HTMLTextAreaElement | null>(null)
   /** Where the cursor goes after an emoji is put in, applied once the draft redraws. */
   const pendingCursor = useRef<number | null>(null)
-  const discordNames = useDiscordNames(conversation, messages)
+  const discordStatus = useDiscordStatus(conversation)
+  const discordNames = useDiscordNames(conversation, messages, discordStatus)
+  const roomServerID = useMemo(() => roomDiscordServerID(discordStatus, roomID), [discordStatus, roomID])
+  const emoji = useEmojiChoices('reaction', roomServerID)
+  const { catalog } = useEmojiCatalog()
+  /** Where the cursor is in the text box, for the `:` suggestions. */
+  const [cursor, setCursor] = useState(0)
+  const [suggestionIndex, setSuggestionIndex] = useState(0)
+  /** Where the `:query` the person shut with Escape starts; it stays shut. */
+  const [dismissedColonAt, setDismissedColonAt] = useState<number | null>(null)
   /** What the next redraw of the list does to the scroll position: go to the
    *  newest message, keep the reader's distance from the bottom (an older page
    *  went in above), or nothing. */
@@ -241,14 +260,67 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
 
   /** Puts an emoji where the cursor is (or over the selection). It only
    *  changes the text box; sending is still the person's Enter or Send. */
-  const insertEmoji = (emoji: string) => {
+  const insertEmoji = (choice: EmojiChoice) => {
     const el = composer.current
-    const next = insertAtSelection(draft, el?.selectionStart ?? draft.length, el?.selectionEnd ?? draft.length, emoji)
+    const next = insertAtSelection(draft, el?.selectionStart ?? draft.length, el?.selectionEnd ?? draft.length, choice.key)
     pendingCursor.current = next.cursor
+    setCursor(next.cursor)
+    setDraft(next.text)
+  }
+
+  const colonQuery = useMemo(() => colonQueryAt(draft, cursor), [draft, cursor])
+  const inReactionCommand = !!colonQuery && colonQueryIsReactionCommand(draft, colonQuery.start)
+  /** The `:` suggestions: in a react command (`+:par`) any emoji the room is
+   *  offered; in a message the unicode ones, with matching custom ones listed
+   *  but not pickable. */
+  const suggestions: EmojiSuggestion[] = useMemo(() => {
+    if (!colonQuery || colonQuery.start === dismissedColonAt) return []
+    if (inReactionCommand) {
+      return searchEmojiChoices([...emoji.custom, ...emoji.unicode], colonQuery.query, emoji.favoriteKeys, SUGGESTION_LIMIT)
+        .map(choice => ({ choice }))
+    }
+    return [
+      ...searchEmojiChoices(emoji.unicode, colonQuery.query, emoji.favoriteKeys, SUGGESTION_LIMIT).map(choice => ({ choice })),
+      ...searchEmojiChoices(emoji.custom, colonQuery.query, emoji.favoriteKeys, 3)
+        .map(choice => ({ choice, disabledReason: CUSTOM_EMOJI_IN_MESSAGE_REASON })),
+    ]
+  }, [colonQuery, dismissedColonAt, inReactionCommand, emoji.custom, emoji.unicode, emoji.favoriteKeys])
+  const activeSuggestion = Math.min(suggestionIndex, Math.max(0, suggestions.length - 1))
+
+  /** The newest message shown, which a react command reacts to. */
+  const newestMessage = (): ShownMessage | null => {
+    const shown = messages ? foldEdits(messages) : []
+    return shown.length > 0 ? shown[shown.length - 1] : null
+  }
+
+  const reactToNewest = async (choice: EmojiChoice) => {
+    const newest = newestMessage()
+    if (!newest) { setSendError('There is no message to react to.'); return }
+    setDraft('')
+    setCursor(0)
+    setSendError(null)
+    await postReaction(newest, choice)
+  }
+
+  const pickSuggestion = (suggestion: EmojiSuggestion) => {
+    if (!colonQuery || suggestion.disabledReason) return
+    if (inReactionCommand) { void reactToNewest(suggestion.choice); return }
+    const next = insertAtSelection(draft, colonQuery.start, cursor, suggestion.choice.key)
+    pendingCursor.current = next.cursor
+    setCursor(next.cursor)
     setDraft(next.text)
   }
 
   const send = async () => {
+    const command = reactionCommandOf(draft)
+    if (command) {
+      const choice: EmojiChoice | null = 'name' in command
+        ? choiceNamed([...emoji.custom, ...emoji.unicode], command.name)
+        : { kind: 'unicode', key: command.emoji, name: command.emoji }
+      if (!choice) { setSendError(`No emoji here is named :${'name' in command ? command.name : ''}:.`); return }
+      await reactToNewest(choice)
+      return
+    }
     const result = sendMessageBodyOf(draft)
     if (!result.ok) { setSendError(result.error); return }
     setSending(true)
@@ -269,15 +341,28 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
   }
 
   /** Reacts to a message as our account; the bridge passes it on to the
-   *  people in the room. */
-  const postReaction = async (message: ShownMessage, key: string) => {
+   *  people in the room. A custom emoji goes as its `discord-emoji:` key, and
+   *  multichat answers the mxc:// key it reacted with, which is what the
+   *  message's reactions carry from then on. */
+  const postReaction = async (message: ShownMessage, choice: Pick<EmojiChoice, 'kind' | 'key' | 'name'>) => {
     const target = reactionTargetEventID(message)
     setReacting(true)
-    const posted = await write<{ event_id: string }>('POST', reactionPostPath(roomID), { event_id: target, key })
+    const posted = await write<{ event_id: string; key: string }>('POST', reactionPostPath(roomID), { event_id: target, key: choice.key })
     setReacting(false)
     if (!posted.ok) { setReactionError(posted.error); return }
     setReactionError(null)
-    updateReactions(target, reactions => withReactionPosted(reactions, key, posted.value.event_id, 'You'))
+    const shortcode = choice.kind === 'custom' ? `:${choice.name}:` : ''
+    updateReactions(target, reactions => withReactionPosted(reactions, posted.value.key || choice.key, posted.value.event_id, 'You', shortcode))
+  }
+
+  /** The favourites the quick-react bar under each message offers here. */
+  const quickReactions = emoji.favorites.slice(0, catalog?.settings.quick_reaction_count ?? 0)
+
+  /** A quick reaction adds ours, or takes back the one we posted from here. */
+  const onQuickReaction = (message: ShownMessage, choice: EmojiChoice) => {
+    const group = (message.reactions ?? []).find(g => reactionGroupIsEmoji(g, choice.key, catalog?.discord_custom_emoji ?? []))
+    if (group?.my_reaction_event_id) { void takeBackReaction(message, group.my_reaction_event_id); return }
+    void postReaction(message, choice)
   }
 
   const takeBackReaction = async (message: ShownMessage, reactionEventID: string) => {
@@ -292,7 +377,7 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
 
   const onChipClick = (message: ShownMessage, reaction: MessageReactionGroup) => {
     const action = reactionChipAction(reaction)
-    if (action.kind === 'post') void postReaction(message, action.key)
+    if (action.kind === 'post') void postReaction(message, { kind: 'unicode', key: action.key, name: reaction.shortcode || action.key })
     if (action.kind === 'take-back') void takeBackReaction(message, action.reactionEventID)
   }
 
@@ -325,12 +410,28 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
               </div>
               <ReactionChips reactions={message.reactions} busy={reacting}
                 onChipClick={reaction => onChipClick(message, reaction)} />
-              <button type="button" className={styles.reactButton} disabled={reacting}
-                aria-expanded={reactingTo?.event_id === message.event_id}
-                title="React to this message" aria-label="React to this message"
-                onClick={() => setReactingTo(current => current?.event_id === message.event_id ? null : message)}>
-                {'\u{1F642}'}
-              </button>
+              <div className={styles.messageTools}>
+                {quickReactions.map(choice => {
+                  const group = (message.reactions ?? []).find(g => reactionGroupIsEmoji(g, choice.key, catalog?.discord_custom_emoji ?? []))
+                  const madeInTheApp = !!group?.reacted_by_me && !group.my_reaction_event_id
+                  return (
+                    <button key={choice.key} type="button" disabled={reacting || madeInTheApp}
+                      className={`${styles.quickReaction} ${group?.reacted_by_me ? styles.quickReactionMine : ''}`}
+                      title={madeInTheApp ? `You reacted with :${choice.name}: in the app; take it back there`
+                        : group?.my_reaction_event_id ? `Take back your :${choice.name}:` : `React with :${choice.name}:`}
+                      aria-label={`React with ${choice.name}`} aria-pressed={!!group?.reacted_by_me}
+                      onClick={() => onQuickReaction(message, choice)}>
+                      <EmojiFace choice={choice} />
+                    </button>
+                  )
+                })}
+                <button type="button" className={styles.reactButton} disabled={reacting}
+                  aria-expanded={reactingTo?.event_id === message.event_id}
+                  title="React to this message" aria-label="React to this message"
+                  onClick={() => setReactingTo(current => current?.event_id === message.event_id ? null : message)}>
+                  {'\u{1F642}'}
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -339,14 +440,34 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
         {reactingTo && (
           <EmojiPickerPanel
             heading={`React to ${reactingTo.is_me ? 'your' : `${reactingTo.sender_name || reactingTo.sender}'s`} message: “${reactingTo.body.slice(0, 60)}${reactingTo.body.length > 60 ? '…' : ''}”`}
-            onPick={emoji => { const message = reactingTo; setReactingTo(null); void postReaction(message, emoji) }}
+            purpose="reaction" roomDiscordServerID={roomServerID}
+            onPick={choice => { const message = reactingTo; setReactingTo(null); void postReaction(message, choice) }}
             onClose={() => setReactingTo(null)} />
         )}
-        <EmojiPickerButton onPick={insertEmoji} disabled={sending} />
+        {suggestions.length > 0 && (
+          <EmojiSuggestionList suggestions={suggestions} activeIndex={activeSuggestion}
+            onPick={pickSuggestion} onHover={setSuggestionIndex} />
+        )}
+        <EmojiPickerButton onPick={insertEmoji} disabled={sending} roomDiscordServerID={roomServerID} />
         <textarea ref={composer} className={styles.input} rows={2} value={draft} disabled={sending}
-          placeholder={`Message ${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''} — Enter sends, Shift+Enter is a new line`}
-          onChange={e => setDraft(e.target.value)}
+          placeholder={`Message ${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''} — Enter sends, : finds an emoji, +:name: reacts to the newest message`}
+          onChange={e => { setDraft(e.target.value); setCursor(e.target.selectionStart); setSuggestionIndex(0) }}
+          onSelect={e => setCursor(e.currentTarget.selectionStart)}
           onKeyDown={e => {
+            if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                const step = e.key === 'ArrowDown' ? 1 : -1
+                setSuggestionIndex((activeSuggestion + step + suggestions.length) % suggestions.length)
+                return
+              }
+              if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+                const suggestion = suggestions[activeSuggestion]
+                if (!suggestion.disabledReason) { e.preventDefault(); pickSuggestion(suggestion); return }
+                if (e.key === 'Tab') return
+              }
+              if (e.key === 'Escape') { e.preventDefault(); setDismissedColonAt(colonQuery?.start ?? null); return }
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
           }} />
         <button type="button" className="bi-save-btn" disabled={sending || !draft.trim()} onClick={() => { void send() }}>
@@ -377,12 +498,10 @@ function MemberList({ conversation }: { conversation: MultichatConversation }) {
   )
 }
 
-/** Names for the Discord tokens a Discord room's messages can still carry
- *  (a channel mention the bridge leaves as `<#id>`): channels from the bridge
- *  status, read once when a Discord room opens, and users from the room's own
- *  senders. Other apps get none. A failed status read only leaves channel ids
- *  unnamed, so it is logged rather than shown over the thread. */
-function useDiscordNames(conversation: MultichatConversation, messages: MultichatMessage[] | null): DiscordNames {
+/** The Discord bridge's status, read once when a Discord room opens: its
+ *  channel names, and which server the room is a channel of (whose custom
+ *  emoji the pickers offer). Null for other apps, and until it answers. */
+function useDiscordStatus(conversation: MultichatConversation): DiscordBridgeStatus | null {
   const { read } = useMultichat()
   const isDiscord = conversation.platform === DISCORD_PLATFORM
   const [status, setStatus] = useState<DiscordBridgeStatus | null>(null)
@@ -391,9 +510,20 @@ function useDiscordNames(conversation: MultichatConversation, messages: Multicha
     let cancelled = false
     read<DiscordBridgeStatus>('/discord/status')
       .then(answer => { if (!cancelled) setStatus(answer) })
-      .catch(err => console.error('Discord channel names are not available:', err))
+      .catch(err => console.error('Discord channel names and custom emoji are not available:', err))
     return () => { cancelled = true }
   }, [isDiscord, read])
+  return status
+}
+
+/** Names for the Discord tokens a Discord room's messages can still carry
+ *  (a channel mention the bridge leaves as `<#id>`): channels from the bridge
+ *  status, read once when a Discord room opens, and users from the room's own
+ *  senders. Other apps get none. A failed status read only leaves channel ids
+ *  unnamed, so it is logged rather than shown over the thread. */
+function useDiscordNames(conversation: MultichatConversation, messages: MultichatMessage[] | null,
+  status: DiscordBridgeStatus | null): DiscordNames {
+  const isDiscord = conversation.platform === DISCORD_PLATFORM
   return useMemo(() => {
     if (!isDiscord) return NO_DISCORD_NAMES
     const senders = (messages ?? []).map(m => ({ sender_user_id: m.sender, sender_display_name: m.sender_name ?? '' }))

@@ -1,25 +1,11 @@
-// The Conversations composer's emoji picker: which emoji a search shows, and
-// how a picked one goes into the text box. The table itself is
-// src/emojiData.ts, generated from Unicode's data and loaded only when the
-// picker first opens.
+// The unicode emoji table's shape, and how a picked emoji goes into the text
+// box. The table itself is src/emojiData.ts, generated from Unicode's data and
+// loaded only when a picker first opens; searching it is emojiCatalog.ts.
 
 export interface EmojiGroup {
   name: string
-  emojis: readonly (readonly [string, string])[]
-}
-
-/** The groups whose emoji match every word of the query somewhere in their
- *  Unicode name, each group keeping only its matches; every group whole for
- *  an empty query. An emoji typed into the search matches itself. */
-export function searchEmoji(groups: readonly EmojiGroup[], query: string): EmojiGroup[] {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return [...groups]
-  return groups
-    .map(group => ({
-      name: group.name,
-      emojis: group.emojis.filter(([emoji, name]) => words.every(word => name.includes(word) || emoji === word)),
-    }))
-    .filter(group => group.emojis.length > 0)
+  /** [emoji, name], and 1 third when the emoji takes a skin tone. */
+  emojis: readonly (readonly [string, string, 1?])[]
 }
 
 /** The draft with `insert` put in place of the selection, and where the cursor

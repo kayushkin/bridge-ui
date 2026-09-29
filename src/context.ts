@@ -65,6 +65,11 @@ export interface BridgeRoutes {
   /** Discord through multichat: the message log with deleted messages kept,
    *  and the bridge's status. `?tab=deleted|status`. Needs `multichatBasePath`. */
   discord: string
+  /** The emoji pickers' settings: favourites (the quick-react bar under each
+   *  message), skin tone, which servers' custom emoji a Discord room is
+   *  offered, and every bridged server's custom emoji with a refresh from
+   *  Discord. Needs `multichatBasePath`. */
+  emoji: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
   // exists, so it is empty, and a link to an empty route is not rendered at all —
@@ -104,6 +109,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   messageContacts: '/messages/contacts',
   previews: '/previews',
   discord: '/messages/discord',
+  emoji: '/messages/emoji',
   notes: '',
 }
 

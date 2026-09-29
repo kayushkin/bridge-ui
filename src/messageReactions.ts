@@ -5,7 +5,7 @@ import { discordEmojiURL, mediaPathOfMxc } from './messageBody'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 
 /** The prefix multichat puts on a custom Discord emoji's reaction key. */
-const DISCORD_EMOJI_KEY_PREFIX = 'discord-emoji:'
+export const DISCORD_EMOJI_KEY_PREFIX = 'discord-emoji:'
 /** The prefix of an archive row's key in the message log's `reactions` map. */
 const DISCORD_MESSAGE_KEY_PREFIX = 'discord:'
 
@@ -93,11 +93,11 @@ export function reactionChipAction(reaction: MessageReactionGroup): ReactionChip
 /** A message's reactions with ours added, shown at once while the next poll
  *  brings the logged copy. */
 export function withReactionPosted(reactions: readonly MessageReactionGroup[], key: string, reactionEventID: string,
-  myName: string): MessageReactionGroup[] {
+  myName: string, shortcode = ''): MessageReactionGroup[] {
   const existing = reactions.find(reaction => reaction.key === key)
   if (!existing) {
     return [...reactions, {
-      key, shortcode: '', count: 1, sender_display_names: [myName], reacted_by_me: true, my_reaction_event_id: reactionEventID,
+      key, shortcode, count: 1, sender_display_names: [myName], reacted_by_me: true, my_reaction_event_id: reactionEventID,
     }]
   }
   return reactions.map(reaction => reaction.key !== key ? reaction : {

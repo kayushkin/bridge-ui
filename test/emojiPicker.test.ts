@@ -1,28 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { EMOJI_GROUPS } from '../src/emojiData'
-import { insertAtSelection, searchEmoji } from '../src/emojiPicker'
+import { insertAtSelection } from '../src/emojiPicker'
 
 describe('the emoji table', () => {
   it('has Unicode’s groups with names', () => {
     expect(EMOJI_GROUPS.map(g => g.name)).toContain('Smileys & Emotion')
     expect(EMOJI_GROUPS.flatMap(g => g.emojis).length).toBeGreaterThan(1500)
-  })
-})
-
-describe('searching', () => {
-  it('matches every word of the query in the name', () => {
-    const found = searchEmoji(EMOJI_GROUPS, 'thumbs up').flatMap(g => g.emojis.map(e => e[0]))
-    expect(found).toContain('\u{1F44D}')
-    expect(found).not.toContain('\u{1F44E}')
-  })
-
-  it('shows every group for an empty query and none for nonsense', () => {
-    expect(searchEmoji(EMOJI_GROUPS, '  ')).toHaveLength(EMOJI_GROUPS.length)
-    expect(searchEmoji(EMOJI_GROUPS, 'zzqqxx')).toEqual([])
-  })
-
-  it('ignores case', () => {
-    expect(searchEmoji(EMOJI_GROUPS, 'RED HEART').flatMap(g => g.emojis.map(e => e[0]))).toContain('❤️')
   })
 })
 
