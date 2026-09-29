@@ -550,8 +550,13 @@ function ProjectPage({
               <ul className={styles.plainList}>
                 {links.map((link) => (
                   <li key={link.id}>
+                    {/* The label is the owning store's name for the thing; the ref is
+                        that store's id, said as such so a bare number reads as an id. */}
                     {link.label && link.label !== link.entity_ref ? `${link.label} ` : ''}
-                    <span className={`${styles.mono} ${styles.muted}`}>{link.entity_ref}</span>
+                    <span className={styles.muted}>
+                      {info?.service ?? 'its store'} id{' '}
+                      <span className={styles.mono}>{link.entity_ref}</span>
+                    </span>
                     {link.note && <span className={styles.muted}> — {link.note}</span>}
                   </li>
                 ))}
