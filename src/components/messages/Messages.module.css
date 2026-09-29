@@ -115,6 +115,17 @@ a.name:hover { text-decoration: underline; }
 }
 .tagAdd:hover { color: var(--text); border-color: var(--text-muted); }
 .tagRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* The open conversation's tags, under its name. A tag that comes from the DM
+   partner's contact is dashed: it changes on the Contacts page, not here. */
+.threadTags {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; font-size: 0.9em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.tagFromContact > .tag { border-style: dashed; opacity: 0.8; }
+.tagSelect {
+  font: inherit; font-size: 0.8em; padding: 0 6px; border-radius: 999px; cursor: pointer;
+  color: var(--text-muted); background: none; border: 1px dashed var(--border);
+}
 .tagManager {
   display: flex; flex-direction: column; gap: 8px; padding: 8px 10px;
   border: 1px solid var(--border); border-radius: 6px;

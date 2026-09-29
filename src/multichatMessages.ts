@@ -8,7 +8,7 @@
 // forwards only the multichat routes it names.
 
 import type {
-  MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage,
+  MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
 } from './types-multichat'
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
@@ -33,6 +33,9 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /contacts/tags/bulk',
   'POST /contacts/tags',
   'DELETE /contacts/tags',
+  'GET /conversations/tags/bulk',
+  'POST /conversations/tags',
+  'DELETE /conversations/tags',
   // Images, custom emoji and custom reactions, loaded by <img> (MessageContent).
   'GET /media/{server_name}/{media_id}',
   // Channel names for a Discord room's `<#id>` tokens, and which server's
@@ -130,12 +133,17 @@ export interface ConversationFilter {
   /** Matched, in any case, against the room name, its members' names and its
    *  last message. */
   text: string
+  /** Null means any tag or none; else one of `conversationTags`. */
+  tagID: number | null
 }
 
-export function filterConversations(conversations: readonly MultichatConversation[], filter: ConversationFilter): MultichatConversation[] {
+export function filterConversations(
+  conversations: readonly MultichatConversation[], tagMaps: ConversationTagMaps, filter: ConversationFilter,
+): MultichatConversation[] {
   const text = filter.text.trim().toLowerCase()
   return conversations.filter(conversation => {
     if (filter.platform && conversation.platform !== filter.platform) return false
+    if (filter.tagID !== null && !conversationTags(conversation, tagMaps).some(tag => tag.id === filter.tagID)) return false
     if (!text) return true
     return conversation.name.toLowerCase().includes(text)
       || (conversation.members ?? []).some(member => (member.display_name ?? '').toLowerCase().includes(text))
@@ -158,10 +166,31 @@ export function conversationShownName(conversation: MultichatConversation): stri
   return `${names.slice(0, NAMED_MEMBERS_SHOWN).join(', ')} and ${others} ${others === 1 ? 'other' : 'others'}`
 }
 
-/** The tags on the people in a room: every tag on any member's identity, once
- *  each, by name. */
-export function conversationTags(conversation: MultichatConversation, tagMap: MultichatContactTagMap): MultichatTag[] {
-  return uniqueTagsSorted((conversation.members ?? []).flatMap(member => tagMap[member.user_id] ?? []))
+/** The two places a room's tags come from. */
+export interface ConversationTagMaps {
+  contactTagMap: MultichatContactTagMap
+  conversationTagMap: MultichatConversationTagMap
+}
+
+/** The tags put on the room itself. */
+export function conversationOwnTags(conversation: MultichatConversation, conversationTagMap: MultichatConversationTagMap): MultichatTag[] {
+  return uniqueTagsSorted(conversationTagMap[conversation.room_id] ?? [])
+}
+
+/** The tags a one-to-one DM takes from the other person's identity; none in
+ *  any other room, so a busy channel does not carry every member's tags. */
+export function conversationPartnerTags(conversation: MultichatConversation, contactTagMap: MultichatContactTagMap): MultichatTag[] {
+  const partner = conversation.direct_message_partner_user_id
+  return partner ? uniqueTagsSorted(contactTagMap[partner] ?? []) : []
+}
+
+/** The tags a room shows and is filtered by: its own, and in a one-to-one DM
+ *  the other person's, once each, by name. */
+export function conversationTags(conversation: MultichatConversation, tagMaps: ConversationTagMaps): MultichatTag[] {
+  return uniqueTagsSorted([
+    ...conversationOwnTags(conversation, tagMaps.conversationTagMap),
+    ...conversationPartnerTags(conversation, tagMaps.contactTagMap),
+  ])
 }
 
 function uniqueTagsSorted(tags: readonly MultichatTag[]): MultichatTag[] {
@@ -271,6 +300,15 @@ export function contactTagAssignBody(userID: string, tagID: number): { contact_u
 
 export function contactTagRemovePath(userID: string, tagID: number): string {
   return `/contacts/tags?${new URLSearchParams({ contact: userID, tag: String(tagID) }).toString()}`
+}
+
+/** The body of `POST /conversations/tags`: one tag onto one room. */
+export function conversationTagAssignBody(roomID: string, tagID: number): { room_id: string; tag_id: number } {
+  return { room_id: roomID, tag_id: tagID }
+}
+
+export function conversationTagRemovePath(roomID: string, tagID: number): string {
+  return `/conversations/tags?${new URLSearchParams({ room: roomID, tag: String(tagID) }).toString()}`
 }
 
 /** When a message or conversation was last active: the time alone for today,

@@ -43,6 +43,9 @@ export interface MultichatConversation {
   /** Unix milliseconds; 0 when the room has no message yet. */
   last_activity: number
   last_message?: string
+  /** The other person in a one-to-one DM; absent in a group, a server
+   *  channel, or a DM whose bridge does not say it is one (Telegram). */
+  direct_message_partner_user_id?: string
 }
 
 /** One person in a room — matrix.ConversationMember. `display_name` is the
@@ -135,3 +138,6 @@ export interface MultichatTag {
  *  tag is absent. */
 export type MultichatContactTagMap = Record<string, MultichatTag[]>
 
+/** `GET {multichatBasePath}/conversations/tags/bulk` — each room's own tags,
+ *  keyed by room id. A room with no tag is absent. */
+export type MultichatConversationTagMap = Record<string, MultichatTag[]>

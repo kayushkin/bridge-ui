@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { DiscordBridgeStatus } from '@kayushkin/multichat-types'
 import { bridgedChannelsOf, DISCORD_PLATFORM } from '../../discordLog'
 import { insertAtSelection } from '../../emojiPicker'
 import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messageBody'
 import {
-  conversationMessagesPath, conversationPlatforms, conversationSendPath, conversationShownName, conversationTags, filterConversations,
+  conversationMessagesPath, conversationOwnTags, conversationPartnerTags, conversationPlatforms, conversationSendPath, conversationShownName,
+  conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterConversations, type ConversationTagMaps,
   conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
   reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
 } from '../../multichatMessages'
@@ -16,10 +17,11 @@ import {
 } from '../../emojiCatalog'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
-  MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatMessagePage, MultichatSendAnswer,
+  MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
+  MultichatSendAnswer, MultichatTag,
 } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
-import { MultichatNotConfigured, TagChips } from './messagesShared'
+import { MultichatNotConfigured, TagChip, TagChips } from './messagesShared'
 import { MessageContent, ReactionChips } from './MessageContent'
 import { EmojiFace, EmojiPickerButton, EmojiPickerPanel, EmojiSuggestionList, useEmojiChoices, type EmojiSuggestion } from './EmojiPicker'
 import { useEmojiCatalog } from './useEmojiCatalog'
@@ -43,15 +45,27 @@ const CUSTOM_EMOJI_IN_MESSAGE_REASON =
  * A message sent here reaches a real person on that app.
  */
 export function BridgeMessageConversations() {
-  const { read, configured } = useMultichat()
+  const { read, write, configured } = useMultichat()
   const [conversations, setConversations] = useState<MultichatConversation[] | null>(null)
-  const [tagMap, setTagMap] = useState<MultichatContactTagMap>({})
+  const [tags, setTags] = useState<MultichatTag[]>([])
+  const [tagMaps, setTagMaps] = useState<ConversationTagMaps>({ contactTagMap: {}, conversationTagMap: {} })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [tagsError, setTagsError] = useState<string | null>(null)
   const [platform, setPlatform] = useState('')
   const [text, setText] = useState('')
+  const [tagID, setTagID] = useState<number | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const roomID = searchParams.get('room') ?? ''
+
+  const reloadTags = useCallback(async () => {
+    const [nextTags, contactTagMap, conversationTagMap] = await Promise.all([
+      read<MultichatTag[] | null>('/tags'),
+      read<MultichatContactTagMap | null>('/contacts/tags/bulk'),
+      read<MultichatConversationTagMap | null>('/conversations/tags/bulk'),
+    ])
+    setTags(nextTags ?? [])
+    setTagMaps({ contactTagMap: contactTagMap ?? {}, conversationTagMap: conversationTagMap ?? {} })
+  }, [read])
 
   const reload = useCallback(async () => {
     try {
@@ -60,14 +74,26 @@ export function BridgeMessageConversations() {
     } catch (err) {
       setLoadError(errorText(err))
     }
-    // Tags only label the rows, so the list still shows when they fail.
+    // Tags only label and filter the rows, so the list still shows when they fail.
     try {
-      setTagMap(await read<MultichatContactTagMap | null>('/contacts/tags/bulk') ?? {})
+      await reloadTags()
       setTagsError(null)
     } catch (err) {
       setTagsError(errorText(err))
     }
-  }, [read])
+  }, [read, reloadTags])
+
+  /** A tag write, then the tags read back from multichat; the refusal, or null. */
+  const writeTags = useCallback(async (method: string, path: string, body?: unknown): Promise<string | null> => {
+    const result = await write(method, path, body)
+    if (!result.ok) return result.error
+    try {
+      await reloadTags()
+      return null
+    } catch (err) {
+      return errorText(err)
+    }
+  }, [write, reloadTags])
 
   useEffect(() => {
     if (!configured) return
@@ -77,7 +103,10 @@ export function BridgeMessageConversations() {
   }, [configured, reload])
 
   const platforms = useMemo(() => conversationPlatforms(conversations ?? []), [conversations])
-  const shown = useMemo(() => filterConversations(conversations ?? [], { platform, text }), [conversations, platform, text])
+  const shown = useMemo(
+    () => filterConversations(conversations ?? [], tagMaps, { platform, text, tagID }),
+    [conversations, tagMaps, platform, text, tagID],
+  )
   const picked = conversations?.find(conversation => conversation.room_id === roomID) ?? null
 
   const pick = (nextRoomID: string) => {
@@ -108,6 +137,11 @@ export function BridgeMessageConversations() {
                 <option value="">Every app ({conversations.length})</option>
                 {platforms.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
+              <select className={styles.input} value={tagID ?? ''} title="A room's tags are its own, plus the other person's in a DM"
+                onChange={e => setTagID(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">Any tag or none</option>
+                {tags.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+              </select>
             </div>
             {shown.length === 0 && (
               <div className={styles.empty}>{conversations.length === 0 ? 'No conversations.' : 'No conversation matches.'}</div>
@@ -125,7 +159,7 @@ export function BridgeMessageConversations() {
                     <span className={styles.rowMeta}>
                       {conversation.platform && <span className={styles.platform}>{conversation.platform}</span>}
                       {conversation.member_count > 2 && <span className={styles.muted}>{conversation.member_count} members</span>}
-                      <TagChips tags={conversationTags(conversation, tagMap)} />
+                      <TagChips tags={conversationTags(conversation, tagMaps)} />
                     </span>
                     {conversation.last_message && <span className={styles.preview}>{conversationPreviewText(conversation.last_message)}</span>}
                   </button>
@@ -134,7 +168,10 @@ export function BridgeMessageConversations() {
             </ul>
           </div>
           <div className={styles.viewer}>
-            {picked ? <ConversationThread key={picked.room_id} conversation={picked} onSent={() => { void reload() }} /> : (
+            {picked ? (
+              <ConversationThread key={picked.room_id} conversation={picked} onSent={() => { void reload() }}
+                tagEditor={<ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />} />
+            ) : (
               <div className={styles.empty}>
                 {roomID ? `multichat lists no conversation ${roomID}.` : 'Pick a conversation to read it here.'}
               </div>
@@ -149,7 +186,12 @@ export function BridgeMessageConversations() {
 /** One room: its messages, oldest at the top, with older pages loaded on
  *  request and the newest page polled; and the box to answer in. Keyed by room,
  *  so switching rooms starts it afresh. */
-function ConversationThread({ conversation, onSent }: { conversation: MultichatConversation; onSent: () => void }) {
+function ConversationThread({ conversation, onSent, tagEditor }: {
+  conversation: MultichatConversation
+  onSent: () => void
+  /** Drawn under the room's name. */
+  tagEditor: ReactNode
+}) {
   const { read, write } = useMultichat()
   const roomID = conversation.room_id
   const [messages, setMessages] = useState<MultichatMessage[] | null>(null)
@@ -389,6 +431,7 @@ function ConversationThread({ conversation, onSent }: { conversation: MultichatC
         <MemberList conversation={conversation} />
         <code className={styles.roomID} title="Matrix room id">{roomID}</code>
       </div>
+      {tagEditor}
       {error && <pre className={styles.error}>{error}</pre>}
       <div className={styles.messages} ref={scroller}>
         {hasOlder && (
@@ -529,4 +572,48 @@ function useDiscordNames(conversation: MultichatConversation, messages: Multicha
     const senders = (messages ?? []).map(m => ({ sender_user_id: m.sender, sender_display_name: m.sender_name ?? '' }))
     return discordNamesOf(bridgedChannelsOf(status), senders)
   }, [isDiscord, status, messages])
+}
+
+/** The open room's tags. Its own come off with ×, and the list adds one. In a
+ *  DM the other person's tags show too, dashed; they belong to the contact and
+ *  change on the Contacts page. */
+function ConversationTagEditor({ conversation, tags, tagMaps, write }: {
+  conversation: MultichatConversation
+  tags: MultichatTag[]
+  tagMaps: ConversationTagMaps
+  write: (method: string, path: string, body?: unknown) => Promise<string | null>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const roomID = conversation.room_id
+  const own = conversationOwnTags(conversation, tagMaps.conversationTagMap)
+  const fromPartner = conversationPartnerTags(conversation, tagMaps.contactTagMap)
+  const addable = tags.filter(tag => !own.some(on => on.id === tag.id))
+  const run = async (method: string, path: string, body?: unknown) => {
+    setBusy(true)
+    setError(await write(method, path, body))
+    setBusy(false)
+  }
+  return (
+    <div className={styles.threadTags} data-room-tags={roomID}>
+      <span className={styles.muted}>Tags</span>
+      {own.map(tag => (
+        <TagChip key={tag.id} tag={tag} disabled={busy}
+          onRemove={() => { void run('DELETE', conversationTagRemovePath(roomID, tag.id)) }} />
+      ))}
+      {fromPartner.map(tag => (
+        <span key={`contact-${tag.id}`} className={styles.tagFromContact} title="On the contact; change it on the Contacts page">
+          <TagChip tag={tag} />
+        </span>
+      ))}
+      {tags.length === 0 ? <span className={styles.muted}>No tags exist yet; add one on the Contacts page.</span> : addable.length > 0 && (
+        <select className={styles.tagSelect} value="" disabled={busy}
+          onChange={e => { if (e.target.value) void run('POST', '/conversations/tags', conversationTagAssignBody(roomID, Number(e.target.value))) }}>
+          <option value="">+ Tag this conversation</option>
+          {addable.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+        </select>
+      )}
+      {error && <pre className={styles.error}>{error}</pre>}
+    </div>
+  )
 }

@@ -3,12 +3,12 @@ import { DEFAULT_BRIDGE_ROUTES, type BridgeConfig } from '../src/context'
 import { groupForPath, navEntriesFor } from '../src/pages'
 import {
   MESSAGE_PAGE_SIZE, contactListPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, conversationMessagesPath,
-  conversationPlatforms, conversationSendPath, conversationShownName, conversationTags, filterContacts, filterConversations, highlightSegments,
+  conversationPlatforms, conversationSendPath, conversationShownName, conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterContacts, filterConversations, highlightSegments,
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
   searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
 } from '../src/multichatMessages'
 import type {
-  MultichatContactTagMap, MultichatConversation, MultichatMessage, MultichatTag, MultichatUnifiedContact,
+  MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatTag, MultichatUnifiedContact,
 } from '../src/types-multichat'
 
 const DEFAULT_CONFIG: Partial<BridgeConfig> = { fetch: async () => new Response(), basePath: '/api/bridge', routes: DEFAULT_BRIDGE_ROUTES }
@@ -79,6 +79,7 @@ describe('merging pages', () => {
 const conversation = (room_id: string, name: string, extra: Partial<MultichatConversation> = {}): MultichatConversation =>
   ({ room_id, name, member_count: 2, last_activity: 0, ...extra })
 const tag = (id: number, name: string): MultichatTag => ({ id, name, color: '#f5d40c' })
+const NO_TAGS = { contactTagMap: {}, conversationTagMap: {} }
 
 describe('the conversation list', () => {
   const conversations = [
@@ -92,14 +93,14 @@ describe('the conversation list', () => {
   })
 
   it('filters by app and by name or last message, in any case', () => {
-    expect(filterConversations(conversations, { platform: 'discord', text: '' }).map(c => c.room_id)).toEqual(['!2'])
-    expect(filterConversations(conversations, { platform: '', text: 'INVOICE' }).map(c => c.room_id)).toEqual(['!1'])
-    expect(filterConversations(conversations, { platform: '', text: ' food ' }).map(c => c.room_id)).toEqual(['!2'])
-    expect(filterConversations(conversations, { platform: '', text: '' })).toHaveLength(3)
+    expect(filterConversations(conversations, NO_TAGS, { platform: 'discord', text: '', tagID: null }).map(c => c.room_id)).toEqual(['!2'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: 'INVOICE', tagID: null }).map(c => c.room_id)).toEqual(['!1'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: ' food ', tagID: null }).map(c => c.room_id)).toEqual(['!2'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: '', tagID: null })).toHaveLength(3)
   })
 
   it("matches a member's name even when the room name leaves it out", () => {
-    expect(filterConversations(conversations, { platform: '', text: 'ruiz' }).map(c => c.room_id)).toEqual(['!1'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: 'ruiz', tagID: null }).map(c => c.room_id)).toEqual(['!1'])
   })
 
   it('shows a room named after its members by the first three and a count of the rest', () => {
@@ -113,10 +114,34 @@ describe('the conversation list', () => {
     expect(conversationShownName({ ...named(6), named_after_members: false, name: 'Book club' })).toBe('Book club')
   })
 
-  it("gathers a room's tags from its members' identities, once each, by name", () => {
-    const tagMap: MultichatContactTagMap = { '@whatsapp_1': [tag(2, 'Reefer'), tag(1, 'LTL')], '@meta_1': [tag(1, 'LTL')] }
-    expect(conversationTags(conversations[0], tagMap).map(t => t.name)).toEqual(['LTL', 'Reefer'])
-    expect(conversationTags(conversations[1], tagMap)).toEqual([])
+  describe('tags', () => {
+    const dm = conversation('!dm', 'Alvaro', { platform: 'discord', direct_message_partner_user_id: '@discord_1', members: [{ user_id: '@discord_1' }] })
+    const channel = conversation('!channel', '#general', { platform: 'discord', members: [{ user_id: '@discord_1' }, { user_id: '@discord_2' }] })
+    const contactTagMap: MultichatContactTagMap = { '@discord_1': [tag(2, 'Reefer'), tag(1, 'LTL')], '@discord_2': [tag(3, 'Zeta')] }
+    const conversationTagMap: MultichatConversationTagMap = { '!dm': [tag(1, 'LTL'), tag(4, 'Alpha')], '!channel': [tag(3, 'Zeta')] }
+    const tagMaps = { contactTagMap, conversationTagMap }
+
+    it("gives a DM its own tags and its partner's, once each, by name", () => {
+      expect(conversationTags(dm, tagMaps).map(t => t.name)).toEqual(['Alpha', 'LTL', 'Reefer'])
+    })
+
+    it("gives a group or channel only its own tags, never its members'", () => {
+      expect(conversationTags(channel, tagMaps).map(t => t.name)).toEqual(['Zeta'])
+      expect(conversationTags(channel, { contactTagMap, conversationTagMap: {} })).toEqual([])
+    })
+
+    it('filters by a tag the room has by either route', () => {
+      const rooms = [dm, channel]
+      const byTag = (tagID: number) => filterConversations(rooms, tagMaps, { platform: '', text: '', tagID }).map(c => c.room_id)
+      expect(byTag(2)).toEqual(['!dm'])
+      expect(byTag(3)).toEqual(['!channel'])
+      expect(byTag(9)).toEqual([])
+    })
+
+    it('writes a room tag by room id, encoded', () => {
+      expect(conversationTagAssignBody('!dm:x', 4)).toEqual({ room_id: '!dm:x', tag_id: 4 })
+      expect(conversationTagRemovePath('!dm:x', 4)).toBe('/conversations/tags?room=%21dm%3Ax&tag=4')
+    })
   })
 })
 
