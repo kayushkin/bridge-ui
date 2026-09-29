@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import type { EmojiSettings } from '@kayushkin/multichat-types'
 import {
-  customChoice, favoriteChoices, SKIN_TONES, searchEmojiChoices, unicodeChoices, unicodeNamesOf, withFavoriteMoved,
+  customChoice, emojiSearchIndex, favoriteChoices, SKIN_TONES, searchEmojiIndex, unicodeChoices, unicodeNamesOf, withFavoriteMoved,
   withFavoriteToggled, withSkinTone, type EmojiChoice,
 } from '../../emojiCatalog'
 import { messageTimeLabel } from '../../multichatMessages'
-import { EmojiFace } from './EmojiPicker'
+import { EmojiFace, emojiSections, VirtualEmojiGrid } from './EmojiPicker'
 import { MultichatNotConfigured } from './messagesShared'
 import { useEmojiCatalog, useEmojiGroups } from './useEmojiCatalog'
 import { useMultichat } from './useMultichat'
@@ -34,15 +34,12 @@ export function BridgeEmoji() {
   const custom = useMemo(() => (catalog?.discord_custom_emoji ?? []).map(customChoice), [catalog])
   const favorites = useMemo(() => favoriteChoices(favoriteKeys, catalog?.discord_custom_emoji ?? [],
     groups ? unicodeNamesOf(groups) : new Map()), [favoriteKeys, catalog, groups])
-  const results = useMemo(() => searchEmojiChoices([...custom, ...unicode], query, favoriteKeys), [custom, unicode, query, favoriteKeys])
-  const customByServer = useMemo(() => {
-    const byServer = new Map<string, EmojiChoice[]>()
-    for (const choice of custom) {
-      if (choice.kind !== 'custom') continue
-      byServer.set(choice.emoji.discord_server_name, [...(byServer.get(choice.emoji.discord_server_name) ?? []), choice])
-    }
-    return [...byServer.entries()]
-  }, [custom])
+  const index = useMemo(() => emojiSearchIndex([...custom, ...unicode]), [custom, unicode])
+  const deferredQuery = useDeferredValue(query)
+  const results = useMemo(() => searchEmojiIndex(index, deferredQuery, favoriteKeys), [index, deferredQuery, favoriteKeys])
+  const resultSections = useMemo(() => [{ id: 'matches', name: 'Matches', choices: results }], [results])
+  // The favourites have their own list above, so the grid starts at the servers.
+  const sections = useMemo(() => emojiSections(groups, unicode, custom, []), [groups, unicode, custom])
 
   if (!configured) return <MultichatNotConfigured page="Emoji" />
 
@@ -138,44 +135,23 @@ export function BridgeEmoji() {
           <section className={styles.emojiPageSection}>
             <div className={styles.emojiPageHeadingRow}>
               <h3 className={styles.emojiPageHeading}>All emoji</h3>
-              <input className={styles.input} type="search" value={query} placeholder="Search by name — :par finds partyParrot"
+              <input className={styles.input} type="search" value={query} placeholder="Search by name or server — :par, pretend, reno kerm"
                 onChange={event => setQuery(event.target.value)} />
             </div>
-            {query.trim() ? (
-              results.length === 0 ? <div className={styles.empty}>No emoji matches.</div> : (
-                <div className={styles.emojiGrid}>{results.map(cell)}</div>
-              )
-            ) : (
-              <>
-                <div className={styles.emojiPageHeadingRow}>
-                  <span className={styles.muted}>
-                    Custom emoji of the bridged Discord servers
-                    {catalog.discord_refreshes.map(r => ` · ${r.discord_server_name} listed ${messageTimeLabel(Date.parse(r.refreshed_at))}`).join('')}
-                  </span>
-                  <button type="button" className="bi-save-btn" disabled={refreshing} onClick={() => { void refresh() }}>
-                    {refreshing ? 'Asking Discord…' : 'Refresh from Discord'}
-                  </button>
-                </div>
-                {customByServer.length === 0 && (
-                  <div className={styles.empty}>No custom emoji yet. Refresh from Discord to list each server&apos;s.</div>
-                )}
-                {customByServer.map(([server, choices]) => (
-                  <div key={server}>
-                    <div className={styles.emojiGroupName}>{server} ({choices.length})</div>
-                    <div className={styles.emojiGrid}>{choices.map(cell)}</div>
-                  </div>
-                ))}
-                {groups?.map(group => {
-                  const start = groups.slice(0, groups.indexOf(group)).reduce((sum, g) => sum + g.emojis.length, 0)
-                  return (
-                    <div key={group.name}>
-                      <div className={styles.emojiGroupName}>{group.name}</div>
-                      <div className={styles.emojiGrid}>{unicode.slice(start, start + group.emojis.length).map(cell)}</div>
-                    </div>
-                  )
-                })}
-              </>
-            )}
+            <div className={styles.emojiPageHeadingRow}>
+              <span className={styles.muted}>
+                Custom emoji of the bridged Discord servers
+                {catalog.discord_refreshes.map(r => ` · ${r.discord_server_name} listed ${messageTimeLabel(Date.parse(r.refreshed_at))}`).join('')}
+              </span>
+              <button type="button" className="bi-save-btn" disabled={refreshing} onClick={() => { void refresh() }}>
+                {refreshing ? 'Asking Discord…' : 'Refresh from Discord'}
+              </button>
+            </div>
+            {custom.length === 0 && <div className={styles.empty}>No custom emoji yet. Refresh from Discord to list each server&apos;s.</div>}
+            {deferredQuery.trim() && results.length === 0 && <div className={styles.empty}>No emoji matches.</div>}
+            <div className={styles.emojiPageGrid}>
+              <VirtualEmojiGrid sections={deferredQuery.trim() ? resultSections : sections} jumpBar={!deferredQuery.trim()} renderCell={cell} />
+            </div>
           </section>
         </>
       )}

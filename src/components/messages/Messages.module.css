@@ -266,3 +266,17 @@ img.emojiSuggestionFace { height: 1.3em; min-width: 0; }
 .emojiFavorite { display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 6px; }
 .emojiFavorite:hover { background: var(--bg-surface); }
 .emojiFavoriteButtons { margin-left: auto; display: inline-flex; gap: 2px; }
+
+/* The emoji grid draws only the rows in view: each row sits at its own top in
+   a canvas as tall as every row together. */
+.emojiGridCanvas { position: relative; }
+.emojiGridHeading, .emojiGridRow { position: absolute; left: 0; right: 0; }
+.emojiGridHeading { display: flex; align-items: center; padding: 0 2px; font-size: 0.72em; color: var(--text-muted); }
+.emojiGridRow { display: grid; align-items: center; }
+.emojiGridRow .emojiCell { height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+/* Section icons above the grid: each jumps to its section. */
+.emojiJumpBar { display: flex; gap: 2px; overflow-x: auto; padding-bottom: 2px; border-bottom: 1px solid var(--border); flex: none; }
+.emojiJumpButton { flex: none; padding: 2px 4px; font-size: 1.05em; line-height: 1; cursor: pointer; background: none; border: none; border-radius: 6px; opacity: 0.6; }
+.emojiJumpButton .customEmoji { height: 1.05em; }
+.emojiJumpButton:hover, .emojiJumpButtonCurrent { opacity: 1; background: var(--bg-surface); }
+.emojiPageGrid { height: 60vh; min-height: 280px; display: flex; flex-direction: column; gap: 4px; }

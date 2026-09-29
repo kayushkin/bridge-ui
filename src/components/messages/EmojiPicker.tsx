@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { DiscordCustomEmoji } from '@kayushkin/multichat-types'
 import { useBridgeConfig } from '../../context'
 import {
-  customChoice, customEmojiImageURL, customEmojiOffered, favoriteChoices, searchEmojiChoices, unicodeChoices,
+  customChoice, customEmojiImageURL, customEmojiOffered, emojiSearchIndex, favoriteChoices, searchEmojiIndex, unicodeChoices,
   unicodeNamesOf, type EmojiChoice,
 } from '../../emojiCatalog'
+import { emojiGridLayout, rowsInView, sectionAt } from '../../emojiGridLayout'
 import { useEmojiCatalog, useEmojiGroups } from './useEmojiCatalog'
 import styles from './Messages.module.css'
 
@@ -17,7 +18,7 @@ export type EmojiPurpose = 'reaction' | 'message'
 /** How one emoji is drawn: its text, or a custom emoji's image. */
 export function EmojiFace({ choice, className }: { choice: EmojiChoice; className?: string }) {
   if (choice.kind === 'custom') {
-    return <img className={`${styles.customEmoji} ${className ?? ''}`} src={customEmojiImageURL(choice.emoji)} alt={`:${choice.name}:`} loading="lazy" />
+    return <img className={`${styles.customEmoji} ${className ?? ''}`} src={customEmojiImageURL(choice.emoji)} alt={`:${choice.name}:`} loading="lazy" decoding="async" />
   }
   return <span className={className}>{choice.key}</span>
 }
@@ -43,9 +44,17 @@ export function useEmojiChoices(purpose: EmojiPurpose, roomDiscordServerID: stri
     return favoriteChoices(favoriteKeys, catalog?.discord_custom_emoji ?? [], unicodeNames)
       .filter(choice => choice.kind === 'unicode' || (purpose === 'reaction' && offeredKeys.has(choice.key)))
   }, [favoriteKeys, catalog, unicodeNames, offered, purpose])
+  const sectionsOf = useMemo(() => emojiSections(groups, unicode, purpose === 'reaction' ? custom : [], favorites),
+    [groups, unicode, custom, favorites, purpose])
+  // Search indexes, built once per list rather than on every keystroke.
+  const unicodeIndex = useMemo(() => emojiSearchIndex(unicode), [unicode])
+  const customIndex = useMemo(() => emojiSearchIndex(custom), [custom])
+  const pickableIndex = useMemo(() => (purpose === 'reaction' ? [...customIndex, ...unicodeIndex] : unicodeIndex),
+    [purpose, customIndex, unicodeIndex])
   return {
     groups, unicode, custom: purpose === 'reaction' ? custom : [], customNotSendable: purpose === 'message' ? custom : [],
     favorites, favoriteKeys, tone, error: groupsError ?? catalogError,
+    sections: sectionsOf, unicodeIndex, customIndex, pickableIndex,
   }
 }
 
@@ -83,12 +92,110 @@ export function EmojiPickerButton({ onPick, disabled, roomDiscordServerID }: {
 }
 
 /** How many results a search shows. */
-const SEARCH_RESULT_LIMIT = 200
+const SEARCH_RESULT_LIMIT = 300
 
-/** The searchable emoji panel: favourites, the room's custom emoji, then
- *  every unicode group; a search matches any part of a name (`:par` finds
- *  parrot and partyParrot) and Enter picks the first match. `heading`, when
- *  given, says what a pick is for. */
+/** One titled run of emoji in a grid: favourites, a server's custom emoji, a
+ *  unicode group, or a search's matches. */
+export interface EmojiGridSection {
+  id: string
+  name: string
+  choices: readonly EmojiChoice[]
+}
+
+/** Favourites, then each server's custom emoji, then each unicode group. */
+export function emojiSections(groups: readonly { name: string; emojis: readonly unknown[] }[] | null,
+  unicode: readonly EmojiChoice[], custom: readonly EmojiChoice[], favorites: readonly EmojiChoice[]): EmojiGridSection[] {
+  const sections: EmojiGridSection[] = [{ id: 'favourites', name: 'Favourites', choices: favorites }]
+  const byServer = new Map<string, EmojiChoice[]>()
+  for (const choice of custom) {
+    if (choice.kind !== 'custom') continue
+    const server = choice.emoji.discord_server_name
+    byServer.set(server, [...(byServer.get(server) ?? []), choice])
+  }
+  for (const [server, choices] of byServer) sections.push({ id: `server:${server}`, name: server, choices })
+  let start = 0
+  for (const group of groups ?? []) {
+    sections.push({ id: `group:${group.name}`, name: group.name, choices: unicode.slice(start, start + group.emojis.length) })
+    start += group.emojis.length
+  }
+  return sections
+}
+
+const EMOJI_CELL_WIDTH = 36
+const EMOJI_ROW_HEIGHT = 36
+const HEADING_HEIGHT = 24
+/** Rows drawn beyond the view on each side, so a fast scroll shows no gap. */
+const OVERSCAN_PX = 240
+
+/**
+ * A scrolling grid of emoji sections that draws only the rows in view, so
+ * ~2,000 emoji scroll and search smoothly. `jumpBar` adds a row of section
+ * icons above it that scroll to each section and mark the one in view.
+ */
+export function VirtualEmojiGrid({ sections, renderCell, jumpBar }: {
+  sections: readonly EmojiGridSection[]
+  renderCell: (choice: EmojiChoice) => ReactNode
+  jumpBar?: boolean
+}) {
+  const scroller = useRef<HTMLDivElement | null>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight })
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  // New sections (a search) start at the top.
+  useLayoutEffect(() => {
+    if (scroller.current) scroller.current.scrollTop = 0
+    setScrollTop(0)
+  }, [sections])
+  const columns = Math.max(1, Math.floor(size.width / EMOJI_CELL_WIDTH))
+  const layout = useMemo(() => emojiGridLayout(sections.map(section => section.choices.length), columns, EMOJI_ROW_HEIGHT, HEADING_HEIGHT),
+    [sections, columns])
+  const shown = rowsInView(layout.rows, scrollTop, size.height, OVERSCAN_PX)
+  const current = sectionAt(layout.sectionTops, scrollTop)
+
+  return (
+    <>
+      {jumpBar && (
+        <div className={styles.emojiJumpBar} role="toolbar" aria-label="Jump to a section">
+          {sections.map((section, index) => section.choices.length > 0 && (
+            <button key={section.id} type="button" title={section.name} aria-label={`Jump to ${section.name}`}
+              className={`${styles.emojiJumpButton} ${index === current ? styles.emojiJumpButtonCurrent : ''}`}
+              onClick={() => { if (scroller.current) scroller.current.scrollTop = layout.sectionTops[index] }}>
+              <EmojiFace choice={section.choices[0]} />
+            </button>
+          ))}
+        </div>
+      )}
+      <div ref={scroller} className={styles.emojiGroups} onScroll={event => setScrollTop(event.currentTarget.scrollTop)}>
+        <div className={styles.emojiGridCanvas} style={{ height: layout.height }}>
+          {shown.map(row => row.kind === 'heading' ? (
+            <div key={`h${row.sectionIndex}`} className={styles.emojiGridHeading} style={{ top: row.top, height: row.height }}>
+              {sections[row.sectionIndex].name} ({sections[row.sectionIndex].choices.length})
+            </div>
+          ) : (
+            <div key={`r${row.sectionIndex}-${row.start}`} className={styles.emojiGridRow}
+              style={{ top: row.top, height: row.height, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+              {sections[row.sectionIndex].choices.slice(row.start, row.end).map(renderCell)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** The searchable emoji panel: a jump bar, then favourites, the room's custom
+ *  emoji and every unicode group. A search matches any part of a name (`:par`
+ *  finds parrot and partyParrot) or a server's name (`pretend`, `reno kerm`),
+ *  and Enter picks the first match. `heading`, when given, says what a pick
+ *  is for. */
 export function EmojiPickerPanel({ onPick, onClose, heading, purpose, roomDiscordServerID }: {
   onPick: (choice: EmojiChoice) => void
   onClose: () => void
@@ -97,20 +204,14 @@ export function EmojiPickerPanel({ onPick, onClose, heading, purpose, roomDiscor
   roomDiscordServerID: string | null
 }) {
   const { routes } = useBridgeConfig()
-  const { groups, unicode, custom, favorites, favoriteKeys, tone, error } = useEmojiChoices(purpose, roomDiscordServerID)
+  const { groups, sections, pickableIndex, favoriteKeys, tone, error } = useEmojiChoices(purpose, roomDiscordServerID)
   const [query, setQuery] = useState('')
-  const results = useMemo(() => searchEmojiChoices([...custom, ...unicode], query, favoriteKeys, SEARCH_RESULT_LIMIT),
-    [custom, unicode, query, favoriteKeys])
-  const customByServer = useMemo(() => {
-    const byServer = new Map<string, EmojiChoice[]>()
-    for (const choice of custom) {
-      if (choice.kind !== 'custom') continue
-      const server = choice.emoji.discord_server_name
-      byServer.set(server, [...(byServer.get(server) ?? []), choice])
-    }
-    return [...byServer.entries()]
-  }, [custom])
-  const searching = query.trim() !== ''
+  // The box shows every keystroke at once; the results follow when React has time.
+  const deferredQuery = useDeferredValue(query)
+  const results = useMemo(() => searchEmojiIndex(pickableIndex, deferredQuery, favoriteKeys, SEARCH_RESULT_LIMIT),
+    [pickableIndex, deferredQuery, favoriteKeys])
+  const searching = deferredQuery.trim() !== ''
+  const resultSections = useMemo(() => [{ id: 'matches', name: 'Matches', choices: results }], [results])
 
   return (
     <div className={styles.emojiPanel} role="dialog" aria-label="Emoji"
@@ -121,30 +222,19 @@ export function EmojiPickerPanel({ onPick, onClose, heading, purpose, roomDiscor
           <button type="button" className={styles.emojiPanelClose} aria-label="Close" onClick={onClose}>✕</button>
         </div>
       )}
-      <input className={styles.input} type="search" value={query} placeholder="Search by name — :par finds partyParrot" autoFocus
+      <input className={styles.input} type="search" value={query} placeholder="Search by name or server — :par, pretend, reno kerm" autoFocus
         onChange={event => setQuery(event.target.value)}
         onKeyDown={event => {
-          if (event.key === 'Enter' && results.length > 0) { event.preventDefault(); onPick(results[0]) }
+          if (event.key !== 'Enter') return
+          event.preventDefault()
+          const first = searchEmojiIndex(pickableIndex, query, favoriteKeys, 1)[0]
+          if (first) onPick(first)
         }} />
-      <div className={styles.emojiGroups}>
-        {error && <pre className={styles.error}>{error}</pre>}
-        {!groups && !error && <div className={styles.empty}>Loading…</div>}
-        {searching ? (
-          results.length === 0 ? <div className={styles.empty}>No emoji matches.</div> : (
-            <EmojiSection name="Matches" choices={results} onPick={onPick} />
-          )
-        ) : (
-          <>
-            {favorites.length > 0 && <EmojiSection name="Favourites" choices={favorites} onPick={onPick} />}
-            {customByServer.map(([server, choices]) => <EmojiSection key={server} name={server} choices={choices} onPick={onPick} />)}
-            {groups?.map(group => (
-              <EmojiSection key={group.name} name={group.name}
-                choices={unicode.slice(unicodeStart(groups, group.name), unicodeStart(groups, group.name) + group.emojis.length)}
-                onPick={onPick} />
-            ))}
-          </>
-        )}
-      </div>
+      {error && <pre className={styles.error}>{error}</pre>}
+      {!groups && !error && <div className={styles.empty}>Loading…</div>}
+      {searching && results.length === 0 && <div className={styles.empty}>No emoji matches.</div>}
+      <VirtualEmojiGrid sections={searching ? resultSections : sections} jumpBar={!searching}
+        renderCell={choice => <EmojiCell key={choice.key} choice={choice} onPick={onPick} />} />
       <div className={styles.emojiPanelFoot}>
         {tone && <span className={styles.muted}>Skin tone {tone}</span>}
         {routes.emoji && <Link to={routes.emoji} className={styles.muted}>Favourites and settings</Link>}
@@ -153,29 +243,13 @@ export function EmojiPickerPanel({ onPick, onClose, heading, purpose, roomDiscor
   )
 }
 
-/** Where a group's emoji begin in the flattened unicode list. */
-function unicodeStart(groups: readonly { name: string; emojis: readonly unknown[] }[], name: string): number {
-  let start = 0
-  for (const group of groups) {
-    if (group.name === name) return start
-    start += group.emojis.length
-  }
-  return start
-}
-
-function EmojiSection({ name, choices, onPick }: { name: string; choices: readonly EmojiChoice[]; onPick: (choice: EmojiChoice) => void }) {
+function EmojiCell({ choice, onPick }: { choice: EmojiChoice; onPick: (choice: EmojiChoice) => void }) {
   return (
-    <section>
-      <div className={styles.emojiGroupName}>{name}</div>
-      <div className={styles.emojiGrid}>
-        {choices.map(choice => (
-          <button key={choice.key} type="button" className={styles.emojiCell} title={`:${choice.name}:`} aria-label={choice.name}
-            onClick={() => onPick(choice)}>
-            <EmojiFace choice={choice} />
-          </button>
-        ))}
-      </div>
-    </section>
+    <button type="button" className={styles.emojiCell}
+      title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${choice.emoji.discord_server_name}` : ''}`} aria-label={choice.name}
+      onClick={() => onPick(choice)}>
+      <EmojiFace choice={choice} />
+    </button>
   )
 }
 

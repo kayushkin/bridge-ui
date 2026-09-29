@@ -37,6 +37,19 @@ describe('name search', () => {
     expect(emojiNameMatchRank('up arrow', 'par')).toBeNull()
   })
 
+  it('finds a server’s emoji by the server’s name, below every name match', () => {
+    const servers: EmojiChoice[] = [
+      customChoice(emoji('1', 'kermit_blush', 'Reno 20s and 30s')),
+      customChoice(emoji('2', 'kermit_coke', 'Pretend')),
+      customChoice(emoji('3', 'renoCity', 'Pretend')),
+      { kind: 'unicode', key: '🐸', name: 'frog' },
+    ]
+    expect(searchEmojiChoices(servers, 'pretend', []).map(c => c.name)).toEqual(['kermit_coke', 'renoCity'])
+    expect(searchEmojiChoices(servers, 'reno', []).map(c => c.name)).toEqual(['renoCity', 'kermit_blush'])
+    expect(searchEmojiChoices(servers, 'reno kerm', []).map(c => c.name)).toEqual(['kermit_blush'])
+    expect(searchEmojiChoices(servers, 'pretend frog', [])).toEqual([])
+  })
+
   it('puts favourites first among equal matches', () => {
     expect(searchEmojiChoices(choices, 'parrot', ['🦜']).map(c => c.key)[0]).toBe('🦜')
   })

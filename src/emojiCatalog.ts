@@ -91,43 +91,99 @@ export function normalizedEmojiQuery(query: string): string {
 
 const compact = (text: string) => text.replace(/[\s_-]+/g, '')
 
-/** How well a name matches the query, best first: 0 the whole name, 1 its
- *  start, 2 the start of a later word (after a space, `_`, `-` or a capital,
- *  so "par" finds "partyParrot" at 1 and "Parrot" in "partyParrot" at 2),
- *  3 anywhere; null when it does not match. Separators are ignored for the
- *  whole name and its start, so "party parrot" and "party_parrot" both find
- *  "partyParrot". */
-export function emojiNameMatchRank(name: string, query: string): number | null {
-  if (!query) return null
-  const lower = name.toLowerCase()
-  const lowerCompact = compact(lower)
+/** One choice as the search reads it, worked out once rather than on every
+ *  keystroke. `server` is a custom emoji's server name in lower case, "" for
+ *  a unicode one. */
+export interface EmojiSearchEntry {
+  choice: EmojiChoice
+  index: number
+  lower: string
+  lowerCompact: string
+  laterWordStarts: string[]
+  server: string
+}
+
+function searchEntry(choice: EmojiChoice, index: number): EmojiSearchEntry {
+  const lower = choice.name.toLowerCase()
+  return {
+    choice, index, lower, lowerCompact: compact(lower),
+    laterWordStarts: choice.name.split(/[\s_-]+|(?<=[a-z0-9])(?=[A-Z])/).slice(1).map(word => word.toLowerCase()),
+    server: choice.kind === 'custom' ? choice.emoji.discord_server_name.toLowerCase() : '',
+  }
+}
+
+/** The search index of a list of choices. Build it once per list. */
+export function emojiSearchIndex(choices: readonly EmojiChoice[]): EmojiSearchEntry[] {
+  return choices.map(searchEntry)
+}
+
+function nameRank(entry: EmojiSearchEntry, query: string): number | null {
   const queryCompact = compact(query)
-  if (lower === query || lowerCompact === queryCompact) return 0
-  if (lower.startsWith(query) || lowerCompact.startsWith(queryCompact)) return 1
-  const wordStarts = name.split(/[\s_-]+|(?<=[a-z0-9])(?=[A-Z])/).map(word => word.toLowerCase())
-  if (wordStarts.slice(1).some(word => word.startsWith(queryCompact))) return 2
+  if (entry.lower === query || entry.lowerCompact === queryCompact) return 0
+  if (entry.lower.startsWith(query) || entry.lowerCompact.startsWith(queryCompact)) return 1
+  if (entry.laterWordStarts.some(word => word.startsWith(queryCompact))) return 2
   // Anywhere else only as typed: dropping separators there would let "kerm"
   // match across the words of "speaker medium volume".
-  if (lower.includes(query)) return 3
+  if (entry.lower.includes(query)) return 3
   return null
 }
 
-/** The choices whose name matches the query, best match first; among equals,
- *  favourites, then shorter names, then the order given. */
-export function searchEmojiChoices(choices: readonly EmojiChoice[], query: string, favoriteKeys: readonly string[],
+/** The rank of a match on the server's name alone, below every name match. */
+export const SERVER_MATCH_RANK = 4
+
+/** How well an emoji matches the query, best first: 0 its whole name, 1 its
+ *  start, 2 the start of a later word (after a space, `_`, `-` or a capital,
+ *  so "par" finds "partyParrot" at 1 and "Parrot" in "partyParrot" at 2),
+ *  3 anywhere in the name, 4 only its server's name; null when it does not
+ *  match. Separators are ignored for the whole name and its start, so
+ *  "party parrot" and "party_parrot" both find "partyParrot". A query of
+ *  several words that is not a name matches when each word is in the name
+ *  or the server's name, so "reno kerm" finds Reno's kermit emoji. */
+function entryRank(entry: EmojiSearchEntry, query: string): number | null {
+  const whole = nameRank(entry, query)
+  if (whole !== null) return whole
+  let best: number | null = null
+  for (const word of query.split(/\s+/)) {
+    if (!word) continue
+    const rank = nameRank(entry, word)
+    if (rank !== null) { best = best === null ? rank : Math.min(best, rank); continue }
+    if (!entry.server.includes(word)) return null
+  }
+  return best ?? SERVER_MATCH_RANK
+}
+
+/** How well one name matches the query; see entryRank. */
+export function emojiNameMatchRank(name: string, query: string): number | null {
+  if (!query) return null
+  return nameRank(searchEntry({ kind: 'unicode', key: name, name }, 0), query)
+}
+
+/** The indexed choices that match the query, best match first; among equals,
+ *  favourites, then shorter names (for a name match), then the order given. */
+export function searchEmojiIndex(index: readonly EmojiSearchEntry[], query: string, favoriteKeys: readonly string[],
   limit = Infinity): EmojiChoice[] {
   const normalized = normalizedEmojiQuery(query)
   if (!normalized) return []
   const favorites = new Set(favoriteKeys)
-  return choices
-    .map((choice, index) => ({ choice, index, rank: emojiNameMatchRank(choice.name, normalized) }))
-    .filter((match): match is { choice: EmojiChoice; index: number; rank: number } => match.rank !== null)
+  const matches: { entry: EmojiSearchEntry; rank: number }[] = []
+  for (const entry of index) {
+    const rank = entryRank(entry, normalized)
+    if (rank !== null) matches.push({ entry, rank })
+  }
+  return matches
     .sort((a, b) => a.rank - b.rank
-      || Number(favorites.has(b.choice.key)) - Number(favorites.has(a.choice.key))
-      || a.choice.name.length - b.choice.name.length
-      || a.index - b.index)
+      || Number(favorites.has(b.entry.choice.key)) - Number(favorites.has(a.entry.choice.key))
+      // A server's emoji found by its name stay in catalog order.
+      || (a.rank < SERVER_MATCH_RANK ? a.entry.choice.name.length - b.entry.choice.name.length : 0)
+      || a.entry.index - b.entry.index)
     .slice(0, limit)
-    .map(match => match.choice)
+    .map(match => match.entry.choice)
+}
+
+/** searchEmojiIndex over a list not yet indexed. */
+export function searchEmojiChoices(choices: readonly EmojiChoice[], query: string, favoriteKeys: readonly string[],
+  limit = Infinity): EmojiChoice[] {
+  return searchEmojiIndex(emojiSearchIndex(choices), query, favoriteKeys, limit)
 }
 
 /** The fewest characters after `:` before suggestions open, so ":)" and ":P"

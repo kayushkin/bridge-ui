@@ -13,7 +13,7 @@ import {
 import { reactionChipAction, withReactionPosted, withReactionTakenBack } from '../../messageReactions'
 import {
   choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID,
-  searchEmojiChoices, type EmojiChoice,
+  searchEmojiIndex, type EmojiChoice,
 } from '../../emojiCatalog'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
@@ -318,15 +318,15 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
   const suggestions: EmojiSuggestion[] = useMemo(() => {
     if (!colonQuery || colonQuery.start === dismissedColonAt) return []
     if (inReactionCommand) {
-      return searchEmojiChoices([...emoji.custom, ...emoji.unicode], colonQuery.query, emoji.favoriteKeys, SUGGESTION_LIMIT)
+      return searchEmojiIndex(emoji.pickableIndex, colonQuery.query, emoji.favoriteKeys, SUGGESTION_LIMIT)
         .map(choice => ({ choice }))
     }
     return [
-      ...searchEmojiChoices(emoji.unicode, colonQuery.query, emoji.favoriteKeys, SUGGESTION_LIMIT).map(choice => ({ choice })),
-      ...searchEmojiChoices(emoji.custom, colonQuery.query, emoji.favoriteKeys, 3)
+      ...searchEmojiIndex(emoji.unicodeIndex, colonQuery.query, emoji.favoriteKeys, SUGGESTION_LIMIT).map(choice => ({ choice })),
+      ...searchEmojiIndex(emoji.customIndex, colonQuery.query, emoji.favoriteKeys, 3)
         .map(choice => ({ choice, disabledReason: CUSTOM_EMOJI_IN_MESSAGE_REASON })),
     ]
-  }, [colonQuery, dismissedColonAt, inReactionCommand, emoji.custom, emoji.unicode, emoji.favoriteKeys])
+  }, [colonQuery, dismissedColonAt, inReactionCommand, emoji.pickableIndex, emoji.unicodeIndex, emoji.customIndex, emoji.favoriteKeys])
   const activeSuggestion = Math.min(suggestionIndex, Math.max(0, suggestions.length - 1))
 
   /** The newest message shown, which a react command reacts to. */
