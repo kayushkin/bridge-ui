@@ -1,13 +1,13 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import type { EmojiSettings } from '@kayushkin/multichat-types'
 import {
-  customChoice, emojiSearchIndex, favoriteChoices, SKIN_TONES, searchEmojiIndex, unicodeChoices, unicodeNamesOf, withFavoriteMoved,
+  allCustomEmoji, customChoice, customEmojiSectionName, emojiSearchIndex, favoriteChoices, SKIN_TONES, searchEmojiIndex, unicodeChoices, unicodeNamesOf, withFavoriteMoved,
   withFavoriteToggled, withSkinTone, type EmojiChoice,
 } from '../../emojiCatalog'
 import { messageTimeLabel } from '../../multichatMessages'
 import { EmojiFace, emojiSections, VirtualEmojiGrid } from './EmojiPicker'
 import { MultichatNotConfigured } from './messagesShared'
-import { useEmojiCatalog, useEmojiGroups } from './useEmojiCatalog'
+import { useEmojiCatalog, useEmojiGroups, useDailyNitroCheck } from './useEmojiCatalog'
 import { useMultichat } from './useMultichat'
 import styles from './Messages.module.css'
 
@@ -20,8 +20,10 @@ import styles from './Messages.module.css'
  * a favourite, and the refresh that lists the custom ones again from Discord.
  */
 export function BridgeEmoji() {
+  useDailyNitroCheck()
   const { configured } = useMultichat()
-  const { catalog, error, saveFavorites, saveSettings, refreshFromDiscord } = useEmojiCatalog()
+  const { catalog, error, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow } = useEmojiCatalog()
+  const [checkingNitro, setCheckingNitro] = useState(false)
   const { groups, error: groupsError } = useEmojiGroups()
   const [query, setQuery] = useState('')
   const [writeError, setWriteError] = useState<string | null>(null)
@@ -31,8 +33,9 @@ export function BridgeEmoji() {
   const favoriteKeys = useMemo(() => catalog?.favorite_keys ?? [], [catalog])
   const favoriteSet = useMemo(() => new Set(favoriteKeys), [favoriteKeys])
   const unicode = useMemo(() => (groups ? unicodeChoices(groups, tone) : []), [groups, tone])
-  const custom = useMemo(() => (catalog?.discord_custom_emoji ?? []).map(customChoice), [catalog])
-  const favorites = useMemo(() => favoriteChoices(favoriteKeys, catalog?.discord_custom_emoji ?? [],
+  // The bridged servers' emoji, then the ones seen in messages.
+  const custom = useMemo(() => allCustomEmoji(catalog).map(customChoice), [catalog])
+  const favorites = useMemo(() => favoriteChoices(favoriteKeys, allCustomEmoji(catalog),
     groups ? unicodeNamesOf(groups) : new Map()), [favoriteKeys, catalog, groups])
   const index = useMemo(() => emojiSearchIndex([...custom, ...unicode]), [custom, unicode])
   const deferredQuery = useDeferredValue(query)
@@ -45,6 +48,11 @@ export function BridgeEmoji() {
 
   const writeFavorites = async (keys: string[]) => setWriteError(await saveFavorites(keys))
   const writeSettings = async (settings: EmojiSettings) => setWriteError(await saveSettings(settings))
+  const checkNitro = async () => {
+    setCheckingNitro(true)
+    setWriteError(await checkNitroNow())
+    setCheckingNitro(false)
+  }
   const refresh = async () => {
     setRefreshing(true)
     setWriteError(await refreshFromDiscord())
@@ -58,7 +66,7 @@ export function BridgeEmoji() {
     return (
       <button key={choice.key} type="button" aria-pressed={favorite}
         className={`${styles.emojiCell} ${favorite ? styles.emojiCellFavorite : ''}`}
-        title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${choice.emoji.discord_server_name}` : ''}${notTaught ? '\nThe bridge learns this one the first time you react with it.' : ''}\n${favorite ? 'Click to take it out of your favourites' : 'Click to make it a favourite'}`}
+        title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${customEmojiSectionName(choice.emoji)}` : ''}${notTaught ? '\nThe bridge learns this one the first time you react with it.' : ''}\n${favorite ? 'Click to take it out of your favourites' : 'Click to make it a favourite'}`}
         onClick={() => toggle(choice)}>
         <EmojiFace choice={choice} />
       </button>
@@ -101,12 +109,20 @@ export function BridgeEmoji() {
                   if (Number.isInteger(count)) void writeSettings({ ...catalog.settings, quick_reaction_count: count })
                 }} />
             </label>
-            <label className={styles.emojiSetting}>
-              <input type="checkbox" checked={catalog.settings.offer_other_servers_emoji}
-                onChange={event => { void writeSettings({ ...catalog.settings, offer_other_servers_emoji: event.target.checked }) }} />
-              <span>Offer every bridged server&apos;s custom emoji in a Discord room, not only that server&apos;s own
-                <span className={styles.muted}> — Discord refuses another server&apos;s emoji unless the account has Nitro</span></span>
-            </label>
+            <div className={styles.emojiSetting}>
+              <span>
+                {!catalog.discord_nitro ? 'Nitro not checked yet: a Discord room is offered only its own server\'s emoji.'
+                  : catalog.discord_nitro.has_nitro ? 'Your Discord account has Nitro, so a Discord room is offered every server\'s emoji and the ones seen in messages.'
+                    : 'Your Discord account has no Nitro, so a Discord room is offered only its own server\'s emoji.'}
+                <span className={styles.muted}>
+                  {catalog.discord_nitro && ` Checked ${messageTimeLabel(Date.parse(catalog.discord_nitro.checked_at))}; checked again the first time you open Messages each day.`}
+                </span>
+              </span>
+              <button type="button" className="bi-save-btn" disabled={checkingNitro} onClick={() => { void checkNitro() }}>
+                {checkingNitro ? 'Asking Discord…' : 'Check now'}
+              </button>
+            </div>
+            {catalog.discord_nitro_error && <pre className={styles.error}>The last Nitro check failed: {catalog.discord_nitro_error}</pre>}
           </section>
 
           <section className={styles.emojiPageSection}>
@@ -140,7 +156,7 @@ export function BridgeEmoji() {
             </div>
             <div className={styles.emojiPageHeadingRow}>
               <span className={styles.muted}>
-                Custom emoji of the bridged Discord servers
+                Custom emoji of the bridged Discord servers, and the ones seen in messages from other servers
                 {catalog.discord_refreshes.map(r => ` · ${r.discord_server_name} listed ${messageTimeLabel(Date.parse(r.refreshed_at))}`).join('')}
               </span>
               <button type="button" className="bi-save-btn" disabled={refreshing} onClick={() => { void refresh() }}>

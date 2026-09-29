@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
-import type { EmojiCatalog, EmojiSettings } from '@kayushkin/multichat-types'
+import type { DiscordNitroCheck, EmojiCatalog, EmojiSettings } from '@kayushkin/multichat-types'
 import type { EmojiGroup } from '../../emojiPicker'
 import { useBridgeConfig } from '../../context'
 import { errorText, useMultichat } from './useMultichat'
@@ -93,6 +93,14 @@ export function useEmojiCatalog() {
     return null
   }, [store, write])
 
+  /** Asks Discord about Nitro now, even if multichat already did today. */
+  const checkNitroNow = useCallback(async (): Promise<string | null> => {
+    const answer = await write<NitroCheckAnswer>('POST', '/emoji/discord/nitro-check?force=true')
+    if (!answer.ok) return answer.error
+    applyNitroCheck(store, answer.value)
+    return null
+  }, [store, write])
+
   const refreshFromDiscord = useCallback(async (): Promise<string | null> => {
     const refreshed = await write<EmojiCatalog>('POST', '/emoji/discord/refresh')
     if (!refreshed.ok) return refreshed.error
@@ -100,8 +108,47 @@ export function useEmojiCatalog() {
     return null
   }, [store, write])
 
-  return useMemo(() => ({ ...state, reload, saveFavorites, saveSettings, refreshFromDiscord }),
-    [state, reload, saveFavorites, saveSettings, refreshFromDiscord])
+  return useMemo(() => ({ ...state, reload, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow }),
+    [state, reload, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow])
+}
+
+/** `POST /emoji/discord/nitro-check`'s answer. */
+interface NitroCheckAnswer {
+  discord_nitro: DiscordNitroCheck | null
+  discord_nitro_error: string
+  checked_now: boolean
+}
+
+function applyNitroCheck(store: Store<CatalogState>, answer: NitroCheckAnswer) {
+  const current = store.get().catalog
+  if (current) {
+    store.set({ ...store.get(), catalog: { ...current, discord_nitro: answer.discord_nitro, discord_nitro_error: answer.discord_nitro_error } })
+  }
+}
+
+/** The local day each multichat was last asked for its Nitro check. */
+const nitroCheckAskedOn = new Map<string, string>()
+
+/**
+ * Asks multichat to check whether the Discord account has Nitro, which
+ * decides whether a Discord room is offered other servers' emoji. Every
+ * Messages page calls it when it opens; it asks once a day per browser tab,
+ * and multichat itself calls Discord at most once a day, so no check is made
+ * on a day nobody opens Messages. A refusal is logged: the Emoji page shows
+ * multichat's own record of a failed check.
+ */
+export function useDailyNitroCheck() {
+  const { multichatBasePath } = useBridgeConfig()
+  const { write, configured } = useMultichat()
+  useEffect(() => {
+    const today = new Date().toDateString()
+    if (!configured || nitroCheckAskedOn.get(multichatBasePath) === today) return
+    nitroCheckAskedOn.set(multichatBasePath, today)
+    void write<NitroCheckAnswer>('POST', '/emoji/discord/nitro-check').then(answer => {
+      if (!answer.ok) { console.error('The daily Nitro check failed:', answer.error); return }
+      applyNitroCheck(catalogStoreFor(multichatBasePath), answer.value)
+    })
+  }, [configured, multichatBasePath, write])
 }
 
 interface Store<T> {

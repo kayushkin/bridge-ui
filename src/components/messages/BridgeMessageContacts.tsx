@@ -7,6 +7,7 @@ import type { MultichatContactTagMap, MultichatTag, MultichatUnifiedContact } fr
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChip } from './messagesShared'
 import styles from './Messages.module.css'
+import { useDailyNitroCheck } from './useEmojiCatalog'
 
 /**
  * Everyone multichat's bridges know, one row per person: multichat merges the
@@ -15,6 +16,7 @@ import styles from './Messages.module.css'
  * identity, and a person's row shows every tag on any of theirs.
  */
 export function BridgeMessageContacts() {
+  useDailyNitroCheck()
   const { read, write, configured } = useMultichat()
   const [contacts, setContacts] = useState<MultichatUnifiedContact[] | null>(null)
   const [tags, setTags] = useState<MultichatTag[]>([])

@@ -12,7 +12,7 @@ import {
 } from '../../multichatMessages'
 import { reactionChipAction, withReactionPosted, withReactionTakenBack } from '../../messageReactions'
 import {
-  choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID,
+  allCustomEmoji, choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID,
   searchEmojiIndex, type EmojiChoice,
 } from '../../emojiCatalog'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
@@ -24,7 +24,7 @@ import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChip, TagChips } from './messagesShared'
 import { MessageContent, ReactionChips } from './MessageContent'
 import { EmojiFace, EmojiPickerButton, EmojiPickerPanel, EmojiSuggestionList, useEmojiChoices, type EmojiSuggestion } from './EmojiPicker'
-import { useEmojiCatalog } from './useEmojiCatalog'
+import { useEmojiCatalog, useDailyNitroCheck } from './useEmojiCatalog'
 import styles from './Messages.module.css'
 
 const CONVERSATIONS_POLL_MS = 30_000
@@ -45,6 +45,7 @@ const CUSTOM_EMOJI_IN_MESSAGE_REASON =
  * A message sent here reaches a real person on that app.
  */
 export function BridgeMessageConversations() {
+  useDailyNitroCheck()
   const { read, write, configured } = useMultichat()
   const [conversations, setConversations] = useState<MultichatConversation[] | null>(null)
   const [tags, setTags] = useState<MultichatTag[]>([])
@@ -402,7 +403,7 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
 
   /** A quick reaction adds ours, or takes back the one we posted from here. */
   const onQuickReaction = (message: ShownMessage, choice: EmojiChoice) => {
-    const group = (message.reactions ?? []).find(g => reactionGroupIsEmoji(g, choice.key, catalog?.discord_custom_emoji ?? []))
+    const group = (message.reactions ?? []).find(g => reactionGroupIsEmoji(g, choice.key, allCustomEmoji(catalog)))
     if (group?.my_reaction_event_id) { void takeBackReaction(message, group.my_reaction_event_id); return }
     void postReaction(message, choice)
   }
@@ -455,7 +456,7 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
                 onChipClick={reaction => onChipClick(message, reaction)} />
               <div className={styles.messageTools}>
                 {quickReactions.map(choice => {
-                  const group = (message.reactions ?? []).find(g => reactionGroupIsEmoji(g, choice.key, catalog?.discord_custom_emoji ?? []))
+                  const group = (message.reactions ?? []).find(g => reactionGroupIsEmoji(g, choice.key, allCustomEmoji(catalog)))
                   const madeInTheApp = !!group?.reacted_by_me && !group.my_reaction_event_id
                   return (
                     <button key={choice.key} type="button" disabled={reacting || madeInTheApp}

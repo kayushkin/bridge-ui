@@ -11,6 +11,7 @@ import { discordNamesOf, type DiscordNames } from '../messageBody'
 import { reactionsOfLoggedMessage } from '../messageReactions'
 import { MessageContent, ReactionChips } from './messages/MessageContent'
 import styles from './BridgeDiscord.module.css'
+import { useDailyNitroCheck } from './messages/useEmojiCatalog'
 
 /**
  * Discord, as multichat sees it through the mautrix-discord bridge.
@@ -22,6 +23,7 @@ import styles from './BridgeDiscord.module.css'
  * Nothing here calls Discord, and nothing writes.
  */
 export function BridgeDiscord() {
+  useDailyNitroCheck()
   const { fetch: apiFetch, multichatBasePath } = useBridgeConfig()
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = discordTabOf(searchParams.get('tab'))

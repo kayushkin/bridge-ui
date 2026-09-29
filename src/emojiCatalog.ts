@@ -4,7 +4,7 @@
 // what a `+:name:` command reacts with, and how a favourite is matched to a
 // reaction already on a message. The records are multichat's (`GET /emoji`);
 // everything here is covered by test/emojiCatalog.test.ts.
-import type { DiscordBridgeStatus, DiscordCustomEmoji, MessageReactionGroup } from '@kayushkin/multichat-types'
+import type { DiscordBridgeStatus, DiscordCustomEmoji, EmojiCatalog, MessageReactionGroup } from '@kayushkin/multichat-types'
 import type { EmojiGroup } from './emojiPicker'
 import { discordEmojiURL } from './messageBody'
 import { DISCORD_EMOJI_KEY_PREFIX } from './messageReactions'
@@ -16,7 +16,22 @@ export const EMOJI_ROUTES_CALLED: readonly string[] = [
   'POST /emoji/discord/refresh',
   'PUT /emoji/favorites',
   'PUT /emoji/settings',
+  'POST /emoji/discord/nitro-check',
 ]
+
+/** What the pickers call the emoji the bridge has seen from servers that are
+ *  not bridged; multichat gives them no server. */
+export const SEEN_EMOJI_SECTION_NAME = 'Seen in messages'
+
+/** Every custom emoji multichat knows: the bridged servers', then the seen ones. */
+export function allCustomEmoji(catalog: EmojiCatalog | null): DiscordCustomEmoji[] {
+  return catalog ? [...catalog.discord_custom_emoji, ...(catalog.discord_seen_emoji ?? [])] : []
+}
+
+/** The section a custom emoji is listed under: its server, or the seen ones' name. */
+export function customEmojiSectionName(emoji: DiscordCustomEmoji): string {
+  return emoji.discord_server_name || SEEN_EMOJI_SECTION_NAME
+}
 
 /** One emoji a picker can offer. `key` is what a reaction or a favourite
  *  carries: the unicode text (with the skin tone applied), or
@@ -73,14 +88,15 @@ export function roomDiscordServerID(status: DiscordBridgeStatus | null, roomID: 
 }
 
 /** The custom emoji a room is offered: none outside Discord; the room's own
- *  server's first, then every other bridged server's when the setting says
- *  so (Discord refuses another server's emoji to an account without Nitro). */
-export function customEmojiOffered(custom: readonly DiscordCustomEmoji[], roomServerID: string | null,
-  offerOtherServersEmoji: boolean): DiscordCustomEmoji[] {
+ *  server's first, then, when the account has Nitro, every other bridged
+ *  server's and the seen ones (Discord refuses an emoji outside its own
+ *  server to an account without Nitro). */
+export function customEmojiOffered(custom: readonly DiscordCustomEmoji[], seen: readonly DiscordCustomEmoji[],
+  roomServerID: string | null, hasNitro: boolean): DiscordCustomEmoji[] {
   if (!roomServerID) return []
   const own = custom.filter(emoji => emoji.discord_server_id === roomServerID)
-  if (!offerOtherServersEmoji) return own
-  return [...own, ...custom.filter(emoji => emoji.discord_server_id !== roomServerID)]
+  if (!hasNitro) return own
+  return [...own, ...custom.filter(emoji => emoji.discord_server_id !== roomServerID), ...seen]
 }
 
 /** The query as a name search reads it: any case, with the colons of

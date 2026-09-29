@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { DiscordCustomEmoji } from '@kayushkin/multichat-types'
 import { useBridgeConfig } from '../../context'
 import {
-  customChoice, customEmojiImageURL, customEmojiOffered, emojiSearchIndex, favoriteChoices, searchEmojiIndex, unicodeChoices,
+  allCustomEmoji, customChoice, customEmojiImageURL, customEmojiOffered, customEmojiSectionName, emojiSearchIndex, favoriteChoices, searchEmojiIndex, unicodeChoices,
   unicodeNamesOf, type EmojiChoice,
 } from '../../emojiCatalog'
 import { emojiGridLayout, rowsInView, sectionAt } from '../../emojiGridLayout'
@@ -35,13 +35,13 @@ export function useEmojiChoices(purpose: EmojiPurpose, roomDiscordServerID: stri
   const unicode = useMemo(() => (groups ? unicodeChoices(groups, tone) : []), [groups, tone])
   const unicodeNames = useMemo(() => (groups ? unicodeNamesOf(groups) : new Map<string, string>()), [groups])
   const offered: DiscordCustomEmoji[] = useMemo(() => (catalog
-    ? customEmojiOffered(catalog.discord_custom_emoji, roomDiscordServerID, catalog.settings.offer_other_servers_emoji)
+    ? customEmojiOffered(catalog.discord_custom_emoji, catalog.discord_seen_emoji ?? [], roomDiscordServerID, !!catalog.discord_nitro?.has_nitro)
     : []), [catalog, roomDiscordServerID])
   const custom = useMemo(() => offered.map(customChoice), [offered])
   const favoriteKeys = useMemo(() => catalog?.favorite_keys ?? [], [catalog])
   const favorites = useMemo(() => {
     const offeredKeys = new Set(offered.map(emoji => emoji.reaction_key))
-    return favoriteChoices(favoriteKeys, catalog?.discord_custom_emoji ?? [], unicodeNames)
+    return favoriteChoices(favoriteKeys, allCustomEmoji(catalog), unicodeNames)
       .filter(choice => choice.kind === 'unicode' || (purpose === 'reaction' && offeredKeys.has(choice.key)))
   }, [favoriteKeys, catalog, unicodeNames, offered, purpose])
   const sectionsOf = useMemo(() => emojiSections(groups, unicode, purpose === 'reaction' ? custom : [], favorites),
@@ -109,7 +109,7 @@ export function emojiSections(groups: readonly { name: string; emojis: readonly 
   const byServer = new Map<string, EmojiChoice[]>()
   for (const choice of custom) {
     if (choice.kind !== 'custom') continue
-    const server = choice.emoji.discord_server_name
+    const server = customEmojiSectionName(choice.emoji)
     byServer.set(server, [...(byServer.get(server) ?? []), choice])
   }
   for (const [server, choices] of byServer) sections.push({ id: `server:${server}`, name: server, choices })
@@ -246,7 +246,7 @@ export function EmojiPickerPanel({ onPick, onClose, heading, purpose, roomDiscor
 function EmojiCell({ choice, onPick }: { choice: EmojiChoice; onPick: (choice: EmojiChoice) => void }) {
   return (
     <button type="button" className={styles.emojiCell}
-      title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${choice.emoji.discord_server_name}` : ''}`} aria-label={choice.name}
+      title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${customEmojiSectionName(choice.emoji)}` : ''}`} aria-label={choice.name}
       onClick={() => onPick(choice)}>
       <EmojiFace choice={choice} />
     </button>
@@ -279,7 +279,7 @@ export function EmojiSuggestionList({ suggestions, activeIndex, onPick, onHover 
           onMouseDown={event => { event.preventDefault(); if (!suggestion.disabledReason) onPick(suggestion) }}>
           <EmojiFace choice={suggestion.choice} className={styles.emojiSuggestionFace} />
           <span>:{suggestion.choice.name}:</span>
-          {suggestion.choice.kind === 'custom' && <span className={styles.muted}>{suggestion.choice.emoji.discord_server_name}</span>}
+          {suggestion.choice.kind === 'custom' && <span className={styles.muted}>{customEmojiSectionName(suggestion.choice.emoji)}</span>}
           {suggestion.disabledReason && <span className={styles.muted}>react only</span>}
         </li>
       ))}

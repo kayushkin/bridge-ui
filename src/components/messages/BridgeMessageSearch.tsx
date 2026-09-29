@@ -6,6 +6,7 @@ import type { MultichatSearchAnswer } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured } from './messagesShared'
 import styles from './Messages.module.css'
+import { useDailyNitroCheck } from './useEmojiCatalog'
 
 /**
  * Search the messages of every conversation. multichat reads the newest 50
@@ -13,6 +14,7 @@ import styles from './Messages.module.css'
  * older message is not found. `?q=` holds the term, so a search can be linked.
  */
 export function BridgeMessageSearch() {
+  useDailyNitroCheck()
   const { read, configured } = useMultichat()
   const { routes } = useBridgeConfig()
   const [searchParams, setSearchParams] = useSearchParams()
