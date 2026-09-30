@@ -8,7 +8,6 @@ import {
   sessionActionOutputIsMarkdown,
   sessionActionRunBy,
   sessionActionStatusText,
-  sessionActionStepText,
 } from '../../sessionActionView'
 import { RefChip } from './RefChip'
 import { ProducerMarkdown } from './producerReferences'
@@ -43,10 +42,11 @@ const NO_SESSION_ACTIONS: SessionActionsInSession = { newest: new Map(), placedI
 export const SessionActionsContext = createContext<SessionActionsInSession>(NO_SESSION_ACTIONS)
 
 /** One action entry: the button where it was offered unless the agent placed it in
- *  its reply, and a line for every later step. */
+ *  its reply. A later step of its run draws nothing where it happened: the button
+ *  itself shows how the run is going, and the server's log keeps every step. */
 export function SessionActionEntry({ action }: { action: SessionAction }) {
   const { newest, placedInProse } = useContext(SessionActionsContext)
-  if (action.state !== 'offered') return <SessionActionStep action={action} />
+  if (action.state !== 'offered') return null
   if (placedInProse.has(action.action_id)) return null
   return <SessionActionButton action={newest.get(action.action_id) ?? action} />
 }
@@ -85,29 +85,36 @@ function SessionActionButton({ action }: { action: SessionAction }) {
   const review = action.review
   return (
     <span className={`bc-session-action bc-session-action-${action.state}`} data-action-id={action.action_id}>
-      <button
-        type="button"
-        className="bc-session-action-button"
-        disabled={!confirmable || confirming}
-        onClick={() => setConfirming(true)}
-        title={SESSION_ACTION_TYPE_LABEL[action.offer.type]}
-      >
-        {action.offer.label}
-      </button>
-      {costText && <span className="bc-session-action-cost">{costText}</span>}
-      {review && (
-        <span className={`bc-session-action-review bc-session-action-review-${review.verdict}`} title={review.reasons}>
-          {SESSION_ACTION_REVIEW_LABEL[review.verdict]}
-        </span>
-      )}
-      <button
-        type="button"
-        className="bc-session-action-what"
-        aria-expanded={showingCommand}
-        onClick={() => setShowingCommand((showing) => !showing)}
-      >
-        What it runs {showingCommand ? '▴' : '▾'}
-      </button>
+      <span className="bc-session-action-head">
+        <button
+          type="button"
+          className="bc-session-action-button"
+          disabled={!confirmable || confirming}
+          onClick={() => setConfirming(true)}
+          title={SESSION_ACTION_TYPE_LABEL[action.offer.type]}
+        >
+          {action.offer.label}
+        </button>
+        {costText && <span className="bc-session-action-cost">{costText}</span>}
+        {review && (
+          <span className={`bc-session-action-review bc-session-action-review-${review.verdict}`} title={review.reasons}>
+            {SESSION_ACTION_REVIEW_LABEL[review.verdict]}
+          </span>
+        )}
+        {action.state !== 'offered' && (
+          <span className="bc-session-action-status" title={`Confirmed by ${sessionActionRunBy(action)}`}>
+            {sessionActionStatusText(action)}
+          </span>
+        )}
+        <button
+          type="button"
+          className="bc-session-action-what"
+          aria-expanded={showingCommand}
+          onClick={() => setShowingCommand((showing) => !showing)}
+        >
+          What it runs {showingCommand ? '▴' : '▾'}
+        </button>
+      </span>
       {confirming && confirmable && (
         <span className="bc-session-action-confirm" role="group" aria-label={`Confirm ${action.offer.label}`}>
           <span className="bc-session-action-confirm-question">Run this?</span>
@@ -127,8 +134,12 @@ function SessionActionButton({ action }: { action: SessionAction }) {
           </button>
         </span>
       )}
-      {action.state !== 'offered' && <span className="bc-session-action-status">{sessionActionStatusText(action)}</span>}
-      {showingCommand && <code className="bc-session-action-command">{action.command}</code>}
+      {showingCommand && (
+        <code className="bc-session-action-command">
+          {action.command}
+          {action.state !== 'offered' && `\n\nConfirmed by ${sessionActionRunBy(action)}.`}
+        </code>
+      )}
       {review && (showingCommand || review.verdict !== 'approve') && (
         <span className={`bc-session-action-review-reasons bc-session-action-review-${review.verdict}`}>
           {review.verdict === 'reject' ? 'This command cannot be run. ' : ''}
@@ -145,28 +156,24 @@ function SessionActionButton({ action }: { action: SessionAction }) {
  *  rest keep their output — a deploy log, the scheduler's reply — behind a toggle. */
 const OUTPUT_IS_THE_RESULT: ReadonlySet<SessionAction['offer']['type']> = new Set(['run_command', 'model_call', 'background_agent'])
 
-/** Who ran it, the session it started, and what came back. */
+/** The session it started, and what came back. Who pressed it is under "What it runs". */
 function SessionActionOutcome({ action }: { action: SessionAction }) {
   const [showingOutput, setShowingOutput] = useState(false)
   const outputIsTheResult = OUTPUT_IS_THE_RESULT.has(action.offer.type)
   return (
-    <span className="bc-session-action-outcome">
-      <span>
-        Confirmed by <code>{sessionActionRunBy(action)}</code>
-        {action.result_session_id && (
-          <>
-            {' '}· {action.state === 'running' ? 'working in' : 'session'}{' '}
-            <RefChip kind="session" refId={action.result_session_id} />
-          </>
-        )}
-      </span>
+    <>
+      {action.result_session_id && (
+        <span className="bc-session-action-session">
+          {action.state === 'running' ? 'Working in' : 'Session'} <RefChip kind="session" refId={action.result_session_id} />
+        </span>
+      )}
       {action.error && <span className="bc-session-action-error">{action.error}</span>}
       {action.output && outputIsTheResult && <SessionActionResult action={action} />}
       {action.output && !outputIsTheResult && (
         <>
           <button
             type="button"
-            className="bc-session-action-what"
+            className="bc-session-action-what bc-session-action-output-toggle"
             aria-expanded={showingOutput}
             onClick={() => setShowingOutput((showing) => !showing)}
           >
@@ -175,7 +182,7 @@ function SessionActionOutcome({ action }: { action: SessionAction }) {
           {showingOutput && <span className="bc-session-action-output">{action.output}</span>}
         </>
       )}
-    </span>
+    </>
   )
 }
 
@@ -192,13 +199,5 @@ function SessionActionResult({ action }: { action: SessionAction }) {
         <ProducerMarkdown text={action.output ?? ''} />
       </SessionActionsContext.Provider>
     </span>
-  )
-}
-
-function SessionActionStep({ action }: { action: SessionAction }) {
-  return (
-    <div className={`bc-session-action-step bc-session-action-${action.state}`} data-action-id={action.action_id}>
-      {sessionActionStepText(action)}
-    </div>
   )
 }

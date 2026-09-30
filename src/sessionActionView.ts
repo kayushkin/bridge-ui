@@ -54,24 +54,6 @@ export function sessionActionRunBy(action: SessionAction): string {
   return action.run_by_principal_id || 'the internal service'
 }
 
-/** One line for a step of an action's run, as the chat shows it where the step
- *  happened. `offered` is the button itself and has no step line. */
-export function sessionActionStepText(action: SessionAction): string {
-  const label = action.offer.label
-  switch (action.state) {
-    case 'offered':
-      return `Offered: ${label}`
-    case 'running':
-      return `${label} — confirmed by ${sessionActionRunBy(action)}, running`
-    case 'succeeded':
-      return `${label} — done`
-    case 'failed':
-      return `${label} — failed: ${action.error ?? 'no reason given'}`
-    case 'outcome_unknown':
-      return `${label} — outcome unknown: ${action.error ?? 'no reason given'}`
-  }
-}
-
 /** The state shown on the button once it has been pressed. */
 export function sessionActionStatusText(action: SessionAction): string {
   switch (action.state) {

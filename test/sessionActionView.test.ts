@@ -6,7 +6,6 @@ import {
   sessionActionOutputIsMarkdown,
   sessionActionRunBy,
   sessionActionStatusText,
-  sessionActionStepText,
 } from '../src/sessionActionView'
 
 const action = (overrides: Partial<SessionAction> = {}): SessionAction => ({
@@ -32,14 +31,10 @@ describe('a session action in the chat', () => {
     expect(sessionActionRunBy(action())).toBe('the internal service')
   })
 
-  it('says how each step went, with the reason a run failed', () => {
-    expect(sessionActionStepText(action({ state: 'running', run_by_principal_id: 'principal_000001' }))).toBe(
-      'Deploy dash — confirmed by principal_000001, running',
-    )
-    expect(sessionActionStepText(action({ state: 'succeeded' }))).toBe('Deploy dash — done')
-    expect(sessionActionStepText(action({ state: 'failed', error: 'deploy.sh failed: exit status 1' }))).toBe(
-      'Deploy dash — failed: deploy.sh failed: exit status 1',
-    )
+  it('says on the button how the run went', () => {
+    expect(sessionActionStatusText(action({ state: 'running' }))).toBe('Running…')
+    expect(sessionActionStatusText(action({ state: 'succeeded' }))).toBe('Done')
+    expect(sessionActionStatusText(action({ state: 'failed' }))).toBe('Failed')
     expect(sessionActionStatusText(action({ state: 'outcome_unknown' }))).toBe('Outcome unknown')
   })
 })
