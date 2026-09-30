@@ -116,7 +116,13 @@ export { BridgeLayout } from './components/BridgeLayout'
 export { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
 export { BridgeHooks } from './components/BridgeHooks'
 export { BridgeServiceSettings } from './components/BridgeServiceSettings'
-export { serviceSettingsSourcesOf, serviceSettingsByKind, serviceSettingValueText, serviceSettingsSummary, serviceSettingsURL, serviceSettingURL, type ServiceSettingsSource, type ServiceSettingsGroup } from './serviceSettings'
+export { BridgeModels } from './components/BridgeModels'
+export {
+  isModelRoleSetting, roleModelsText, roleOptions, backgroundCallRowsOf, modelPriceText, addableModels, moveModel, removeModel,
+  appendModel, roleModelsSaveBody, type RoleOption, type BackgroundCallRow,
+} from './modelRoles'
+export type { ModelStoreModel, ModelStoreRoles, ModelStoreRoleModelsBody } from './types-model-store'
+export { serviceSettingsSourcesOf, serviceSettingsByKind, serviceSettingValueText, serviceSettingsSummary, serviceSettingsURL, serviceSettingURL, fetchServiceSettings, putServiceSetting, type ServiceSettingsSource, type ServiceSettingsGroup, type ServiceSettingsAnswer } from './serviceSettings'
 export { BridgeInboundRules } from './components/BridgeInboundRules'
 export { BridgeMessageConversations } from './components/messages/BridgeMessageConversations'
 export { BridgeMessageSearch } from './components/messages/BridgeMessageSearch'

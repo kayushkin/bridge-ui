@@ -44,6 +44,10 @@ export interface BridgeRoutes {
    *  each setting is, the value in force and what decided it. Backed by each
    *  service's `GET /settings`. */
   serviceSettings: string
+  /** Which models the background calls use: every service setting that names a
+   *  model-store role, and each role's ordered model list, editable. Needs
+   *  `modelStoreBasePath`. */
+  models: string
   /** The producer's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
@@ -99,6 +103,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   serviceInventory: '/service-inventory',
   effectiveConfig: '/effective-config',
   serviceSettings: '/service-settings',
+  models: '/models',
   hooks: '/hooks',
   inboundRules: '/inbound-rules',
   orchestrator: '/orchestrator',
@@ -209,6 +214,13 @@ export interface BridgeConfig {
    * "Group by project" toggle and the session header's filing control. If
    * empty, none of those is drawn. */
   projectStoreBasePath: string
+  /** Base path for model-store as the host proxies it (dash:
+   * "/api/model-store"; model-store roots its API at /api, so the page asks
+   * `{base}/api/roles` and `{base}/api/models`). Read by the Models page and by
+   * the service settings page's drop-down for a `model_role` setting. If
+   * empty, the Models page is hidden and a `model_role` setting says the roles
+   * cannot be listed. */
+  modelStoreBasePath: string
   /** Base path of the HOST's own routes, read only by the service settings
    * page, which asks `{base}/settings` — the host describes its own settings
    * there like any backend (dash: "/api/dash"). The host is not proxied under a

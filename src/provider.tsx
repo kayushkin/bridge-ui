@@ -75,6 +75,9 @@ export interface BridgeProviderProps {
    * it. */
   workGraphStoreBasePath?: string
   projectStoreBasePath?: string
+  /** Base path for model-store (dash: "/api/model-store"). If omitted, the
+   * Models page is hidden and a model_role setting cannot list the roles. */
+  modelStoreBasePath?: string
   /** Optional render hook for per-harness Settings-tab extensions. Return null
    * for harnesses that don't need a custom panel. */
   renderHarnessExtension?: (harnessName: string) => ReactNode
@@ -115,6 +118,7 @@ export function BridgeProvider({
   previewsBasePath = '',
   workGraphStoreBasePath = '',
   projectStoreBasePath = '',
+  modelStoreBasePath = '',
   renderHarnessExtension,
   routes,
   children,
@@ -149,9 +153,10 @@ export function BridgeProvider({
     previewsBasePath,
     workGraphStoreBasePath,
     projectStoreBasePath,
+    modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

@@ -26,6 +26,7 @@ import { BridgeOrchestrator } from './components/BridgeOrchestrator'
 import { BridgeConformance } from './components/BridgeConformance'
 import { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
 import { BridgeServiceSettings } from './components/BridgeServiceSettings'
+import { BridgeModels } from './components/BridgeModels'
 import { BridgeHooks } from './components/BridgeHooks'
 import { BridgeInboundRules } from './components/BridgeInboundRules'
 import { BridgePreviews } from './components/BridgePreviews'
@@ -136,6 +137,10 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   { route: 'usage', label: 'Usage', group: 'system', listed: true, component: BridgeUsage },
   { route: 'effectiveConfig', label: 'Effective config', group: 'system', listed: true, component: BridgeEffectiveConfig },
   { route: 'serviceSettings', label: 'Service settings', group: 'system', listed: true, component: BridgeServiceSettings },
+  // Which model each background call uses: every model_role service setting,
+  // and model-store's roles. The roles need model-store, so a host that does
+  // not proxy it gets no tab.
+  { route: 'models', label: 'Models', group: 'system', listed: true, available: c => !!c.modelStoreBasePath, component: BridgeModels },
   // Reads the bridge server itself (`GET /services` on basePath), so no store
   // base path gates it; a host whose server lacks the route turns it off.
   { route: 'serviceInventory', label: 'Service inventory', group: 'system', listed: true, available: (_, f) => f.showServiceInventory, component: BridgeServiceInventory },

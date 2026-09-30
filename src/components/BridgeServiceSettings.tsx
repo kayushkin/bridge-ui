@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ServiceSetting, ServiceSettings } from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
 import {
-  serviceSettingsByKind, serviceSettingsSourcesOf, serviceSettingsSummary, serviceSettingsURL, serviceSettingURL,
-  serviceSettingValueText, type ServiceSettingsSource,
+  fetchServiceSettings, putServiceSetting, serviceSettingsByKind, serviceSettingsSourcesOf, serviceSettingsSummary,
+  serviceSettingsURL, serviceSettingValueText, type ServiceSettingsAnswer, type ServiceSettingsSource,
 } from '../serviceSettings'
+import { isModelRoleSetting, roleModelList, roleModelsText, roleOptions } from '../modelRoles'
+import { useModelStoreRoles, type ModelStoreRolesState } from '../useModelStoreRoles'
 import { SettingsSection } from './settings/SettingsSection'
 
 /** Service settings: every backend this host proxies, asked to describe its own
@@ -19,6 +21,8 @@ import { SettingsSection } from './settings/SettingsSection'
 export function BridgeServiceSettings() {
   const config = useBridgeConfig()
   const sources = useMemo(() => serviceSettingsSourcesOf(config), [config])
+  // Read once for every model_role setting on the page.
+  const { state: roles } = useModelStoreRoles()
   return (
     <div className="bh-container bss-sections">
       <header>
@@ -30,51 +34,35 @@ export function BridgeServiceSettings() {
           whether it is set.
         </p>
       </header>
-      {sources.map(source => <ServicePanel key={source.configKey} source={source} />)}
+      {sources.map(source => <ServicePanel key={source.configKey} source={source} roles={roles} />)}
     </div>
   )
 }
 
-type PanelState =
-  | { phase: 'loading' }
-  | { phase: 'described'; described: ServiceSettings }
-  | { phase: 'silent'; status: number }
-  | { phase: 'failed'; message: string }
+type PanelState = { phase: 'loading' } | ServiceSettingsAnswer
 
-function ServicePanel({ source }: { source: ServiceSettingsSource }) {
+function ServicePanel({ source, roles }: { source: ServiceSettingsSource; roles: ModelStoreRolesState }) {
   const { fetch: apiFetch } = useBridgeConfig()
   const [state, setState] = useState<PanelState>({ phase: 'loading' })
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    apiFetch(serviceSettingsURL(source.basePath))
-      .then(async res => {
-        if (cancelled) return
-        if (!res.ok) { setState({ phase: 'silent', status: res.status }); return }
-        const described = await res.json() as ServiceSettings
-        // Some other route answering 200 at this path is not a description.
-        if (!described || !Array.isArray(described.settings)) { setState({ phase: 'silent', status: res.status }); return }
-        setState({ phase: 'described', described })
-        setExpanded(true)
-      })
-      .catch(err => { if (!cancelled) setState({ phase: 'failed', message: err instanceof Error ? err.message : String(err) }) })
+    void fetchServiceSettings(apiFetch, source.basePath).then(answer => {
+      if (cancelled) return
+      setState(answer)
+      if (answer.phase === 'described') setExpanded(true)
+    })
     return () => { cancelled = true }
   }, [apiFetch, source.basePath])
 
   /** One write. The service answers with its whole description, so the page
    *  shows what is now in force rather than what was typed. */
   const save = useCallback(async (key: string, value: string): Promise<string | null> => {
-    try {
-      const res = await apiFetch(serviceSettingURL(source.basePath, key), {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
-      })
-      if (!res.ok) return `PUT /settings/${key} → ${res.status}: ${(await res.text()).trim()}`
-      setState({ phase: 'described', described: await res.json() as ServiceSettings })
-      return null
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err)
-    }
+    const result = await putServiceSetting(apiFetch, source.basePath, key, value)
+    if (!result.ok) return result.error
+    setState({ phase: 'described', described: result.described })
+    return null
   }, [apiFetch, source.basePath])
 
   if (state.phase !== 'described') {
@@ -102,7 +90,7 @@ function ServicePanel({ source }: { source: ServiceSettingsSource }) {
           <h4 className="bsv-group-title">{group.kind}</h4>
           {group.description && <p className="bss-help">{group.description}</p>}
           <ul className="bh-list">
-            {group.settings.map(setting => <SettingRow key={setting.key} setting={setting} describedSources={described.sources ?? []} onSave={save} />)}
+            {group.settings.map(setting => <SettingRow key={setting.key} setting={setting} describedSources={described.sources ?? []} roles={roles} onSave={save} />)}
           </ul>
         </div>
       ))}
@@ -110,9 +98,10 @@ function ServicePanel({ source }: { source: ServiceSettingsSource }) {
   )
 }
 
-function SettingRow({ setting, describedSources, onSave }: {
+function SettingRow({ setting, describedSources, roles, onSave }: {
   setting: ServiceSetting
   describedSources: ServiceSettings['sources']
+  roles: ModelStoreRolesState
   onSave: (key: string, value: string) => Promise<string | null>
 }) {
   const [editing, setEditing] = useState(false)
@@ -147,10 +136,18 @@ function SettingRow({ setting, describedSources, onSave }: {
       {!editing && (
         <div className="bsv-value">
           <code className={setting.is_set ? '' : 'bsv-unset'}>{serviceSettingValueText(setting)}</code>
+          {isModelRoleSetting(setting) && setting.is_set && <RoleModelsNote role={setting.value} roles={roles} />}
           {setting.default_value && setting.source !== 'default' && <span className="bss-help">default {setting.default_value}</span>}
         </div>
       )}
-      {editing && (
+      {editing && isModelRoleSetting(setting) && (
+        <div className="bsv-edit">
+          <ModelRoleSelect value={draft} roles={roles} disabled={busy} label={`New role for ${setting.key}`} onChange={setDraft} />
+          <span className="bss-help">model-store role{setting.default_value ? ` · default ${setting.default_value}` : ''}</span>
+          <button type="button" className="bi-save-btn" disabled={busy || draft === setting.value || roles.phase !== 'loaded'} onClick={() => { void submit() }}>{busy ? 'Saving…' : 'Save'}</button>
+        </div>
+      )}
+      {editing && !isModelRoleSetting(setting) && (
         <div className="bsv-edit">
           <input aria-label={`New value for ${setting.key}`} value={draft} spellCheck={false} disabled={busy}
             placeholder={setting.value_type} onChange={e => setDraft(e.target.value)}
@@ -163,4 +160,34 @@ function SettingRow({ setting, describedSources, onSave }: {
       {error && <div className="bridge-error bss-error">{error}</div>}
     </li>
   )
+}
+
+/** A drop-down of model-store's roles, each with the models it resolves to.
+ *  While the roles cannot be read it says why, and offers nothing to pick. */
+export function ModelRoleSelect({ value, roles, disabled, label, onChange }: {
+  value: string
+  roles: ModelStoreRolesState
+  disabled: boolean
+  label: string
+  onChange: (role: string) => void
+}) {
+  if (roles.phase === 'loading') return <span className="bss-help">reading model-store roles…</span>
+  if (roles.phase === 'failed') return <div className="bridge-error bss-error">{roles.error}</div>
+  return (
+    <select aria-label={label} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>
+      {value === '' && <option value="" disabled>choose a role</option>}
+      {roleOptions(roles.roles, value).map(option => (
+        <option key={option.role} value={option.role}>{option.label}</option>
+      ))}
+    </select>
+  )
+}
+
+/** The models a role resolves to, beside the role's name. */
+export function RoleModelsNote({ role, roles }: { role: string; roles: ModelStoreRolesState }) {
+  if (roles.phase === 'loading') return null
+  if (roles.phase === 'failed') return <span className="bss-error">{roles.error}</span>
+  if (!roles.roles.canonical.includes(role)) return <span className="bss-error">not a model-store role</span>
+  const text = roleModelsText(roleModelList(roles.roles, role))
+  return <span className="bss-help">{text === '' ? 'no models' : text}</span>
 }

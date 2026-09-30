@@ -1,5 +1,6 @@
 import type { ServiceSetting, ServiceSettingKind, ServiceSettings } from '@kayushkin/llm-bridge-types'
 import type { BridgeConfig } from './context'
+import type { FetchFn } from './types'
 
 /** One backend the page asks for its settings: the name to show before it has
  *  answered, and the base path the host proxies it at. */
@@ -41,6 +42,7 @@ const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName:
   { configKey: 'authStoreBasePath', serviceName: 'auth-store' },
   { configKey: 'workGraphStoreBasePath', serviceName: 'work-graph-store' },
   { configKey: 'projectStoreBasePath', serviceName: 'project-store' },
+  { configKey: 'modelStoreBasePath', serviceName: 'model-store' },
   { configKey: 'hostBasePath', serviceName: 'the host' },
 ]
 
@@ -103,4 +105,43 @@ export function serviceSettingsSummary(described: ServiceSettings): string {
   const editable = settings.filter(s => s.editable).length
   const fromEnvironment = settings.filter(s => s.source === 'environment').length
   return `${settings.length} settings · ${editable} changed here · ${fromEnvironment} set by the environment`
+}
+
+/** What asking one service for its settings came to. `silent` is a service
+ *  that answered something other than a description — one not converted yet;
+ *  `failed` is a request that never got an answer. */
+export type ServiceSettingsAnswer =
+  | { phase: 'described'; described: ServiceSettings }
+  | { phase: 'silent'; status: number }
+  | { phase: 'failed'; message: string }
+
+/** Asks one service for its settings. Both the Service settings page and the
+ *  Models page read services through this. */
+export async function fetchServiceSettings(fetchFn: FetchFn, basePath: string): Promise<ServiceSettingsAnswer> {
+  try {
+    const res = await fetchFn(serviceSettingsURL(basePath))
+    if (!res.ok) return { phase: 'silent', status: res.status }
+    const described = await res.json() as ServiceSettings
+    // Some other route answering 200 at this path is not a description.
+    if (!described || !Array.isArray(described.settings)) return { phase: 'silent', status: res.status }
+    return { phase: 'described', described }
+  } catch (err) {
+    return { phase: 'failed', message: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** One write, `PUT {base}/settings/{key}`. The service answers with its whole
+ *  description, so a caller redraws from what is now in force rather than what
+ *  was typed. A refusal comes back as the service's own text. */
+export async function putServiceSetting(fetchFn: FetchFn, basePath: string, key: string, value: string):
+  Promise<{ ok: true; described: ServiceSettings } | { ok: false; error: string }> {
+  try {
+    const res = await fetchFn(serviceSettingURL(basePath, key), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
+    })
+    if (!res.ok) return { ok: false, error: `PUT /settings/${key} → ${res.status}: ${(await res.text()).trim()}` }
+    return { ok: true, described: await res.json() as ServiceSettings }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
