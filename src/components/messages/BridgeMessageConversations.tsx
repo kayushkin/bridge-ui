@@ -5,7 +5,7 @@ import { bridgedChannelsOf, DISCORD_PLATFORM } from '../../discordLog'
 import { insertAtSelection } from '../../emojiPicker'
 import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messageBody'
 import {
-  conversationMessagesPath, conversationOwnTags, conversationPartnerTags, conversationPlatforms, conversationSendPath, conversationShownName,
+  conversationMessagesPath, conversationOwnTags, conversationPartnerTags, conversationPlatforms, conversationSendFilePath, conversationSendPath, conversationShownName,
   conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterConversations, type ConversationTagMaps,
   conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
   reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
@@ -18,13 +18,15 @@ import {
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
-  MultichatSendAnswer, MultichatTag,
+  MultichatSendAnswer, MultichatSendFileAnswer, MultichatTag,
 } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChip, TagChips } from './messagesShared'
 import { MessageContent, ReactionChips } from './MessageContent'
 import { EmojiFace, EmojiPickerButton, EmojiPickerPanel, EmojiSuggestionList, useEmojiChoices, type EmojiSuggestion } from './EmojiPicker'
 import { useEmojiCatalog, useDailyNitroCheck } from './useEmojiCatalog'
+import { captionsForFiles, humanFileSize, pendingAttachment, type PendingAttachment } from '../../messageAttachments'
+import { filesFromPaste } from '../../sessionFileAttachments'
 import styles from './Messages.module.css'
 
 const CONVERSATIONS_POLL_MS = 30_000
@@ -193,7 +195,14 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
   /** Drawn under the room's name. */
   tagEditor: ReactNode
 }) {
-  const { read, write } = useMultichat()
+  const { read, write, writeForm } = useMultichat()
+  /** Files waiting in the composer, sent with the next Send. */
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([])
+  /** Which file of how many is going now, while files send. */
+  const [fileProgress, setFileProgress] = useState<{ done: number; total: number } | null>(null)
+  /** A drag carrying files is over the thread. */
+  const [dragging, setDragging] = useState(false)
+  const filePicker = useRef<HTMLInputElement | null>(null)
   const roomID = conversation.room_id
   const [messages, setMessages] = useState<MultichatMessage[] | null>(null)
   const [olderFrom, setOlderFrom] = useState<string | null>(null)
@@ -356,7 +365,46 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
     setDraft(next.text)
   }
 
+  const addFiles = (files: readonly File[], pasted: boolean) => {
+    if (files.length === 0) return
+    const now = new Date()
+    setAttachments(current => [...current, ...files.map(file => pendingAttachment(file, pasted, now))])
+    setSendError(null)
+    composer.current?.focus()
+  }
+
+  /** Sends the waiting files one by one, the typed text as the first one's
+   *  caption. A file that fails stops the rest; it and those after it stay in
+   *  the composer, and the text stays unless it already went. */
+  const sendFiles = async () => {
+    const captions = captionsForFiles(draft, attachments.length)
+    setSending(true)
+    for (let index = 0; index < attachments.length; index++) {
+      const attachment = attachments[index]
+      setFileProgress({ done: index + 1, total: attachments.length })
+      const form = new FormData()
+      form.append('file', attachment.file, attachment.name)
+      if (captions[index]) form.append('caption', captions[index])
+      const sent = await writeForm<MultichatSendFileAnswer>(conversationSendFilePath(roomID), form)
+      if (!sent.ok) {
+        setSendError(`${attachment.name} was not sent: ${sent.error}`)
+        setAttachments(current => current.filter(pending => attachments.slice(index).some(a => a.id === pending.id)))
+        break
+      }
+      if (index === 0) setDraft('')
+      if (index === attachments.length - 1) {
+        setSendError(null)
+        setAttachments([])
+      }
+    }
+    setFileProgress(null)
+    setSending(false)
+    onSent()
+    try { await refreshNewest(true) } catch (err) { setError(errorText(err)) }
+  }
+
   const send = async () => {
+    if (attachments.length > 0) { await sendFiles(); return }
     const command = reactionCommandOf(draft)
     if (command) {
       const choice: EmojiChoice | null = 'name' in command
@@ -427,7 +475,20 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
   }
 
   return (
-    <div className={styles.thread}>
+    <div className={`${styles.thread} ${dragging ? styles.threadDragging : ''}`}
+      onDragOver={event => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={event => { if (event.currentTarget === event.target) setDragging(false) }}
+      onDrop={event => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        setDragging(false)
+        addFiles(Array.from(event.dataTransfer.files), false)
+      }}>
+      {dragging && <div className={styles.dropHint}>Drop to attach — nothing is sent until you press Send</div>}
       <div className={styles.threadBar}>
         <span className={styles.name} title={conversation.name}>{conversationShownName(conversation)}</span>
         {conversation.platform && <span className={styles.platform}>{conversation.platform}</span>}
@@ -482,6 +543,19 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
           ))
         )}
       </div>
+      {attachments.length > 0 && (
+        <ul className={styles.attachmentTray} aria-label="Files to send">
+          {attachments.map(attachment => (
+            <li key={attachment.id} className={styles.attachment}>
+              <AttachmentPreview attachment={attachment} />
+              <span className={styles.attachmentName} title={attachment.name}>{attachment.name}</span>
+              <span className={styles.muted}>{humanFileSize(attachment.file.size)}</span>
+              <button type="button" className={styles.emojiPanelClose} disabled={sending} aria-label={`Remove ${attachment.name}`}
+                onClick={() => setAttachments(current => current.filter(pending => pending.id !== attachment.id))}>✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className={styles.composer}>
         {reactingTo && (
           <EmojiPickerPanel
@@ -494,11 +568,21 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
           <EmojiSuggestionList suggestions={suggestions} activeIndex={activeSuggestion}
             onPick={pickSuggestion} onHover={setSuggestionIndex} />
         )}
+        <input ref={filePicker} type="file" multiple hidden
+          onChange={event => { addFiles(Array.from(event.target.files ?? []), false); event.target.value = '' }} />
+        <button type="button" className={styles.emojiButton} disabled={sending} title="Attach images or files (or paste or drop them here)"
+          aria-label="Attach files" onClick={() => filePicker.current?.click()}>📎</button>
         <EmojiPickerButton onPick={insertEmoji} disabled={sending} discordRoom={discordRoom} />
         <textarea ref={composer} className={styles.input} rows={2} value={draft} disabled={sending}
           placeholder={`Message ${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''} — Enter sends, : finds an emoji, +:name: reacts to the newest message`}
           onChange={e => { setDraft(e.target.value); setCursor(e.target.selectionStart); setSuggestionIndex(0) }}
           onSelect={e => setCursor(e.currentTarget.selectionStart)}
+          onPaste={e => {
+            const { files, keepText } = filesFromPaste({ files: e.clipboardData.files, types: Array.from(e.clipboardData.types) })
+            if (files.length === 0) return
+            if (!keepText) e.preventDefault()
+            addFiles(files, true)
+          }}
           onKeyDown={e => {
             if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -516,8 +600,8 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
             }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
           }} />
-        <button type="button" className="bi-save-btn" disabled={sending || !draft.trim()} onClick={() => { void send() }}>
-          {sending ? 'Sending…' : 'Send'}
+        <button type="button" className="bi-save-btn" disabled={sending || (!draft.trim() && attachments.length === 0)} onClick={() => { void send() }}>
+          {fileProgress ? `Sending ${fileProgress.done} of ${fileProgress.total}…` : sending ? 'Sending…' : 'Send'}
         </button>
       </div>
       {sendError && <pre className={styles.error}>{sendError}</pre>}
@@ -619,4 +703,18 @@ function ConversationTagEditor({ conversation, tags, tagMaps, write }: {
       {error && <pre className={styles.error}>{error}</pre>}
     </div>
   )
+}
+
+/** A waiting file's thumbnail: the image itself, or what kind of file it is. */
+function AttachmentPreview({ attachment }: { attachment: PendingAttachment }) {
+  const [url, setURL] = useState<string | null>(null)
+  useEffect(() => {
+    if (attachment.kind !== 'image') return
+    const objectURL = URL.createObjectURL(attachment.file)
+    setURL(objectURL)
+    return () => URL.revokeObjectURL(objectURL)
+  }, [attachment])
+  if (attachment.kind === 'image' && url) return <img className={styles.attachmentThumbnail} src={url} alt="" />
+  const icon = attachment.kind === 'video' ? '🎬' : attachment.kind === 'audio' ? '🎵' : attachment.kind === 'image' ? '🖼️' : '📄'
+  return <span className={styles.attachmentIcon} aria-hidden="true">{icon}</span>
 }

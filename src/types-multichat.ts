@@ -73,6 +73,9 @@ export interface MultichatMessage {
   /** `org.matrix.custom.html` when `formatted_body` is Matrix HTML, else "". */
   format?: string
   formatted_body?: string
+  /** A media message's file name, sent only when the sender set one apart
+   *  from `body`; then `body` is the caption sent with the file. */
+  file_name?: string
   /** The `mxc://` URI of an image, file or video message, else "". */
   media_url?: string
   media_mimetype?: string
@@ -94,6 +97,18 @@ export interface MultichatMessagePage {
 }
 
 /** `POST {multichatBasePath}/conversations/{room_id}/send` answers this. */
+/** `POST {multichatBasePath}/conversations/{room_id}/send-file` — built in
+ *  multichat's internal/api/send_file.go. */
+export interface MultichatSendFileAnswer {
+  event_id: string
+  mxc_uri: string
+  filename: string
+  mimetype: string
+  /** `m.image`, `m.video`, `m.audio` or `m.file`. */
+  msgtype: string
+  size: number
+}
+
 export interface MultichatSendAnswer {
   event_id: string
 }

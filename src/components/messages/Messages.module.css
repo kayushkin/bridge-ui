@@ -280,3 +280,33 @@ img.emojiSuggestionFace { height: 1.3em; min-width: 0; }
 .emojiJumpButton .customEmoji { height: 1.05em; }
 .emojiJumpButton:hover, .emojiJumpButtonCurrent { opacity: 1; background: var(--bg-surface); }
 .emojiPageGrid { height: 60vh; min-height: 280px; display: flex; flex-direction: column; gap: 4px; }
+
+/* A file message: the image, player or link, then the caption sent with it. */
+.mediaMessage { display: flex; flex-direction: column; gap: 4px; }
+button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; }
+.messageVideo { max-width: min(100%, 420px); max-height: 320px; border-radius: 6px; background: #000; }
+/* An image shown large over the page. */
+.imageViewer {
+  position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 24px; background: rgba(0, 0, 0, 0.82); cursor: zoom-out;
+}
+.imageViewer > img { max-width: 100%; max-height: calc(100% - 48px); object-fit: contain; border-radius: 4px; cursor: default; }
+.imageViewerBar { display: flex; gap: 16px; align-items: center; cursor: default; }
+.imageViewerBar a, .imageViewerBar button { color: #fff; font: inherit; background: none; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 6px; padding: 3px 10px; cursor: pointer; text-decoration: none; }
+
+/* Files waiting in the composer, above the text box. */
+.attachmentTray { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 6px 10px 0; list-style: none; border-top: 1px solid var(--border); }
+.attachment {
+  display: flex; align-items: center; gap: 6px; max-width: 260px; padding: 4px 6px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); font-size: 0.8em;
+}
+.attachmentThumbnail { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; flex: none; }
+.attachmentIcon { width: 40px; text-align: center; font-size: 1.6em; flex: none; }
+.attachmentName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A drag carrying files over the thread. */
+.thread { position: relative; }
+.threadDragging { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.dropHint {
+  position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); font-weight: 600;
+}

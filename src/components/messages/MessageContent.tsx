@@ -1,4 +1,4 @@
-import { createElement, useMemo, type ComponentProps, type ReactNode } from 'react'
+import { createElement, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useBridgeConfig } from '../../context'
@@ -7,6 +7,7 @@ import {
   MESSAGE_IMAGE_THUMBNAIL, isImageMedia, mediaPathOfMxc, messageBodyKind, sanitizeMatrixHtml,
   type DiscordNames, type SafeNode,
 } from '../../messageBody'
+import { attachmentKind, mediaCaption, mediaFileName } from '../../messageAttachments'
 import { groupReactions, reactionChipAction, reactionFace, reactionTooltip } from '../../messageReactions'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
 import styles from './Messages.module.css'
@@ -20,13 +21,16 @@ export interface MessageContentFields {
   formatted_body?: string
   media_url?: string
   media_mimetype?: string
+  /** A media message's file name when the sender set one; then body is its caption. */
+  file_name?: string
 }
 
 /**
  * One message's content, the same on Conversations and the Discord page:
  * Matrix HTML sanitized (see `sanitizeMatrixHtml`), Discord markdown for an
- * archive row, plain text otherwise; an image as a thumbnail that opens full
- * size, any other file as a link.
+ * archive row, plain text otherwise; an image as a thumbnail that opens large
+ * in the page, a video or audio file as a player, any other file as a link,
+ * each with the caption sent with it.
  */
 export function MessageContent({ message, messageType, discordNames }: {
   message: MessageContentFields
@@ -50,21 +54,57 @@ function MessageMedia({ message, messageType, multichatBasePath }: {
   messageType: string
   multichatBasePath: string
 }) {
+  const [viewing, setViewing] = useState(false)
   const full = mediaPathOfMxc(multichatBasePath, message.media_url ?? '')
+  const caption = mediaCaption(message)
+  const fileName = mediaFileName(message)
   if (!full) return <div className={styles.plainText}>{message.body} <span className={styles.muted}>(no valid media address)</span></div>
+  const kind = attachmentKind(message.media_mimetype ?? '')
+  let media: ReactNode
   if (isImageMedia(message)) {
     const thumbnail = mediaPathOfMxc(multichatBasePath, message.media_url ?? '', MESSAGE_IMAGE_THUMBNAIL)!
-    return (
-      <a href={full} target="_blank" rel="noopener noreferrer" className={styles.imageLink} title={`${message.body} — open full size`}>
-        <img className={styles.messageImage} src={thumbnail} alt={message.body} loading="lazy" />
-      </a>
+    media = (
+      <>
+        <button type="button" className={styles.imageLink} title={`${fileName} — view larger`} onClick={() => setViewing(true)}>
+          <img className={styles.messageImage} src={thumbnail} alt={caption || fileName} loading="lazy" />
+        </button>
+        {viewing && <ImageViewer src={full} alt={caption || fileName} onClose={() => setViewing(false)} />}
+      </>
+    )
+  } else if (kind === 'video') {
+    media = <video className={styles.messageVideo} src={full} controls preload="metadata" title={fileName} />
+  } else if (kind === 'audio') {
+    media = <audio src={full} controls preload="metadata" title={fileName} />
+  } else {
+    media = (
+      <div className={styles.plainText}>
+        <span className={styles.muted}>{messageType.replace(/^m\./, '')} </span>
+        <a href={full} target="_blank" rel="noopener noreferrer">{fileName || 'open'}</a>
+      </div>
     )
   }
-  const kind = messageType.replace(/^m\./, '')
   return (
-    <div className={styles.plainText}>
-      <span className={styles.muted}>{kind} </span>
-      <a href={full} target="_blank" rel="noopener noreferrer">{message.body || 'open'}</a>
+    <div className={styles.mediaMessage}>
+      {media}
+      {caption && <div className={styles.plainText}>{caption}</div>}
+    </div>
+  )
+}
+
+/** An image shown large over the page; a click outside it or Escape closes it. */
+function ImageViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+  return (
+    <div className={styles.imageViewer} role="dialog" aria-label={alt} onClick={onClose}>
+      <img src={src} alt={alt} onClick={event => event.stopPropagation()} />
+      <div className={styles.imageViewerBar} onClick={event => event.stopPropagation()}>
+        <a href={src} target="_blank" rel="noopener noreferrer">Open the original</a>
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
     </div>
   )
 }

@@ -29,7 +29,19 @@ export function useMultichat() {
     }
   }, [apiFetch, multichatBasePath])
 
-  return { read, write, configured: !!multichatBasePath }
+  /** A POST of a multipart form (a file), whose Content-Type the browser
+   *  sets with its boundary. */
+  const writeForm = useCallback(async <T,>(path: string, form: FormData): Promise<MultichatWriteResult<T>> => {
+    try {
+      const res = await apiFetch(`${multichatBasePath}${path}`, { method: 'POST', body: form })
+      if (!res.ok) return { ok: false, error: `POST ${path} → ${res.status}: ${(await res.text()).trim()}` }
+      return { ok: true, value: await res.json() as T }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }, [apiFetch, multichatBasePath])
+
+  return { read, write, writeForm, configured: !!multichatBasePath }
 }
 
 export const errorText = (err: unknown) => err instanceof Error ? err.message : String(err)

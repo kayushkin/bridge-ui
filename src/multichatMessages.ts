@@ -22,6 +22,8 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /conversations',
   'GET /conversations/{room_id}/messages',
   'POST /conversations/{room_id}/send',
+  // A pasted, dropped or picked file, with the typed text as its caption.
+  'POST /conversations/{room_id}/send-file',
   // Reacting to a message, and taking back a reaction we posted.
   'POST /conversations/{room_id}/reactions',
   'DELETE /conversations/{room_id}/reactions/{reaction_event_id}',
@@ -70,6 +72,11 @@ export function reactionTakeBackPath(roomID: string, reactionEventID: string): s
  *  original — reactions point at the original, never at an edit. */
 export function reactionTargetEventID(message: MultichatMessage): string {
   return message.replaces_event_id || message.event_id
+}
+
+/** Where a file is sent into the room, as a multipart form of `file` and `caption`. */
+export function conversationSendFilePath(roomID: string): string {
+  return `/conversations/${roomSegment(roomID)}/send-file`
 }
 
 export function conversationSendPath(roomID: string): string {
