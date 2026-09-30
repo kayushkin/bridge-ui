@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { DiscordCustomEmoji } from '@kayushkin/multichat-types'
 import { useBridgeConfig } from '../../context'
 import {
-  allCustomEmoji, customChoice, customEmojiImageURL, customEmojiOffered, customEmojiSectionName, emojiSearchIndex, favoriteChoices, searchEmojiIndex, unicodeChoices,
+  allCustomEmoji, customChoice, type DiscordRoom, customEmojiImageURL, customEmojiOffered, customEmojiSectionName, emojiSearchIndex, favoriteChoices, searchEmojiIndex, unicodeChoices,
   unicodeNamesOf, type EmojiChoice,
 } from '../../emojiCatalog'
 import { emojiGridLayout, rowsInView, sectionAt } from '../../emojiGridLayout'
@@ -28,15 +28,15 @@ export function EmojiFace({ choice, className }: { choice: EmojiChoice; classNam
  * custom emoji of the room's Discord server (and of every other bridged
  * server when the setting says so), and the favourites among those.
  */
-export function useEmojiChoices(purpose: EmojiPurpose, roomDiscordServerID: string | null) {
+export function useEmojiChoices(purpose: EmojiPurpose, discordRoom: DiscordRoom | null) {
   const { groups, error: groupsError } = useEmojiGroups()
   const { catalog, error: catalogError } = useEmojiCatalog()
   const tone = catalog?.settings.skin_tone ?? ''
   const unicode = useMemo(() => (groups ? unicodeChoices(groups, tone) : []), [groups, tone])
   const unicodeNames = useMemo(() => (groups ? unicodeNamesOf(groups) : new Map<string, string>()), [groups])
   const offered: DiscordCustomEmoji[] = useMemo(() => (catalog
-    ? customEmojiOffered(catalog.discord_custom_emoji, catalog.discord_seen_emoji ?? [], roomDiscordServerID, !!catalog.discord_nitro?.has_nitro)
-    : []), [catalog, roomDiscordServerID])
+    ? customEmojiOffered(catalog.discord_custom_emoji, catalog.discord_seen_emoji ?? [], discordRoom, !!catalog.discord_nitro?.has_nitro)
+    : []), [catalog, discordRoom])
   const custom = useMemo(() => offered.map(customChoice), [offered])
   const favoriteKeys = useMemo(() => catalog?.favorite_keys ?? [], [catalog])
   const favorites = useMemo(() => {
@@ -63,10 +63,10 @@ export function useEmojiChoices(purpose: EmojiPurpose, roomDiscordServerID: stri
  * `onPick` and nothing else: the composer puts it in its text box, and
  * nothing is sent until the person sends.
  */
-export function EmojiPickerButton({ onPick, disabled, roomDiscordServerID }: {
+export function EmojiPickerButton({ onPick, disabled, discordRoom }: {
   onPick: (choice: EmojiChoice) => void
   disabled?: boolean
-  roomDiscordServerID: string | null
+  discordRoom: DiscordRoom | null
 }) {
   const [open, setOpen] = useState(false)
   const wrapper = useRef<HTMLDivElement | null>(null)
@@ -86,7 +86,7 @@ export function EmojiPickerButton({ onPick, disabled, roomDiscordServerID }: {
         title="Insert an emoji (or type : and a name)" aria-label="Insert an emoji" onClick={() => setOpen(o => !o)}>
         {'\u{1F642}'}
       </button>
-      {open && <EmojiPickerPanel purpose="message" roomDiscordServerID={roomDiscordServerID} onPick={onPick} onClose={() => setOpen(false)} />}
+      {open && <EmojiPickerPanel purpose="message" discordRoom={discordRoom} onPick={onPick} onClose={() => setOpen(false)} />}
     </div>
   )
 }
@@ -200,15 +200,15 @@ export function VirtualEmojiGrid({ sections, renderCell, jumpBar }: {
  *  finds parrot and partyParrot) or a server's name (`pretend`, `reno kerm`),
  *  and Enter picks the first match. `heading`, when given, says what a pick
  *  is for. */
-export function EmojiPickerPanel({ onPick, onClose, heading, purpose, roomDiscordServerID }: {
+export function EmojiPickerPanel({ onPick, onClose, heading, purpose, discordRoom }: {
   onPick: (choice: EmojiChoice) => void
   onClose: () => void
   heading?: string
   purpose: EmojiPurpose
-  roomDiscordServerID: string | null
+  discordRoom: DiscordRoom | null
 }) {
   const { routes } = useBridgeConfig()
-  const { groups, sections, pickableIndex, favoriteKeys, tone, error } = useEmojiChoices(purpose, roomDiscordServerID)
+  const { groups, sections, pickableIndex, favoriteKeys, tone, error } = useEmojiChoices(purpose, discordRoom)
   const [query, setQuery] = useState('')
   // The box shows every keystroke at once; the results follow when React has time.
   const deferredQuery = useDeferredValue(query)

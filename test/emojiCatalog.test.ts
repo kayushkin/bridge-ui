@@ -102,7 +102,7 @@ describe('react commands', () => {
   })
 
   it('names the room’s own emoji before another server’s', () => {
-    const offered = customEmojiOffered([emoji('9', 'wave', 'pretend'), emoji('1', 'wave', 'reno')], [], 'reno', true)
+    const offered = customEmojiOffered([emoji('9', 'wave', 'pretend'), emoji('1', 'wave', 'reno')], [], { serverID: 'reno' }, true)
     const found = choiceNamed(offered.map(customChoice), 'wave')
     expect(found?.kind === 'custom' && found.emoji.discord_emoji_id).toBe('1')
   })
@@ -112,9 +112,14 @@ describe('what a room is offered', () => {
   const all = [emoji('1', 'a', 'reno'), emoji('2', 'b', 'pretend')]
   const seen = [emoji('7', 'seen', '')]
   it('offers only the room’s own server without Nitro, and every server’s and the seen ones with it', () => {
-    expect(customEmojiOffered(all, seen, 'reno', false).map(e => e.name)).toEqual(['a'])
-    expect(customEmojiOffered(all, seen, 'pretend', true).map(e => e.name)).toEqual(['b', 'a', 'seen'])
+    expect(customEmojiOffered(all, seen, { serverID: 'reno' }, false).map(e => e.name)).toEqual(['a'])
+    expect(customEmojiOffered(all, seen, { serverID: 'pretend' }, true).map(e => e.name)).toEqual(['b', 'a', 'seen'])
     expect(customEmojiOffered(all, seen, null, true)).toEqual([])
+  })
+
+  it('offers a Discord DM every server’s emoji with Nitro, and none without', () => {
+    expect(customEmojiOffered(all, seen, { serverID: null }, true).map(e => e.name)).toEqual(['a', 'b', 'seen'])
+    expect(customEmojiOffered(all, seen, { serverID: null }, false)).toEqual([])
   })
 
   it('finds a room’s server from the bridge status', () => {

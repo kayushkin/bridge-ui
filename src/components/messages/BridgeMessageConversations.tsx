@@ -12,7 +12,7 @@ import {
 } from '../../multichatMessages'
 import { reactionChipAction, withReactionPosted, withReactionTakenBack } from '../../messageReactions'
 import {
-  allCustomEmoji, choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID,
+  allCustomEmoji, choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID, type DiscordRoom,
   searchEmojiIndex, type EmojiChoice,
 } from '../../emojiCatalog'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
@@ -213,8 +213,10 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
   const pendingCursor = useRef<number | null>(null)
   const discordStatus = useDiscordStatus(conversation)
   const discordNames = useDiscordNames(conversation, messages, discordStatus)
-  const roomServerID = useMemo(() => roomDiscordServerID(discordStatus, roomID), [discordStatus, roomID])
-  const emoji = useEmojiChoices('reaction', roomServerID)
+  // A Discord room: a server's channel, or a DM, which has no server.
+  const discordRoom: DiscordRoom | null = useMemo(() => (conversation.platform === DISCORD_PLATFORM
+    ? { serverID: roomDiscordServerID(discordStatus, roomID) } : null), [conversation.platform, discordStatus, roomID])
+  const emoji = useEmojiChoices('reaction', discordRoom)
   const { catalog } = useEmojiCatalog()
   /** Where the cursor is in the text box, for the `:` suggestions. */
   const [cursor, setCursor] = useState(0)
@@ -484,7 +486,7 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
         {reactingTo && (
           <EmojiPickerPanel
             heading={`React to ${reactingTo.is_me ? 'your' : `${reactingTo.sender_name || reactingTo.sender}'s`} message: “${reactingTo.body.slice(0, 60)}${reactingTo.body.length > 60 ? '…' : ''}”`}
-            purpose="reaction" roomDiscordServerID={roomServerID}
+            purpose="reaction" discordRoom={discordRoom}
             onPick={choice => { const message = reactingTo; setReactingTo(null); void postReaction(message, choice) }}
             onClose={() => setReactingTo(null)} />
         )}
@@ -492,7 +494,7 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
           <EmojiSuggestionList suggestions={suggestions} activeIndex={activeSuggestion}
             onPick={pickSuggestion} onHover={setSuggestionIndex} />
         )}
-        <EmojiPickerButton onPick={insertEmoji} disabled={sending} roomDiscordServerID={roomServerID} />
+        <EmojiPickerButton onPick={insertEmoji} disabled={sending} discordRoom={discordRoom} />
         <textarea ref={composer} className={styles.input} rows={2} value={draft} disabled={sending}
           placeholder={`Message ${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''} — Enter sends, : finds an emoji, +:name: reacts to the newest message`}
           onChange={e => { setDraft(e.target.value); setCursor(e.target.selectionStart); setSuggestionIndex(0) }}

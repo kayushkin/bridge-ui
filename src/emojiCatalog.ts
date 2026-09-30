@@ -90,16 +90,23 @@ export function roomDiscordServerID(status: DiscordBridgeStatus | null, roomID: 
   return null
 }
 
-/** The custom emoji a room is offered: none outside Discord; the room's own
- *  server's first, then, when the account has Nitro, every other bridged
- *  server's and the seen ones (Discord refuses an emoji outside its own
- *  server to an account without Nitro). */
+/** A Discord room: a channel of a server (`serverID`), or a direct message
+ *  or group DM, which belongs to no server (`serverID` null). */
+export interface DiscordRoom {
+  serverID: string | null
+}
+
+/** The custom emoji a room is offered: none outside Discord (`room` null).
+ *  In a server's channel, that server's first; then, when the account has
+ *  Nitro, every other server's and the seen ones. A DM has no server of its
+ *  own, so without Nitro it gets none and with Nitro all of them (Discord
+ *  refuses an emoji outside its own server to an account without Nitro). */
 export function customEmojiOffered(custom: readonly DiscordCustomEmoji[], seen: readonly DiscordCustomEmoji[],
-  roomServerID: string | null, hasNitro: boolean): DiscordCustomEmoji[] {
-  if (!roomServerID) return []
-  const own = custom.filter(emoji => emoji.discord_server_id === roomServerID)
+  room: DiscordRoom | null, hasNitro: boolean): DiscordCustomEmoji[] {
+  if (!room) return []
+  const own = room.serverID ? custom.filter(emoji => emoji.discord_server_id === room.serverID) : []
   if (!hasNitro) return own
-  return [...own, ...custom.filter(emoji => emoji.discord_server_id !== roomServerID), ...seen]
+  return [...own, ...custom.filter(emoji => emoji.discord_server_id !== room.serverID), ...seen]
 }
 
 /** The query as a name search reads it: any case, with the colons of
