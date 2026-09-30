@@ -4,7 +4,9 @@
 // what a `+:name:` command reacts with, and how a favourite is matched to a
 // reaction already on a message. The records are multichat's (`GET /emoji`);
 // everything here is covered by test/emojiCatalog.test.ts.
-import type { DiscordBridgeStatus, DiscordCustomEmoji, EmojiCatalog, MessageReactionGroup } from '@kayushkin/multichat-types'
+import type {
+  DiscordBridgeStatus, DiscordCustomEmoji, DiscordServerSweepStatus, EmojiCatalog, MessageReactionGroup,
+} from '@kayushkin/multichat-types'
 import type { EmojiGroup } from './emojiPicker'
 import { discordEmojiURL } from './messageBody'
 import { DISCORD_EMOJI_KEY_PREFIX } from './messageReactions'
@@ -17,6 +19,7 @@ export const EMOJI_ROUTES_CALLED: readonly string[] = [
   'PUT /emoji/favorites',
   'PUT /emoji/settings',
   'POST /emoji/discord/nitro-check',
+  'POST /emoji/discord/server-sweep',
 ]
 
 /** What the pickers call the emoji the bridge has seen from servers that are
@@ -293,4 +296,18 @@ export function reactionGroupIsEmoji(group: MessageReactionGroup, key: string,
 /** What a custom emoji's image is loaded from. */
 export function customEmojiImageURL(emoji: DiscordCustomEmoji): string {
   return discordEmojiURL(emoji.discord_emoji_id, emoji.animated)
+}
+
+/** What the Emoji page says about the listing of every server's emoji:
+ *  its progress while it runs, else how many servers are listed. */
+export function serverSweepSummary(sweep: DiscordServerSweepStatus, serversListed: number): string {
+  if (sweep.running) {
+    return sweep.servers_to_list > 0
+      ? `Listing your servers' emoji: ${sweep.servers_listed} of ${sweep.servers_to_list} done, one server at a time.`
+      : 'Asking Discord which servers you are in.'
+  }
+  const listed = `${serversListed} ${serversListed === 1 ? 'server' : 'servers'} listed.`
+  return sweep.finished_at
+    ? `${listed} The last listing checked ${sweep.servers_to_list} of your ${sweep.servers_in_account} servers.`
+    : `${listed} The next listing starts the first time you open Messages tomorrow, and lists only servers not listed in the past week.`
 }

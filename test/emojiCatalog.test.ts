@@ -4,7 +4,7 @@ import { EMOJI_GROUPS } from '../src/emojiData'
 import {
   choiceNamed, colonQueryAt, colonQueryIsReactionCommand, customChoice, customEmojiOffered, emojiNameMatchRank,
   favoriteChoices, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID, searchEmojiChoices, unicodeChoices,
-  unicodeNamesOf, withFavoriteMoved, withFavoriteToggled, withSkinTone, type EmojiChoice,
+  serverSweepSummary, unicodeNamesOf, withFavoriteMoved, withFavoriteToggled, withSkinTone, type EmojiChoice,
 } from '../src/emojiCatalog'
 
 const emoji = (id: string, name: string, server = 'reno', bridgeMXC = ''): DiscordCustomEmoji => ({
@@ -48,6 +48,13 @@ describe('name search', () => {
     expect(searchEmojiChoices(servers, 'reno', []).map(c => c.name)).toEqual(['renoCity', 'kermit_blush'])
     expect(searchEmojiChoices(servers, 'reno kerm', []).map(c => c.name)).toEqual(['kermit_blush'])
     expect(searchEmojiChoices(servers, 'pretend frog', [])).toEqual([])
+  })
+
+  it('says how far the server listing has got', () => {
+    const idle = { running: false, started_at: null, finished_at: null, servers_in_account: 0, servers_to_list: 0, servers_listed: 0, error: '' }
+    expect(serverSweepSummary({ ...idle, running: true, servers_to_list: 132, servers_listed: 40 }, 42)).toContain('40 of 132')
+    expect(serverSweepSummary({ ...idle, finished_at: '2026-09-30T12:00:00Z', servers_to_list: 132, servers_in_account: 134 }, 134))
+      .toBe('134 servers listed. The last listing checked 132 of your 134 servers.')
   })
 
   it('puts favourites first among equal matches', () => {

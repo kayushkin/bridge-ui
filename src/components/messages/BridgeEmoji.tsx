@@ -1,7 +1,7 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { EmojiSettings } from '@kayushkin/multichat-types'
 import {
-  allCustomEmoji, customChoice, customEmojiSectionName, emojiSearchIndex, favoriteChoices, SKIN_TONES, searchEmojiIndex, unicodeChoices, unicodeNamesOf, withFavoriteMoved,
+  allCustomEmoji, customChoice, customEmojiSectionName, emojiSearchIndex, serverSweepSummary, favoriteChoices, SKIN_TONES, searchEmojiIndex, unicodeChoices, unicodeNamesOf, withFavoriteMoved,
   withFavoriteToggled, withSkinTone, type EmojiChoice,
 } from '../../emojiCatalog'
 import { messageTimeLabel } from '../../multichatMessages'
@@ -22,7 +22,14 @@ import styles from './Messages.module.css'
 export function BridgeEmoji() {
   useDailyNitroCheck()
   const { configured } = useMultichat()
-  const { catalog, error, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow } = useEmojiCatalog()
+  const { catalog, error, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow, startServerSweep, reload } = useEmojiCatalog()
+  const sweepRunning = !!catalog?.discord_server_sweep.running
+  // While the listing runs, read its progress (and the emoji it has added) every 30 seconds.
+  useEffect(() => {
+    if (!sweepRunning) return
+    const timer = window.setInterval(() => { void reload() }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [sweepRunning, reload])
   const [checkingNitro, setCheckingNitro] = useState(false)
   const { groups, error: groupsError } = useEmojiGroups()
   const [query, setQuery] = useState('')
@@ -156,13 +163,22 @@ export function BridgeEmoji() {
             </div>
             <div className={styles.emojiPageHeadingRow}>
               <span className={styles.muted}>
-                Custom emoji of the bridged Discord servers, and the ones seen in messages from other servers
-                {catalog.discord_refreshes.map(r => ` · ${r.discord_server_name} listed ${messageTimeLabel(Date.parse(r.refreshed_at))}`).join('')}
+                Custom emoji of your Discord servers, and the ones seen in messages from servers you are not in.{' '}
+                {serverSweepSummary(catalog.discord_server_sweep, catalog.discord_refreshes.length)}
               </span>
-              <button type="button" className="bi-save-btn" disabled={refreshing} onClick={() => { void refresh() }}>
-                {refreshing ? 'Asking Discord…' : 'Refresh from Discord'}
+              <button type="button" className="bi-save-btn" disabled={refreshing} onClick={() => { void refresh() }}
+                title="Lists the bridged servers' emoji again now, with the bot. The other servers are listed by the weekly listing.">
+                {refreshing ? 'Asking Discord…' : 'Refresh bridged servers'}
+              </button>
+              <button type="button" className="bi-save-btn" disabled={sweepRunning}
+                title="Lists the emoji of every server you are in that was not listed in the past week, one server every 30 seconds."
+                onClick={() => { void startServerSweep().then(setWriteError) }}>
+                {sweepRunning ? 'Listing…' : 'List all my servers now'}
               </button>
             </div>
+            {catalog.discord_server_sweep.error && (
+              <pre className={styles.error}>The listing of your servers&apos; emoji: {catalog.discord_server_sweep.error}</pre>
+            )}
             {custom.length === 0 && <div className={styles.empty}>No custom emoji yet. Refresh from Discord to list each server&apos;s.</div>}
             {deferredQuery.trim() && results.length === 0 && <div className={styles.empty}>No emoji matches.</div>}
             <div className={styles.emojiPageGrid}>

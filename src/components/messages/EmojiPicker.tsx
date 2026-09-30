@@ -106,13 +106,17 @@ export interface EmojiGridSection {
 export function emojiSections(groups: readonly { name: string; emojis: readonly unknown[] }[] | null,
   unicode: readonly EmojiChoice[], custom: readonly EmojiChoice[], favorites: readonly EmojiChoice[]): EmojiGridSection[] {
   const sections: EmojiGridSection[] = [{ id: 'favourites', name: 'Favourites', choices: favorites }]
-  const byServer = new Map<string, EmojiChoice[]>()
+  // By server id: two servers can share a name. The seen emoji have none, so
+  // they share one section.
+  const byServer = new Map<string, { name: string; choices: EmojiChoice[] }>()
   for (const choice of custom) {
     if (choice.kind !== 'custom') continue
-    const server = customEmojiSectionName(choice.emoji)
-    byServer.set(server, [...(byServer.get(server) ?? []), choice])
+    const serverID = choice.emoji.discord_server_id
+    const section = byServer.get(serverID) ?? { name: customEmojiSectionName(choice.emoji), choices: [] }
+    section.choices.push(choice)
+    byServer.set(serverID, section)
   }
-  for (const [server, choices] of byServer) sections.push({ id: `server:${server}`, name: server, choices })
+  for (const [serverID, { name, choices }] of byServer) sections.push({ id: `server:${serverID}`, name, choices })
   let start = 0
   for (const group of groups ?? []) {
     sections.push({ id: `group:${group.name}`, name: group.name, choices: unicode.slice(start, start + group.emojis.length) })

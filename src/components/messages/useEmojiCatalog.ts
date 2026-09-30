@@ -101,6 +101,16 @@ export function useEmojiCatalog() {
     return null
   }, [store, write])
 
+  /** Starts the listing of every server's emoji now; multichat keeps its pace
+   *  and lists only servers not listed in the past week. The catalog is read
+   *  again so the page shows its progress. */
+  const startServerSweep = useCallback(async (): Promise<string | null> => {
+    const started = await write<unknown>('POST', '/emoji/discord/server-sweep')
+    if (!started.ok) return started.error
+    await reload()
+    return null
+  }, [reload, write])
+
   const refreshFromDiscord = useCallback(async (): Promise<string | null> => {
     const refreshed = await write<EmojiCatalog>('POST', '/emoji/discord/refresh')
     if (!refreshed.ok) return refreshed.error
@@ -108,8 +118,8 @@ export function useEmojiCatalog() {
     return null
   }, [store, write])
 
-  return useMemo(() => ({ ...state, reload, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow }),
-    [state, reload, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow])
+  return useMemo(() => ({ ...state, reload, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow, startServerSweep }),
+    [state, reload, saveFavorites, saveSettings, refreshFromDiscord, checkNitroNow, startServerSweep])
 }
 
 /** `POST /emoji/discord/nitro-check`'s answer. */
