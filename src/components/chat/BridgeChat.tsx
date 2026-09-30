@@ -214,6 +214,20 @@ export function BridgeChat() {
   const [openProjectId, setOpenProjectId] = useState<string | null>(
     () => searchParams.get('project') || null,
   )
+  // The work graph's repo (repo-store id) and selected commit, `?repo=` and
+  // `?commit=`, so a repo or commit chip can link straight to them. Written
+  // back by the same URL effect, for the same reason.
+  const [workGraphFocus, setWorkGraphFocus] = useState<{ repoId: number | null; commitSha: string | null }>(() => {
+    const repoId = Number(searchParams.get('repo'))
+    return {
+      repoId: Number.isInteger(repoId) && repoId > 0 ? repoId : null,
+      commitSha: searchParams.get('commit') || null,
+    }
+  })
+  const onWorkGraphFocusChange = useCallback((repoId: number | null, commitSha: string | null) => {
+    setWorkGraphFocus(current =>
+      current.repoId === repoId && current.commitSha === commitSha ? current : { repoId, commitSha })
+  }, [])
 
   // Declared BEFORE the bootstrap effect so an inbound deeplink claims the bootstrap
   // latch first. Otherwise a cold `/?session=<id>` opens a pending "New chat"
@@ -269,11 +283,24 @@ export function BridgeChat() {
       else next.delete('project')
       changed = true
     }
+    const workGraphShown = workspaceView === 'work-graph'
+    const shownRepo = workGraphShown && workGraphFocus.repoId !== null ? String(workGraphFocus.repoId) : null
+    const shownCommit = workGraphShown ? workGraphFocus.commitSha : null
+    if ((next.get('repo') || null) !== shownRepo) {
+      if (shownRepo) next.set('repo', shownRepo)
+      else next.delete('repo')
+      changed = true
+    }
+    if ((next.get('commit') || null) !== shownCommit) {
+      if (shownCommit) next.set('commit', shownCommit)
+      else next.delete('commit')
+      changed = true
+    }
     if (!changed) return
     // Replace, not push: browsing sessions must not fill the back stack with one entry
     // per session looked at.
     setSearchParams(next, { replace: true })
-  }, [activeId, workspaceView, openProjectId, searchParams, setSearchParams])
+  }, [activeId, workspaceView, openProjectId, workGraphFocus, searchParams, setSearchParams])
 
   const afterOpenSession = useCallback(() => {
     setWorkspaceView(null)
@@ -371,6 +398,9 @@ export function BridgeChat() {
             />
           ) : workspaceView === 'work-graph' ? (
             <WorkGraphView
+              initialRepoId={workGraphFocus.repoId}
+              initialCommitSha={workGraphFocus.commitSha}
+              onFocusChange={onWorkGraphFocusChange}
               onSelectSession={sessionId => {
                 select(sessionId)
                 setWorkspaceView(null)

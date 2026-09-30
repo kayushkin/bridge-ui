@@ -95,6 +95,10 @@
   background: none; border: none; cursor: pointer; text-align: left;
 }
 .shaLink:disabled { color: var(--text-muted); cursor: default; }
+/* A link out to GitHub: the accent colour, like the in-graph sha links, but
+   underlined on hover only, so a row of them does not read as a wall of links. */
+.shaGitHub { color: var(--accent); text-decoration: none; }
+.shaGitHub:hover { text-decoration: underline; }
 
 .details { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .detailsHeader { display: flex; align-items: center; justify-content: space-between; }

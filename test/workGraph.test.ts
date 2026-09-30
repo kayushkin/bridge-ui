@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   branchesByHeadSha,
   branchesForList,
+  githubBranchUrl,
+  githubCommitUrl,
   layoutCommitGraph,
   otherRepos,
   reposByRecentActivity,
   sessionColor,
   sessionHue,
   sessionsInGraph,
+  workGraphChatHref,
   workGraphRepoGraphPath,
   worktreeName,
   type WorkGraph,
@@ -23,6 +26,7 @@ function commit(sha: string, parents: string[], madeBy?: { session: string; subc
     committed_at: 0,
     author_name: 'a',
     subject: sha,
+    on_origin_branch: false,
     made_by: madeBy
       ? { sha, session_id: madeBy.session, git_subcommand: madeBy.subcommand, recorded_at_unix_nano: madeBy.at }
       : undefined,
@@ -181,5 +185,31 @@ describe('small rules', () => {
   })
   it('names a worktree by its last segment', () => {
     expect(worktreeName('/home/k/repos/dash-wt-work-graph/')).toBe('dash-wt-work-graph')
+  })
+})
+
+describe('links out', () => {
+  const onGitHub = { github_url: 'https://github.com/kayushkin/dash' }
+  const notOnGitHub = { github_url: undefined }
+
+  it('links a commit to GitHub only when origin has it', () => {
+    const pushed = { ...commit('abc1234def', []), on_origin_branch: true }
+    expect(githubCommitUrl(onGitHub, pushed)).toBe('https://github.com/kayushkin/dash/commit/abc1234def')
+    expect(githubCommitUrl(onGitHub, commit('abc1234def', []))).toBeNull()
+    expect(githubCommitUrl(notOnGitHub, pushed)).toBeNull()
+  })
+
+  it("links only origin's remote-tracking branches, never a local one or origin/HEAD", () => {
+    expect(githubBranchUrl(onGitHub, branch('origin/feature/x y', 'a', [], true)))
+      .toBe('https://github.com/kayushkin/dash/tree/feature/x%20y')
+    expect(githubBranchUrl(onGitHub, branch('main', 'a'))).toBeNull()
+    expect(githubBranchUrl(onGitHub, branch('upstream/main', 'a', [], true))).toBeNull()
+    expect(githubBranchUrl(onGitHub, branch('origin/HEAD', 'a', [], true))).toBeNull()
+    expect(githubBranchUrl(notOnGitHub, branch('origin/main', 'a', [], true))).toBeNull()
+  })
+
+  it('opens the chat on the work graph, a repo, and a commit', () => {
+    expect(workGraphChatHref('/chat', 15)).toBe('/chat?view=work-graph&repo=15')
+    expect(workGraphChatHref('/chat', 15, 'abc1234')).toBe('/chat?view=work-graph&repo=15&commit=abc1234')
   })
 })

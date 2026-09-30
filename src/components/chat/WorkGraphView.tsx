@@ -11,6 +11,8 @@ import {
   branchTouchedBy,
   branchesByHeadSha,
   branchesForList,
+  githubBranchUrl,
+  githubCommitUrl,
   layoutCommitGraph,
   otherRepos,
   reposByRecentActivity,
@@ -24,6 +26,7 @@ import {
   type WorkGraphActivityAnswer,
   type WorkGraphBranch,
   type WorkGraphCommit,
+  type WorkGraphRepo,
   type WorkGraphRepoChoice,
   type WorkGraphSegment,
   type WorkGraphSessionSummary,
@@ -79,24 +82,33 @@ async function readJSON<T>(response: Response, what: string): Promise<T> {
 }
 
 export interface WorkGraphViewProps {
+  /** The repo (repo-store id) and commit to open on, from `?repo=` and
+   *  `?commit=`; the most recently active repo when null. */
+  initialRepoId?: number | null
+  initialCommitSha?: string | null
+  /** Told the repo and commit shown whenever either changes, so the host can
+   *  keep them in the URL. */
+  onFocusChange?: (repoId: number | null, commitSha: string | null) => void
   /** Open a session in the chat, closing this view. */
   onSelectSession: (sessionId: string) => void
   onClose: () => void
 }
 
-export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps): JSX.Element {
+export function WorkGraphView({ initialRepoId = null, initialCommitSha = null, onFocusChange, onSelectSession, onClose }: WorkGraphViewProps): JSX.Element {
   const { fetch: fetchFn, workGraphStoreBasePath, repoStoreBasePath } = useBridgeConfig()
 
   const [activeRepos, setActiveRepos] = useState<WorkGraphRepoChoice[]>([])
   const [allRepos, setAllRepos] = useState<RepoStoreRepo[]>([])
   const [pickerError, setPickerError] = useState<string | null>(null)
-  const [repoId, setRepoId] = useState<number | null>(null)
+  const [repoId, setRepoId] = useState<number | null>(initialRepoId)
   const [maxCommits, setMaxCommits] = useState(WORK_GRAPH_COMMIT_PAGE)
   const [graph, setGraph] = useState<WorkGraph | null>(null)
   const [graphError, setGraphError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [reloadSignal, setReloadSignal] = useState(0)
-  const [selectedSha, setSelectedSha] = useState<string | null>(null)
+  const [selectedSha, setSelectedSha] = useState<string | null>(initialCommitSha)
+  // A commit opened from a link is scrolled to once, when its row first draws.
+  const [scrollToSha, setScrollToSha] = useState<string | null>(initialCommitSha)
   const [highlightedSession, setHighlightedSession] = useState<string | null>(null)
 
   // The picker: repos sessions touched lately, most recent first, then every
@@ -148,6 +160,10 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
     return () => window.clearInterval(timer)
   }, [repoId])
 
+  useEffect(() => {
+    onFocusChange?.(repoId, selectedSha)
+  }, [repoId, selectedSha, onFocusChange])
+
   const pickRepo = useCallback((id: number) => {
     setRepoId(id)
     setMaxCommits(WORK_GRAPH_COMMIT_PAGE)
@@ -165,6 +181,21 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
   const commitsBySha = useMemo(() => new Map((shownGraph?.commits ?? []).map(commit => [commit.sha, commit])), [shownGraph])
   const selectedCommit = selectedSha ? commitsBySha.get(selectedSha) ?? null : null
   const otherRepoChoices = useMemo(() => otherRepos(allRepos, activeRepos), [allRepos, activeRepos])
+
+  // A linked commit older than the page loaded: load every commit the store
+  // will send, once, rather than asking the reader to page back for it.
+  const linkedCommitMissing = shownGraph !== null && selectedSha !== null && !commitsBySha.has(selectedSha)
+  useEffect(() => {
+    if (linkedCommitMissing && shownGraph?.truncated && maxCommits < WORK_GRAPH_MAX_COMMITS) {
+      setMaxCommits(WORK_GRAPH_MAX_COMMITS)
+    }
+  }, [linkedCommitMissing, shownGraph, maxCommits])
+
+  useEffect(() => {
+    if (!scrollToSha || !commitsBySha.has(scrollToSha)) return
+    document.querySelector(`[data-commit-sha="${scrollToSha}"]`)?.scrollIntoView({ block: 'center' })
+    setScrollToSha(null)
+  }, [scrollToSha, commitsBySha])
 
   const toggleHighlight = (sessionId: string) =>
     setHighlightedSession(current => (current === sessionId ? null : sessionId))
@@ -210,6 +241,11 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
             </optgroup>
           )}
         </select>
+        {shownGraph?.repo.github_url && (
+          <a className="bc-ctrl-btn" href={shownGraph.repo.github_url} target="_blank" rel="noreferrer" title={shownGraph.repo.github_url}>
+            GitHub ↗
+          </a>
+        )}
         {shownGraph && (
           <span className={styles.muted}>
             {shownGraph.commits.length} commits{shownGraph.truncated ? ' (newest)' : ''} · {shownGraph.branches.length} branches
@@ -220,6 +256,11 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
 
       {pickerError && <p className={styles.error}>{pickerError}</p>}
       {graphError && <p className={styles.error}>{graphError}</p>}
+      {linkedCommitMissing && !loading && !(shownGraph?.truncated && maxCommits < WORK_GRAPH_MAX_COMMITS) && (
+        <p className={styles.error}>
+          Commit <code>{selectedSha}</code> is not among the {shownGraph?.commits.length} commits listed: it is on no branch of {shownGraph?.repo.name}, or older than the newest {WORK_GRAPH_MAX_COMMITS}.
+        </p>
+      )}
 
       <div className={styles.body}>
         <div className={styles.graphScroll}>
@@ -273,6 +314,7 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
                     key={row.commit.sha}
                     textStart={laneX(row.widestColumn) + GRAPH_PAD + 6}
                     commit={row.commit}
+                    repo={shownGraph.repo}
                     heads={headsBySha.get(row.commit.sha) ?? []}
                     defaultBranch={shownGraph.default_branch}
                     selected={row.commit.sha === selectedSha}
@@ -302,6 +344,7 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
             {selectedCommit && (
               <CommitDetails
                 commit={selectedCommit}
+                repo={shownGraph.repo}
                 heads={headsBySha.get(selectedCommit.sha) ?? []}
                 commitsBySha={commitsBySha}
                 sessionName={sessionName}
@@ -354,6 +397,7 @@ export function WorkGraphView({ onSelectSession, onClose }: WorkGraphViewProps):
                       {shortSha(branch.head_sha)}
                     </button>
                     <span className={styles.muted}>{relativeTimeFromUnixSeconds(branch.committed_at)}</span>
+                    <GitHubLink href={githubBranchUrl(shownGraph.repo, branch)} title="Open this branch on GitHub" />
                   </li>
                 ))}
               </ul>
@@ -412,6 +456,7 @@ function WorkGraphHeader({
 
 function CommitRow({
   commit,
+  repo,
   heads,
   defaultBranch,
   selected,
@@ -420,6 +465,7 @@ function CommitRow({
   textStart,
 }: {
   commit: WorkGraphCommit
+  repo: WorkGraphRepo
   heads: WorkGraphBranch[]
   /** Where the row's text begins, just right of the lines this row draws. */
   textStart: number
@@ -438,6 +484,7 @@ function CommitRow({
     <li
       className={`${styles.row} ${selected ? styles.rowSelected : ''} ${dimmed ? styles.rowDimmed : ''}`}
       style={{ height: ROW_HEIGHT, paddingLeft: textStart }}
+      data-commit-sha={commit.sha}
       onClick={onSelect}
       title={title}
     >
@@ -451,7 +498,7 @@ function CommitRow({
       ))}
       <span className={styles.subject}>{commit.subject}</span>
       <span className={styles.author}>{commit.author_name}</span>
-      <code className={styles.sha}>{shortSha(commit.sha)}</code>
+      <CommitShaLink commit={commit} repo={repo} />
       <span className={styles.time}>{relativeTimeFromUnixSeconds(commit.committed_at)}</span>
     </li>
   )
@@ -539,6 +586,7 @@ function SessionEntry({
 
 function CommitDetails({
   commit,
+  repo,
   heads,
   commitsBySha,
   sessionName,
@@ -547,6 +595,7 @@ function CommitDetails({
   onClose,
 }: {
   commit: WorkGraphCommit
+  repo: WorkGraphRepo
   heads: WorkGraphBranch[]
   commitsBySha: Map<string, WorkGraphCommit>
   sessionName: (sessionId: string) => string
@@ -565,6 +614,18 @@ function CommitDetails({
       <dl className={styles.detailsList}>
         <dt>sha</dt>
         <dd><code className={styles.fullSha}>{commit.sha}</code></dd>
+        <dt>GitHub</dt>
+        <dd>
+          {githubCommitUrl(repo, commit) ? (
+            <a href={githubCommitUrl(repo, commit) ?? undefined} target="_blank" rel="noreferrer">Open this commit ↗</a>
+          ) : (
+            <span className={styles.muted}>
+              {repo.github_url ? 'not on any branch of origin, so GitHub does not have it' : `${repo.name} has no GitHub remote`}
+            </span>
+          )}
+        </dd>
+        <dt>mention</dt>
+        <dd><code title="Write this in a chat message to link this commit">{repo.name}@{shortSha(commit.sha)}</code></dd>
         <dt>parents</dt>
         <dd>
           {commit.parents.length === 0 && <span className={styles.muted}>none (root commit)</span>}
@@ -606,6 +667,38 @@ function CommitDetails({
         )}
       </dl>
     </section>
+  )
+}
+
+/** The short sha, linked to the commit on GitHub when GitHub has it. The row
+ *  itself selects the commit, so the link keeps its click to itself. */
+function CommitShaLink({ commit, repo }: { commit: WorkGraphCommit; repo: WorkGraphRepo }): JSX.Element {
+  const href = githubCommitUrl(repo, commit)
+  if (!href) {
+    return (
+      <code className={styles.sha} title={repo.github_url ? 'Not on any branch of origin' : undefined}>
+        {shortSha(commit.sha)}
+      </code>
+    )
+  }
+  return (
+    <a
+      className={`${styles.sha} ${styles.shaGitHub}`}
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title="Open this commit on GitHub"
+      onClick={event => event.stopPropagation()}
+    >
+      {shortSha(commit.sha)} ↗
+    </a>
+  )
+}
+
+function GitHubLink({ href, title }: { href: string | null; title: string }): JSX.Element | null {
+  if (!href) return null
+  return (
+    <a className={styles.shaGitHub} href={href} target="_blank" rel="noreferrer" title={title}>↗</a>
   )
 }
 

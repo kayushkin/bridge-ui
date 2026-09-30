@@ -5,7 +5,9 @@ import type { ManagedSessionDetail, TurnModel } from '@kayushkin/chat-core';
 import type { NoteboardItem } from '@kayushkin/chat-core';
 import type { ResolvedRefMatch } from '@kayushkin/chat-core';
 import type { Project } from '@kayushkin/project-store-types';
+import type { Repo as RepoStoreRepo } from '@kayushkin/repo-store-types';
 import { useBridgeConfig } from '../../context';
+import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
   useNoteboardRefDetail,
   useResolvedRef,
@@ -717,6 +719,19 @@ function UnclassifiedRefChip({
     if (match.type === 'project') {
       return <ProjectRefChip refId={refId} project={match.data as Project} className={className} />;
     }
+    if (match.type === 'repo') {
+      return <RepoRefChip refId={refId} repo={match.data as RepoStoreRepo} className={className} />;
+    }
+    if (match.type === 'commit') {
+      return (
+        <CommitRefChip
+          refId={refId}
+          answer={match.data as WorkGraphCommitAnswer}
+          className={className}
+          onActivate={onActivate}
+        />
+      );
+    }
   }
   return <MultiMatchRefChip refId={refId} matches={matches} className={className} />;
 }
@@ -830,6 +845,137 @@ function ProjectRefChip({
               <a className="ref-chip-panel-btn" href={href}>
                 Open project
               </a>
+            </div>
+          )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A `repo:<name>` mention, resolved by repo-store: the repo's name on the
+ *  chip, and in the panel its path and remote, with links to its GitHub page
+ *  and to the chat's work graph for it. */
+function RepoRefChip({
+  refId,
+  repo,
+  className,
+}: {
+  refId: string;
+  repo: RepoStoreRepo;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { routes } = useBridgeConfig();
+  const workGraphHref = routes.chat ? workGraphChatHref(routes.chat, repo.id) : '';
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="repo" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={repo.path ? `${repo.name} (${repo.path})` : repo.name}
+      >
+        <span className="ref-chip-glyph" aria-hidden>
+          ⎇
+        </span>
+        <span className="ref-chip-label">{truncate(repo.name)}</span>
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Repository details" refId={refId} refKind="repo">
+          <div className="ref-chip-panel-title">{repo.name}</div>
+          {repo.description && <RefRow label="About" value={repo.description} />}
+          {repo.path && <RefRow label="Path" value={repo.path} />}
+          {repo.git_remote && <RefRow label="Remote" value={repo.git_remote} />}
+          {(repo.github_url || workGraphHref) && (
+            <div className="ref-chip-panel-actions">
+              {repo.github_url && (
+                <a className="ref-chip-panel-btn" href={repo.github_url} target="_blank" rel="noreferrer">
+                  GitHub ↗
+                </a>
+              )}
+              {workGraphHref && (
+                <a className="ref-chip-panel-btn" href={workGraphHref}>
+                  Work graph
+                </a>
+              )}
+            </div>
+          )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A `<repo>@<sha>` mention, resolved by work-graph-store: `repo@sha` on the
+ *  chip, and in the panel the commit's subject, author and maker, with links to
+ *  the commit on GitHub (only when origin has it, since GitHub would 404
+ *  otherwise) and in the chat's work graph. */
+function CommitRefChip({
+  refId,
+  answer,
+  className,
+  onActivate,
+}: {
+  refId: string;
+  answer: WorkGraphCommitAnswer;
+  className?: string;
+  onActivate?: (kind: string, refId: string) => void;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { routes } = useBridgeConfig();
+  const { repo, commit } = answer;
+  const githubHref = githubCommitUrl(repo, commit);
+  const workGraphHref = routes.chat ? workGraphChatHref(routes.chat, repo.id, commit.sha) : '';
+  const madeBy = commit.made_by;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="commit" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${commit.subject}\n${repo.name} ${commit.sha}`}
+      >
+        <span className="ref-chip-glyph" aria-hidden>
+          ⊙
+        </span>
+        <span className="ref-chip-label">
+          {repo.name}@{shortSha(commit.sha)}
+        </span>
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Commit details" refId={refId} refKind="commit">
+          <div className="ref-chip-panel-title">{commit.subject}</div>
+          <RefRow label="Repo" value={repo.name} />
+          <RefRow label="Sha" value={commit.sha} badge={commit.on_origin_branch ? undefined : 'unpushed'} />
+          <RefRow label="Author" value={commit.author_name} />
+          <RefRow label="Committed" value={timeAgo(new Date(commit.committed_at * 1000).toISOString())} />
+          {madeBy && <RefRow label="Made by" value={`${madeBy.session_id} (git ${madeBy.git_subcommand})`} />}
+          {(githubHref || workGraphHref || (madeBy && onActivate)) && (
+            <div className="ref-chip-panel-actions">
+              {githubHref && (
+                <a className="ref-chip-panel-btn" href={githubHref} target="_blank" rel="noreferrer">
+                  GitHub ↗
+                </a>
+              )}
+              {workGraphHref && (
+                <a className="ref-chip-panel-btn" href={workGraphHref}>
+                  Work graph
+                </a>
+              )}
+              {madeBy && onActivate && (
+                <button type="button" className="ref-chip-panel-btn" onClick={() => onActivate('session', madeBy.session_id)}>
+                  Open maker's session
+                </button>
+              )}
             </div>
           )}
         </AnchoredPanel>

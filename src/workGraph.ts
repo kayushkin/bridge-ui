@@ -2,6 +2,7 @@ import type {
   Branch,
   BranchSession,
   Commit,
+  CommitAnswer,
   Graph,
   RefUpdate,
   Repo,
@@ -23,6 +24,7 @@ export type {
   Branch as WorkGraphBranch,
   BranchSession as WorkGraphBranchSession,
   Commit as WorkGraphCommit,
+  CommitAnswer as WorkGraphCommitAnswer,
   Graph as WorkGraph,
   RefUpdate as WorkGraphRefUpdate,
   Repo as WorkGraphRepo,
@@ -57,6 +59,35 @@ export function workGraphRepoGraphPath(basePath: string, repoStoreId: number, ma
 
 export function shortSha(sha: string): string {
   return sha.slice(0, 7)
+}
+
+// ---------------------------------------------------------------------------
+// Links out
+
+/** The chat's work graph opened on a repo, and on one commit in it when `sha`
+ *  is given: `?view=work-graph&repo=<repo-store id>&commit=<sha>`. */
+export function workGraphChatHref(chatRoute: string, repoStoreId: number, sha?: string): string {
+  const params = new URLSearchParams({ view: 'work-graph', repo: String(repoStoreId) })
+  if (sha) params.set('commit', sha)
+  return `${chatRoute}?${params.toString()}`
+}
+
+/** The commit's page on GitHub, or null when the repo is not on GitHub or the
+ *  commit is on no branch of origin (whose URL `github_url` is) — GitHub would
+ *  answer 404 for it. */
+export function githubCommitUrl(repo: Pick<Repo, 'github_url'>, commit: Pick<Commit, 'sha' | 'on_origin_branch'>): string | null {
+  if (!repo.github_url || !commit.on_origin_branch) return null
+  return `${repo.github_url}/commit/${commit.sha}`
+}
+
+/** A remote-tracking branch's page on GitHub, or null for a local branch (it
+ *  may never have been pushed) and for a branch of any remote but `origin`,
+ *  which is the remote repo-store's `github_url` is read from. */
+export function githubBranchUrl(repo: Pick<Repo, 'github_url'>, branch: Pick<Branch, 'is_remote' | 'name'>): string | null {
+  if (!repo.github_url || !branch.is_remote) return null
+  const name = branch.name.startsWith('origin/') ? branch.name.slice('origin/'.length) : null
+  if (!name || name === 'HEAD') return null
+  return `${repo.github_url}/tree/${name.split('/').map(encodeURIComponent).join('/')}`
 }
 
 // ---------------------------------------------------------------------------
