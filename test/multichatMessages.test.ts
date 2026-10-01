@@ -7,6 +7,7 @@ import {
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
   searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
   contactKey, contactLinkBody, contactLinkSuggestionDecisionPath, contactUnlinkBody, linkCandidates, personOfIdentity, OPERATOR_LINK_REASON,
+  conversationEntries, conversationEntryOf, conversationLinkBody, conversationLinkCandidates, conversationTabLabel, conversationUnlinkBody,
 } from '../src/multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatTag, MultichatUnifiedContact,
@@ -354,3 +355,45 @@ describe('linking one person across apps', () => {
   })
 })
 
+
+describe('linked conversations', () => {
+  const room = (room_id: string, platform: string, last_activity: number, name = room_id): MultichatConversation =>
+    ({ room_id, name, platform, member_count: 4, last_activity })
+  const texts = room('!texts:chat.kayushkin.com', 'gmessages', 300, 'Lillian, Loukic, Maleeha')
+  const discord = room('!discord:chat.kayushkin.com', 'discord', 500, 'Logan, Twili Midna, KiLlersLuvbLaDe')
+  const general = room('!general:chat.kayushkin.com', 'discord', 400, '#general')
+  const all = [discord, general, texts]
+  const links = [{ id: 1, room_ids: ['!discord:chat.kayushkin.com', '!texts:chat.kayushkin.com'] }]
+
+  it('lists a link as one row named after its newest room, ordered by that room', () => {
+    const entries = conversationEntries(all, all, links)
+    expect(entries.map(entry => entry.conversations.map(c => c.room_id))).toEqual([
+      ['!discord:chat.kayushkin.com', '!texts:chat.kayushkin.com'],
+      ['!general:chat.kayushkin.com'],
+    ])
+    expect(entries[0].linkID).toBe(1)
+    expect(entries[1].linkID).toBeNull()
+  })
+
+  it('brings in the whole link when only one of its rooms passes the filter', () => {
+    const entries = conversationEntries(all, [texts], links)
+    expect(entries).toHaveLength(1)
+    expect(entries[0].conversations.map(c => c.platform)).toEqual(['discord', 'gmessages'])
+  })
+
+  it('leaves out a linked room multichat does not list', () => {
+    const entries = conversationEntries([texts], [texts], links)
+    expect(entries[0].conversations.map(c => c.room_id)).toEqual(['!texts:chat.kayushkin.com'])
+  })
+
+  it('finds the row of a room, labels tabs by app, and offers only rooms outside the link', () => {
+    const entries = conversationEntries(all, all, links)
+    const entry = conversationEntryOf(entries, '!texts:chat.kayushkin.com')!
+    expect(entry.linkID).toBe(1)
+    expect(conversationTabLabel(entry, texts)).toBe('gmessages')
+    expect(conversationTabLabel({ linkID: 2, conversations: [discord, general] }, general)).toBe('discord · #general')
+    expect(conversationLinkCandidates(all, entry).map(c => c.room_id)).toEqual(['!general:chat.kayushkin.com'])
+    expect(conversationLinkBody('!a:x', '!b:x')).toEqual({ room_ids: ['!a:x', '!b:x'] })
+    expect(conversationUnlinkBody('!a:x')).toEqual({ room_id: '!a:x' })
+  })
+})

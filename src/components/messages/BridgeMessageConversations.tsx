@@ -7,6 +7,7 @@ import { discordNamesOf, NO_DISCORD_NAMES, type DiscordNames } from '../../messa
 import {
   conversationMessagesPath, conversationOwnTags, conversationPartnerTags, conversationPlatforms, conversationSendFilePath, conversationSendPath, conversationShownName,
   conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterConversations, type ConversationTagMaps,
+  conversationEntries, conversationEntryOf, conversationLinkBody, conversationLinkCandidates, conversationTabLabel, conversationUnlinkBody, type ConversationEntry,
   conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
   reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
 } from '../../multichatMessages'
@@ -15,7 +16,7 @@ import {
   allCustomEmoji, choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID, type DiscordRoom,
   searchEmojiIndex, type EmojiChoice,
 } from '../../emojiCatalog'
-import type { MessageReactionGroup } from '@kayushkin/multichat-types'
+import type { ConversationLink, MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSendAnswer, MultichatSendFileAnswer, MultichatTag,
@@ -55,6 +56,8 @@ export function BridgeMessageConversations() {
   const [tagMaps, setTagMaps] = useState<ConversationTagMaps>({ contactTagMap: {}, conversationTagMap: {} })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [tagsError, setTagsError] = useState<string | null>(null)
+  const [links, setLinks] = useState<ConversationLink[]>([])
+  const [linksError, setLinksError] = useState<string | null>(null)
   const [platform, setPlatform] = useState('')
   const [text, setText] = useState('')
   const [tagID, setTagID] = useState<number | null>(null)
@@ -78,6 +81,13 @@ export function BridgeMessageConversations() {
     } catch (err) {
       setLoadError(errorText(err))
     }
+    // Links only group the rows, so the list still shows, one row per room, when they fail.
+    try {
+      setLinks(await read<ConversationLink[] | null>('/conversations/links') ?? [])
+      setLinksError(null)
+    } catch (err) {
+      setLinksError(errorText(err))
+    }
     // Tags only label and filter the rows, so the list still shows when they fail.
     try {
       await reloadTags()
@@ -86,6 +96,18 @@ export function BridgeMessageConversations() {
       setTagsError(errorText(err))
     }
   }, [read, reloadTags])
+
+  /** A link write, then the links read back from multichat; the refusal, or null. */
+  const writeLinks = useCallback(async (path: string, body: unknown): Promise<string | null> => {
+    const result = await write('POST', path, body)
+    if (!result.ok) return result.error
+    try {
+      setLinks(await read<ConversationLink[] | null>('/conversations/links') ?? [])
+      return null
+    } catch (err) {
+      return errorText(err)
+    }
+  }, [write, read])
 
   /** A tag write, then the tags read back from multichat; the refusal, or null. */
   const writeTags = useCallback(async (method: string, path: string, body?: unknown): Promise<string | null> => {
@@ -111,6 +133,11 @@ export function BridgeMessageConversations() {
     () => filterConversations(conversations ?? [], tagMaps, { platform, text, tagID }),
     [conversations, tagMaps, platform, text, tagID],
   )
+  const shownEntries = useMemo(() => conversationEntries(conversations ?? [], shown, links), [conversations, shown, links])
+  const pickedEntry = useMemo(
+    () => conversationEntryOf(conversationEntries(conversations ?? [], conversations ?? [], links), roomID),
+    [conversations, links, roomID],
+  )
   const picked = conversations?.find(conversation => conversation.room_id === roomID) ?? null
 
   const pick = (nextRoomID: string) => {
@@ -131,6 +158,7 @@ export function BridgeMessageConversations() {
       </header>
       {loadError && <pre className={styles.error}>{loadError}</pre>}
       {tagsError && <pre className={styles.error}>Tags are not shown: {tagsError}</pre>}
+      {linksError && <pre className={styles.error}>Linked conversations are listed apart: {linksError}</pre>}
       {!conversations ? (loadError ? null : <div className={styles.empty}>Loading…</div>) : (
         <div className={styles.columns}>
           <div className={styles.listColumn}>
@@ -151,31 +179,42 @@ export function BridgeMessageConversations() {
               <div className={styles.empty}>{conversations.length === 0 ? 'No conversations.' : 'No conversation matches.'}</div>
             )}
             <ul className={styles.list}>
-              {shown.map(conversation => (
-                <li key={conversation.room_id}>
-                  <button type="button" data-room-id={conversation.room_id}
-                    className={`${styles.row} ${styles.rowPick} ${conversation.room_id === roomID ? styles.rowSelected : ''}`}
-                    onClick={() => pick(conversation.room_id)}>
-                    <span className={styles.rowHead}>
-                      <span className={styles.name} title={conversation.name}>{conversationShownName(conversation)}</span>
-                      {conversation.last_activity > 0 && <span className={styles.time}>{messageTimeLabel(conversation.last_activity)}</span>}
-                    </span>
-                    <span className={styles.rowMeta}>
-                      {conversation.platform && <span className={styles.platform}>{conversation.platform}</span>}
-                      {conversation.member_count > 2 && <span className={styles.muted}>{conversation.member_count} members</span>}
-                      <TagChips tags={conversationTags(conversation, tagMaps)} />
-                    </span>
-                    {conversation.last_message && <span className={styles.preview}>{conversationPreviewText(conversation.last_message)}</span>}
-                  </button>
-                </li>
-              ))}
+              {shownEntries.map(entry => {
+                const newest = entry.conversations[0]
+                const selected = entry.conversations.some(conversation => conversation.room_id === roomID)
+                const entryTags = [...new Map(entry.conversations.flatMap(conversation => conversationTags(conversation, tagMaps)).map(tag => [tag.id, tag])).values()]
+                return (
+                  <li key={newest.room_id}>
+                    <button type="button" data-room-id={newest.room_id} data-link-id={entry.linkID ?? undefined}
+                      className={`${styles.row} ${styles.rowPick} ${selected ? styles.rowSelected : ''}`}
+                      onClick={() => pick(selected ? roomID : newest.room_id)}>
+                      <span className={styles.rowHead}>
+                        <span className={styles.name} title={newest.name}>{conversationShownName(newest)}</span>
+                        {newest.last_activity > 0 && <span className={styles.time}>{messageTimeLabel(newest.last_activity)}</span>}
+                      </span>
+                      <span className={styles.rowMeta}>
+                        {entry.conversations.map(conversation => conversation.platform && (
+                          <span key={conversation.room_id} className={styles.platform}>{conversation.platform}</span>
+                        ))}
+                        {newest.member_count > 2 && <span className={styles.muted}>{newest.member_count} members</span>}
+                        <TagChips tags={entryTags} />
+                      </span>
+                      {newest.last_message && <span className={styles.preview}>{conversationPreviewText(newest.last_message)}</span>}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           </div>
           <div className={styles.viewer}>
+            {picked && pickedEntry && pickedEntry.conversations.length > 1 && (
+              <ConversationTabs entry={pickedEntry} roomID={roomID} onPick={pick} />
+            )}
             {picked ? (
               <ConversationThread key={picked.room_id} conversation={picked} onSent={() => { void reload() }}
                 tagEditor={<>
                   <ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />
+                  {pickedEntry && <ConversationLinkEditor key={picked.room_id} conversation={picked} entry={pickedEntry} conversations={conversations} write={writeLinks} />}
                   {picked.direct_message_partner_user_id && <ConversationPerson key={picked.direct_message_partner_user_id} partnerUserID={picked.direct_message_partner_user_id} />}
                 </>} />
             ) : (
@@ -703,6 +742,68 @@ function ConversationTagEditor({ conversation, tags, tagMaps, write }: {
           <option value="">+ Tag this conversation</option>
           {addable.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
         </select>
+      )}
+      {error && <pre className={styles.error}>{error}</pre>}
+    </div>
+  )
+}
+
+/** One tab per room of a link: the chats on different apps that are one
+ *  conversation. Each tab opens its own room to read and answer in. */
+function ConversationTabs({ entry, roomID, onPick }: {
+  entry: ConversationEntry
+  roomID: string
+  onPick: (roomID: string) => void
+}) {
+  return (
+    <nav className={styles.tabs} data-link-id={entry.linkID ?? undefined}>
+      {entry.conversations.map(conversation => (
+        <button key={conversation.room_id} type="button" title={conversationShownName(conversation)}
+          className={`${styles.tab} ${conversation.room_id === roomID ? styles.tabActive : ''}`}
+          onClick={() => onPick(conversation.room_id)}>
+          {conversationTabLabel(entry, conversation)}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+/** Link this room with a chat on another app that is the same conversation,
+ *  or take it out of its link. */
+function ConversationLinkEditor({ conversation, entry, conversations, write }: {
+  conversation: MultichatConversation
+  entry: ConversationEntry
+  conversations: readonly MultichatConversation[]
+  write: (path: string, body: unknown) => Promise<string | null>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const roomID = conversation.room_id
+  const candidates = useMemo(() => conversationLinkCandidates(conversations, entry), [conversations, entry])
+  const run = async (path: string, body: unknown) => {
+    setBusy(true)
+    setError(await write(path, body))
+    setBusy(false)
+  }
+  return (
+    <div className={styles.threadTags} data-room-link={roomID}>
+      <span className={styles.muted}>Same conversation</span>
+      {candidates.length > 0 && (
+        <select className={styles.tagSelect} value="" disabled={busy}
+          onChange={e => { if (e.target.value) void run('/conversations/links', conversationLinkBody(roomID, e.target.value)) }}>
+          <option value="">+ Link with a chat on another app</option>
+          {candidates.map(candidate => (
+            <option key={candidate.room_id} value={candidate.room_id}>
+              {conversationShownName(candidate)}{candidate.platform ? ` (${candidate.platform})` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+      {entry.linkID !== null && (
+        <button type="button" className={styles.tagSelect} disabled={busy}
+          onClick={() => { void run('/conversations/links/remove', conversationUnlinkBody(roomID)) }}>
+          Unlink this chat
+        </button>
       )}
       {error && <pre className={styles.error}>{error}</pre>}
     </div>

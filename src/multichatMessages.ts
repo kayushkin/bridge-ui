@@ -11,6 +11,7 @@ import type {
   MultichatContactLinkSuggestion, MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
 } from './types-multichat'
+import type { ConversationLink } from '@kayushkin/multichat-types'
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
 
 /** How many messages one page asks for. multichat takes 1–200. */
@@ -44,6 +45,10 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /conversations/tags/bulk',
   'POST /conversations/tags',
   'DELETE /conversations/tags',
+  // Rooms on different apps that are one conversation, listed as one entry.
+  'GET /conversations/links',
+  'POST /conversations/links',
+  'POST /conversations/links/remove',
   // Images, custom emoji and custom reactions, loaded by <img> (MessageContent).
   'GET /media/{server_name}/{media_id}',
   // Channel names for a Discord room's `<#id>` tokens, and which server's
@@ -177,6 +182,73 @@ export function conversationShownName(conversation: MultichatConversation): stri
   if (names.length <= NAMED_MEMBERS_SHOWN) return conversation.name
   const others = names.length - NAMED_MEMBERS_SHOWN
   return `${names.slice(0, NAMED_MEMBERS_SHOWN).join(', ')} and ${others} ${others === 1 ? 'other' : 'others'}`
+}
+
+/** One row of the conversation list: a room, or the rooms of one link —
+ *  chats on different apps that are one conversation. `conversations` holds
+ *  every listed room of the link, newest first, whether or not each passed the
+ *  filter; the first is the one the row is named after. */
+export interface ConversationEntry {
+  /** The link's id, or null for a room in no link. */
+  linkID: number | null
+  conversations: MultichatConversation[]
+}
+
+/** The rows for the rooms that passed the filter, newest first. A room in a
+ *  link brings in its whole link, once. A linked room multichat does not list
+ *  (no bridge puppet in it yet) is left out, since there is nothing to open. */
+export function conversationEntries(
+  all: readonly MultichatConversation[], matching: readonly MultichatConversation[], links: readonly ConversationLink[],
+): ConversationEntry[] {
+  const byRoomID = new Map(all.map(conversation => [conversation.room_id, conversation]))
+  const linkOfRoom = new Map<string, ConversationLink>()
+  for (const link of links) for (const roomID of link.room_ids) linkOfRoom.set(roomID, link)
+  const newestFirst = (a: MultichatConversation, b: MultichatConversation) => b.last_activity - a.last_activity
+  const entries: ConversationEntry[] = []
+  const linksTaken = new Set<number>()
+  for (const conversation of matching) {
+    const link = linkOfRoom.get(conversation.room_id)
+    if (!link) {
+      entries.push({ linkID: null, conversations: [conversation] })
+      continue
+    }
+    if (linksTaken.has(link.id)) continue
+    linksTaken.add(link.id)
+    const rooms = link.room_ids.flatMap(roomID => byRoomID.get(roomID) ?? [])
+    entries.push({ linkID: link.id, conversations: rooms.sort(newestFirst) })
+  }
+  return entries.sort((a, b) => newestFirst(a.conversations[0], b.conversations[0]))
+}
+
+/** The row a room belongs to, among rows built from every room. */
+export function conversationEntryOf(entries: readonly ConversationEntry[], roomID: string): ConversationEntry | null {
+  return entries.find(entry => entry.conversations.some(conversation => conversation.room_id === roomID)) ?? null
+}
+
+/** A tab's label: the app, and the room's name too when two rooms of the
+ *  link are on the same app. */
+export function conversationTabLabel(entry: ConversationEntry, conversation: MultichatConversation): string {
+  const platform = conversation.platform || 'unknown app'
+  const sharesApp = entry.conversations.filter(other => other.platform === conversation.platform).length > 1
+  return sharesApp ? `${platform} · ${conversationShownName(conversation)}` : platform
+}
+
+/** Rooms this room could be linked with: every listed room not already in its
+ *  link, by name. */
+export function conversationLinkCandidates(
+  all: readonly MultichatConversation[], entry: ConversationEntry,
+): MultichatConversation[] {
+  const inEntry = new Set(entry.conversations.map(conversation => conversation.room_id))
+  return all.filter(conversation => !inEntry.has(conversation.room_id))
+    .sort((a, b) => conversationShownName(a).localeCompare(conversationShownName(b)))
+}
+
+export function conversationLinkBody(roomID: string, otherRoomID: string): { room_ids: string[] } {
+  return { room_ids: [roomID, otherRoomID] }
+}
+
+export function conversationUnlinkBody(roomID: string): { room_id: string } {
+  return { room_id: roomID }
 }
 
 /** The two places a room's tags come from. */
