@@ -3,17 +3,39 @@
 // this one is hand-written because multichat assembles the contact answer from
 // unnamed types in its router, so there is nothing for tygo to render yet.
 
-/** One person on one app: the bridge puppet id a rule's `sender_user_id` names. */
+/** One person on one app: the bridge puppet id a rule's `sender_user_id` names,
+ *  under the name that app shows. `linked_by` and `link_reason` say who tied
+ *  it to its person and why; absent when it is linked to no one. */
 export interface MultichatContactIdentity {
   user_id: string
   platform: string
+  display_name?: string
+  avatar_url?: string
+  /** One of `GET /contacts/links/sources`: operator, phone_number, agent. */
+  linked_by?: string
+  link_reason?: string
 }
 
-/** `GET {multichatBasePath}/contacts/unified` — one row per person, with every
- *  app identity multichat merged under that display name. */
+/** `GET {multichatBasePath}/contacts/unified` — one row per person. A person
+ *  linked across apps carries principal-store's id and name; an identity
+ *  linked to no one is a row of its own with no `principal_id`. */
 export interface MultichatUnifiedContact {
+  principal_id?: string
   display_name: string
   identities: MultichatContactIdentity[]
+  platforms?: string[]
+}
+
+/** `GET {multichatBasePath}/contacts/links/suggestions` — db.ContactLinkSuggestion:
+ *  a link an agent was not sure enough to make. */
+export interface MultichatContactLinkSuggestion {
+  id: number
+  contact_user_id: string
+  other_contact_user_id: string
+  reason: string
+  suggested_by: string
+  created_at: number
+  status: string
 }
 
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'

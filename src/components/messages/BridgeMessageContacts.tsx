@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  contactListPlatforms, contactPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, filterContacts,
+  contactKey, contactListPlatforms, contactPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, filterContacts,
   tagCreateBodyOf, tagDeletePath,
 } from '../../multichatMessages'
 import type { MultichatContactTagMap, MultichatTag, MultichatUnifiedContact } from '../../types-multichat'
@@ -8,10 +8,12 @@ import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChip } from './messagesShared'
 import styles from './Messages.module.css'
 import { useDailyNitroCheck } from './useEmojiCatalog'
+import { ContactLinkSuggestions, IdentityLink, PersonLinkPicker } from './PersonLinks'
 
 /**
- * Everyone multichat's bridges know, one row per person: multichat merges the
- * app identities that share a display name. Tags are multichat's own and sit
+ * Everyone multichat's bridges know, one row per person: the app identities
+ * linked to one principal-store id, by phone number, by the review agent or by
+ * hand here. Tags are multichat's own and sit
  * on one identity — one Matrix user id — so each is put on or taken off an
  * identity, and a person's row shows every tag on any of theirs.
  */
@@ -37,12 +39,19 @@ export function BridgeMessageContacts() {
     setTagMap(nextMap ?? {})
   }, [read])
 
+  const reloadContacts = useCallback(async () => {
+    try {
+      setContacts((await read<MultichatUnifiedContact[] | null>('/contacts/unified')) ?? [])
+      setLoadError(null)
+    } catch (err) {
+      setLoadError(errorText(err))
+    }
+  }, [read])
+
   useEffect(() => {
     if (!configured) return
-    Promise.all([read<MultichatUnifiedContact[] | null>('/contacts/unified'), reloadTags()])
-      .then(([nextContacts]) => { setContacts(nextContacts ?? []); setLoadError(null) })
-      .catch(err => setLoadError(errorText(err)))
-  }, [configured, read, reloadTags])
+    Promise.all([reloadContacts(), reloadTags()]).catch(err => setLoadError(errorText(err)))
+  }, [configured, reloadContacts, reloadTags])
 
   /** A write, then the tags read back from multichat; the refusal, or null. */
   const writeTags = useCallback(async (method: string, path: string, body?: unknown): Promise<string | null> => {
@@ -70,13 +79,15 @@ export function BridgeMessageContacts() {
       <header className={styles.header}>
         <h2 className={styles.title}>Contacts</h2>
         <p className={styles.subtitle}>
-          Everyone multichat&apos;s bridges know, one row per person. multichat merges identities by display name, so two
-          people with the same name share a row, and one person under two names has two.
+          Everyone multichat&apos;s bridges know, one row per person. Accounts that share a phone number are linked on their
+          own, and the review agent links people it is sure of; open a row to link an account to someone else, or to
+          separate one that is not them.
         </p>
       </header>
       {loadError && <pre className={styles.error}>{loadError}</pre>}
       {!contacts ? (loadError ? null : <div className={styles.empty}>Loading…</div>) : (
         <>
+          <ContactLinkSuggestions contacts={contacts} onDecided={reloadContacts} />
           <TagManager tags={tags} write={writeTags} onDeleted={id => { if (tagID === id) setTagID(null) }} />
           <div className={styles.filters}>
             <input className={styles.input} type="search" value={text} placeholder="Filter by name or user id"
@@ -97,7 +108,7 @@ export function BridgeMessageContacts() {
           <div className={styles.muted}>{shown.length} of {contacts.length} contacts</div>
           <ul className={styles.list}>
             {shown.map(contact => {
-              const key = `${contact.display_name}\u0000${contact.identities[0]?.user_id ?? ''}`
+              const key = contactKey(contact)
               const open = expanded === key
               return (
                 <li key={key} className={styles.row}>
@@ -108,7 +119,7 @@ export function BridgeMessageContacts() {
                     {contactTags(contact, tagMap).map(tag => <TagChip key={tag.id} tag={tag} />)}
                     <span className={styles.chevron}>{open ? '▾' : '▸'}</span>
                   </button>
-                  {open && <ContactIdentities contact={contact} tags={tags} tagMap={tagMap} write={writeTags} />}
+                  {open && <ContactIdentities contact={contact} contacts={contacts} tags={tags} tagMap={tagMap} write={writeTags} onLinksChanged={reloadContacts} />}
                 </li>
               )
             })}
@@ -121,8 +132,10 @@ export function BridgeMessageContacts() {
 
 /** Each app identity of one person, with the tags on it: × takes one off, and
  *  the dashed ones put a tag on. */
-function ContactIdentities({ contact, tags, tagMap, write }: {
+function ContactIdentities({ contact, contacts, tags, tagMap, write, onLinksChanged }: {
   contact: MultichatUnifiedContact
+  contacts: readonly MultichatUnifiedContact[]
+  onLinksChanged: () => Promise<void>
   tags: MultichatTag[]
   tagMap: MultichatContactTagMap
   write: (method: string, path: string, body?: unknown) => Promise<string | null>
@@ -142,7 +155,11 @@ function ContactIdentities({ contact, tags, tagMap, write }: {
         return (
           <div key={identity.user_id} className={styles.identity} data-user-id={identity.user_id}>
             <span className={styles.platform}>{identity.platform}</span>
-            <code className={styles.roomID}>{identity.user_id}</code>
+            <span>
+              {identity.display_name && identity.display_name !== contact.display_name && <span>{identity.display_name} </span>}
+              <code className={styles.roomID}>{identity.user_id}</code>{' '}
+              <IdentityLink identity={identity} onChanged={onLinksChanged} />
+            </span>
             <span className={styles.tagRow}>
               {onIdentity.map(tag => (
                 <TagChip key={tag.id} tag={tag} disabled={busy}
@@ -159,6 +176,9 @@ function ContactIdentities({ contact, tags, tagMap, write }: {
           </div>
         )
       })}
+      {contact.identities[0] && (
+        <PersonLinkPicker userID={contact.identities[0].user_id} contacts={contacts} onLinked={onLinksChanged} />
+      )}
       {error && <pre className={styles.error}>{error}</pre>}
     </div>
   )

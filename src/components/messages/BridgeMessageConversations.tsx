@@ -28,6 +28,7 @@ import { useEmojiCatalog, useDailyNitroCheck } from './useEmojiCatalog'
 import { captionsForFiles, humanFileSize, pendingAttachment, type PendingAttachment } from '../../messageAttachments'
 import { filesFromPaste } from '../../sessionFileAttachments'
 import styles from './Messages.module.css'
+import { ConversationPerson } from './PersonLinks'
 
 const CONVERSATIONS_POLL_MS = 30_000
 const MESSAGES_POLL_MS = 5_000
@@ -173,7 +174,10 @@ export function BridgeMessageConversations() {
           <div className={styles.viewer}>
             {picked ? (
               <ConversationThread key={picked.room_id} conversation={picked} onSent={() => { void reload() }}
-                tagEditor={<ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />} />
+                tagEditor={<>
+                  <ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />
+                  {picked.direct_message_partner_user_id && <ConversationPerson key={picked.direct_message_partner_user_id} partnerUserID={picked.direct_message_partner_user_id} />}
+                </>} />
             ) : (
               <div className={styles.empty}>
                 {roomID ? `multichat lists no conversation ${roomID}.` : 'Pick a conversation to read it here.'}

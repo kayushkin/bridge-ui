@@ -6,6 +6,7 @@ import {
   conversationPlatforms, conversationSendPath, conversationShownName, conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterContacts, filterConversations, highlightSegments,
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
   searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
+  contactKey, contactLinkBody, contactLinkSuggestionDecisionPath, contactUnlinkBody, linkCandidates, personOfIdentity, OPERATOR_LINK_REASON,
 } from '../src/multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatTag, MultichatUnifiedContact,
@@ -307,3 +308,49 @@ describe('reaction routes', () => {
     expect(reactionTargetEventID({ event_id: '$post' } as MultichatMessage)).toBe('$post')
   })
 })
+
+describe('linking one person across apps', () => {
+  const texts = '@gmessages_1.630:chat.kayushkin.com'
+  const midnaID = '@discord_493904201101869067:chat.kayushkin.com'
+  const maleeha: MultichatUnifiedContact = {
+    principal_id: 'principal_000040', display_name: 'Maleeha',
+    identities: [{ user_id: texts, platform: 'gmessages', display_name: 'Maleeha' }],
+  }
+  const midna: MultichatUnifiedContact = {
+    display_name: 'Twili Midna', identities: [{ user_id: midnaID, platform: 'discord', display_name: 'Twili Midna' }],
+  }
+  const mom: MultichatUnifiedContact = {
+    display_name: 'Mom', identities: [{ user_id: '@whatsapp_19545474042:chat.kayushkin.com', platform: 'whatsapp', display_name: 'Mom' }],
+  }
+  const contacts = [maleeha, midna, mom]
+
+  it('keys a person by principal id, else by their one identity', () => {
+    expect(contactKey(maleeha)).toBe('principal_000040')
+    expect(contactKey(midna)).toBe(midnaID)
+  })
+
+  it('finds the person an identity belongs to', () => {
+    expect(personOfIdentity(contacts, texts)).toBe(maleeha)
+    expect(personOfIdentity(contacts, '@nobody:x')).toBeUndefined()
+  })
+
+  it('offers other people by any of their names, and no one for an empty query', () => {
+    expect(linkCandidates(contacts, texts, 'midna')).toEqual([midna])
+    expect(linkCandidates(contacts, texts, 'male')).toEqual([])
+    expect(linkCandidates(contacts, midnaID, 'MALE')).toEqual([maleeha])
+    expect(linkCandidates(contacts, texts, '  ')).toEqual([])
+  })
+
+  it('links to an existing person by id, or to a lone identity by its user id', () => {
+    expect(contactLinkBody(midnaID, maleeha)).toEqual({ user_id: midnaID, linked_by: 'operator', reason: OPERATOR_LINK_REASON, principal_id: 'principal_000040' })
+    expect(contactLinkBody(texts, midna)).toEqual({ user_id: texts, linked_by: 'operator', reason: OPERATOR_LINK_REASON, with_user_id: midnaID })
+    expect(contactUnlinkBody(texts)).toEqual({ user_id: texts, removed_by: 'operator' })
+  })
+
+  it('decides a suggestion by its id', () => {
+    const suggestion = { id: 7, contact_user_id: texts, other_contact_user_id: midnaID, reason: 'r', suggested_by: 'agent', created_at: 1, status: 'open' }
+    expect(contactLinkSuggestionDecisionPath(suggestion, 'accept')).toBe('/contacts/links/suggestions/7/accept')
+    expect(contactLinkSuggestionDecisionPath(suggestion, 'reject')).toBe('/contacts/links/suggestions/7/reject')
+  })
+})
+

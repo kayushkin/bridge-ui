@@ -8,7 +8,7 @@
 // forwards only the multichat routes it names.
 
 import type {
-  MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
+  MultichatContactLinkSuggestion, MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
 } from './types-multichat'
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
@@ -29,6 +29,12 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'DELETE /conversations/{room_id}/reactions/{reaction_event_id}',
   'GET /search',
   'GET /contacts/unified',
+  // Linking one person's accounts across apps, and the agent's open suggestions.
+  'POST /contacts/links',
+  'POST /contacts/links/remove',
+  'GET /contacts/links/suggestions',
+  'POST /contacts/links/suggestions/{id}/accept',
+  'POST /contacts/links/suggestions/{id}/reject',
   'GET /tags',
   'POST /tags',
   'DELETE /tags',
@@ -278,8 +284,7 @@ export function filterContacts(contacts: readonly MultichatUnifiedContact[], tag
     if (filter.platform && !platforms.includes(filter.platform)) return false
     if (filter.tagID !== null && !contactTags(contact, tagMap).some(tag => tag.id === filter.tagID)) return false
     if (!text) return true
-    return contact.display_name.toLowerCase().includes(text)
-      || contact.identities.some(identity => identity.user_id.toLowerCase().includes(text))
+    return contactMatchesText(contact, text)
   })
 }
 
@@ -391,3 +396,69 @@ export function conversationPreviewText(lastMessage: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+/** Whether the person's name, any account's own name, or any user id contains
+ *  `lowerText`, which is already lowercased. */
+function contactMatchesText(contact: MultichatUnifiedContact, lowerText: string): boolean {
+  return contact.display_name.toLowerCase().includes(lowerText)
+    || contact.identities.some(identity => identity.user_id.toLowerCase().includes(lowerText)
+      || (identity.display_name ?? '').toLowerCase().includes(lowerText))
+}
+
+/** The row a contact list keys a person by: principal-store's id, or the one
+ *  identity of a person linked to no one. */
+export function contactKey(contact: MultichatUnifiedContact): string {
+  return contact.principal_id ?? contact.identities[0]?.user_id ?? contact.display_name
+}
+
+/** The person an identity belongs to, or undefined when no row holds it. */
+export function personOfIdentity(contacts: readonly MultichatUnifiedContact[], userID: string): MultichatUnifiedContact | undefined {
+  return contacts.find(contact => contact.identities.some(identity => identity.user_id === userID))
+}
+
+/** People the identity could be linked to: every other row whose name, account
+ *  names or user ids contain the query, most apps first, at most `limit`. An
+ *  empty query offers no one, so the list never dumps two thousand rows. */
+export function linkCandidates(contacts: readonly MultichatUnifiedContact[], userID: string, query: string, limit = 8): MultichatUnifiedContact[] {
+  const text = query.trim().toLowerCase()
+  if (!text) return []
+  return contacts
+    .filter(contact => !contact.identities.some(identity => identity.user_id === userID) && contactMatchesText(contact, text))
+    .slice(0, limit)
+}
+
+/** What a link made by hand records as its reason. */
+export const OPERATOR_LINK_REASON = 'linked by the operator in dash'
+
+/** The body of `POST /contacts/links` that makes `userID` the same person as
+ *  `target`: by principal-store id when the target already is a person, else
+ *  by the target's one identity. When neither is a person yet, multichat
+ *  creates one under `userID`'s own name — the account the operator is on. */
+export function contactLinkBody(userID: string, target: MultichatUnifiedContact) {
+  const base = { user_id: userID, linked_by: 'operator', reason: OPERATOR_LINK_REASON }
+  return target.principal_id
+    ? { ...base, principal_id: target.principal_id }
+    : { ...base, with_user_id: target.identities[0].user_id }
+}
+
+/** The body of `POST /contacts/links/remove`: the operator separates one
+ *  identity from its person, and no automatic pass links it back. */
+export function contactUnlinkBody(userID: string) {
+  return { user_id: userID, removed_by: 'operator' }
+}
+
+/** Where a suggestion is accepted or rejected. */
+export function contactLinkSuggestionDecisionPath(suggestion: MultichatContactLinkSuggestion, decision: 'accept' | 'reject'): string {
+  return `/contacts/links/suggestions/${suggestion.id}/${decision}`
+}
+
+/** Who made an identity's link, in words. */
+export function linkedByLabel(linkedBy: string | undefined): string {
+  switch (linkedBy) {
+    case 'operator': return 'linked by you'
+    case 'phone_number': return 'same phone number'
+    case 'agent': return 'linked by the agent'
+    default: return linkedBy ?? ''
+  }
+}
+
