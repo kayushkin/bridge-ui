@@ -329,3 +329,4 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
    their panel opens downward from the button rather than up from a composer. */
 .autoReactionEmojiWrap { position: relative; }
 .autoReactionEmojiWrap > .emojiPanel { top: calc(100% + 4px); bottom: auto; left: 0; width: 360px; }
+.autoReactionEmojiWrapLeftward > .emojiPanel { left: auto; right: 0; }

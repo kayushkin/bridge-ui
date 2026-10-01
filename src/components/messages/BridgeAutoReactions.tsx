@@ -28,8 +28,9 @@ function timeLabel(unixSeconds: number): string {
 }
 
 /** A button that opens the emoji panel and hands back the bot's form of the
- *  picked emoji. */
-function EmojiChooser({ label, onChoose, disabled }: { label: string; onChoose: (emoji: string) => void; disabled?: boolean }) {
+ *  picked emoji. `opensLeftward` lines the panel up with the button's right
+ *  edge, for a button near the right of the page. */
+function EmojiChooser({ label, onChoose, disabled, opensLeftward }: { label: string; onChoose: (emoji: string) => void; disabled?: boolean; opensLeftward?: boolean }) {
   const [open, setOpen] = useState(false)
   const wrapper = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -41,7 +42,7 @@ function EmojiChooser({ label, onChoose, disabled }: { label: string; onChoose: 
     return () => document.removeEventListener('mousedown', closeOnOutsideClick)
   }, [open])
   return (
-    <div className={styles.autoReactionEmojiWrap} ref={wrapper}>
+    <div className={`${styles.autoReactionEmojiWrap} ${opensLeftward ? styles.autoReactionEmojiWrapLeftward : ''}`} ref={wrapper}>
       <button type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen(o => !o)}>{label}</button>
       {open && (
         <EmojiPickerPanel purpose="reaction" discordRoom={null} heading="The bot reacts with"
@@ -182,7 +183,7 @@ export function BridgeAutoReactions() {
             <input className={styles.input} placeholder={guildID ? 'Person (start of their name)' : 'Pick a server first'}
               disabled={!guildID || busy} value={query} onChange={e => setQuery(e.target.value)} />
           )}
-          <EmojiChooser label={emoji ? `Emoji: ${autoReactionEmojiLabel(emoji)}` : 'Pick emoji'} disabled={busy} onChoose={setEmoji} />
+          <EmojiChooser label={emoji ? `Emoji: ${autoReactionEmojiLabel(emoji)}` : 'Pick emoji'} disabled={busy} onChoose={setEmoji} opensLeftward />
           <button type="button" disabled={busy || !guildID || !member || !emoji} onClick={() => { void add() }}>Add</button>
         </div>
         {!member && members.length > 0 && (
