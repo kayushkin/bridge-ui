@@ -324,3 +324,8 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
 .personLinkCandidates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .personLinkCandidates .tagAdd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; text-align: left; }
 .identityLink { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The Auto-reactions page's emoji buttons sit near the top of the page, so
+   their panel opens downward from the button rather than up from a composer. */
+.autoReactionEmojiWrap { position: relative; }
+.autoReactionEmojiWrap > .emojiPanel { top: calc(100% + 4px); bottom: auto; left: 0; width: 360px; }

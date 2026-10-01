@@ -41,7 +41,7 @@ function EmojiChooser({ label, onChoose, disabled }: { label: string; onChoose: 
     return () => document.removeEventListener('mousedown', closeOnOutsideClick)
   }, [open])
   return (
-    <div className={styles.emojiPickerWrap} ref={wrapper}>
+    <div className={styles.autoReactionEmojiWrap} ref={wrapper}>
       <button type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen(o => !o)}>{label}</button>
       {open && (
         <EmojiPickerPanel purpose="reaction" discordRoom={null} heading="The bot reacts with"
