@@ -164,12 +164,18 @@ export function ConversationPerson({ partnerUserID }: { partnerUserID: string })
     <div className={styles.threadTags} data-conversation-person={partnerUserID}>
       <span className={styles.muted}>Person</span>
       <span className={styles.name}>{person?.display_name ?? partnerUserID}</span>
+      {identity?.linked_by && (
+        <span className={styles.identityLink}>
+          <span className={styles.muted}>this {identity.platform} account:</span>
+          <IdentityLink identity={identity} onChanged={reload} />
+        </span>
+      )}
+      {elsewhere.length > 0 && <span className={styles.muted}>also</span>}
       {elsewhere.map(other => (
-        <span key={other.user_id} className={styles.platform} title={other.link_reason}>
+        <span key={other.user_id} className={styles.platform} title={`${linkedByLabel(other.linked_by)}: ${other.link_reason ?? ''}`}>
           {other.platform}{other.display_name ? ` · ${other.display_name}` : ''}
         </span>
       ))}
-      {identity && <IdentityLink identity={identity} onChanged={reload} />}
       <PersonLinkPicker userID={partnerUserID} contacts={contacts} onLinked={reload} />
     </div>
   )
