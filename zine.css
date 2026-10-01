@@ -3,7 +3,7 @@
    lines, flat orange and pink, chunky pink headlines with a cream outline, and
    sticker-like cards with hard offset shadows. The pictures (the crab, the
    conductor, the status icons, stars) are PNGs in zine/, painted by code in
-   dash's art/ studio.
+   the zine-art repo (github.com/kayushkin/zine-art).
 
    Opt in with `import '@kayushkin/bridge-ui/zine.css'` after styles.css and
    `data-theme="zine"` on a parent element. It sets the variables styles.css
@@ -311,7 +311,7 @@
 
 /* The status row: Space Mono ticker tape, and the crab animated in the slot's mood
    (bridge-ui sets `data-mood` and leaves `.bc-status-mascot` empty for us). Each mood is
-   a strip of frames (art/pieces.js, MOOD_FRAMES) played by `zineStrip`. */
+   a strip of frames (zine-art's pieces.js, MOOD_FRAMES) played by `zineStrip`. */
 [data-theme="zine"] .bc-status-slot { font-family: 'Space Mono', monospace; border-top: 2px dashed var(--zine-ink); }
 [data-theme="zine"] .bc-status-mascot {
   position: relative;
@@ -341,7 +341,7 @@
 
 /* The conductor: the orchestrator, docked at the foot of the chat sidebar (bridge-ui's
    `.bc-conductor`). It is drawn by `data-state`, each a strip of frames
-   (art/pieces.js, CONDUCTOR_FRAMES); with the pointer on it, it turns to you. Its reply
+   (zine-art's pieces.js, CONDUCTOR_FRAMES); with the pointer on it, it turns to you. Its reply
    is a speech bubble whose tail points down at it — the crab is the one speaking. */
 [data-theme="zine"] .bc-conductor {
   border-top: 2px dashed var(--zine-ink);
@@ -628,7 +628,7 @@
 
 /* ---------- status icons ----------
    bridge-ui draws each session state as a coloured dot with a symbol; zine swaps in a
-   painted icon per state (art/pieces.js, "status icons"). A state where something is
+   painted icon per state (zine-art's pieces.js, "status icons"). A state where something is
    happening is an animation: its PNG is a strip of square frames, left to right, and
    `zineFrames` steps the background across them — --zine-status-frames frames in
    --zine-status-loop. Under reduced motion the animation is off and frame 0 shows. */
