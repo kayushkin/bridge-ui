@@ -232,6 +232,23 @@ export interface BridgeConfig {
    * whose contract is that every route has a component here. Empty hides the
    * "open in Mail" deep link while leaving the inline preview available. */
   mailPagePath: string
+  /** Base path for people-store as the host proxies it (dash: "/api/people"):
+   * the people in the operator's own life, `person_000001`. Read by the
+   * service settings page. A person id in prose resolves through the host's
+   * resolver, not through this. Empty means the host does not carry it. */
+  peopleStoreBasePath: string
+  /** Base path for journal-store as the host proxies it (dash:
+   * "/api/journal"): the operator's own writing, `entry_000001`. Read by the
+   * service settings page. Empty means the host does not carry it. */
+  journalStoreBasePath: string
+  /** Path to the HOST's own people page (dash: "/people"), which a person chip
+   * opens as `{path}?id=person_000001`. A plain path for the same reason as
+   * `mailPagePath`. Empty hides the chip's "Open person" link. */
+  peoplePagePath: string
+  /** Path to the HOST's own journal page (dash: "/journal"), which an entry
+   * chip opens as `{path}?id=entry_000001`. Empty hides the chip's "Open
+   * entry" link. */
+  journalPagePath: string
   /** Optional render hook called per harness in the Settings tab. Hosts can
    * use this to inject harness-specific configuration UI keyed on harness
    * name. Return null for harnesses without an extension. */

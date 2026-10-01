@@ -6,6 +6,9 @@ import type { NoteboardItem } from '@kayushkin/chat-core';
 import type { ResolvedRefMatch } from '@kayushkin/chat-core';
 import type { Project } from '@kayushkin/project-store-types';
 import type { Repo as RepoStoreRepo } from '@kayushkin/repo-store-types';
+import type { PersonDetail } from '@kayushkin/people-store-types';
+import type { Entry } from '@kayushkin/journal-store-types';
+import { calendarDayOf, entryChipLabel, hostPageHref } from '../../journalRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
@@ -719,6 +722,12 @@ function UnclassifiedRefChip({
     if (match.type === 'project') {
       return <ProjectRefChip refId={refId} project={match.data as Project} className={className} />;
     }
+    if (match.type === 'person') {
+      return <PersonRefChip refId={refId} person={match.data as PersonDetail} className={className} />;
+    }
+    if (match.type === 'entry') {
+      return <EntryRefChip refId={refId} entry={match.data as Entry} className={className} />;
+    }
     if (match.type === 'repo') {
       return <RepoRefChip refId={refId} repo={match.data as RepoStoreRepo} className={className} />;
     }
@@ -844,6 +853,119 @@ function ProjectRefChip({
             <div className="ref-chip-panel-actions">
               <a className="ref-chip-panel-btn" href={href}>
                 Open project
+              </a>
+            </div>
+          )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A person id, resolved by people-store: the person's name on the chip, and
+ *  in the panel what the store holds about them, with a link to the host's
+ *  people page. people-store answers a deleted person too, so a link to them
+ *  keeps resolving; the chip says so rather than hiding it. */
+function PersonRefChip({
+  refId,
+  person,
+  className,
+}: {
+  refId: string;
+  person: PersonDetail;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { peoplePagePath } = useBridgeConfig();
+  const href = hostPageHref(peoplePagePath, refId);
+  const deleted = person.deleted_at !== 0;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="person" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${person.display_name} (${refId})`}
+      >
+        <span className="ref-chip-glyph" aria-hidden>
+          ☺
+        </span>
+        <span className="ref-chip-label">{truncate(person.display_name)}</span>
+        {deleted && <span className="ref-chip-badge ref-chip-badge-deleted">deleted</span>}
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Person details" refId={refId} refKind="person">
+          <div className="ref-chip-panel-title">{person.display_name}</div>
+          <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          {person.birthday && <RefRow label="Birthday" value={person.birthday} />}
+          {person.how_met && <RefRow label="How met" value={person.how_met} />}
+          {person.tags.length > 0 && <RefRow label="Tags" value={person.tags.join(', ')} />}
+          {person.identities.length > 0 && (
+            <RefRow label="Reached at" value={`${person.identities.length} handle${person.identities.length === 1 ? '' : 's'}`} />
+          )}
+          {href && (
+            <div className="ref-chip-panel-actions">
+              <a className="ref-chip-panel-btn" href={href}>
+                Open person
+              </a>
+            </div>
+          )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** An entry id, resolved by journal-store: the entry's title on the chip (an
+ *  untitled journal entry by its day), and its kind, visibility and date in
+ *  the panel, with a link to the host's journal page. The body is not shown:
+ *  this is private writing, and a chip can sit in a chat an agent reads. */
+function EntryRefChip({
+  refId,
+  entry,
+  className,
+}: {
+  refId: string;
+  entry: Entry;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { journalPagePath } = useBridgeConfig();
+  const href = hostPageHref(journalPagePath, refId);
+  const label = entryChipLabel(entry);
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="entry" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${label} (${refId})`}
+      >
+        <span className="ref-chip-glyph" aria-hidden>
+          ✎
+        </span>
+        <span className="ref-chip-label">{truncate(label)}</span>
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Entry details" refId={refId} refKind="entry">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} />
+          <RefRow label="Kind" value={entry.kind} />
+          <RefRow label="Visibility" value={entry.visibility} />
+          {entry.written_at !== 0 && <RefRow label="Written" value={calendarDayOf(entry.written_at)} />}
+          {entry.tags.length > 0 && <RefRow label="Tags" value={entry.tags.join(', ')} />}
+          {href && (
+            <div className="ref-chip-panel-actions">
+              <a className="ref-chip-panel-btn" href={href}>
+                Open entry
               </a>
             </div>
           )}

@@ -50,6 +50,13 @@ export interface BridgeProviderProps {
   multichatBasePath?: string
   /** Path to the host's own mail page (dash: "/mail"). Empty hides the deep link. */
   mailPagePath?: string
+  /** people-store and journal-store as the host proxies them (dash:
+   * "/api/people", "/api/journal"), and the host's own pages for them (dash:
+   * "/people", "/journal"), which person and entry chips link to. */
+  peopleStoreBasePath?: string
+  journalStoreBasePath?: string
+  peoplePagePath?: string
+  journalPagePath?: string
   /** Base path for usage-store API. If omitted, spend/limits sections of the
    * Usage tab are hidden and only per-session aggregates are shown. */
   usageStoreBasePath?: string
@@ -102,6 +109,10 @@ export function BridgeProvider({
   mailBasePath = '',
   multichatBasePath = '',
   mailPagePath = '',
+  peopleStoreBasePath = '',
+  journalStoreBasePath = '',
+  peoplePagePath = '',
+  journalPagePath = '',
   noteboardBasePath = '',
   resolveEndpoint = '',
   bridgeAdapterBasePath = '',
@@ -137,6 +148,10 @@ export function BridgeProvider({
     mailBasePath,
     multichatBasePath,
     mailPagePath,
+    peopleStoreBasePath,
+    journalStoreBasePath,
+    peoplePagePath,
+    journalPagePath,
     noteboardBasePath,
     resolveEndpoint,
     bridgeAdapterBasePath,
@@ -156,7 +171,7 @@ export function BridgeProvider({
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, peoplePagePath, journalPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>
