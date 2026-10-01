@@ -8,7 +8,7 @@ import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured, TagChip } from './messagesShared'
 import styles from './Messages.module.css'
 import { useDailyNitroCheck } from './useEmojiCatalog'
-import { ContactLinkSuggestions, IdentityLink, PersonLinkPicker } from './PersonLinks'
+import { IdentityLink, PersonLinkPicker } from './PersonLinks'
 
 /**
  * Everyone multichat's bridges know, one row per person: the app identities
@@ -81,13 +81,13 @@ export function BridgeMessageContacts() {
         <p className={styles.subtitle}>
           Everyone multichat&apos;s bridges know, one row per person. Accounts that share a phone number are linked on their
           own, and the review agent links people it is sure of; open a row to link an account to someone else, or to
-          separate one that is not them.
+          separate one that is not them. People and their links live in people-store; the links the agent was not sure
+          of wait as suggestions on the People page.
         </p>
       </header>
       {loadError && <pre className={styles.error}>{loadError}</pre>}
       {!contacts ? (loadError ? null : <div className={styles.empty}>Loading…</div>) : (
         <>
-          <ContactLinkSuggestions contacts={contacts} onDecided={reloadContacts} />
           <TagManager tags={tags} write={writeTags} onDeleted={id => { if (tagID === id) setTagID(null) }} />
           <div className={styles.filters}>
             <input className={styles.input} type="search" value={text} placeholder="Filter by name or user id"

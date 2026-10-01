@@ -6,7 +6,7 @@ import {
   conversationPlatforms, conversationSendPath, conversationShownName, conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterContacts, filterConversations, highlightSegments,
   mergeNewestMessages, messageTimeLabel, orderedSearchGroups, pageMessages, prependOlderMessages, sameMessages,
   searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
-  contactKey, contactLinkBody, contactLinkSuggestionDecisionPath, contactUnlinkBody, linkCandidates, personOfIdentity, OPERATOR_LINK_REASON,
+  contactKey, contactLinkBody, contactUnlinkBody, linkCandidates, personOfIdentity, OPERATOR_LINK_REASON,
   conversationEntries, conversationEntryOf, conversationLinkBody, conversationLinkCandidates, conversationTabLabel, conversationUnlinkBody,
 } from '../src/multichatMessages'
 import type {
@@ -314,7 +314,7 @@ describe('linking one person across apps', () => {
   const texts = '@gmessages_1.630:chat.kayushkin.com'
   const midnaID = '@discord_493904201101869067:chat.kayushkin.com'
   const maleeha: MultichatUnifiedContact = {
-    principal_id: 'principal_000040', display_name: 'Maleeha',
+    person_id: 'person_000040', display_name: 'Maleeha',
     identities: [{ user_id: texts, platform: 'gmessages', display_name: 'Maleeha' }],
   }
   const midna: MultichatUnifiedContact = {
@@ -325,8 +325,8 @@ describe('linking one person across apps', () => {
   }
   const contacts = [maleeha, midna, mom]
 
-  it('keys a person by principal id, else by their one identity', () => {
-    expect(contactKey(maleeha)).toBe('principal_000040')
+  it('keys a person by people-store id, else by their one identity', () => {
+    expect(contactKey(maleeha)).toBe('person_000040')
     expect(contactKey(midna)).toBe(midnaID)
   })
 
@@ -343,15 +343,9 @@ describe('linking one person across apps', () => {
   })
 
   it('links to an existing person by id, or to a lone identity by its user id', () => {
-    expect(contactLinkBody(midnaID, maleeha)).toEqual({ user_id: midnaID, linked_by: 'operator', reason: OPERATOR_LINK_REASON, principal_id: 'principal_000040' })
+    expect(contactLinkBody(midnaID, maleeha)).toEqual({ user_id: midnaID, linked_by: 'operator', reason: OPERATOR_LINK_REASON, person_id: 'person_000040' })
     expect(contactLinkBody(texts, midna)).toEqual({ user_id: texts, linked_by: 'operator', reason: OPERATOR_LINK_REASON, with_user_id: midnaID })
     expect(contactUnlinkBody(texts)).toEqual({ user_id: texts, removed_by: 'operator' })
-  })
-
-  it('decides a suggestion by its id', () => {
-    const suggestion = { id: 7, contact_user_id: texts, other_contact_user_id: midnaID, reason: 'r', suggested_by: 'agent', created_at: 1, status: 'open' }
-    expect(contactLinkSuggestionDecisionPath(suggestion, 'accept')).toBe('/contacts/links/suggestions/7/accept')
-    expect(contactLinkSuggestionDecisionPath(suggestion, 'reject')).toBe('/contacts/links/suggestions/7/reject')
   })
 })
 

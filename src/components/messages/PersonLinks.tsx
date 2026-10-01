@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  contactLinkBody, contactLinkSuggestionDecisionPath, contactUnlinkBody, linkCandidates, linkedByLabel, personOfIdentity,
+  contactLinkBody, contactUnlinkBody, linkCandidates, linkedByLabel, personOfIdentity,
 } from '../../multichatMessages'
-import type { MultichatContactIdentity, MultichatContactLinkSuggestion, MultichatUnifiedContact } from '../../types-multichat'
+import type { MultichatContactIdentity, MultichatUnifiedContact } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
 import styles from './Messages.module.css'
 
@@ -53,7 +53,7 @@ export function PersonLinkPicker({ userID, contacts, onLinked }: {
       {candidates.length > 0 && (
         <ul className={styles.personLinkCandidates}>
           {candidates.map(candidate => (
-            <li key={candidate.principal_id ?? candidate.identities[0]?.user_id}>
+            <li key={candidate.person_id ?? candidate.identities[0]?.user_id}>
               <button type="button" className={styles.tagAdd} disabled={busy} onClick={() => { void link(candidate) }}>
                 {candidate.display_name}
                 {candidate.identities.map(identity => (
@@ -96,58 +96,6 @@ export function IdentityLink({ identity, onChanged }: {
       <button type="button" className={styles.tagAdd} disabled={busy} onClick={() => { void unlink() }}>Not this person</button>
       {error && <pre className={styles.error}>{error}</pre>}
     </span>
-  )
-}
-
-/** The agent's open suggestions: pairs it thought might be one person but was
- *  not sure enough to link. Accept links them; reject keeps them apart. */
-export function ContactLinkSuggestions({ contacts, onDecided }: {
-  contacts: readonly MultichatUnifiedContact[]
-  onDecided: () => Promise<void> | void
-}) {
-  const { read, write } = useMultichat()
-  const [suggestions, setSuggestions] = useState<MultichatContactLinkSuggestion[]>([])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const reload = useCallback(async () => {
-    try {
-      setSuggestions((await read<MultichatContactLinkSuggestion[] | null>('/contacts/links/suggestions')) ?? [])
-    } catch (err) {
-      setError(errorText(err))
-    }
-  }, [read])
-  useEffect(() => { void reload() }, [reload])
-  if (suggestions.length === 0 && !error) return null
-  const nameOf = (userID: string) => {
-    const person = personOfIdentity(contacts, userID)
-    const identity = person?.identities.find(i => i.user_id === userID)
-    return `${person?.display_name ?? userID} (${identity?.platform ?? '?'}${identity?.display_name && identity.display_name !== person?.display_name ? ` · ${identity.display_name}` : ''})`
-  }
-  const decide = async (suggestion: MultichatContactLinkSuggestion, decision: 'accept' | 'reject') => {
-    setBusy(true)
-    const result = await write('POST', contactLinkSuggestionDecisionPath(suggestion, decision), { decided_by: 'operator' })
-    setBusy(false)
-    if (!result.ok) { setError(result.error); return }
-    setError(null)
-    await Promise.all([reload(), onDecided()])
-  }
-  return (
-    <section className={styles.tagManager}>
-      <span className={styles.muted}>Suggested links ({suggestions.length})</span>
-      <ul className={styles.list}>
-        {suggestions.map(suggestion => (
-          <li key={suggestion.id} className={styles.row}>
-            <span>{nameOf(suggestion.contact_user_id)} = {nameOf(suggestion.other_contact_user_id)}?</span>
-            <span className={styles.muted}>{suggestion.reason}</span>
-            <span className={styles.tagRow}>
-              <button type="button" className={styles.tagAdd} disabled={busy} onClick={() => { void decide(suggestion, 'accept') }}>Same person</button>
-              <button type="button" className={styles.tagAdd} disabled={busy} onClick={() => { void decide(suggestion, 'reject') }}>Different people</button>
-            </span>
-          </li>
-        ))}
-      </ul>
-      {error && <pre className={styles.error}>{error}</pre>}
-    </section>
   )
 }
 

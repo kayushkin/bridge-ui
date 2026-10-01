@@ -8,7 +8,7 @@
 // forwards only the multichat routes it names.
 
 import type {
-  MultichatContactLinkSuggestion, MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
+  MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
 } from './types-multichat'
 import type { ConversationLink } from '@kayushkin/multichat-types'
@@ -33,9 +33,6 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   // Linking one person's accounts across apps, and the agent's open suggestions.
   'POST /contacts/links',
   'POST /contacts/links/remove',
-  'GET /contacts/links/suggestions',
-  'POST /contacts/links/suggestions/{id}/accept',
-  'POST /contacts/links/suggestions/{id}/reject',
   'GET /tags',
   'POST /tags',
   'DELETE /tags',
@@ -477,10 +474,10 @@ function contactMatchesText(contact: MultichatUnifiedContact, lowerText: string)
       || (identity.display_name ?? '').toLowerCase().includes(lowerText))
 }
 
-/** The row a contact list keys a person by: principal-store's id, or the one
+/** The row a contact list keys a person by: people-store's person id, or the one
  *  identity of a person linked to no one. */
 export function contactKey(contact: MultichatUnifiedContact): string {
-  return contact.principal_id ?? contact.identities[0]?.user_id ?? contact.display_name
+  return contact.person_id ?? contact.identities[0]?.user_id ?? contact.display_name
 }
 
 /** The person an identity belongs to, or undefined when no row holds it. */
@@ -503,13 +500,13 @@ export function linkCandidates(contacts: readonly MultichatUnifiedContact[], use
 export const OPERATOR_LINK_REASON = 'linked by the operator in dash'
 
 /** The body of `POST /contacts/links` that makes `userID` the same person as
- *  `target`: by principal-store id when the target already is a person, else
+ *  `target`: by people-store person id when the target already is a person, else
  *  by the target's one identity. When neither is a person yet, multichat
  *  creates one under `userID`'s own name — the account the operator is on. */
 export function contactLinkBody(userID: string, target: MultichatUnifiedContact) {
   const base = { user_id: userID, linked_by: 'operator', reason: OPERATOR_LINK_REASON }
-  return target.principal_id
-    ? { ...base, principal_id: target.principal_id }
+  return target.person_id
+    ? { ...base, person_id: target.person_id }
     : { ...base, with_user_id: target.identities[0].user_id }
 }
 
@@ -517,11 +514,6 @@ export function contactLinkBody(userID: string, target: MultichatUnifiedContact)
  *  identity from its person, and no automatic pass links it back. */
 export function contactUnlinkBody(userID: string) {
   return { user_id: userID, removed_by: 'operator' }
-}
-
-/** Where a suggestion is accepted or rejected. */
-export function contactLinkSuggestionDecisionPath(suggestion: MultichatContactLinkSuggestion, decision: 'accept' | 'reject'): string {
-  return `/contacts/links/suggestions/${suggestion.id}/${decision}`
 }
 
 /** Who made an identity's link, in words. */

@@ -11,31 +11,23 @@ export interface MultichatContactIdentity {
   platform: string
   display_name?: string
   avatar_url?: string
-  /** One of `GET /contacts/links/sources`: operator, phone_number, agent. */
+  /** One of people-store's link sources (`GET /contacts/links/sources`): operator, phone_number, agent, import. */
   linked_by?: string
   link_reason?: string
 }
 
 /** `GET {multichatBasePath}/contacts/unified` — one row per person. A person
- *  linked across apps carries principal-store's id and name; an identity
- *  linked to no one is a row of its own with no `principal_id`. */
+ *  is a people-store id (`person_000040`) with people-store's name; an account
+ *  linked to no one is a row of its own with no `person_id`.
+ *  `person_deleted_at` is set when the operator deleted the person in
+ *  people-store. Suggested links are people-store suggestions, decided on the
+ *  host's People page, not here. */
 export interface MultichatUnifiedContact {
-  principal_id?: string
+  person_id?: string
+  person_deleted_at?: number
   display_name: string
   identities: MultichatContactIdentity[]
   platforms?: string[]
-}
-
-/** `GET {multichatBasePath}/contacts/links/suggestions` — db.ContactLinkSuggestion:
- *  a link an agent was not sure enough to make. */
-export interface MultichatContactLinkSuggestion {
-  id: number
-  contact_user_id: string
-  other_contact_user_id: string
-  reason: string
-  suggested_by: string
-  created_at: number
-  status: string
 }
 
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
