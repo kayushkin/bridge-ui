@@ -24,7 +24,6 @@
 .check { display: flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text-muted); }
 
 .columns { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2.5fr); gap: 12px; flex: 1; min-height: 0; }
-@media (max-width: 900px) { .columns { grid-template-columns: 1fr; } }
 .listColumn { display: flex; flex-direction: column; gap: 8px; min-height: 0; max-height: 80vh; }
 
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
@@ -133,6 +132,8 @@ a.name:hover { text-decoration: underline; }
 .tagSelect {
   font: inherit; font-size: 0.8em; padding: 0 6px; border-radius: 999px; cursor: pointer;
   color: var(--text-muted); background: none; border: 1px dashed var(--border);
+  /* A select is as wide as its longest option; the link picker lists every room. */
+  max-width: 100%;
 }
 .tagManager {
   display: flex; flex-direction: column; gap: 8px; padding: 8px 10px;
@@ -330,3 +331,23 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
 .autoReactionEmojiWrap { position: relative; }
 .autoReactionEmojiWrap > .emojiPanel { top: calc(100% + 4px); bottom: auto; left: 0; width: 360px; }
 .autoReactionEmojiWrapLeftward > .emojiPanel { left: auto; right: 0; }
+
+/* A narrow screen shows one column at a time: the list, or the open room with
+   a link back to the list. minmax(0, …) lets a long preview ellipsize instead
+   of widening the column past the screen. Last in the file so it overrides
+   the base rules above. */
+.backToList { display: none; }
+@media (max-width: 900px) {
+  .columns { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .columns:not(.columnsRoomOpen) > .viewer { display: none; }
+  .columnsRoomOpen > .listColumn { display: none; }
+  .pageRoomOpen > .header { display: none; }
+  .listColumn { max-height: none; min-height: 0; }
+  .viewer { min-height: 0; max-height: none; }
+  .backToList {
+    display: block; align-self: flex-start; padding: 8px 10px; font: inherit; font-size: 0.9em;
+    color: var(--accent); background: none; border: none; cursor: pointer;
+  }
+  .threadBar .roomID { display: none; }
+  .message { max-width: 88%; }
+}

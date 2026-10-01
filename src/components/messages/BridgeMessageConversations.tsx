@@ -146,10 +146,17 @@ export function BridgeMessageConversations() {
     setSearchParams(next, { replace: true })
   }
 
+  /** Back to the list, which a narrow screen shows in place of the open room. */
+  const closeRoom = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('room')
+    setSearchParams(next, { replace: true })
+  }
+
   if (!configured) return <MultichatNotConfigured page="Conversations" />
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${roomID ? styles.pageRoomOpen : ''}`}>
       <header className={styles.header}>
         <h2 className={styles.title}>Conversations</h2>
         <p className={styles.subtitle}>
@@ -160,7 +167,7 @@ export function BridgeMessageConversations() {
       {tagsError && <pre className={styles.error}>Tags are not shown: {tagsError}</pre>}
       {linksError && <pre className={styles.error}>Linked conversations are listed apart: {linksError}</pre>}
       {!conversations ? (loadError ? null : <div className={styles.empty}>Loading…</div>) : (
-        <div className={styles.columns}>
+        <div className={`${styles.columns} ${roomID ? styles.columnsRoomOpen : ''}`}>
           <div className={styles.listColumn}>
             <div className={styles.filters}>
               <input className={styles.input} type="search" value={text} placeholder="Filter by name, member or last message"
@@ -207,6 +214,7 @@ export function BridgeMessageConversations() {
             </ul>
           </div>
           <div className={styles.viewer}>
+            <button type="button" className={styles.backToList} onClick={closeRoom}>← Conversations</button>
             {picked && pickedEntry && pickedEntry.conversations.length > 1 && (
               <ConversationTabs entry={pickedEntry} roomID={roomID} onPick={pick} />
             )}
