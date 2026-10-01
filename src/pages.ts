@@ -32,6 +32,7 @@ import { BridgeInboundRules } from './components/BridgeInboundRules'
 import { BridgePreviews } from './components/BridgePreviews'
 import { BridgeDiscord } from './components/BridgeDiscord'
 import { BridgeEmoji } from './components/messages/BridgeEmoji'
+import { BridgeAutoReactions } from './components/messages/BridgeAutoReactions'
 
 /** The navigation groups, in the order they are drawn. A group is drawn only
  *  when at least one of its pages is available on this host.
@@ -114,6 +115,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The emoji pickers' favourites and settings, and every bridged server's
   // custom emoji: GET /emoji and its writes.
   { route: 'emoji', label: 'Emoji', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeEmoji },
+  // The Event-Manager bot reacting to everything one person posts on Discord.
+  // discord-signup-store owns the rules; the picker reads multichat's emoji.
+  { route: 'autoReactions', label: 'Auto-reactions', group: 'messages', listed: true, available: c => !!c.discordSignupBasePath && !!c.multichatBasePath, component: BridgeAutoReactions },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },

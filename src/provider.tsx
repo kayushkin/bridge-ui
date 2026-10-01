@@ -48,6 +48,9 @@ export interface BridgeProviderProps {
   /** Base path for multichat's API as the host proxies it (dash:
    * "/api/multichat"). If omitted, the Inbound rules tab is hidden. */
   multichatBasePath?: string
+  /** Base path for discord-signup-store's API as the host proxies it (dash:
+   * "/api/discord-signup"). If omitted, the Auto-reactions page is hidden. */
+  discordSignupBasePath?: string
   /** Path to the host's own mail page (dash: "/mail"). Empty hides the deep link. */
   mailPagePath?: string
   /** people-store and journal-store as the host proxies them (dash:
@@ -108,6 +111,7 @@ export function BridgeProvider({
   repoStoreBasePath = '',
   mailBasePath = '',
   multichatBasePath = '',
+  discordSignupBasePath = '',
   mailPagePath = '',
   peopleStoreBasePath = '',
   journalStoreBasePath = '',
@@ -147,6 +151,7 @@ export function BridgeProvider({
     repoStoreBasePath,
     mailBasePath,
     multichatBasePath,
+    discordSignupBasePath,
     mailPagePath,
     peopleStoreBasePath,
     journalStoreBasePath,
@@ -171,7 +176,7 @@ export function BridgeProvider({
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, peoplePagePath, journalPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, discordSignupBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, peoplePagePath, journalPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

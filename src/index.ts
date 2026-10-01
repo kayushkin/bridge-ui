@@ -124,6 +124,8 @@ export {
 export type { ModelStoreModel, ModelStoreRoles, ModelStoreRoleModelsBody } from './types-model-store'
 export { serviceSettingsSourcesOf, serviceSettingsByKind, serviceSettingValueText, serviceSettingsSummary, serviceSettingsURL, serviceSettingURL, fetchServiceSettings, putServiceSetting, type ServiceSettingsSource, type ServiceSettingsGroup, type ServiceSettingsAnswer } from './serviceSettings'
 export { BridgeInboundRules } from './components/BridgeInboundRules'
+export { BridgeAutoReactions } from './components/messages/BridgeAutoReactions'
+export { autoReactionEmojiOf, autoReactionEmojiLabel, AUTO_REACTION_ROUTES_CALLED, type AutoReaction, type DiscordSignupGuild, type DiscordSignupMember, type CreateAutoReactionBody } from './autoReactions'
 export { BridgeMessageConversations } from './components/messages/BridgeMessageConversations'
 export { BridgeMessageSearch } from './components/messages/BridgeMessageSearch'
 export { BridgeMessageContacts } from './components/messages/BridgeMessageContacts'

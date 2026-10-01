@@ -74,6 +74,10 @@ export interface BridgeRoutes {
    *  offered, and every bridged server's custom emoji with a refresh from
    *  Discord. Needs `multichatBasePath`. */
   emoji: string
+  /** The Event-Manager bot's auto-reactions: an emoji on every message one
+   *  person posts in a Discord server. Needs `discordSignupBasePath` and
+   *  `multichatBasePath` (its emoji picker). */
+  autoReactions: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
   // exists, so it is empty, and a link to an empty route is not rendered at all —
@@ -115,6 +119,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   previews: '/previews',
   discord: '/messages/discord',
   emoji: '/messages/emoji',
+  autoReactions: '/messages/auto-reactions',
   notes: '',
 }
 
@@ -186,6 +191,11 @@ export interface BridgeConfig {
    * `DISCORD_ROUTES_CALLED` in `src/discordLog.ts`. If empty, Inbound rules and
    * the Messages group are hidden. */
   multichatBasePath: string
+  /** Base path for discord-signup-store's API as the host proxies it (dash:
+   * "/api/discord-signup", which forwards only the routes
+   * `AUTO_REACTION_ROUTES_CALLED` in `src/autoReactions.ts` lists). If empty,
+   * the Auto-reactions page is hidden. */
+  discordSignupBasePath: string
   /** Base paths the host proxies seven more services at, read only by the
    * service settings page, which asks `{base}/settings`. dash: scheduler
    * "/api/scheduler", log-store "/api/log-store", job-store "/api/jobs",
