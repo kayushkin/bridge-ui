@@ -326,28 +326,7 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
 .personLinkCandidates .tagAdd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; text-align: left; }
 .identityLink { display: inline-flex; align-items: center; gap: 6px; }
 
-/* The Auto-reactions page's emoji buttons sit near the top of the page, so
-   their panel opens downward from the button rather than up from a composer. */
-.autoReactionEmojiWrap { position: relative; }
-.autoReactionEmojiWrap > .emojiPanel { top: calc(100% + 4px); bottom: auto; left: 0; width: 360px; }
-.autoReactionEmojiWrapLeftward > .emojiPanel { left: auto; right: 0; }
-
-/* A narrow screen shows one column at a time: the list, or the open room with
-   a link back to the list. minmax(0, …) lets a long preview ellipsize instead
-   of widening the column past the screen. Last in the file so it overrides
-   the base rules above. */
-.backToList { display: none; }
-@media (max-width: 900px) {
-  .columns { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .columns:not(.columnsRoomOpen) > .viewer { display: none; }
-  .columnsRoomOpen > .listColumn { display: none; }
-  .pageRoomOpen > .header { display: none; }
-  .listColumn { max-height: none; min-height: 0; }
-  .viewer { min-height: 0; max-height: none; }
-  .backToList {
-    display: block; align-self: flex-start; padding: 8px 10px; font: inherit; font-size: 0.9em;
-    color: var(--accent); background: none; border: none; cursor: pointer;
-  }
-  .threadBar .roomID { display: none; }
-  .message { max-width: 88%; }
-}
+/* The Auto-reactions page's emoji panel, placed in the window by
+   emojiPanelBox in BridgeAutoReactions.tsx wherever its button sits. */
+.autoReactionEmojiFloat { position: fixed; z-index: 20; }
+.autoReactionEmojiFloat > .emojiPanel { position: static; width: 100%; }

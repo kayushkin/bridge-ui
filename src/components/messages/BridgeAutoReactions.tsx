@@ -64,26 +64,59 @@ function useWrites(reload: () => Promise<void>) {
   return { error, setError, busy, act }
 }
 
-/** A button that opens the emoji panel. `opensLeftward` lines the panel up
- *  with the button's right edge, for a button near the right of the page. */
-function EmojiChooser({ label, onPick, disabled, opensLeftward }: { label: string; onPick: (choice: EmojiChoice) => void; disabled?: boolean; opensLeftward?: boolean }) {
-  const [open, setOpen] = useState(false)
+/** The emoji panel's size, as Messages.module.css draws it. */
+const EMOJI_PANEL_WIDTH = 360
+const EMOJI_PANEL_HEIGHT = 320
+const EMOJI_PANEL_MARGIN = 8
+
+/** Where the panel goes for a button at `button`: below it, or above when
+ *  there is no room below, moved and narrowed as needed so that all of it
+ *  stays inside the window. */
+export function emojiPanelBox(button: { left: number; top: number; bottom: number }, windowWidth: number, windowHeight: number) {
+  const width = Math.min(EMOJI_PANEL_WIDTH, windowWidth - 2 * EMOJI_PANEL_MARGIN)
+  const left = Math.min(Math.max(button.left, EMOJI_PANEL_MARGIN), windowWidth - EMOJI_PANEL_MARGIN - width)
+  const below = button.bottom + 4
+  const above = button.top - 4 - EMOJI_PANEL_HEIGHT
+  const top = below + EMOJI_PANEL_HEIGHT <= windowHeight - EMOJI_PANEL_MARGIN ? below
+    : Math.max(EMOJI_PANEL_MARGIN, Math.min(above, windowHeight - EMOJI_PANEL_MARGIN - EMOJI_PANEL_HEIGHT))
+  return { left, top, width }
+}
+
+/** A button that opens the emoji panel, placed in the window by
+ *  `emojiPanelBox` wherever the button sits on the page. */
+function EmojiChooser({ label, onPick, disabled }: { label: string; onPick: (choice: EmojiChoice) => void; disabled?: boolean }) {
+  const [box, setBox] = useState<{ left: number; top: number; width: number } | null>(null)
   const wrapper = useRef<HTMLDivElement | null>(null)
+  const button = useRef<HTMLButtonElement | null>(null)
+  const close = () => setBox(null)
   useEffect(() => {
-    if (!open) return
+    if (!box) return
     const closeOnOutsideClick = (event: MouseEvent) => {
-      if (wrapper.current && !wrapper.current.contains(event.target as Node)) setOpen(false)
+      if (wrapper.current && !wrapper.current.contains(event.target as Node)) setBox(null)
     }
+    // The panel stays where it opened, so scrolling or resizing closes it.
     document.addEventListener('mousedown', closeOnOutsideClick)
-    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
-  }, [open])
+    window.addEventListener('resize', close)
+    document.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      window.removeEventListener('resize', close)
+      document.removeEventListener('scroll', close, true)
+    }
+  }, [box])
+  const toggle = () => {
+    if (box || !button.current) { setBox(null); return }
+    setBox(emojiPanelBox(button.current.getBoundingClientRect(), window.innerWidth, window.innerHeight))
+  }
   return (
-    <div className={`${styles.autoReactionEmojiWrap} ${opensLeftward ? styles.autoReactionEmojiWrapLeftward : ''}`} ref={wrapper}>
-      <button type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen(o => !o)}>{label}</button>
-      {open && (
-        <EmojiPickerPanel purpose="reaction" discordRoom={null} heading="React with"
-          onPick={(choice: EmojiChoice) => { onPick(choice); setOpen(false) }}
-          onClose={() => setOpen(false)} />
+    <div ref={wrapper}>
+      <button type="button" ref={button} disabled={disabled} aria-expanded={!!box} onClick={toggle}>{label}</button>
+      {box && (
+        <div className={styles.autoReactionEmojiFloat} style={{ left: box.left, top: box.top, width: box.width }}>
+          <EmojiPickerPanel purpose="reaction" discordRoom={null} heading="React with"
+            onPick={(choice: EmojiChoice) => { onPick(choice); close() }}
+            onClose={close} />
+        </div>
       )}
     </div>
   )
@@ -201,7 +234,7 @@ function AccountAutoReactions() {
           <label title="Their messages in every chat you share on that app, not only this one">
             <input type="checkbox" checked={everyChat} disabled={busy} onChange={e => setEveryChat(e.target.checked)} /> every chat
           </label>
-          <EmojiChooser label={reactionKey ? `Emoji: ${reactionKey}` : 'Pick emoji'} disabled={busy} opensLeftward
+          <EmojiChooser label={reactionKey ? `Emoji: ${reactionKey}` : 'Pick emoji'} disabled={busy}
             onPick={choice => pickKey(choice, setReactionKey)} />
           <button type="button" disabled={busy || !senderUserID || !reactionKey} onClick={() => { void add() }}>Add</button>
         </div>
@@ -289,7 +322,7 @@ function BotAutoReactions() {
             <input className={styles.input} placeholder={guildID ? 'Person (start of their name)' : 'Pick a server first'}
               disabled={!guildID || busy} value={query} onChange={e => setQuery(e.target.value)} />
           )}
-          <EmojiChooser label={emoji ? `Emoji: ${autoReactionEmojiLabel(emoji)}` : 'Pick emoji'} disabled={busy} opensLeftward
+          <EmojiChooser label={emoji ? `Emoji: ${autoReactionEmojiLabel(emoji)}` : 'Pick emoji'} disabled={busy}
             onPick={choice => setEmoji(autoReactionEmojiOf(choice))} />
           <button type="button" disabled={busy || !guildID || !member || !emoji} onClick={() => { void add() }}>Add</button>
         </div>

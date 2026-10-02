@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DiscordCustomEmoji } from '@kayushkin/multichat-types'
 import type { BridgeConfig } from '../src/context'
 import { BRIDGE_PAGES } from '../src/pages'
+import { emojiPanelBox } from '../src/components/messages/BridgeAutoReactions'
 import { accountAutoReactionPlaceLabel, accountReactionKeyOf, autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath, type AccountAutoReaction, type AutoReaction } from '../src/autoReactions'
 
 describe('autoReactionEmojiOf', () => {
@@ -48,5 +49,27 @@ describe('account rules', () => {
     const rule = { room_id: '', room_name: '' } as AccountAutoReaction
     expect(accountAutoReactionPlaceLabel(rule)).toBe('in every chat')
     expect(accountAutoReactionPlaceLabel({ ...rule, room_id: '!x:chat', room_name: 'Lillian, Loukic, Maleeha' })).toBe('in Lillian, Loukic, Maleeha')
+  })
+})
+
+describe('emojiPanelBox', () => {
+  const inside = (box: { left: number; top: number; width: number }, w: number, h: number) =>
+    box.left >= 0 && box.top >= 0 && box.left + box.width <= w && box.top + 320 <= h
+  it('opens below a button with room under it', () => {
+    expect(emojiPanelBox({ left: 100, top: 200, bottom: 220 }, 1280, 720)).toEqual({ left: 100, top: 224, width: 360 })
+  })
+  it('stays inside the window from every corner, as the browser check found it did not', () => {
+    for (const [left, top] of [[1200, 300], [20, 472 - 30], [1200, 690], [0, 0], [600, 400]]) {
+      const box = emojiPanelBox({ left, top, bottom: top + 20 }, 1280, 720)
+      expect(inside(box, 1280, 720), `button at ${left},${top}: ${JSON.stringify(box)}`).toBe(true)
+    }
+  })
+  it('opens above a button near the bottom', () => {
+    expect(emojiPanelBox({ left: 100, top: 650, bottom: 670 }, 1280, 720).top).toBe(650 - 4 - 320)
+  })
+  it('narrows on a phone', () => {
+    const box = emojiPanelBox({ left: 200, top: 100, bottom: 120 }, 320, 640)
+    expect(box.width).toBe(304)
+    expect(box.left).toBe(8)
   })
 })
