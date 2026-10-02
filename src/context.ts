@@ -74,9 +74,9 @@ export interface BridgeRoutes {
    *  offered, and every bridged server's custom emoji with a refresh from
    *  Discord. Needs `multichatBasePath`. */
   emoji: string
-  /** The Event-Manager bot's auto-reactions: an emoji on every message one
-   *  person posts in a Discord server. Needs `discordSignupBasePath` and
-   *  `multichatBasePath` (its emoji picker). */
+  /** Auto-reactions: an emoji on every message one person sends, from the
+   *  operator's own account (multichat) and, when `discordSignupBasePath` is
+   *  set, from the Event-Manager Discord bot. Needs `multichatBasePath`. */
   autoReactions: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
@@ -194,7 +194,7 @@ export interface BridgeConfig {
   /** Base path for discord-signup-store's API as the host proxies it (dash:
    * "/api/discord-signup", which forwards only the routes
    * `AUTO_REACTION_ROUTES_CALLED` in `src/autoReactions.ts` lists). If empty,
-   * the Auto-reactions page is hidden. */
+   * the Auto-reactions page shows only the rules from the operator's account. */
   discordSignupBasePath: string
   /** Base paths the host proxies seven more services at, read only by the
    * service settings page, which asks `{base}/settings`. dash: scheduler

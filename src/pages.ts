@@ -115,9 +115,10 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The emoji pickers' favourites and settings, and every bridged server's
   // custom emoji: GET /emoji and its writes.
   { route: 'emoji', label: 'Emoji', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeEmoji },
-  // The Event-Manager bot reacting to everything one person posts on Discord.
-  // discord-signup-store owns the rules; the picker reads multichat's emoji.
-  { route: 'autoReactions', label: 'Auto-reactions', group: 'messages', listed: true, available: c => !!c.discordSignupBasePath && !!c.multichatBasePath, component: BridgeAutoReactions },
+  // An emoji on everything one person sends: from the operator's own account
+  // (multichat's rules), and from the Event-Manager Discord bot
+  // (discord-signup-store's, shown when the host proxies it).
+  { route: 'autoReactions', label: 'Auto-reactions', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeAutoReactions },
   // Agents
   { route: 'instances', label: 'Instances', group: 'agents', listed: true, component: BridgeInstances },
   { route: 'agents', label: 'Agents', group: 'agents', listed: true, component: BridgeAgents },

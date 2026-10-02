@@ -49,7 +49,7 @@ export interface BridgeProviderProps {
    * "/api/multichat"). If omitted, the Inbound rules tab is hidden. */
   multichatBasePath?: string
   /** Base path for discord-signup-store's API as the host proxies it (dash:
-   * "/api/discord-signup"). If omitted, the Auto-reactions page is hidden. */
+   * "/api/discord-signup"). If omitted, the Auto-reactions page leaves out the bot's rules. */
   discordSignupBasePath?: string
   /** Path to the host's own mail page (dash: "/mail"). Empty hides the deep link. */
   mailPagePath?: string

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DiscordCustomEmoji } from '@kayushkin/multichat-types'
 import type { BridgeConfig } from '../src/context'
 import { BRIDGE_PAGES } from '../src/pages'
-import { autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath, type AutoReaction } from '../src/autoReactions'
+import { accountAutoReactionPlaceLabel, accountReactionKeyOf, autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath, type AccountAutoReaction, type AutoReaction } from '../src/autoReactions'
 
 describe('autoReactionEmojiOf', () => {
   it('sends a unicode emoji as itself and a custom one as name:id', () => {
@@ -28,12 +28,25 @@ describe('labels', () => {
 })
 
 describe('the Auto-reactions page', () => {
-  it('shows only when the host proxies discord-signup-store and multichat', () => {
+  it('shows when the host proxies multichat, with or without discord-signup-store', () => {
     const page = BRIDGE_PAGES.find(p => p.route === 'autoReactions')
     expect(page?.group).toBe('messages')
     const available = (c: Partial<BridgeConfig>) => page?.available?.(c as BridgeConfig, {} as never)
-    expect(available({ discordSignupBasePath: '', multichatBasePath: '/api/multichat' })).toBe(false)
+    expect(available({ discordSignupBasePath: '', multichatBasePath: '/api/multichat' })).toBe(true)
     expect(available({ discordSignupBasePath: '/api/discord-signup', multichatBasePath: '' })).toBe(false)
     expect(available({ discordSignupBasePath: '/api/discord-signup', multichatBasePath: '/api/multichat' })).toBe(true)
+  })
+})
+
+describe('account rules', () => {
+  it('react with a standard emoji only', () => {
+    expect(accountReactionKeyOf({ kind: 'unicode', key: '🥛', name: 'glass_of_milk' })).toBe('🥛')
+    const custom = { discord_emoji_id: '1', name: 'milkies' } as DiscordCustomEmoji
+    expect(accountReactionKeyOf({ kind: 'custom', key: 'discord-emoji:1', name: 'milkies', emoji: custom })).toBeNull()
+  })
+  it('say where they apply', () => {
+    const rule = { room_id: '', room_name: '' } as AccountAutoReaction
+    expect(accountAutoReactionPlaceLabel(rule)).toBe('in every chat')
+    expect(accountAutoReactionPlaceLabel({ ...rule, room_id: '!x:chat', room_name: 'Lillian, Loukic, Maleeha' })).toBe('in Lillian, Loukic, Maleeha')
   })
 })

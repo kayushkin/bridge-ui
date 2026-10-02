@@ -253,7 +253,7 @@ describe('the Messages group in the registry', () => {
   it('lists its pages only where the host proxies multichat', () => {
     const labelsOf = (base: string) => navEntriesFor(config(base), flags).filter(e => e.group === 'messages').map(e => e.label)
     expect(labelsOf('')).toEqual([])
-    expect(labelsOf('/api/multichat')).toEqual(['Conversations', 'Search', 'Contacts', 'Discord', 'Emoji'])
+    expect(labelsOf('/api/multichat')).toEqual(['Conversations', 'Search', 'Contacts', 'Discord', 'Emoji', 'Auto-reactions'])
   })
 
   it('lights up Messages on every page of it, and Conversations only on its own path', () => {

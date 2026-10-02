@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useBridgeConfig } from '../../context'
 import {
-  autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath,
-  type AutoReaction, type CreateAutoReactionBody, type DiscordSignupGuild, type DiscordSignupMember,
+  accountAutoReactionPlaceLabel, accountReactionKeyOf, autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath,
+  type AccountAutoReaction, type AutoReaction, type CreateAccountAutoReactionBody, type CreateAutoReactionBody,
+  type DiscordSignupGuild, type DiscordSignupMember,
 } from '../../autoReactions'
 import type { EmojiChoice } from '../../emojiCatalog'
+import type { MultichatConversation } from '../../types-multichat'
 import { EmojiPickerPanel } from './EmojiPicker'
+import { MultichatNotConfigured } from './messagesShared'
+import { useMultichat } from './useMultichat'
 import styles from './Messages.module.css'
 
-/** Requests to discord-signup-store through the host's proxy. Both throw the
+/** Requests to discord-signup-store through the host's proxy. They throw the
  *  store's refusal in its own words, so the page can show it. */
 function useDiscordSignup() {
   const { fetch: apiFetch, discordSignupBasePath } = useBridgeConfig()
@@ -23,14 +27,46 @@ function useDiscordSignup() {
   }, [apiFetch, discordSignupBasePath])
 }
 
+/** The same over multichat's proxy, for the account rules. */
+function useMultichatCall() {
+  const { fetch: apiFetch, multichatBasePath } = useBridgeConfig()
+  return useCallback(async <T,>(method: string, path: string, body?: unknown): Promise<T> => {
+    const res = await apiFetch(`${multichatBasePath}${path}`, {
+      method,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${(await res.text()).trim()}`)
+    return (res.status === 204 ? undefined : await res.json()) as T
+  }, [apiFetch, multichatBasePath])
+}
+
 function timeLabel(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleString()
 }
 
-/** A button that opens the emoji panel and hands back the bot's form of the
- *  picked emoji. `opensLeftward` lines the panel up with the button's right
- *  edge, for a button near the right of the page. */
-function EmojiChooser({ label, onChoose, disabled, opensLeftward }: { label: string; onChoose: (emoji: string) => void; disabled?: boolean; opensLeftward?: boolean }) {
+/** Runs a write, then reloads, keeping the error to show. */
+function useWrites(reload: () => Promise<void>) {
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await work()
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { error, setError, busy, act }
+}
+
+/** A button that opens the emoji panel. `opensLeftward` lines the panel up
+ *  with the button's right edge, for a button near the right of the page. */
+function EmojiChooser({ label, onPick, disabled, opensLeftward }: { label: string; onPick: (choice: EmojiChoice) => void; disabled?: boolean; opensLeftward?: boolean }) {
   const [open, setOpen] = useState(false)
   const wrapper = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -45,47 +81,157 @@ function EmojiChooser({ label, onChoose, disabled, opensLeftward }: { label: str
     <div className={`${styles.autoReactionEmojiWrap} ${opensLeftward ? styles.autoReactionEmojiWrapLeftward : ''}`} ref={wrapper}>
       <button type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen(o => !o)}>{label}</button>
       {open && (
-        <EmojiPickerPanel purpose="reaction" discordRoom={null} heading="The bot reacts with"
-          onPick={(choice: EmojiChoice) => { onChoose(autoReactionEmojiOf(choice)); setOpen(false) }}
+        <EmojiPickerPanel purpose="reaction" discordRoom={null} heading="React with"
+          onPick={(choice: EmojiChoice) => { onPick(choice); setOpen(false) }}
           onClose={() => setOpen(false)} />
       )}
     </div>
   )
 }
 
-/**
- * The Event-Manager bot's auto-reactions: for each rule, the bot reacts with
- * its emoji to every message that person posts in that server, in every
- * channel and thread the bot can see. discord-signup-store keeps the rules and
- * counts each reaction made; a refusal from Discord (most often a channel that
- * denies the bot Add Reactions) shows on the rule.
- */
-export function BridgeAutoReactions() {
+/** One rule's row: emoji, who, where, on/off, counts, and its last refusal. */
+function RuleRow({ emoji, person, place, enabled, reactionCount, lastReactedAt, lastError, lastErrorAt, busy, onToggle, onEmoji, onDelete }: {
+  emoji: string; person: string; place: string; enabled: boolean
+  reactionCount: number; lastReactedAt: number; lastError: string; lastErrorAt: number
+  busy: boolean; onToggle: (enabled: boolean) => void; onEmoji: (choice: EmojiChoice) => void; onDelete: () => void
+}) {
+  return (
+    <div className={styles.row}>
+      <div className={styles.rowHead}>
+        <span style={{ fontSize: '1.4em' }}>{emoji}</span>
+        <strong>{person}</strong>
+        <span className={styles.muted}>{place}</span>
+      </div>
+      <div className={styles.rowMeta}>
+        <label>
+          <input type="checkbox" checked={enabled} disabled={busy} onChange={e => onToggle(e.target.checked)} />
+          {' '}{enabled ? 'On' : 'Off'}
+        </label>
+        <span className={styles.muted}>
+          {reactionCount} reaction{reactionCount === 1 ? '' : 's'}
+          {lastReactedAt > 0 && `, last ${timeLabel(lastReactedAt)}`}
+        </span>
+        <EmojiChooser label="Change emoji" disabled={busy} onPick={onEmoji} />
+        <button type="button" disabled={busy}
+          onClick={() => { if (window.confirm(`Delete the ${emoji} rule for ${person}?`)) onDelete() }}>
+          Delete
+        </button>
+      </div>
+      {lastError && <div className={styles.error}>The last reaction failed ({timeLabel(lastErrorAt)}): {lastError}</div>}
+    </div>
+  )
+}
+
+function Section({ title, explanation, children }: { title: string; explanation: string; children: ReactNode }) {
+  return (
+    <section className={styles.header}>
+      <h3 className={styles.title}>{title}</h3>
+      <span className={styles.muted}>{explanation}</span>
+      {children}
+    </section>
+  )
+}
+
+/** Rules multichat applies: the operator's own account reacts, through the
+ *  bridge, so the people in the chat see the operator react. */
+function AccountAutoReactions() {
+  const call = useMultichatCall()
+  const { read } = useMultichat()
+  const [rules, setRules] = useState<AccountAutoReaction[] | null>(null)
+  const [conversations, setConversations] = useState<MultichatConversation[]>([])
+  const reload = useCallback(async () => {
+    const list = await call<{ auto_reactions: AccountAutoReaction[] }>('GET', '/auto-reactions')
+    setRules(list.auto_reactions)
+  }, [call])
+  const { error, setError, busy, act } = useWrites(reload)
+  useEffect(() => {
+    reload().catch(err => setError(err instanceof Error ? err.message : String(err)))
+    read<MultichatConversation[] | null>('/conversations')
+      .then(list => setConversations(list ?? []))
+      .catch(err => setError(err instanceof Error ? err.message : String(err)))
+  }, [reload, read, setError])
+
+  const [roomID, setRoomID] = useState('')
+  const [senderUserID, setSenderUserID] = useState('')
+  const [everyChat, setEveryChat] = useState(false)
+  const [reactionKey, setReactionKey] = useState('')
+  const conversation = conversations.find(c => c.room_id === roomID)
+
+  const pickKey = (choice: EmojiChoice, apply: (key: string) => void) => {
+    const key = accountReactionKeyOf(choice)
+    if (key === null) setError('Reacting from your account takes a standard emoji; custom server emoji are not supported here yet.')
+    else apply(key)
+  }
+  const add = () => act(async () => {
+    const body: CreateAccountAutoReactionBody = { sender_user_id: senderUserID, room_id: everyChat ? '' : roomID, reaction_key: reactionKey, enabled: true }
+    await call('POST', '/auto-reactions', body)
+    setSenderUserID('')
+    setReactionKey('')
+    setEveryChat(false)
+  })
+
+  return (
+    <Section title="From your account"
+      explanation="Your own account reacts, on any app multichat bridges (Discord, Google Messages, WhatsApp…), so people see you react. A rule only reacts to messages sent after it was made.">
+      {error && <div className={styles.error}>{error}</div>}
+      {rules === null ? <div className={styles.empty}>Loading…</div>
+        : rules.length === 0 ? <div className={styles.empty}>No rules yet.</div>
+          : rules.map(rule => (
+            <RuleRow key={rule.id} emoji={rule.reaction_key} person={rule.sender_display_name || rule.sender_user_id}
+              place={accountAutoReactionPlaceLabel(rule)} enabled={rule.enabled}
+              reactionCount={rule.reaction_count} lastReactedAt={rule.last_reacted_at} lastError={rule.last_error} lastErrorAt={rule.last_error_at}
+              busy={busy}
+              onToggle={enabled => { void act(() => call('PATCH', `/auto-reactions/${rule.id}`, { enabled })) }}
+              onEmoji={choice => pickKey(choice, key => { void act(() => call('PATCH', `/auto-reactions/${rule.id}`, { reaction_key: key })) })}
+              onDelete={() => { void act(() => call('DELETE', `/auto-reactions/${rule.id}`)) }} />
+          ))}
+      <div className={styles.row}>
+        <strong>New rule</strong>
+        <div className={styles.filters}>
+          <select className={styles.input} value={roomID} disabled={busy}
+            onChange={e => { setRoomID(e.target.value); setSenderUserID('') }}>
+            <option value="">Chat…</option>
+            {conversations.map(c => <option key={c.room_id} value={c.room_id}>{c.name}{c.platform ? ` (${c.platform})` : ''}</option>)}
+          </select>
+          <select className={styles.input} value={senderUserID} disabled={busy || !conversation}
+            onChange={e => setSenderUserID(e.target.value)}>
+            <option value="">{conversation ? 'Person…' : 'Pick a chat first'}</option>
+            {(conversation?.members ?? []).map(m => <option key={m.user_id} value={m.user_id}>{m.display_name || m.user_id}</option>)}
+          </select>
+          <label title="Their messages in every chat you share on that app, not only this one">
+            <input type="checkbox" checked={everyChat} disabled={busy} onChange={e => setEveryChat(e.target.checked)} /> every chat
+          </label>
+          <EmojiChooser label={reactionKey ? `Emoji: ${reactionKey}` : 'Pick emoji'} disabled={busy} opensLeftward
+            onPick={choice => pickKey(choice, setReactionKey)} />
+          <button type="button" disabled={busy || !senderUserID || !reactionKey} onClick={() => { void add() }}>Add</button>
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+/** Rules discord-signup-store applies: the Event-Manager bot reacts on
+ *  Discord, where a channel lets it. */
+function BotAutoReactions() {
   const call = useDiscordSignup()
   const [rules, setRules] = useState<AutoReaction[] | null>(null)
   const [guilds, setGuilds] = useState<DiscordSignupGuild[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const reload = useCallback(async () => {
+    const [list, guildList] = await Promise.all([
+      call<{ auto_reactions: AutoReaction[] }>('GET', '/auto-reactions'),
+      call<{ guilds: DiscordSignupGuild[] }>('GET', '/guilds'),
+    ])
+    setRules(list.auto_reactions)
+    setGuilds(guildList.guilds)
+  }, [call])
+  const { error, setError, busy, act } = useWrites(reload)
+  useEffect(() => { reload().catch(err => setError(err instanceof Error ? err.message : String(err))) }, [reload, setError])
 
   const [guildID, setGuildID] = useState('')
   const [query, setQuery] = useState('')
   const [members, setMembers] = useState<DiscordSignupMember[]>([])
   const [member, setMember] = useState<DiscordSignupMember | null>(null)
   const [emoji, setEmoji] = useState('')
-
-  const reload = useCallback(async () => {
-    try {
-      const [list, guildList] = await Promise.all([
-        call<{ auto_reactions: AutoReaction[] }>('GET', '/auto-reactions'),
-        call<{ guilds: DiscordSignupGuild[] }>('GET', '/guilds'),
-      ])
-      setRules(list.auto_reactions)
-      setGuilds(guildList.guilds)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }, [call])
-  useEffect(() => { void reload() }, [reload])
 
   // The member search runs as someone types, a moment after they stop.
   useEffect(() => {
@@ -98,20 +244,7 @@ export function BridgeAutoReactions() {
         .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)) })
     }, 250)
     return () => { cancelled = true; window.clearTimeout(timer) }
-  }, [call, guildID, query, member])
-
-  const act = async (work: () => Promise<unknown>) => {
-    setBusy(true)
-    setError(null)
-    try {
-      await work()
-      await reload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  }, [call, guildID, query, member, setError])
 
   const add = () => act(async () => {
     if (!member) return
@@ -125,48 +258,21 @@ export function BridgeAutoReactions() {
   })
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <h2 className={styles.title}>Auto-reactions</h2>
-        <span className={styles.muted}>
-          The Event-Manager bot reacts with the emoji to every message the person posts in that server, in every channel and thread it can see.
-        </span>
-      </header>
+    <Section title="From the Event-Manager bot"
+      explanation="The bot reacts on Discord, in every channel and thread it can see. A channel that does not give it Add Reactions refuses it, and the refusal shows on the rule.">
       {error && <div className={styles.error}>{error}</div>}
-
       {rules === null ? <div className={styles.empty}>Loading…</div>
         : rules.length === 0 ? <div className={styles.empty}>No rules yet.</div>
           : rules.map(rule => (
-            <div key={rule.id} className={styles.row} data-auto-reaction-id={rule.id}>
-              <div className={styles.rowHead}>
-                <span style={{ fontSize: '1.4em' }}>{autoReactionEmojiLabel(rule.emoji)}</span>
-                <strong>{autoReactionPersonLabel(rule)}</strong>
-                <span className={styles.muted}>in {rule.guild_name || rule.guild_id}</span>
-              </div>
-              <div className={styles.rowMeta}>
-                <label>
-                  <input type="checkbox" checked={rule.enabled} disabled={busy}
-                    onChange={e => { const enabled = e.target.checked; void act(() => call('PATCH', `/auto-reactions/${rule.id}`, { enabled })) }} />
-                  {' '}{rule.enabled ? 'On' : 'Off'}
-                </label>
-                <span className={styles.muted}>
-                  {rule.reaction_count} reaction{rule.reaction_count === 1 ? '' : 's'}
-                  {rule.last_reacted_at > 0 && `, last ${timeLabel(rule.last_reacted_at)}`}
-                </span>
-                <EmojiChooser label="Change emoji" disabled={busy}
-                  onChoose={next => { void act(() => call('PATCH', `/auto-reactions/${rule.id}`, { emoji: next })) }} />
-                <button type="button" disabled={busy}
-                  onClick={() => { if (window.confirm(`Delete the ${autoReactionEmojiLabel(rule.emoji)} rule for ${autoReactionPersonLabel(rule)}?`)) void act(() => call('DELETE', `/auto-reactions/${rule.id}`)) }}>
-                  Delete
-                </button>
-              </div>
-              {rule.last_error && (
-                <div className={styles.error}>Discord refused the last reaction ({timeLabel(rule.last_error_at)}): {rule.last_error}</div>
-              )}
-            </div>
+            <RuleRow key={rule.id} emoji={autoReactionEmojiLabel(rule.emoji)} person={autoReactionPersonLabel(rule)}
+              place={`in ${rule.guild_name || rule.guild_id}`} enabled={rule.enabled}
+              reactionCount={rule.reaction_count} lastReactedAt={rule.last_reacted_at} lastError={rule.last_error} lastErrorAt={rule.last_error_at}
+              busy={busy}
+              onToggle={enabled => { void act(() => call('PATCH', `/auto-reactions/${rule.id}`, { enabled })) }}
+              onEmoji={choice => { void act(() => call('PATCH', `/auto-reactions/${rule.id}`, { emoji: autoReactionEmojiOf(choice) })) }}
+              onDelete={() => { void act(() => call('DELETE', `/auto-reactions/${rule.id}`)) }} />
           ))}
-
-      <section className={styles.row}>
+      <div className={styles.row}>
         <strong>New rule</strong>
         <div className={styles.filters}>
           <select className={styles.input} value={guildID} disabled={busy}
@@ -183,7 +289,8 @@ export function BridgeAutoReactions() {
             <input className={styles.input} placeholder={guildID ? 'Person (start of their name)' : 'Pick a server first'}
               disabled={!guildID || busy} value={query} onChange={e => setQuery(e.target.value)} />
           )}
-          <EmojiChooser label={emoji ? `Emoji: ${autoReactionEmojiLabel(emoji)}` : 'Pick emoji'} disabled={busy} onChoose={setEmoji} opensLeftward />
+          <EmojiChooser label={emoji ? `Emoji: ${autoReactionEmojiLabel(emoji)}` : 'Pick emoji'} disabled={busy} opensLeftward
+            onPick={choice => setEmoji(autoReactionEmojiOf(choice))} />
           <button type="button" disabled={busy || !guildID || !member || !emoji} onClick={() => { void add() }}>Add</button>
         </div>
         {!member && members.length > 0 && (
@@ -195,7 +302,29 @@ export function BridgeAutoReactions() {
             ))}
           </div>
         )}
-      </section>
+      </div>
+    </Section>
+  )
+}
+
+/**
+ * Auto-reactions: an emoji on every message one person sends. Rules that react
+ * from the operator's own account live in multichat; rules for the
+ * Event-Manager Discord bot live in discord-signup-store, and show only when
+ * the host proxies it.
+ */
+export function BridgeAutoReactions() {
+  const { discordSignupBasePath } = useBridgeConfig()
+  const { configured } = useMultichat()
+  if (!configured) return <MultichatNotConfigured page="Auto-reactions" />
+  return (
+    <div className={styles.page} style={{ overflowY: 'auto' }}>
+      <header className={styles.header}>
+        <h2 className={styles.title}>Auto-reactions</h2>
+        <span className={styles.muted}>An emoji on every message one person sends.</span>
+      </header>
+      <AccountAutoReactions />
+      {discordSignupBasePath && <BotAutoReactions />}
     </div>
   )
 }
