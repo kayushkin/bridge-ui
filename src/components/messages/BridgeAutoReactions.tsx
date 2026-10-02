@@ -89,32 +89,32 @@ function EmojiChooser({ label, onPick, disabled }: { label: string; onPick: (cho
   const wrapper = useRef<HTMLDivElement | null>(null)
   const button = useRef<HTMLButtonElement | null>(null)
   const close = () => setBox(null)
+  const isOpen = !!box
   useEffect(() => {
-    if (!box) return
+    if (!isOpen) return
     const closeOnOutsideClick = (event: MouseEvent) => {
       if (wrapper.current && !wrapper.current.contains(event.target as Node)) setBox(null)
     }
-    // The panel stays where it opened, so scrolling the page or resizing the
-    // window closes it. Scrolling inside the panel, through the emoji grid,
-    // does not.
-    const closeOnPageScroll = (event: Event) => {
-      if (wrapper.current && event.target instanceof Node && wrapper.current.contains(event.target)) return
-      setBox(null)
+    // Follow the button when the page scrolls or the window changes size,
+    // still inside the window. Closing on scroll instead shut the panel the
+    // moment it opened, since opening it can itself scroll the page a little.
+    const follow = () => {
+      if (!button.current) return
+      const next = emojiPanelBox(button.current.getBoundingClientRect(), window.innerWidth, window.innerHeight)
+      // Scrolling the emoji grid reaches here too, and moves nothing.
+      setBox(current => current && current.left === next.left && current.top === next.top && current.width === next.width ? current : next)
     }
     document.addEventListener('mousedown', closeOnOutsideClick)
-    window.addEventListener('resize', close)
-    document.addEventListener('scroll', closeOnPageScroll, true)
+    window.addEventListener('resize', follow)
+    document.addEventListener('scroll', follow, true)
     return () => {
       document.removeEventListener('mousedown', closeOnOutsideClick)
-      window.removeEventListener('resize', close)
-      document.removeEventListener('scroll', closeOnPageScroll, true)
+      window.removeEventListener('resize', follow)
+      document.removeEventListener('scroll', follow, true)
     }
-  }, [box])
+  }, [isOpen])
   const toggle = () => {
     if (box || !button.current) { setBox(null); return }
-    // Bring the whole button into view first, so the scroll that would
-    // otherwise follow the click does not close the panel it opens.
-    button.current.scrollIntoView({ block: 'nearest' })
     setBox(emojiPanelBox(button.current.getBoundingClientRect(), window.innerWidth, window.innerHeight))
   }
   return (
