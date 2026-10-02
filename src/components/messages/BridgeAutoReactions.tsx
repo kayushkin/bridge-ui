@@ -94,18 +94,27 @@ function EmojiChooser({ label, onPick, disabled }: { label: string; onPick: (cho
     const closeOnOutsideClick = (event: MouseEvent) => {
       if (wrapper.current && !wrapper.current.contains(event.target as Node)) setBox(null)
     }
-    // The panel stays where it opened, so scrolling or resizing closes it.
+    // The panel stays where it opened, so scrolling the page or resizing the
+    // window closes it. Scrolling inside the panel, through the emoji grid,
+    // does not.
+    const closeOnPageScroll = (event: Event) => {
+      if (wrapper.current && event.target instanceof Node && wrapper.current.contains(event.target)) return
+      setBox(null)
+    }
     document.addEventListener('mousedown', closeOnOutsideClick)
     window.addEventListener('resize', close)
-    document.addEventListener('scroll', close, true)
+    document.addEventListener('scroll', closeOnPageScroll, true)
     return () => {
       document.removeEventListener('mousedown', closeOnOutsideClick)
       window.removeEventListener('resize', close)
-      document.removeEventListener('scroll', close, true)
+      document.removeEventListener('scroll', closeOnPageScroll, true)
     }
   }, [box])
   const toggle = () => {
     if (box || !button.current) { setBox(null); return }
+    // Bring the whole button into view first, so the scroll that would
+    // otherwise follow the click does not close the panel it opens.
+    button.current.scrollIntoView({ block: 'nearest' })
     setBox(emojiPanelBox(button.current.getBoundingClientRect(), window.innerWidth, window.innerHeight))
   }
   return (
