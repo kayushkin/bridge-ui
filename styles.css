@@ -6173,6 +6173,15 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-session-action-outcome_unknown .bc-session-action-status { color: var(--error, #e57373); }
 .bc-session-action-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .bc-session-action-confirm-question { color: var(--text-muted); font-size: 0.9em; }
+/* A text box on a button: its label above, the field below, one per line so a
+   password box is never squeezed beside the Confirm button. */
+.bc-session-action-input { display: flex; flex-direction: column; gap: 2px; flex-basis: 100%; }
+.bc-session-action-input-label { color: var(--text-muted); font-size: 0.85em; }
+.bc-session-action-input-field {
+  font: inherit; padding: 4px 8px; max-width: 28em;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text);
+}
+.bc-session-action-input-field:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .bc-session-action-confirm-yes, .bc-session-action-confirm-no {
   padding: 2px 12px; border-radius: 6px; font: inherit; font-size: 0.9em; cursor: pointer;
   border: 1px solid var(--border); background: transparent; color: var(--text);

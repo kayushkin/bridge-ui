@@ -66,13 +66,20 @@ function SessionActionButton({ action }: { action: SessionAction }) {
   const [sending, setSending] = useState(false)
   const [showingCommand, setShowingCommand] = useState(false)
   const [refusal, setRefusal] = useState<string | null>(null)
+  // What the person typed into the button's boxes. It goes to the server with the
+  // confirm and is cleared from here as soon as it has been sent.
+  const [inputValues, setInputValues] = useState<Record<string, string>>({})
+  const inputs = action.offer.inputs ?? []
+  const allInputsFilled = inputs.every((input) => (inputValues[input.name] ?? '') !== '')
   const confirmable = sessionActionIsConfirmable(action)
 
   const confirm = async () => {
+    if (!allInputsFilled) return
     setSending(true)
     setRefusal(null)
     try {
-      await api.runSessionAction(action.session_id, action.action_id)
+      await api.runSessionAction(action.session_id, action.action_id, inputs.length > 0 ? inputValues : undefined)
+      setInputValues({})
       setConfirming(false)
     } catch (error) {
       setRefusal(error instanceof Error ? error.message : String(error))
@@ -117,8 +124,28 @@ function SessionActionButton({ action }: { action: SessionAction }) {
       </span>
       {confirming && confirmable && (
         <span className="bc-session-action-confirm" role="group" aria-label={`Confirm ${action.offer.label}`}>
+          {inputs.map((input) => (
+            <label key={input.name} className="bc-session-action-input">
+              <span className="bc-session-action-input-label">{input.label}</span>
+              <input
+                type={input.secret ? 'password' : 'text'}
+                className="bc-session-action-input-field"
+                value={inputValues[input.name] ?? ''}
+                autoComplete={input.secret ? 'new-password' : 'off'}
+                spellCheck={false}
+                disabled={sending}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setInputValues((values) => ({ ...values, [input.name]: value }))
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void confirm()
+                }}
+              />
+            </label>
+          ))}
           <span className="bc-session-action-confirm-question">Run this?</span>
-          <button type="button" className="bc-session-action-confirm-yes" disabled={sending} onClick={() => void confirm()}>
+          <button type="button" className="bc-session-action-confirm-yes" disabled={sending || !allInputsFilled} onClick={() => void confirm()}>
             {sending ? 'Starting…' : 'Confirm'}
           </button>
           <button
@@ -128,6 +155,7 @@ function SessionActionButton({ action }: { action: SessionAction }) {
             onClick={() => {
               setConfirming(false)
               setRefusal(null)
+              setInputValues({})
             }}
           >
             Cancel
