@@ -4903,6 +4903,10 @@
 .bc-cost-ceiling-warn.bc-cost-clickable:hover { border-color: color-mix(in srgb, #f59e0b 45%, var(--border)); background: color-mix(in srgb, #f59e0b 8%, transparent); }
 .bc-cost-ceiling-crit.bc-cost-clickable:hover { border-color: color-mix(in srgb, #ef4444 45%, var(--border)); background: color-mix(in srgb, #ef4444 8%, transparent); }
 .bc-cost-panel-ceiling .bc-cost-panel-group-label { color: var(--text); }
+.bc-cost-ceiling-editor-row { display: flex; gap: 6px; align-items: center; padding: 3px 0; }
+.bc-cost-ceiling-editor-prefix { color: var(--text-muted); }
+.bc-cost-ceiling-editor .bc-budget-banner-input { width: 90px; }
+.bc-cost-ceiling-editor .bc-budget-banner-hint { padding-bottom: 0; }
 
 .bc-budget-banner {
   display: flex; flex-direction: column; gap: 8px;

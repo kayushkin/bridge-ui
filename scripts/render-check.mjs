@@ -19,6 +19,7 @@ import {
   BridgeOrchestrator, CostBreakdown, GitPanel, LinkedKanbanPanel,
   OrchestratorPanel,
 } from '../src/index.ts'
+import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
 import { ProducerTextWithReferenceLinks } from '../src/components/chat/producerReferences.tsx'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
@@ -60,6 +61,15 @@ const check = (name, cond, detail) => {
 }
 
 console.log('CostBreakdown')
+{
+  const html = renderToStaticMarkup(h(CeilingEditor, { spendUSD: 10, maxBudgetUSD: 25, setCeiling: async () => null }))
+  check('ceiling editor starts on the ceiling in force', html.includes('value="25"'), html)
+  check('ceiling editor with a ceiling says "Change ceiling"', html.includes('Change ceiling'), html)
+}
+{
+  const html = renderToStaticMarkup(h(CeilingEditor, { spendUSD: 0, maxBudgetUSD: 0, setCeiling: async () => null }))
+  check('ceiling editor with no ceiling starts empty and says "Set a ceiling"', html.includes('value=""') && html.includes('Set a ceiling'), html)
+}
 {
   const html = renderToStaticMarkup(h(CostBreakdown, {
     rows: [], fallbackTotalUSD: 0, ceiling: { spendUSD: 3, maxBudgetUSD: 10 },

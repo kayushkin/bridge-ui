@@ -7,6 +7,7 @@ import {
   useSessionList,
   useSessionActions,
   useSessionCost,
+  useSpendCeiling,
   useContextUsage,
   useSessionInfo,
   useManagedSession,
@@ -151,6 +152,7 @@ export default function SessionHeader({
   // three axes the controls read and write — the mode, the sandbox `disableNetwork` gate,
   // and the Custom mode's raw `permissionModeCustom` knobs.
   const { session: managed, setPermissionState } = useManagedSession(id)
+  const { setCeiling } = useSpendCeiling(id)
 
   // The pair the cost chip measures spend against. Both fields ride on the detail read
   // above, NOT on the session summary — `spend_usd` / `max_budget_usd` are deliberately
@@ -371,10 +373,18 @@ export default function SessionHeader({
         {/* What the session has used, as one group: the context ring, then spend. */}
         <span className={styles.usageGroup}>
           <ContextRing tokens={tokens} limit={limit} pct={pct} />
-          {(totalUsd > 0 || spendCeiling) && (
+          {/* Once the detail has loaded, the chip shows on every session, even at $0.00
+              with no ceiling: its drill-down is where a ceiling is set, and a session
+              is worth capping before it has spent anything. */}
+          {(totalUsd > 0 || spendCeiling || managed) && (
             <CostBreakdown
               aggregate={{ totalUsd, byModel, bySource: byQuerySource }}
               ceiling={spendCeiling}
+              ceilingEditor={managed ? {
+                spendUSD: managed.spendUsd ?? 0,
+                maxBudgetUSD: maxBudgetUsd,
+                setCeiling,
+              } : undefined}
             />
           )}
         </span>

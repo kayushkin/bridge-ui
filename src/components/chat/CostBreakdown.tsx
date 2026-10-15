@@ -73,9 +73,21 @@ export interface CostBreakdownProps {
    * chip renders exactly as it did before, and a server that predates the
    * ceiling cannot send one, so nothing appears. */
   ceiling?: SpendCeiling
+  /** Lets the drill-down set the session's ceiling: raise it, lower it, or clear it
+   * with 0. Resolves to null on success and to the server's refusal text otherwise.
+   * Without it the panel only reads. */
+  ceilingEditor?: CeilingEditorProps
 }
 
-export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggregate, ceiling }: CostBreakdownProps) {
+export interface CeilingEditorProps {
+  /** The gated spend the gate compares against the ceiling (the row's spend_usd). */
+  spendUSD: number
+  /** The ceiling now in force; 0 means none. */
+  maxBudgetUSD: number
+  setCeiling: (maxBudgetUSD: number) => Promise<string | null>
+}
+
+export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggregate, ceiling, ceilingEditor }: CostBreakdownProps) {
   const apiSpend = latestApiSpend(rows ?? [])
 
   // With a ceiling, the chip reads "$3.00 / $10.00" and the ceiling's own
@@ -128,6 +140,7 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
         {open && (
           <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
             <CeilingPanelRows ceiling={ceiling} />
+            {ceilingEditor && <CeilingEditor {...ceilingEditor} />}
             <div className="bc-cost-panel-row bc-cost-panel-total">
               <span className="bc-cost-panel-label">API spend</span>
               <span className="bc-cost-panel-value">{formatCost(aggregate.totalUsd)}</span>
@@ -174,7 +187,7 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
           {ceiling ? ceilingLabel : formatCost(apiSpend.total_usd)}
           <span className="bc-cost-caret" aria-hidden>▾</span>
         </button>
-        {open && <CostDrilldownPanel spend={apiSpend} fallbackTotalUSD={fallbackTotalUSD} ceiling={ceiling} />}
+        {open && <CostDrilldownPanel spend={apiSpend} fallbackTotalUSD={fallbackTotalUSD} ceiling={ceiling} ceilingEditor={ceilingEditor} />}
       </div>
     )
   }
@@ -205,6 +218,7 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
         {open && (
           <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
             <CeilingPanelRows ceiling={ceiling} />
+            {ceilingEditor && <CeilingEditor {...ceilingEditor} />}
           </div>
         )}
       </div>
@@ -251,10 +265,84 @@ function CeilingPanelRows({ ceiling }: { ceiling?: SpendCeiling }) {
   )
 }
 
-function CostDrilldownPanel({ spend, fallbackTotalUSD, ceiling }: {
+// CeilingEditor sets the session's spend ceiling from the drill-down, at any
+// time — not only once the gate has halted the session, which is all the
+// budget banner covers. The field starts on the ceiling in force, or empty
+// when there is none. Empty or 0 clears it.
+//
+// A ceiling at or below the gated spend is allowed: it halts the session at
+// once, and that is a fair thing to want. The hint says so before the click.
+export function CeilingEditor({ spendUSD, maxBudgetUSD, setCeiling }: CeilingEditorProps) {
+  const current = maxBudgetUSD > 0 ? String(maxBudgetUSD) : ''
+  const [draft, setDraft] = useState(current)
+  const [seededFrom, setSeededFrom] = useState(current)
+  const [saving, setSaving] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+
+  // Follow the server when the ceiling moves under us (a save here, or the
+  // banner), without wiping what the user is typing on an unrelated render.
+  if (current !== seededFrom) {
+    setSeededFrom(current)
+    setDraft(current)
+  }
+
+  const trimmed = draft.trim()
+  const next = trimmed === '' ? 0 : Number(trimmed)
+  const valid = Number.isFinite(next) && next >= 0
+  const unchanged = valid && next === (maxBudgetUSD > 0 ? maxBudgetUSD : 0)
+  const haltsAtOnce = valid && next > 0 && next <= spendUSD
+  const canSave = valid && !unchanged && !saving
+
+  const save = async () => {
+    if (!canSave) return
+    setSaving(true)
+    setFailure(null)
+    const err = await setCeiling(next)
+    setSaving(false)
+    if (err) setFailure(err)
+  }
+
+  return (
+    <div className="bc-cost-panel-group bc-cost-ceiling-editor">
+      <div className="bc-cost-panel-group-label">{maxBudgetUSD > 0 ? 'Change ceiling' : 'Set a ceiling'}</div>
+      <div className="bc-cost-ceiling-editor-row">
+        <span className="bc-cost-ceiling-editor-prefix" aria-hidden>$</span>
+        <input
+          className="bc-budget-banner-input"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="no limit"
+          value={draft}
+          disabled={saving}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') void save() }}
+          aria-label="Spend ceiling in dollars; empty or 0 for no limit"
+        />
+        <button
+          type="button"
+          className="bc-budget-banner-raise"
+          onClick={() => void save()}
+          disabled={!canSave}
+        >
+          {saving ? 'Saving…' : next === 0 && maxBudgetUSD > 0 ? 'Remove' : 'Save'}
+        </button>
+      </div>
+      {haltsAtOnce && (
+        <div className="bc-budget-banner-hint">
+          at or below the {formatCost(spendUSD)} already spent — the session stops at once
+        </div>
+      )}
+      {failure && <div className="bc-budget-banner-failure">Could not set the ceiling: {failure}</div>}
+    </div>
+  )
+}
+
+function CostDrilldownPanel({ spend, fallbackTotalUSD, ceiling, ceilingEditor }: {
   spend: APISpendTotalEvent
   fallbackTotalUSD: number
   ceiling?: SpendCeiling
+  ceilingEditor?: CeilingEditorProps
 }) {
   const byModel = mapEntriesSortedDesc(spend.by_model)
   const bySource = mapEntriesSortedDesc(spend.by_query_source)
@@ -269,6 +357,7 @@ function CostDrilldownPanel({ spend, fallbackTotalUSD, ceiling }: {
   return (
     <div className="bc-cost-panel" role="dialog" aria-label="Cost breakdown">
       <CeilingPanelRows ceiling={ceiling} />
+      {ceilingEditor && <CeilingEditor {...ceilingEditor} />}
       <div className="bc-cost-panel-row bc-cost-panel-total">
         <span className="bc-cost-panel-label">API spend</span>
         <span className="bc-cost-panel-value">{formatCost(spend.total_usd)}</span>
