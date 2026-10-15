@@ -273,7 +273,9 @@ function CeilingPanelRows({ ceiling }: { ceiling?: SpendCeiling }) {
 // A ceiling at or below the gated spend is allowed: it halts the session at
 // once, and that is a fair thing to want. The hint says so before the click.
 export function CeilingEditor({ spendUSD, maxBudgetUSD, setCeiling }: CeilingEditorProps) {
-  const current = maxBudgetUSD > 0 ? String(maxBudgetUSD) : ''
+  // Cents, as every other figure here: a ceiling stored as 26.286004249999998
+  // starts the field on 26.29.
+  const current = maxBudgetUSD > 0 ? String(Math.round(maxBudgetUSD * 100) / 100) : ''
   const [draft, setDraft] = useState(current)
   const [seededFrom, setSeededFrom] = useState(current)
   const [saving, setSaving] = useState(false)
@@ -289,7 +291,7 @@ export function CeilingEditor({ spendUSD, maxBudgetUSD, setCeiling }: CeilingEdi
   const trimmed = draft.trim()
   const next = trimmed === '' ? 0 : Number(trimmed)
   const valid = Number.isFinite(next) && next >= 0
-  const unchanged = valid && next === (maxBudgetUSD > 0 ? maxBudgetUSD : 0)
+  const unchanged = valid && trimmed === current
   const haltsAtOnce = valid && next > 0 && next <= spendUSD
   const canSave = valid && !unchanged && !saving
 

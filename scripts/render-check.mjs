@@ -67,6 +67,10 @@ console.log('CostBreakdown')
   check('ceiling editor with a ceiling says "Change ceiling"', html.includes('Change ceiling'), html)
 }
 {
+  const html = renderToStaticMarkup(h(CeilingEditor, { spendUSD: 10, maxBudgetUSD: 26.286004249999998, setCeiling: async () => null }))
+  check('ceiling editor rounds a stored ceiling to cents', html.includes('value="26.29"'), html)
+}
+{
   const html = renderToStaticMarkup(h(CeilingEditor, { spendUSD: 0, maxBudgetUSD: 0, setCeiling: async () => null }))
   check('ceiling editor with no ceiling starts empty and says "Set a ceiling"', html.includes('value=""') && html.includes('Set a ceiling'), html)
 }
