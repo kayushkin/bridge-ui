@@ -1315,7 +1315,11 @@ function bridgeOrchestratorChecks() {
       }, h(BridgeOrchestrator))))
 
   const configured = mount('/api/producer')
-  check('a configured host gets the page', configured.includes('bc-orchestrator-conversation'), configured.slice(0, 300))
+  // The conversation lives in the home session's chat now, so the page has no
+  // composer of its own: it links to the chat once producerd names the session.
+  check('a configured host gets the page, with no composer of its own',
+    configured.includes('bc-orchestrator') && !configured.includes('bc-composer') && !configured.includes('bc-orchestrator-conversation'),
+    configured.slice(0, 300))
   check('with its runs log and context inspector',
     configured.includes('bc-orchestrator-runs') && configured.includes('bc-orchestrator-context'),
     configured.slice(0, 300))
