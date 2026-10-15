@@ -16,6 +16,24 @@ export const SESSION_ACTION_TYPE_LABEL: Record<SessionActionType, string> = {
   send_message: 'Send a message here',
   fork_and_send: 'Fork this session and send',
   new_session_and_send: 'Start a new session and send',
+  send_to_session: 'Send a message to another session',
+  stop_session: 'Stop another session',
+}
+
+/** The other session a button acts on, and what it does to it, for the line beside the
+ *  button: "Sends to" or "Stops", then the session as a chip. Null for an action that
+ *  names no target. */
+export function sessionActionTarget(action: SessionAction): { verb: string; sessionId: string } | null {
+  const sessionId = action.offer.target_session_id
+  if (!sessionId) return null
+  switch (action.offer.type) {
+    case 'send_to_session':
+      return { verb: 'Sends to', sessionId }
+    case 'stop_session':
+      return { verb: 'Stops', sessionId }
+    default:
+      return null
+  }
 }
 
 /** The button can be pressed only while the action waits for its one run, and never

@@ -6,6 +6,7 @@ import {
   sessionActionOutputIsMarkdown,
   sessionActionRunBy,
   sessionActionStatusText,
+  sessionActionTarget,
 } from '../src/sessionActionView'
 
 const action = (overrides: Partial<SessionAction> = {}): SessionAction => ({
@@ -58,5 +59,15 @@ describe('the richer kinds of button', () => {
     expect(sessionActionCostText(ask)).toBe('up to $0.20')
     expect(sessionActionCostText({ ...ask, state: 'succeeded', cost_usd: 0.0021 })).toBe('spent $0.0021 of $0.20')
     expect(sessionActionCostText(action())).toBe('')
+  })
+
+  it('names the other session a send or a stop acts on', () => {
+    const send = action({
+      offer: { label: 'Answer it', type: 'send_to_session', target_session_id: 'br_target', message: 'go on' },
+    })
+    expect(sessionActionTarget(send)).toEqual({ verb: 'Sends to', sessionId: 'br_target' })
+    const stop = action({ offer: { label: 'Stop it', type: 'stop_session', target_session_id: 'br_target' } })
+    expect(sessionActionTarget(stop)).toEqual({ verb: 'Stops', sessionId: 'br_target' })
+    expect(sessionActionTarget(action())).toBeNull()
   })
 })

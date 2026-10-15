@@ -8,6 +8,7 @@ import {
   sessionActionOutputIsMarkdown,
   sessionActionRunBy,
   sessionActionStatusText,
+  sessionActionTarget,
 } from '../../sessionActionView'
 import { RefChip } from './RefChip'
 import { ProducerMarkdown } from './producerReferences'
@@ -89,6 +90,7 @@ function SessionActionButton({ action }: { action: SessionAction }) {
   }
 
   const costText = sessionActionCostText(action)
+  const target = sessionActionTarget(action)
   const review = action.review
   return (
     <span className={`bc-session-action bc-session-action-${action.state}`} data-action-id={action.action_id}>
@@ -102,6 +104,11 @@ function SessionActionButton({ action }: { action: SessionAction }) {
         >
           {action.offer.label}
         </button>
+        {target && (
+          <span className="bc-session-action-session">
+            {target.verb} <RefChip kind="session" refId={target.sessionId} />
+          </span>
+        )}
         {costText && <span className="bc-session-action-cost">{costText}</span>}
         {review && (
           <span className={`bc-session-action-review bc-session-action-review-${review.verdict}`} title={review.reasons}>
@@ -182,15 +189,23 @@ function SessionActionButton({ action }: { action: SessionAction }) {
 
 /** Actions whose output is what the person pressed the button for, shown open; the
  *  rest keep their output — a deploy log, the scheduler's reply — behind a toggle. */
-const OUTPUT_IS_THE_RESULT: ReadonlySet<SessionAction['offer']['type']> = new Set(['run_command', 'model_call', 'background_agent'])
+const OUTPUT_IS_THE_RESULT: ReadonlySet<SessionAction['offer']['type']> = new Set([
+  'run_command',
+  'model_call',
+  'background_agent',
+  'send_to_session',
+  'stop_session',
+])
 
-/** The session it started, and what came back. Who pressed it is under "What it runs". */
+/** The session it started, and what came back. Who pressed it is under "What it runs".
+ *  A button that acted on another session already shows that session beside it. */
 function SessionActionOutcome({ action }: { action: SessionAction }) {
   const [showingOutput, setShowingOutput] = useState(false)
   const outputIsTheResult = OUTPUT_IS_THE_RESULT.has(action.offer.type)
+  const resultSessionIsTheTarget = action.result_session_id === action.offer.target_session_id
   return (
     <>
-      {action.result_session_id && (
+      {action.result_session_id && !resultSessionIsTheTarget && (
         <span className="bc-session-action-session">
           {action.state === 'running' ? 'Working in' : 'Session'} <RefChip kind="session" refId={action.result_session_id} />
         </span>
