@@ -178,8 +178,9 @@ export { BridgeCardPage } from './components/BridgeCardPage'
 // chrome differs, so only the chrome is repeated.
 export { CardDetail } from './components/BridgeKanban'
 export type { CardDetailProps } from './components/BridgeKanban'
-// The producer's full review page — conversation + composer (one run per send),
-// runs log, cost windows and the injected-context inspector.
+// The producer's review page — a link to the orchestrator's home session (the
+// chat you talk to it in), the week's cost, the injected-context inspector and
+// the log of one-shot runs from before the home session.
 //
 // ⚠️ Needs chat-core's `<ChatProvider>` above it as well as `BridgeProvider`:
 // the reference chips' hooks throw without it. `<Bridge>` mounts both; a host
@@ -235,11 +236,14 @@ export { UsageLine } from './components/chat/UsageLine'
 export type { UsageLineProps } from './components/chat/UsageLine'
 export { EditableName } from './components/chat/EditableName'
 export type { EditableNameProps } from './components/chat/EditableName'
-// The pinned "Orchestrator" sidebar entry. Self-fetching against the host's
-// producer proxy, so a standalone sidebar mounts it with the two paths its own
-// BridgeProvider was given and nothing else.
+// The pinned "Orchestrator" sidebar entry. Its gear panel fetches its settings
+// from the host's producer proxy; a click calls `onOpenHomeSession`, which the
+// host points at its own session-open path (the chat's sidebar uses
+// `useHomeSession`).
 export { ProducerRow } from './components/chat/ProducerRow'
 export type { ProducerRowProps } from './components/chat/ProducerRow'
+export { useHomeSession, fetchHomeSessionId } from './components/chat/useHomeSession'
+export type { HomeSession } from './components/chat/useHomeSession'
 
 // The three side panes. Each is a self-contained pane with its own header and
 // collapse control, so the host that owns the layout decides where the pane goes

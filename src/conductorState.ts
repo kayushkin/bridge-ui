@@ -1,23 +1,28 @@
 // What the chat's conductor — the orchestrator, drawn at the foot of the sidebar — is
-// doing, decided from what the producer and the signals say. Pure, so the order of
-// the rules is tested rather than read out of a component.
+// doing, decided from what the producer, its home session and the signals say. Pure,
+// so the order of the rules is tested rather than read out of a component.
 //
-// The orchestrator's job is to keep the work moving, not to do it, so its usual state
-// is `conducting`. It cannot answer while a run is in flight, and it is the one that
-// raises what needs a person: the open questions and permission requests every session
-// files as signals.
+// The orchestrator is one long-lived llm-bridge session (the "home session", whose id
+// producerd hands out at `GET /home-session`). Its job is to keep the work moving, not
+// to do it, so its usual state is `conducting`. It is the one that raises what needs a
+// person: the open questions and permission requests every session files as signals.
 
 export type ConductorState = 'offline' | 'alert' | 'busy' | 'trouble' | 'resting' | 'conducting'
 
+/** Home session states that mean it is working on a turn right now. */
+const HOME_SESSION_BUSY_STATES: ReadonlySet<string> = new Set(['running', 'tool_running', 'starting'])
+/** Home session states that mean its last turn went wrong: ended in error, or its
+ *  process went away without a clean exit. */
+const HOME_SESSION_TROUBLE_STATES: ReadonlySet<string> = new Set(['error', 'disconnected'])
+
 export interface ConductorFacts {
-  /** The producer answered its last poll. False when it did not; null before the first. */
+  /** The producer answered its last call. False when it did not; null before the first. */
   reachable: boolean | null
   /** Autonomous mode (`/config`'s `enabled`): off, the orchestrator only answers when asked. */
   enabled: boolean | null
-  /** Runs started and not yet finished (`GET /runs/active`), counting a send from here. */
-  activeRuns: number
-  /** The error of the newest finished run, when it failed. */
-  lastRunError: string | null
+  /** The home session's state as llm-bridge reports it, or null while this client
+   *  does not know the session. */
+  homeSessionState: string | null
   /** Open signals across every session — the sidebar's "Needs you". */
   needsYou: number
   /** Of those, the ones raised since you last opened them from the conductor. Only these
@@ -27,20 +32,14 @@ export interface ConductorFacts {
 
 /** In priority order: unreachable first, since nothing else it says can be trusted then;
  *  then anything waiting on you, because that is the reason to look; then busy, because
- *  a run in flight both hides an older failure and decides whether it can answer. */
+ *  a turn in flight hides how the last one ended. */
 export function conductorState(facts: ConductorFacts): ConductorState {
   if (facts.reachable === false) return 'offline'
   if (facts.newNeedsYou > 0) return 'alert'
-  if (facts.activeRuns > 0) return 'busy'
-  if (facts.lastRunError) return 'trouble'
+  if (facts.homeSessionState !== null && HOME_SESSION_BUSY_STATES.has(facts.homeSessionState)) return 'busy'
+  if (facts.homeSessionState !== null && HOME_SESSION_TROUBLE_STATES.has(facts.homeSessionState)) return 'trouble'
   if (facts.enabled === false) return 'resting'
   return 'conducting'
-}
-
-/** Whether a message sent now would be answered: not while a run is in flight (each run
- *  sees the conversation as it stood when it began), and not while unreachable. */
-export function conductorCanAnswer(facts: ConductorFacts): boolean {
-  return facts.reachable !== false && facts.activeRuns === 0
 }
 
 /** The words beside the conductor. */
@@ -51,9 +50,9 @@ export function conductorStatusText(state: ConductorState, facts: ConductorFacts
     case 'alert':
       return `${facts.newNeedsYou} new — ${facts.newNeedsYou === 1 ? 'needs' : 'need'} you`
     case 'busy':
-      return facts.activeRuns > 1 ? `busy — ${facts.activeRuns} runs in flight` : 'busy — a run is in flight'
+      return 'busy — working in its session'
     case 'trouble':
-      return 'the last run failed'
+      return `its session is in state ${facts.homeSessionState}`
     case 'resting':
       return 'autonomous mode off — answers when asked'
     case 'conducting':

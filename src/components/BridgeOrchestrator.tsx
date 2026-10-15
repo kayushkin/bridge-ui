@@ -1,28 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
+import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
+import { fetchHomeSessionId } from './chat/useHomeSession'
 import { ProducerMarkdown, ProducerTextWithReferenceChips } from './chat/producerReferences'
-import { CostHeader, useProducerConversation, useProducerResource } from './orchestratorShared'
+import { CostHeader, useProducerResource } from './orchestratorShared'
 
-// The orchestrator's dedicated page. It is NOT a chat session — the producer is
-// a stateless-per-run runtime — so this is purpose-built rather than another
-// mounting of the chat surface: a conversation you drive (each send is one
-// `POST /run`), the runs log, the cost windows, and the injected-context
-// inspector. No git/kanban/terminal/repo/compact panes; cost is per-run and
-// additive, not an accumulating session.
+// The orchestrator's dedicated page. The orchestrator itself is an ordinary
+// llm-bridge chat session, its home session (`GET /home-session`), and you talk
+// to it there; this page links to it. What the page keeps is what a chat does
+// not show: the week's spend against the limit, the injected-context
+// inspector, and the log of the one-shot runs from before the home session.
 //
 // Ported here from dash's own `pages/Orchestrator.tsx`, which is now a thin
-// mount of this component. It was the last surface with a hand-rolled
-// `\[(session|task|todo):([^\]]+)\]` matcher and three hardcoded paths
-// (`/?session=`, `/kanban`, `/notes`) — both of which are gone: references go
-// through chat-core's chips (`./chat/producerReferences`) and every navigation
-// target comes from `routes`.
+// mount of this component. References go through chat-core's chips
+// (`./chat/producerReferences`) and every navigation target comes from
+// `routes`.
 //
-// ⚠️ Mount inside chat-core's `<ChatProvider>`. The reference chips resolve
-// their ids against llm-bridge and noteboard through its context, and chat-core
-// hooks throw without it. `BridgeProvider` is required too, for
-// `producerBasePath` and `routes`.
+// ⚠️ Mount inside chat-core's `<ChatProvider>` and a react-router router. The
+// reference chips resolve their ids against llm-bridge and noteboard through
+// chat-core's context, and its hooks throw without it. `BridgeProvider` is
+// required too, for `producerBasePath` and `routes`.
 
 export function BridgeOrchestrator(): JSX.Element {
   const { producerBasePath } = useBridgeConfig()
@@ -42,117 +41,46 @@ export function BridgeOrchestrator(): JSX.Element {
     <div className="bc-orchestrator" style={page}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>🎬 Orchestrator</h1>
-        <span style={{ fontSize: 13, opacity: 0.7 }}>
-          a stateless-per-run session manager — not a chat session
-        </span>
+        <HomeSessionLink />
         <span style={{ marginLeft: 'auto' }}>
           <CostHeader />
         </span>
       </div>
-      <Conversation />
-      <Runs />
       <ContextInspector />
+      <Runs />
     </div>
   )
 }
 
-// --- conversation + composer (each send is one /run) ------------------------
+// --- the way into the orchestrator's chat ----------------------------------
 
-function Conversation(): JSX.Element {
-  const { messages, running, error, send: sendMessage } = useProducerConversation()
-  const [draft, setDraft] = useState('')
-  const endRef = useRef<HTMLDivElement>(null)
+/** A link that opens the home session on the host's chat page, or the reason
+ *  producerd could not name it. Nothing when the host mounts no chat route. */
+function HomeSessionLink(): JSX.Element | null {
+  const { fetch: apiFetch, producerBasePath, routes } = useBridgeConfig()
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    endRef.current?.scrollIntoView()
-  }, [messages])
+    let cancelled = false
+    fetchHomeSessionId(apiFetch, producerBasePath).then(
+      (id) => { if (!cancelled) { setSessionId(id); setError(null) } },
+      (e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) },
+    )
+    return () => { cancelled = true }
+  }, [apiFetch, producerBasePath])
 
-  const send = async () => {
-    const message = draft.trim()
-    if (!message || running) return
-    setDraft('')
-    await sendMessage(message)
-  }
-
+  if (!routes.chat) return null
+  if (error) return <span style={{ color: '#ef4444', fontSize: 13 }}>home session: {error}</span>
+  if (!sessionId) return null
   return (
-    <section className="bc-orchestrator-conversation" style={card}>
-      <div style={cardHeader}>
-        Conversation <span style={{ opacity: 0.5, fontWeight: 400 }}>· each send is one run</span>
-      </div>
-      <div
-        style={{
-          maxHeight: 380,
-          overflow: 'auto',
-          padding: 12,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}
-      >
-        {messages.length === 0 && (
-          <div style={{ opacity: 0.5, fontSize: 13 }}>No conversation yet — ask the orchestrator something.</div>
-        )}
-        {messages.map((m, i) => (
-          <div
-            key={m.id + i}
-            className="bc-orchestrator-message"
-            data-role={m.role}
-            style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}
-          >
-            <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 2 }}>{m.role}</div>
-            <div
-              style={{
-                background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-surface)',
-                color: m.role === 'user' ? 'var(--accent-on,#fff)' : 'inherit',
-                border: m.role === 'user' ? 'none' : '1px solid var(--border)',
-                padding: '8px 11px',
-                borderRadius: 10,
-                fontSize: 13,
-              }}
-            >
-              {/* A prompt is echoed back exactly as it was written — verbatim,
-                  never re-interpreted as markdown, the same rule the chat
-                  surfaces follow for user turns. It still gets chips, because a
-                  trigger-injected prompt names sessions and todos too, and
-                  losing those would be losing the reader's way into them.
-                  Nothing there is expanded: an open question is something the
-                  PRODUCER is reporting, not something the user asked. */}
-              {m.role === 'user' ? (
-                <div style={{ whiteSpace: 'pre-wrap' }}>
-                  <ProducerTextWithReferenceChips text={m.content} />
-                </div>
-              ) : (
-                <ProducerMarkdown text={m.content} />
-              )}
-            </div>
-          </div>
-        ))}
-        {running && <div style={{ opacity: 0.6, fontSize: 13 }}>orchestrator running…</div>}
-        <div ref={endRef} />
-      </div>
-      {error && <div style={{ color: '#ef4444', fontSize: 12, padding: '0 12px 6px' }}>{error}</div>}
-      <div className="bc-composer" style={{ margin: 12 }}>
-        <textarea
-          className="bc-composer-input"
-          value={draft}
-          disabled={running}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              void send()
-            }
-          }}
-          placeholder="Ask the orchestrator… (Enter to send)"
-          rows={2}
-        />
-        <div className="bc-composer-actions">
-          <button className="bc-composer-btn" onClick={() => void send()} disabled={running || !draft.trim()}>
-            {running ? '…' : 'Send'}
-          </button>
-        </div>
-      </div>
-    </section>
+    <Link
+      className="bc-orchestrator-home-session-link"
+      to={`${routes.chat}?session=${encodeURIComponent(sessionId)}`}
+      style={{ fontSize: 13 }}
+    >
+      Open the orchestrator’s chat →
+    </Link>
   )
 }
 
@@ -180,7 +108,10 @@ function Runs(): JSX.Element {
   return (
     <section className="bc-orchestrator-runs" style={card}>
       <div style={cardHeader}>
-        Runs <span style={{ opacity: 0.5, fontWeight: 400 }}>· {runs.length}</span>
+        One-shot runs{' '}
+        <span style={{ opacity: 0.5, fontWeight: 400 }}>
+          · {runs.length} · history from before the home session; no new runs are added
+        </span>
       </div>
       {error && <div style={{ color: '#ef4444', fontSize: 12, padding: '6px 12px' }}>{error}</div>}
       {runs.length === 0 && !error && <div style={{ opacity: 0.5, fontSize: 13, padding: 12 }}>No runs yet.</div>}
@@ -214,7 +145,7 @@ function Runs(): JSX.Element {
   )
 }
 
-// --- context inspector (the parts the next run would be handed) -------------
+// --- context inspector (the parts producerd injects into the orchestrator) ---
 
 interface ContextVersion {
   part: string

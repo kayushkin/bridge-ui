@@ -10,6 +10,8 @@ interface ProducerConfig {
   week_remaining_usd: number
   week_start: string
   week_resets_at: string
+  /** The llm-bridge session id of the orchestrator's home session. */
+  home_session_id: string
 }
 
 export interface ProducerRowProps {
@@ -18,19 +20,23 @@ export interface ProducerRowProps {
    *  BridgeProvider. A host that proxies none should not render the row at all
    *  rather than pass an empty string — there is no path to guess. */
   producerBasePath: string
-  /** Opens the Orchestrator in the chat's workspace, in place of the thread. */
-  onOpen: () => void
-  /** Whether the Orchestrator is the view on screen. */
+  /** Opens the orchestrator's home session as a chat, the way a session row does.
+   *  The caller asks producerd for the id (`GET /home-session`) on each click —
+   *  see `useHomeSession`. */
+  onOpenHomeSession: () => void
+  /** Why the home session could not be found or opened, verbatim; shown on the row. */
+  homeSessionError: string | null
+  /** Whether the home session is the session on screen. */
   selected: boolean
 }
 
-// ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar.
-// It is deliberately self-contained: it fetches its own state from the producer
-// service (proxied at producerBasePath) using the same apiFetch the rest of the
-// sidebar uses, so it needs no new provider wiring. If the service is
-// unreachable the row still renders, showing an offline state rather than
-// breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath, onOpen, selected }: ProducerRowProps) {
+// ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar. A
+// click opens the orchestrator's home session, an ordinary llm-bridge chat
+// session. The gear panel fetches its own settings from the producer service
+// (proxied at producerBasePath) using the same apiFetch the rest of the sidebar
+// uses. If the service is unreachable the row still renders, showing an offline
+// state rather than breaking the sidebar.
+export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, homeSessionError, selected }: ProducerRowProps) {
   const [cfg, setCfg] = useState<ProducerConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -103,9 +109,9 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpen, selected }: Pr
       <div className={`bc-session-item bc-producer-row ${selected ? 'bc-session-item-selected' : ''}`}>
         <button
           className="bc-session-item-main"
-          onClick={onOpen}
+          onClick={onOpenHomeSession}
           aria-current={selected || undefined}
-          title={unreachable ? 'Orchestrator service unreachable' : 'Open the Orchestrator'}
+          title={unreachable ? 'Orchestrator service unreachable' : 'Open the orchestrator’s chat session'}
         >
           <span className="bc-session-harness bc-producer-badge" aria-hidden>🎬</span>
           <span className={`bc-producer-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
@@ -119,6 +125,12 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpen, selected }: Pr
           title="Orchestrator settings"
         >{expanded ? '▾' : '⚙'}</span>
       </div>
+
+      {homeSessionError && (
+        <div className="bc-producer-error" role="alert">
+          Cannot open the orchestrator’s session: {homeSessionError}
+        </div>
+      )}
 
       {expanded && (
         <div className="bc-producer-panel">

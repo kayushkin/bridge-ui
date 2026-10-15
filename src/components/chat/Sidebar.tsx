@@ -20,6 +20,7 @@ import { useBridgeMachines } from '../../useBridgeMachines'
 import { EditableName } from './EditableName'
 import { ProducerRow } from './ProducerRow'
 import { ConductorDock } from './ConductorDock'
+import { useHomeSession } from './useHomeSession'
 import { StatusDot } from './StatusDot'
 import { isArchivedFolder } from './bridgeAdapters'
 import {
@@ -124,10 +125,6 @@ interface SidebarProps {
   onAfterOpenSession: () => void
   /** Show the signals page in place of the thread (the inbox's "Open all"). */
   onOpenSignalsPage: () => void
-  /** Show the Orchestrator in place of the thread (the pinned row). */
-  onOpenOrchestrator: () => void
-  /** Whether the Orchestrator is the view on screen, so its row reads as selected. */
-  orchestratorOpen: boolean
   /** Show the work graph in place of the thread (the pinned row under the
    *  Orchestrator's). */
   onOpenWorkGraph: () => void
@@ -145,8 +142,6 @@ export default function Sidebar({
   onToggleCollapse,
   onAfterOpenSession,
   onOpenSignalsPage,
-  onOpenOrchestrator,
-  orchestratorOpen,
   onOpenWorkGraph,
   workGraphOpen,
   onOpenProjects,
@@ -189,6 +184,9 @@ export default function Sidebar({
     selectSession(sessionId)
     onAfterOpenSession()
   }, [selectSession, onAfterOpenSession])
+  // The orchestrator's home session, an ordinary chat session opened through the same
+  // `select` as any row; the pinned row and the conductor dock both open it.
+  const homeSession = useHomeSession(select)
   const prefetch = usePrefetch()
   const { filter, set, contentSearchReach, searching, searchError } = useFilters()
   const { newSession, archive, unarchive, rename, error: actionError } = useSessionActions()
@@ -538,7 +536,7 @@ export default function Sidebar({
           basePath={basePath}
           displayState={s.state}
           hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
-          active={!orchestratorOpen && !workGraphOpen && !projectsOpen && s.sessionId === activeId}
+          active={!workGraphOpen && !projectsOpen && s.sessionId === activeId}
           subagentCount={subagentsOf(s.sessionId).length}
           subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
           onToggleSubagents={toggleSubagents}
@@ -602,7 +600,7 @@ export default function Sidebar({
               // row the list stream keeps current, not the point-in-time fetch.
               displayState={child.state}
               hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
-              active={!orchestratorOpen && !workGraphOpen && !projectsOpen && child.sessionId === activeId}
+              active={!workGraphOpen && !projectsOpen && child.sessionId === activeId}
               // A child's own children are not drawn — see the note above on depth.
               subagentCount={0}
               subagentsExpanded={false}
@@ -909,17 +907,16 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* The pinned Orchestrator entry, between "+ New" and the search box — the same
-          slot bridge-ui's SessionList gives it, so the two sidebars read alike. It is
-          bridge-ui's own component, self-fetching against the producer proxy: the only
-          part chat owns is the mount, the path and what a click opens: the Orchestrator
-          in the workspace, in place of the thread, as a session would be. */}
+      {/* The pinned Orchestrator entry, between "+ New" and the search box. A click
+          opens the orchestrator's home session as a chat, through the same `select` a
+          session row uses; the gear panel fetches its settings from the producer proxy. */}
       {producerBasePath && (
         <ProducerRow
           apiFetch={bridgeApiFetch}
           producerBasePath={producerBasePath}
-          onOpen={onOpenOrchestrator}
-          selected={orchestratorOpen}
+          onOpenHomeSession={() => void homeSession.open()}
+          homeSessionError={homeSession.error}
+          selected={!workGraphOpen && !projectsOpen && homeSession.sessionId !== null && homeSession.sessionId === activeId}
         />
       )}
 
@@ -1174,11 +1171,16 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* The orchestrator as a conductor, pinned to the foot of the column: what it is
-          doing, what needs you, and a field to ask it something from any chat. Last in
-          the column, so the list above takes the height and this never scrolls away. */}
+      {/* The orchestrator as a conductor, pinned to the foot of the column: what its
+          home session is doing and what needs you. Last in the column, so the list
+          above takes the height and this never scrolls away. */}
       {producerBasePath && (
-        <ConductorDock onOpenOrchestrator={onOpenOrchestrator} onOpenSignalsPage={onOpenSignalsPage} />
+        <ConductorDock
+          homeSessionId={homeSession.sessionId}
+          homeSessionError={homeSession.error}
+          onOpenHomeSession={() => void homeSession.open()}
+          onOpenSignalsPage={onOpenSignalsPage}
+        />
       )}
 
       {/* The context menu lives OUTSIDE the VList: it is positioned in viewport

@@ -3,10 +3,9 @@ import type { JSX } from 'react'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
 
-// What the Orchestrator page (`BridgeOrchestrator`) and the Orchestrator thread in
-// the chat (`chat/OrchestratorThread`) both read from the producer: the fetch
-// helpers, the conversation and its send, the cost windows. One copy, so the two
-// surfaces cannot disagree about what a send does or what the week has cost.
+// What the Orchestrator page (`BridgeOrchestrator`) reads from the producer: the
+// fetch helpers and the cost header. Talking to the orchestrator happens in its home
+// session, an ordinary chat session, so nothing here sends.
 
 /** Reads a producer response, or throws with the status. Every panel surfaces
  *  what this throws — an orchestrator view that quietly shows stale numbers when
@@ -26,13 +25,8 @@ const REFRESH_MS = 20000
 /** Poll one producer endpoint, keeping whatever it last answered and the reason
  *  the latest attempt failed. Both, deliberately: a failed refresh must not blank
  *  a panel that is still showing the last good answer, and it must not be
- *  invisible either. `refreshSignal` re-reads at once when it changes, so a
- *  panel can follow a run that just finished instead of waiting for the timer. */
-export function useProducerResource<T>(
-  path: string,
-  initial: T,
-  refreshSignal: unknown = null,
-): { data: T; error: string | null } {
+ *  invisible either. */
+export function useProducerResource<T>(path: string, initial: T): { data: T; error: string | null } {
   const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
   const [data, setData] = useState<T>(initial)
   const [error, setError] = useState<string | null>(null)
@@ -51,97 +45,32 @@ export function useProducerResource<T>(
     void load()
     const timer = setInterval(() => void load(), REFRESH_MS)
     return () => clearInterval(timer)
-  }, [load, refreshSignal])
+  }, [load])
 
   return { data, error }
 }
 
-// --- the conversation (each send is one POST /run) ---------------------------
-
-export interface ProducerMessage {
-  id: string
-  role: string
-  content: string
-  tokens: number
-  at: string
-}
-
-export interface ProducerConversation {
-  messages: ProducerMessage[]
-  running: boolean
-  /** Why the last read or send failed, verbatim from the producer — the weekly
-   *  limit refusal among them. */
-  error: string | null
-  /** Counts finished sends, so a panel that shows the week's spend or the runs
-   *  log can re-read the moment a run lands. */
-  completedSends: number
-  send: (message: string) => Promise<void>
-}
-
-export function useProducerConversation(): ProducerConversation {
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
-  const [messages, setMessages] = useState<ProducerMessage[]>([])
-  const [running, setRunning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [completedSends, setCompletedSends] = useState(0)
-
-  const load = useCallback(async () => {
-    try {
-      setMessages(await producerJSON<ProducerMessage[]>(await apiFetch(`${producerBasePath}/convo`)))
-    } catch (e) {
-      setError(messageOf(e))
-    }
-  }, [apiFetch, producerBasePath])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  const send = useCallback(
-    async (message: string) => {
-      setRunning(true)
-      setError(null)
-      // Optimistic echo of what was just sent, replaced by the server's own copy
-      // when the run finishes and /convo is re-read.
-      setMessages((m) => [...m, { id: 'pending', role: 'user', content: message, tokens: 0, at: '' }])
-      try {
-        const response = await apiFetch(`${producerBasePath}/run`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, trigger: 'user' }),
-        })
-        if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as { error?: string }
-          throw new Error(body.error || `HTTP ${response.status}`)
-        }
-        await response.json()
-      } catch (e) {
-        setError(messageOf(e))
-      } finally {
-        setRunning(false)
-        setCompletedSends((n) => n + 1)
-        void load()
-      }
-    },
-    [apiFetch, producerBasePath, load],
-  )
-
-  return { messages, running, error, completedSends, send }
-}
-
-// --- cost windows (this week vs limit, dropdown for 24h / 7d / lifetime) -----
+// --- cost: this week against the limit, the home session's spend, and the
+// one-shot run history from before the home session -------------------------
 
 interface CostWindow {
   cost_usd: number
   runs: number
 }
-interface CostWindows {
-  windows: Record<string, CostWindow>
+/** `GET /cost`. */
+interface ProducerCost {
+  week_start: string
+  week_resets_at: string
   week_limit_usd: number
+  week_spent_usd: number
+  home_session: { session_id: string; spend_usd: number }
+  /** The old `windows` map, computed from the frozen log of one-shot `claude -p`
+   *  runs; no new runs are added to it. */
+  claude_p_run_history: Record<string, CostWindow>
 }
 
-export function CostHeader({ refreshSignal = null }: { refreshSignal?: unknown } = {}): JSX.Element | null {
-  const { data, error } = useProducerResource<CostWindows | null>('/cost', null, refreshSignal)
+export function CostHeader(): JSX.Element | null {
+  const { data, error } = useProducerResource<ProducerCost | null>('/cost', null)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLSpanElement | null>(null)
   useEffect(() => {
@@ -161,24 +90,32 @@ export function CostHeader({ refreshSignal = null }: { refreshSignal?: unknown }
   if (error && !data) return <span style={{ color: '#ef4444', fontSize: 12 }}>cost: {error}</span>
   if (!data) return null
 
-  const windows = data.windows
-  const week = windows.week?.cost_usd ?? 0
-  const over = data.week_limit_usd > 0 && week >= data.week_limit_usd
-  const rows: Array<[string, CostWindow | undefined]> = [
-    ['this week', windows.week],
-    ['last 24h', windows.last_24h],
-    ['last 7 days', windows.last_7d],
-    ['lifetime', windows.lifetime],
+  const over = data.week_limit_usd > 0 && data.week_spent_usd >= data.week_limit_usd
+  const history = data.claude_p_run_history
+  const historyRows: Array<[string, CostWindow | undefined]> = [
+    ['this week', history.week],
+    ['last 24h', history.last_24h],
+    ['last 7 days', history.last_7d],
+    ['lifetime', history.lifetime],
   ]
 
   return (
     <span ref={ref} className="bc-orchestrator-cost" style={{ position: 'relative', display: 'inline-block' }}>
       <button onClick={() => setOpen((o) => !o)} style={{ ...pill, color: over ? '#ef4444' : 'inherit' }}>
-        week {formatCost(week)} / {data.week_limit_usd > 0 ? formatCost(data.week_limit_usd) : 'no limit'} · {windows.week?.runs ?? 0} runs ▾
+        week {formatCost(data.week_spent_usd)} / {data.week_limit_usd > 0 ? formatCost(data.week_limit_usd) : 'no limit'} ▾
       </button>
       {open && (
         <div style={dropdown}>
-          {rows.map(([label, costWindow]) => (
+          <div style={{ display: 'flex', gap: 16, padding: '3px 4px', fontSize: 13 }}>
+            <span style={{ opacity: 0.7, minWidth: 90 }}>home session</span>
+            <span style={{ marginLeft: 'auto' }}>{formatCost(data.home_session.spend_usd)}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 16, padding: '3px 4px', fontSize: 13 }}>
+            <span style={{ opacity: 0.7, minWidth: 90 }}>week resets</span>
+            <span style={{ marginLeft: 'auto' }}>{new Date(data.week_resets_at).toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.6, padding: '8px 4px 2px' }}>one-shot run history</div>
+          {historyRows.map(([label, costWindow]) => (
             <div key={label} style={{ display: 'flex', gap: 16, padding: '3px 4px', fontSize: 13 }}>
               <span style={{ opacity: 0.7, minWidth: 90 }}>{label}</span>
               <span style={{ marginLeft: 'auto' }}>{formatCost(costWindow?.cost_usd ?? 0)}</span>

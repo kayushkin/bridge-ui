@@ -19,7 +19,6 @@ import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { SplitDragHandle } from './SplitDragHandle'
 import Sidebar from './Sidebar'
 import SignalsPage from './SignalsPage'
-import { OrchestratorThread } from './OrchestratorThread'
 import { WorkGraphView } from './WorkGraphView'
 import { ProjectsView } from './ProjectsView'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
@@ -58,10 +57,10 @@ import {
 } from './panePersistence'
 
 /** `?view=` values, each a surface drawn in place of the thread: the signals page,
- *  the Orchestrator, which the producer runs rather than llm-bridge, the work
- *  graph, each repo's commits coloured by the session that made them, and the
- *  projects (`&project=` opens one project's page). */
-const WORKSPACE_VIEWS = ['signals', 'orchestrator', 'work-graph', 'projects'] as const
+ *  the work graph, each repo's commits coloured by the session that made them, and
+ *  the projects (`&project=` opens one project's page). The orchestrator is not one:
+ *  it is an ordinary session, its home session, opened like any other. */
+const WORKSPACE_VIEWS = ['signals', 'work-graph', 'projects'] as const
 type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 function workspaceViewOf(param: string | null): WorkspaceView | null {
@@ -200,7 +199,7 @@ export function BridgeChat() {
     setSidebarCollapsed(next)
   }, [sidebarCollapsed])
 
-  // The signals page ("Needs you", opened out) or the Orchestrator takes the thread
+  // The signals page ("Needs you", opened out), the work graph or the projects take the thread
   // pane's place. It is state here, read from `?view=` once on load and written back
   // by the URL effect below, so it survives a reload and can be linked to. It sits
   // beside `?session=` rather than replacing it: the session stays active behind the
@@ -310,10 +309,6 @@ export function BridgeChat() {
     setWorkspaceView('signals')
     if (minimal) setDrawerOpen(false)
   }, [minimal, setDrawerOpen])
-  const openOrchestrator = useCallback(() => {
-    setWorkspaceView('orchestrator')
-    if (minimal) setDrawerOpen(false)
-  }, [minimal, setDrawerOpen])
   const openWorkGraph = useCallback(() => {
     setWorkspaceView('work-graph')
     if (minimal) setDrawerOpen(false)
@@ -335,8 +330,6 @@ export function BridgeChat() {
       onToggleCollapse={toggleSidebar}
       onAfterOpenSession={afterOpenSession}
       onOpenSignalsPage={openSignalsPage}
-      onOpenOrchestrator={openOrchestrator}
-      orchestratorOpen={workspaceView === 'orchestrator'}
       onOpenWorkGraph={openWorkGraph}
       workGraphOpen={workspaceView === 'work-graph'}
       onOpenProjects={openProjects}
@@ -353,8 +346,7 @@ export function BridgeChat() {
       {minimal && (
         <MinimalTopBar
           title={
-            workspaceView === 'orchestrator' ? 'Orchestrator'
-              : workspaceView === 'work-graph' ? 'Work graph'
+            workspaceView === 'work-graph' ? 'Work graph'
               : workspaceView === 'projects' ? 'Projects'
                 : activeSummary?.displayName || activeSummary?.sessionId || ''
           }
@@ -384,8 +376,6 @@ export function BridgeChat() {
               }}
               onClose={() => setWorkspaceView(null)}
             />
-          ) : workspaceView === 'orchestrator' ? (
-            <OrchestratorThread onClose={() => setWorkspaceView(null)} onOpenWorkGraph={openWorkGraph} />
           ) : workspaceView === 'projects' ? (
             <ProjectsView
               projectId={openProjectId}
