@@ -228,8 +228,10 @@
   25% { transform: translateY(-6px) rotate(-1deg) scale(1.02); opacity: 1; }
   100% { transform: translateY(-90px) rotate(-2deg) scale(0.92); opacity: 0; }
 }
+/* `data-arriving` (TurnList) marks a row on its first mount only; virtua mounts a row
+   again whenever it scrolls back into view, and the slip must not replay then. */
 @media (prefers-reduced-motion: no-preference) {
-  [data-theme="zine"] :last-child > .bc-turns-user {
+  [data-theme="zine"] .bc-turns-user[data-arriving] {
     animation: zineSlipIn 0.8s cubic-bezier(0.2, 0.8, 0.3, 1.2) 0.15s both, zineSlipGlow 1.8s ease-out 0.15s;
   }
 }
@@ -246,7 +248,7 @@
 
 /* A finished turn — the newest reply, not streaming, not an error, with the slot gone
    from the pane — gets a "done" stamp in its header. */
-[data-theme="zine"] .bc-turns-pane:not(:has(.bc-status-slot)) :last-child > .bc-turns-assistant:not(.bc-turns-streaming):not(.bc-turns-error) > .bc-turns-meta::after {
+[data-theme="zine"] .bc-turns-pane:not(:has(.bc-status-slot)) .bc-turns-assistant[data-latest]:not(.bc-turns-streaming):not(.bc-turns-error) > .bc-turns-meta::after {
   content: 'done \2713';
   display: inline-block;
   margin-left: 8px;
@@ -261,7 +263,7 @@
   transform: rotate(-6deg);
 }
 @media (prefers-reduced-motion: no-preference) {
-  [data-theme="zine"] .bc-turns-pane:not(:has(.bc-status-slot)) :last-child > .bc-turns-assistant:not(.bc-turns-streaming):not(.bc-turns-error) > .bc-turns-meta::after {
+  [data-theme="zine"] .bc-turns-pane:not(:has(.bc-status-slot)) .bc-turns-assistant[data-latest][data-arriving]:not(.bc-turns-streaming):not(.bc-turns-error) > .bc-turns-meta::after {
     animation: zineStampDone 0.4s cubic-bezier(0.34, 1.6, 0.64, 1);
   }
 }

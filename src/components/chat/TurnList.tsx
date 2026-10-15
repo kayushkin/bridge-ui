@@ -1,4 +1,5 @@
 import { Fragment,
+  cloneElement,
   isValidElement,
   memo,
   useCallback,
@@ -470,6 +471,11 @@ export default function TurnList({
         }
       }
       flushSpan()
+      // The newest row is told so, for themes that mark or animate it. CSS cannot
+      // find it with `:last-child`: virtua mounts only the rows near the viewport,
+      // so while the user is scrolled up the last MOUNTED row is some older one.
+      const newest = out[out.length - 1]
+      if (isValidElement<{ latest?: boolean }>(newest)) out[out.length - 1] = cloneElement(newest, { latest: true })
       return out
     },
     [
@@ -1256,6 +1262,32 @@ function latestStep(text: string): string {
   return ''
 }
 
+/** Row keys that have mounted at least once on this page. virtua unmounts a row
+ *  scrolled out of view and mounts it again on the way back; this is how a row
+ *  tells its first arrival from a return. */
+const rowKeysMountedBefore = new Set<string>()
+
+/** True for the whole life of a row that mounted for the first time as the newest
+ *  row: a message just sent or received, or the last one on first load. Fixed at
+ *  mount, so streaming re-renders do not restart a theme's arrival animation, and
+ *  a row mounted again after scrolling, or mounted for the first time while
+ *  scrolling up through history, does not play it at all. */
+function useArrivingRow(rowKey: string, latest: boolean): boolean {
+  const [arriving] = useState(() => latest && !rowKeysMountedBefore.has(rowKey))
+  useEffect(() => {
+    rowKeysMountedBefore.add(rowKey)
+  }, [rowKey])
+  return arriving
+}
+
+/** `data-latest` and `data-arriving` on a row, for themes (zine.css). */
+function rowMarks(latest: boolean, arriving: boolean) {
+  return {
+    'data-latest': latest ? '' : undefined,
+    'data-arriving': arriving ? '' : undefined,
+  }
+}
+
 /** One user prompt row.
  *
  *  Its own component so the flattened list has a memo boundary per row rather
@@ -1268,13 +1300,16 @@ function latestStep(text: string): string {
 const UserTurnRow = memo(function UserTurnRow({
   item,
   sourceNames,
+  latest = false,
 }: {
   item: Extract<RenderItem, { kind: 'user' }>
   sourceNames: string[]
+  latest?: boolean
 }) {
+  const arriving = useArrivingRow(item.key, latest)
   return (
     <div className={`bc-turns-item bc-turns-user ${styles.vrow}`}
-      data-entry-ids={item.entryIds.join(' ')}>
+      data-entry-ids={item.entryIds.join(' ')} {...rowMarks(latest, arriving)}>
       <div className="bc-turns-meta">
         <span className="bc-turns-actor">You</span>
         <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
@@ -1286,9 +1321,11 @@ const UserTurnRow = memo(function UserTurnRow({
 })
 
 /** A file the user shared, on the user's side of the conversation like their messages. */
-function UserFileRow({ item }: { item: Extract<RenderItem, { kind: 'file' }> }) {
+function UserFileRow({ item, latest = false }: { item: Extract<RenderItem, { kind: 'file' }>; latest?: boolean }) {
+  const arriving = useArrivingRow(item.key, latest)
   return (
-    <div className={`bc-turns-item bc-turns-user ${styles.vrow}`} data-file-id={item.file.file_id}>
+    <div className={`bc-turns-item bc-turns-user ${styles.vrow}`} data-file-id={item.file.file_id}
+      {...rowMarks(latest, arriving)}>
       <div className="bc-turns-meta">
         <span className="bc-turns-actor">You</span>
         <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
@@ -1408,6 +1445,7 @@ function SpanRow({
   markdown,
   sourceNamesForEntries,
   onActivateSessionRef,
+  latest = false,
 }: {
   segments: SpanSegment[]
   agentName: string
@@ -1415,7 +1453,9 @@ function SpanRow({
   markdown: boolean
   sourceNamesForEntries: (entryIds: string[]) => string[]
   onActivateSessionRef: (kind: string, refId: string) => void
+  latest?: boolean
 }) {
+  const arriving = useArrivingRow(`span:${segments[0]!.turnId}`, latest)
   const final = segments[segments.length - 1]!
   const intermediate = segments.slice(0, -1)
   const finalLast = [...final.items].reverse().find((it) => it.kind === 'assistant')
@@ -1436,6 +1476,7 @@ function SpanRow({
     <div
       className={`bc-turns-item bc-turns-assistant${finalSegmentHasError ? ' bc-turns-error' : ''}${streaming ? ' bc-turns-streaming' : ''} ${styles.vrow}`}
       data-entry-ids={segments.flatMap((seg) => seg.items.flatMap((it) => (it.kind === 'assistant' || it.kind === 'user' ? it.entryIds : []))).join(' ')}
+      {...rowMarks(latest, arriving)}
     >
       <div className="bc-turns-meta">
         <span className="bc-turns-actor">{agentName}</span>
