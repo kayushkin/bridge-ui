@@ -126,7 +126,7 @@ export function OrchestratorThread({ onClose, onOpenWorkGraph }: OrchestratorThr
                       <ProducerTextWithReferenceChips text={m.content} />
                     </div>
                   ) : (
-                    <ProducerMarkdown text={m.content} expandSessionsWithOpenQuestions />
+                    <ProducerMarkdown text={m.content} />
                   )}
                 </div>
               </div>

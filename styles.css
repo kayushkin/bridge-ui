@@ -5437,6 +5437,68 @@
   color: var(--error);
 }
 
+/* A session chip whose session has an open question (SessionChipOpenQuestions).
+   The `?` sits inside the pill in the warning colours the State row's
+   "question" badge uses, so the same fact looks the same in both places. The
+   question follows the chip in the text, and its answer form, once opened,
+   takes a block of its own in the flow: several chips with questions in one
+   message each push the text down rather than stack on top of each other. */
+.ref-chip-has-question {
+  border-color: var(--warning);
+}
+
+.ref-chip-question-marker {
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.ref-chip-open-questions {
+  margin-left: 4px;
+}
+
+.ref-chip-open-question-text {
+  color: var(--warning);
+}
+
+.ref-chip-open-question-label {
+  font-weight: 600;
+}
+
+.ref-chip-open-question-more {
+  color: var(--text-muted);
+}
+
+.ref-chip-answer-toggle {
+  padding: 0 6px;
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.85em;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.ref-chip-answer-form {
+  display: block;
+  margin: 4px 0 6px;
+}
+
+.ref-chip-open-questions-error {
+  margin-left: 4px;
+  color: var(--error);
+  font-size: 0.85em;
+}
+
+.ref-chip-panel-note {
+  padding: 4px 0;
+  color: var(--warning);
+}
+
 /* Full-load controls: "Load last N turns" / "Show full body" / "Open session". */
 .ref-chip-panel-actions {
   display: flex;

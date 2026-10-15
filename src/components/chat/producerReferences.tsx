@@ -3,9 +3,8 @@ import type { ComponentProps, JSX, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useNavigate } from 'react-router-dom'
-import { SIGNAL_KIND_QUESTION, parseRefChips, remarkRefChips, useOpenSignals, useResolvableIdPatterns } from '@kayushkin/chat-core'
+import { parseRefChips, remarkRefChips, useResolvableIdPatterns } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
-import { SignalRequestList } from './SessionSignals'
 import type { RefChipProps } from './RefChip'
 import { useBridgeConfig } from '../../context'
 import type { BridgeRoutes } from '../../context'
@@ -30,8 +29,9 @@ import type { BridgeRoutes } from '../../context'
 // does on every run. So:
 //
 //   - a surface INSIDE a `ChatProvider` (the `BridgeOrchestrator` page, which
-//     documents that requirement) renders chips, with the detail panel and the
-//     answer-in-place signal cards that come with them;
+//     documents that requirement) renders chips, with the detail panel and, for
+//     a session waiting on a question, the question and its answer form that
+//     every session chip carries (`SessionChipOpenQuestions`);
 //   - a surface that cannot promise one renders routes-aware links instead, and
 //     a plain span when the host mounts no such page.
 //
@@ -78,81 +78,6 @@ function useOpenReferencedSession(): ((kind: string, refId: string) => void) | u
 // Chips (require chat-core's <ChatProvider>)
 // ---------------------------------------------------------------------------
 
-interface ProducerReferenceChipProps extends RefChipProps {
-  /** Inline-expand a referenced session that is waiting on an open question —
-   *  see {@link SessionReferenceWithOpenQuestions}. */
-  expandSessionsWithOpenQuestions: boolean
-  onOpenSession?: (kind: string, refId: string) => void
-}
-
-/** One reference, as a chip. Sessions may expand inline; everything else is
- *  chat-core's chip unchanged. */
-function ProducerReferenceChip({
-  expandSessionsWithOpenQuestions,
-  onOpenSession,
-  ...chipProps
-}: ProducerReferenceChipProps): JSX.Element {
-  const kind = String(chipProps.kind ?? 'session')
-  const refId = String(chipProps.refId ?? chipProps.refid ?? '')
-
-  // The expanding variant reads the session's open signals, so it is mounted
-  // ONLY when expansion is on: a page that does not expand must not put a
-  // /signals request on the wire for every id the producer happened to mention.
-  if (kind !== 'session' || refId === '' || !expandSessionsWithOpenQuestions) {
-    return <RefChip {...chipProps} onActivate={onOpenSession} />
-  }
-  return <SessionReferenceWithOpenQuestions refId={refId} onOpenSession={onOpenSession} />
-}
-
-/**
- * A referenced session that is waiting on a human, shown already open.
- *
- * A collapsed chip hides the one thing that matters about such a session — that
- * it is blocked on a question only a person can answer — behind a click. On a
- * surface whose whole job is "what is the fleet doing", that question should be
- * on screen and answerable where it is named.
- *
- * It expands INLINE rather than by opening the chip's panel, and that is the
- * point rather than an implementation detail: the panel is a portal onto
- * `document.body`, positioned against the chip's rect, and opening several at
- * once stacks them at overlapping coordinates, each stealing the others'
- * screen space and pointer events. An inline card takes its own room in the
- * flow, so ten of them read as ten cards.
- *
- * Sessions with nothing open stay ordinary collapsed chips — this renders the
- * chip alone, with no wrapper and no empty box.
- */
-function SessionReferenceWithOpenQuestions({
-  refId,
-  onOpenSession,
-}: {
-  refId: string
-  onOpenSession?: (kind: string, refId: string) => void
-}): JSX.Element {
-  const { requests, reload } = useOpenSignals(refId)
-
-  // QUESTIONS only. A notification is something the session said, not something
-  // it is waiting on, and expanding for one would put a card in the reader's way
-  // for every routine "done" the producer mentions. The whole request GROUP is
-  // rendered once it qualifies, because the group is the unit that gets
-  // answered — dropping a notification out of a mixed group would ask half a
-  // question.
-  const openQuestionRequests = useMemo(
-    () => requests.filter((r) => r.signals.some((s) => s.kind === SIGNAL_KIND_QUESTION)),
-    [requests],
-  )
-
-  const chip = <RefChip kind="session" refId={refId} onActivate={onOpenSession} />
-  if (openQuestionRequests.length === 0) return chip
-
-  return (
-    <span className="bc-producer-ref-expanded" data-ref-kind="session" data-ref-id={refId}>
-      {chip}
-      <SignalRequestList requests={openQuestionRequests} compact onResolved={reload} />
-    </span>
-  )
-}
-
 // react-markdown types `components` over intrinsic elements only; `ref-chip` is
 // the custom hast element `remarkRefChips` emits, so the map is cast — the same
 // way `TurnsView` and dash's `TurnList` wire theirs.
@@ -182,10 +107,6 @@ function remarkPluginsFor(patterns: readonly string[] | null): MarkdownPlugins {
 export interface ProducerMarkdownProps {
   /** Producer prose — a conversation message, a run's reply. */
   text: string
-  /** Inline-expand a referenced session that has open questions. Off by
-   *  default: it costs one `/signals` read per referenced session, and only a
-   *  surface that means to be answered from wants that. */
-  expandSessionsWithOpenQuestions?: boolean
   className?: string
 }
 
@@ -196,24 +117,16 @@ export interface ProducerMarkdownProps {
  * their ids against llm-bridge and noteboard through its context, and its hooks
  * throw without it.
  */
-export function ProducerMarkdown({
-  text,
-  expandSessionsWithOpenQuestions = false,
-  className,
-}: ProducerMarkdownProps): JSX.Element {
+export function ProducerMarkdown({ text, className }: ProducerMarkdownProps): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
   const components = useMemo(
     () =>
       ({
         'ref-chip': (props: RefChipProps) => (
-          <ProducerReferenceChip
-            {...props}
-            onOpenSession={onOpenSession}
-            expandSessionsWithOpenQuestions={expandSessionsWithOpenQuestions}
-          />
+          <RefChip {...props} onActivate={onOpenSession} />
         ),
       }) as unknown as MarkdownComponents,
-    [onOpenSession, expandSessionsWithOpenQuestions],
+    [onOpenSession],
   )
   const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns())
   // `bc-turns-md` by default, and not for want of a name of its own: it is the
