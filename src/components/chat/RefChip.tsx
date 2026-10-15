@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { RefKind } from '@kayushkin/chat-core';
-import type { ManagedSessionDetail, TurnModel } from '@kayushkin/chat-core';
+import type { ManagedSessionDetail, SignalRequest, TurnModel } from '@kayushkin/chat-core';
 import type { NoteboardItem } from '@kayushkin/chat-core';
 import type { ResolvedRefMatch } from '@kayushkin/chat-core';
 import type { Project } from '@kayushkin/project-store-types';
@@ -18,7 +18,9 @@ import {
   useSessionRefTranscript,
   REF_TRANSCRIPT_TURNS,
 } from '@kayushkin/chat-core';
-import { SessionSignals } from './SessionSignals';
+import { SignalRequestList } from './SessionSignals';
+import { SessionChipOpenQuestions } from './SessionChipOpenQuestions';
+import { useOpenSignalRequestsOfSession } from './sessionsWithOpenQuestion';
 import { SessionActionInText } from './SessionActions';
 import { FileRefChip } from './FileRefChip';
 
@@ -317,10 +319,16 @@ function SessionRefChip({
 }): JSX.Element {
   const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
   const { data, error, loading } = useSessionRefDetail(refId);
+  // The one cross-session /signals read every chip and the sidebar share, not a
+  // read per chip: see `useOpenSignalRequestsOfSession`.
+  const openSignals = useOpenSignalRequestsOfSession(refId);
+  const [answerFormOpen, setAnswerFormOpen] = useState(false);
+  const hasOpenQuestion = openSignals.questionRequests.length > 0;
 
   const summary = data?.summary;
   const emoji = summary ? sessionEmoji(summary.type, summary.purpose, refId) : '💬';
   const label = summary?.displayName ? truncate(summary.displayName) : idTail(refId);
+  const name = summary?.displayName || refId;
 
   // The chip BODY opens the detail panel; navigation lives on the ↗ button beside
   // it. It used to be the other way around — body navigated, a separate ▾ caret
@@ -329,19 +337,35 @@ function SessionRefChip({
   // The body therefore matches the noteboard chip's shape (one button, inline
   // caret), and the ↗ renders only when a navigation handler exists — same rule
   // as before, an affordance never points nowhere.
+  //
+  // A session with an open question carries a `?` on the chip and its question in
+  // the text right after it (`SessionChipOpenQuestions`), answerable there. The
+  // chip and that text are siblings, not one element, so the panel still anchors
+  // to the chip alone.
   return (
-    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="session" data-ref-id={refId}>
+    <>
+    <span
+      className={`ref-chip-wrap${hasOpenQuestion ? ' ref-chip-wrap-has-question' : ''}`}
+      ref={wrapRef}
+      data-ref-kind="session"
+      data-ref-id={refId}
+    >
       <button
         type="button"
-        className={`${className ?? 'ref-chip ref-chip-session'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        className={`${className ?? 'ref-chip ref-chip-session'} ref-chip-item${open ? ' ref-chip-open' : ''}${hasOpenQuestion ? ' ref-chip-has-question' : ''}`}
         onClick={toggle}
         aria-expanded={open}
-        title={summary?.displayName || refId}
+        title={hasOpenQuestion ? `${name} — waiting on your answer` : name}
       >
         <span className="ref-chip-glyph" aria-hidden>
           {emoji}
         </span>
         <span className="ref-chip-label">{label}</span>
+        {hasOpenQuestion && (
+          <span className="ref-chip-question-marker" aria-label="has an open question">
+            ?
+          </span>
+        )}
         <span className="ref-chip-caret-inline" aria-hidden>
           ▾
         </span>
@@ -367,10 +391,37 @@ function SessionRefChip({
         >
           {loading && <div className="ref-chip-panel-loading">Loading session…</div>}
           {error && <div className="ref-chip-panel-error">Couldn’t load session: {error}</div>}
-          {data && <SessionRefPanel detail={data} refId={refId} onActivate={onActivate} />}
+          {data && (
+            <SessionRefPanel
+              detail={data}
+              refId={refId}
+              onActivate={onActivate}
+              hasOpenQuestion={hasOpenQuestion}
+              requestsWithoutQuestion={openSignals.requestsWithoutQuestion}
+              onSignalsResolved={openSignals.reload}
+            />
+          )}
         </AnchoredPanel>
       )}
     </span>
+    {/* Said, not swallowed: without the read nothing here can say whether the
+        session is waiting on you, and drawing a plain chip would say it is not. */}
+    {openSignals.error !== null && (
+      <span
+        className="ref-chip-open-questions-error"
+        title={`Couldn’t check this session for open questions: ${openSignals.error}`}
+      >
+        (couldn’t check for questions)
+      </span>
+    )}
+    <SessionChipOpenQuestions
+      sessionId={refId}
+      questionRequests={openSignals.questionRequests}
+      answerFormOpen={answerFormOpen}
+      onToggleAnswerForm={() => setAnswerFormOpen((wasOpen) => !wasOpen)}
+      onResolved={openSignals.reload}
+    />
+    </>
   );
 }
 
@@ -378,10 +429,18 @@ function SessionRefPanel({
   detail,
   refId,
   onActivate,
+  hasOpenQuestion,
+  requestsWithoutQuestion,
+  onSignalsResolved,
 }: {
   detail: ManagedSessionDetail;
   refId: string;
   onActivate?: (kind: string, refId: string) => void;
+  hasOpenQuestion: boolean;
+  /** The session's open notifications. Its questions are drawn beside the chip,
+   *  not here — see `SessionChipOpenQuestions`. */
+  requestsWithoutQuestion: readonly SignalRequest[];
+  onSignalsResolved: () => void;
 }): JSX.Element {
   const [showHistory, setShowHistory] = useState(false);
   const { summary, info } = detail;
@@ -460,13 +519,17 @@ function SessionRefPanel({
         )}
       </div>
 
-      {/* The cross-session answer: open session A's chip while working in session
-          B and answer A's open question right here. The State row's "question"
-          badge is what says one is waiting; this is where it can be dealt with.
-          Renders nothing at all when the session has no open signals, or when
-          this bridge-server predates the signals route — no wrapper element, so
-          a session with nothing waiting leaves no empty box in the panel. */}
-      <SessionSignals sessionId={detail.sessionId || refId} compact />
+      {/* A question is answered beside the chip, where it shows without a click;
+          drawing its form here too would put two live forms for one question on
+          the page. The panel keeps the session's notifications, which nothing
+          beside the chip draws. Both come from the shared cross-session read, so
+          opening a panel puts no request of its own on the wire. */}
+      {hasOpenQuestion && (
+        <div className="ref-chip-panel-note">
+          This session is waiting on your answer — it is shown beside the chip.
+        </div>
+      )}
+      <SignalRequestList requests={requestsWithoutQuestion} compact onResolved={onSignalsResolved} />
 
       {/* Mounted only while expanded, which is also what gates the fetch. */}
       {showHistory && <SessionRefTranscript refId={refId} />}

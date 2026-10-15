@@ -24,22 +24,7 @@ import { CostHeader, useProducerConversation, useProducerResource } from './orch
 // hooks throw without it. `BridgeProvider` is required too, for
 // `producerBasePath` and `routes`.
 
-export interface BridgeOrchestratorProps {
-  /**
-   * Render a referenced session that is waiting on an OPEN QUESTION as an
-   * already-expanded inline card, rather than as a collapsed chip somebody has
-   * to click. Default true: this page exists to show what the fleet is blocked
-   * on, and a blocked session is the thing it is most worth being blocked on.
-   *
-   * A host that would rather have a quiet page of uniform chips — or that has
-   * no signals route to read — passes false, and every reference stays a chip.
-   */
-  expandSessionsWithOpenQuestions?: boolean
-}
-
-export function BridgeOrchestrator({
-  expandSessionsWithOpenQuestions = true,
-}: BridgeOrchestratorProps = {}): JSX.Element {
+export function BridgeOrchestrator(): JSX.Element {
   const { producerBasePath } = useBridgeConfig()
 
   if (!producerBasePath) {
@@ -64,8 +49,8 @@ export function BridgeOrchestrator({
           <CostHeader />
         </span>
       </div>
-      <Conversation expandSessionsWithOpenQuestions={expandSessionsWithOpenQuestions} />
-      <Runs expandSessionsWithOpenQuestions={expandSessionsWithOpenQuestions} />
+      <Conversation />
+      <Runs />
       <ContextInspector />
     </div>
   )
@@ -73,11 +58,7 @@ export function BridgeOrchestrator({
 
 // --- conversation + composer (each send is one /run) ------------------------
 
-function Conversation({
-  expandSessionsWithOpenQuestions,
-}: {
-  expandSessionsWithOpenQuestions: boolean
-}): JSX.Element {
+function Conversation(): JSX.Element {
   const { messages, running, error, send: sendMessage } = useProducerConversation()
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
@@ -141,10 +122,7 @@ function Conversation({
                   <ProducerTextWithReferenceChips text={m.content} />
                 </div>
               ) : (
-                <ProducerMarkdown
-                  text={m.content}
-                  expandSessionsWithOpenQuestions={expandSessionsWithOpenQuestions}
-                />
+                <ProducerMarkdown text={m.content} />
               )}
             </div>
           </div>
@@ -195,11 +173,7 @@ interface ProducerRun {
   error?: string
 }
 
-function Runs({
-  expandSessionsWithOpenQuestions,
-}: {
-  expandSessionsWithOpenQuestions: boolean
-}): JSX.Element {
+function Runs(): JSX.Element {
   const { data: runs, error } = useProducerResource<ProducerRun[]>('/runs?limit=50', [])
   const [open, setOpen] = useState<string | null>(null)
 
@@ -228,10 +202,7 @@ function Runs({
           {open === r.id && !r.error && (
             <div style={{ padding: '0 12px 10px', fontSize: 12 }}>
               <div style={{ opacity: 0.6, margin: '4px 0' }}>you: {r.message}</div>
-              <ProducerMarkdown
-                text={r.reply}
-                expandSessionsWithOpenQuestions={expandSessionsWithOpenQuestions}
-              />
+              <ProducerMarkdown text={r.reply} />
               <div style={{ opacity: 0.5, marginTop: 6 }}>
                 {r.model} · {r.input_tokens} in / {r.output_tokens} out · {(r.duration_ms / 1000).toFixed(1)}s
               </div>
