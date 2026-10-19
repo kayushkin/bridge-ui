@@ -1,14 +1,8 @@
 import { useMemo } from 'react'
-import {
-  SIGNAL_KIND_QUESTION,
-  useOpenSignals,
-  useSessionNames,
-  type Signal,
-  type SignalRequest,
-} from '@kayushkin/chat-core'
+import { useOpenSignalsByAttention, useSessionNames, type Signal, type SignalRequest } from '@kayushkin/chat-core'
 import { SignalRequestCard } from './SignalCard'
 import { RefChip } from './RefChip'
-import { questionsFirst } from './SignalsInbox'
+import { backgroundSessionTypeLabel, signalSection } from '../../signalAttentionSections'
 import { timeAgo } from '../../utils'
 import styles from './Chat.module.css'
 
@@ -23,8 +17,10 @@ import styles from './Chat.module.css'
  * sidebar has no room for — when it was raised, by what, who it is for, the todo it
  * belongs to, and a reply triage drafted for the customer.
  *
- * Same read as the sidebar (`useOpenSignals()` with no session id), so the two share
- * one cache entry and a card answered here leaves the sidebar count too.
+ * Same read and same split as the sidebar (`useOpenSignalsByAttention()`), so the two
+ * share one cache entry and a card answered here leaves the sidebar count too. "Needs
+ * you" is the operator's (interactive and herald sessions); background agents'
+ * signals follow in a collapsed section of their own, with their own count.
  */
 export default function SignalsPage({
   onSelectSession,
@@ -35,11 +31,13 @@ export default function SignalsPage({
   /** Go back to the chat thread. */
   onClose: () => void
 }) {
-  const { signals, requests, available, loading, error, reload } = useOpenSignals()
-  const ordered = useMemo(() => questionsFirst(requests), [requests])
-  const questions = ordered.filter(holdsQuestion)
-  const notifications = ordered.filter(request => !holdsQuestion(request))
-  const sessionIds = useMemo(() => ordered.map(request => request.sessionId), [ordered])
+  const { operator, background, sessionTypeOf, available, loading, error, reload } = useOpenSignalsByAttention()
+  const needsYou = useMemo(() => signalSection(operator), [operator])
+  const backgroundSection = useMemo(() => signalSection(background), [background])
+  const sessionIds = useMemo(
+    () => [...needsYou.requests, ...backgroundSection.requests].map(request => request.sessionId),
+    [needsYou, backgroundSection],
+  )
   const sessionName = useSessionNames(sessionIds)
 
   const renderRequest = (request: SignalRequest) => (
@@ -56,6 +54,7 @@ export default function SignalsPage({
         <SignalRequestDetails
           request={request}
           sessionName={sessionName(request.sessionId)}
+          sessionTypeOf={sessionTypeOf}
           onSelectSession={onSelectSession}
         />
       }
@@ -66,7 +65,7 @@ export default function SignalsPage({
     <div className={styles.signalsPage} role="region" aria-label="Signals needing you">
       <div className={styles.signalsPageHeader}>
         <h2 className={styles.signalsPageTitle}>Needs you</h2>
-        <span className={styles.inboxCount}>{signals.length}</span>
+        <span className={styles.inboxCount}>{needsYou.signalCount}</span>
         <span className={styles.signalsPageSpacer} />
         <button type="button" className="bc-ctrl-btn" onClick={reload} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
@@ -81,31 +80,58 @@ export default function SignalsPage({
         {!available && (
           <p className={styles.signalsPageEmpty}>This bridge server has no signals route.</p>
         )}
-        {available && error === null && !loading && ordered.length === 0 && (
+        {available && error === null && !loading && needsYou.requests.length === 0 && (
           <p className={styles.signalsPageEmpty}>Nothing is waiting on you.</p>
         )}
 
-        {questions.length > 0 && (
+        {needsYou.questionRequests.length > 0 && (
           <section className={styles.signalsPageSection}>
-            <h3 className={styles.signalsPageSectionTitle}>Questions · {questions.length}</h3>
-            {questions.map(renderRequest)}
+            <h3 className={styles.signalsPageSectionTitle}>Questions · {needsYou.questionRequests.length}</h3>
+            {needsYou.questionRequests.map(renderRequest)}
           </section>
         )}
-        {notifications.length > 0 && (
+        {needsYou.notificationRequests.length > 0 && (
           <section className={styles.signalsPageSection}>
             <h3 className={styles.signalsPageSectionTitle}>
-              Notifications · {notifications.length}
+              Notifications · {needsYou.notificationRequests.length}
             </h3>
-            {notifications.map(renderRequest)}
+            {needsYou.notificationRequests.map(renderRequest)}
           </section>
+        )}
+
+        {/* Background agents' signals: listed, never counted as needing you. A
+            <details> that starts shut, so the page opens on the operator's own and the
+            background pile is one line with its count until asked for. */}
+        {backgroundSection.requests.length > 0 && (
+          <details className={styles.signalsPageBackground}>
+            <summary className={styles.signalsPageBackgroundSummary}>
+              Background agents · {backgroundSection.signalCount}
+              <span className={styles.signalsPageBackgroundNote}>
+                {' '}— autoworkers, delegates, scheduled tasks and other background sessions; not counted as
+                needing you
+              </span>
+            </summary>
+            {backgroundSection.questionRequests.length > 0 && (
+              <section className={styles.signalsPageSection}>
+                <h3 className={styles.signalsPageSectionTitle}>
+                  Questions · {backgroundSection.questionRequests.length}
+                </h3>
+                {backgroundSection.questionRequests.map(renderRequest)}
+              </section>
+            )}
+            {backgroundSection.notificationRequests.length > 0 && (
+              <section className={styles.signalsPageSection}>
+                <h3 className={styles.signalsPageSectionTitle}>
+                  Notifications · {backgroundSection.notificationRequests.length}
+                </h3>
+                {backgroundSection.notificationRequests.map(renderRequest)}
+              </section>
+            )}
+          </details>
         )}
       </div>
     </div>
   )
-}
-
-function holdsQuestion(request: SignalRequest): boolean {
-  return request.signals.some(signal => signal.kind === SIGNAL_KIND_QUESTION)
 }
 
 /**
@@ -118,10 +144,13 @@ function holdsQuestion(request: SignalRequest): boolean {
 function SignalRequestDetails({
   request,
   sessionName,
+  sessionTypeOf,
   onSelectSession,
 }: {
   request: SignalRequest
   sessionName: string
+  /** chat-core's resolver: the signal's own type, else its session row's, else ''. */
+  sessionTypeOf: (signal: Signal) => string
   onSelectSession: (sessionId: string) => void
 }) {
   const first: Signal | undefined = request.signals[0]
@@ -141,7 +170,9 @@ function SignalRequestDetails({
         </button>
         <span title={first.createdAt}>{timeAgo(first.createdAt)}</span>
         {first.source !== '' && <span>from {first.source}</span>}
-        {first.sessionType !== '' && <span>{first.sessionType} session</span>}
+        {/* Always said, and an unknown type is said to be unknown: on this page the
+            kind of session is what separates the operator's from a background agent's. */}
+        <span>{backgroundSessionTypeLabel(sessionTypeOf(first))} session</span>
         {first.audience !== '' && <span>for the {first.audience}</span>}
         {first.linkedTodoId !== '' && <RefChip kind="todo" refId={first.linkedTodoId} />}
       </div>

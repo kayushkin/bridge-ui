@@ -27,6 +27,7 @@ const SIDEBAR_COLLAPSED_KEY = chatKey('sidebar-collapsed')
 const FOLDER_COLLAPSED_KEY = chatKey('folder-collapsed')
 const FILTERS_OPEN_KEY = chatKey('filters-open')
 const INBOX_OPEN_KEY = chatKey('inbox-open')
+const BACKGROUND_INBOX_OPEN_KEY = chatKey('background-inbox-open')
 const GROUP_BY_PROJECT_KEY = chatKey('group-by-project')
 const PROJECT_GROUP_COLLAPSED_KEY = chatKey('project-group-collapsed')
 const HIDE_ARCHIVED_KEY = chatKey('hide-archived')
@@ -186,6 +187,31 @@ export function saveInboxOpen(open: boolean): void {
     store.setItem(INBOX_OPEN_KEY, String(open))
   } catch {
     // As above — losing the preference is not worth losing the interaction.
+  }
+}
+
+/** Whether the inbox's Background agents group is expanded. Defaults to CLOSED, the
+ *  opposite of "Needs you" and on purpose: these are background agents' questions and
+ *  notifications, which are not the operator's to answer, and on this host they
+ *  outnumber the operator's own several times over. Closed, the group is one line with
+ *  its count, so it is still seen. */
+export function loadBackgroundInboxOpen(): boolean {
+  const store = storage()
+  if (!store) return false
+  try {
+    return store.getItem(BACKGROUND_INBOX_OPEN_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function saveBackgroundInboxOpen(open: boolean): void {
+  const store = storage()
+  if (!store) return
+  try {
+    store.setItem(BACKGROUND_INBOX_OPEN_KEY, String(open))
+  } catch {
+    // Losing the preference is not worth losing the interaction.
   }
 }
 

@@ -6428,3 +6428,14 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
   -webkit-user-drag: none;
 }
 .bc-mc-drawer-page-active { border-color: var(--accent); color: var(--accent); }
+
+/* A background session (autoworker, delegate, system, external…) waiting on a human.
+   The state is still drawn, glyph and all, but still and grey: the pulse and the colour
+   are what say "this needs you", and it does not. Set by the chat sidebar from
+   chat-core's isOperatorSessionType. */
+.bc-status-dot.bc-status-dot-background-waiting {
+  background-color: var(--text-dim);
+  box-shadow: none;
+  opacity: 0.6;
+  animation: none;
+}

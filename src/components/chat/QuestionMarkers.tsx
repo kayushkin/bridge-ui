@@ -129,7 +129,7 @@ export function SessionQuestionMarker({
  *
  * Mounted only while its dropdown is open, which is what gates the PER-SESSION read. The
  * sidebar separately holds one cross-session read to decide which rows get a marker at all
- * (`useSessionsWithOpenQuestion`); both go through the same 30s cache in `useOpenSignals`,
+ * (`useSessionsWithOpenOperatorQuestion`); both go through the same 30s cache in `useOpenSignals`,
  * so opening a panel for a session the list already covered costs no second request.
  *
  * Uses `useOpenSignals` + `SignalRequestList` rather than `SessionSignals` for the empty

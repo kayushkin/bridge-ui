@@ -38,6 +38,35 @@ export function requestsOfSessionWithoutQuestion(
   )
 }
 
+/** A session chip's share of the open signals, split by chat-core's attention rule.
+ *
+ *  Only the operator's question groups get the chip's `?` and the Answer button
+ *  beside it. Everything else of the session — its notifications, and every group
+ *  of a background session, questions included — goes in the chip's panel, which
+ *  opens only on a click. So an autoworker's question stays answerable from its chip
+ *  without the chip claiming it needs the operator. Each group lands in exactly one
+ *  of the two. */
+export interface SessionChipSignalShares {
+  /** Drawn beside the chip with a `?`: the operator's question groups. */
+  questionRequests: SignalRequest[]
+  /** Listed in the chip's panel. */
+  panelRequests: SignalRequest[]
+}
+
+export function sessionChipSignalShares(
+  operatorRequests: readonly SignalRequest[],
+  backgroundRequests: readonly SignalRequest[],
+  sessionId: string,
+): SessionChipSignalShares {
+  return {
+    questionRequests: questionRequestsOfSession(operatorRequests, sessionId),
+    panelRequests: [
+      ...requestsOfSessionWithoutQuestion(operatorRequests, sessionId),
+      ...backgroundRequests.filter(request => request.sessionId === sessionId),
+    ],
+  }
+}
+
 /** What a chip says about its session's questions before anyone clicks: the first
  *  question's text, and how many questions there are in all. */
 export interface OpenQuestionPreview {

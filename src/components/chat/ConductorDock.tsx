@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useOpenSignals, useSessionStatus } from '@kayushkin/chat-core'
+import { useOpenSignalsByAttention, useSessionStatus } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
 import {
   conductorState,
@@ -49,7 +49,10 @@ export interface ConductorDockProps {
 
 export function ConductorDock({ homeSessionId, homeSessionError, onOpenHomeSession, onOpenSignalsPage }: ConductorDockProps) {
   const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
-  const { signals } = useOpenSignals()
+  // The operator's signals only: a background agent's question or notification never
+  // turns the conductor to `alert`. They are on the signals page, in their own group.
+  const { operator } = useOpenSignalsByAttention()
+  const signals = operator.signals
   const homeSessionStatus = useSessionStatus(homeSessionId)
   const [configReachable, setConfigReachable] = useState<boolean | null>(null)
   const [configError, setConfigError] = useState<string | null>(null)

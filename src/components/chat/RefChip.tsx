@@ -12,6 +12,7 @@ import { calendarDayOf, entryChipLabel, hostPageHref } from '../../journalRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
+  isSessionAwaitingOperator,
   useNoteboardRefDetail,
   useResolvedRef,
   useSessionRefDetail,
@@ -298,7 +299,9 @@ function sessionEmoji(type: string, purpose: string, sessionId: string): string 
   return '🔗';
 }
 
-/** The "needs a human" states, badged so a waiting question stands out. */
+/** The "needs a human" states, badged so a waiting question stands out — only on a
+ *  session the operator is to answer (`isSessionAwaitingOperator`). A background
+ *  session in the same state shows the state with no badge. */
 const STATE_BADGES: ReadonlyMap<string, string> = new Map([
   ['awaiting_user', 'question'],
   ['awaiting_permission', 'approval'],
@@ -397,7 +400,7 @@ function SessionRefChip({
               refId={refId}
               onActivate={onActivate}
               hasOpenQuestion={hasOpenQuestion}
-              requestsWithoutQuestion={openSignals.requestsWithoutQuestion}
+              panelRequests={openSignals.panelRequests}
               onSignalsResolved={openSignals.reload}
             />
           )}
@@ -430,16 +433,17 @@ function SessionRefPanel({
   refId,
   onActivate,
   hasOpenQuestion,
-  requestsWithoutQuestion,
+  panelRequests,
   onSignalsResolved,
 }: {
   detail: ManagedSessionDetail;
   refId: string;
   onActivate?: (kind: string, refId: string) => void;
   hasOpenQuestion: boolean;
-  /** The session's open notifications. Its questions are drawn beside the chip,
-   *  not here — see `SessionChipOpenQuestions`. */
-  requestsWithoutQuestion: readonly SignalRequest[];
+  /** The session's open notifications, and every open group of a background
+   *  session. The operator's questions are drawn beside the chip, not here — see
+   *  `SessionChipOpenQuestions` and `sessionChipSignalShares`. */
+  panelRequests: readonly SignalRequest[];
   onSignalsResolved: () => void;
 }): JSX.Element {
   const [showHistory, setShowHistory] = useState(false);
@@ -449,7 +453,11 @@ function SessionRefPanel({
     <>
       <div className="ref-chip-panel-title">{summary.displayName || '(untitled session)'}</div>
 
-      <RefRow label="State" value={summary.state} badge={STATE_BADGES.get(summary.state)} />
+      <RefRow
+        label="State"
+        value={summary.state}
+        badge={isSessionAwaitingOperator(summary) ? STATE_BADGES.get(summary.state) : undefined}
+      />
       <RefRow
         label="Type"
         value={summary.purpose ? `${summary.type} · ${summary.purpose}` : summary.type}
@@ -521,15 +529,15 @@ function SessionRefPanel({
 
       {/* A question is answered beside the chip, where it shows without a click;
           drawing its form here too would put two live forms for one question on
-          the page. The panel keeps the session's notifications, which nothing
-          beside the chip draws. Both come from the shared cross-session read, so
+          the page. The panel keeps the session's notifications, and a background
+          session's questions, which nothing beside the chip draws. Both come from the shared cross-session read, so
           opening a panel puts no request of its own on the wire. */}
       {hasOpenQuestion && (
         <div className="ref-chip-panel-note">
           This session is waiting on your answer — it is shown beside the chip.
         </div>
       )}
-      <SignalRequestList requests={requestsWithoutQuestion} compact onResolved={onSignalsResolved} />
+      <SignalRequestList requests={panelRequests} compact onResolved={onSignalsResolved} />
 
       {/* Mounted only while expanded, which is also what gates the fetch. */}
       {showHistory && <SessionRefTranscript refId={refId} />}

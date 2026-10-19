@@ -1,11 +1,22 @@
-import { useCallback, useMemo, useState } from 'react'
-import { SIGNAL_KIND_QUESTION, useOpenSignals, useSessionNames, type SignalRequest } from '@kayushkin/chat-core'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useOpenSignalsByAttention, useSessionNames, type Signal, type SignalRequest } from '@kayushkin/chat-core'
 import { SignalRequestCard } from './SignalCard'
-import { loadInboxOpen, saveInboxOpen } from './sidebarPersistence'
+import { loadBackgroundInboxOpen, loadInboxOpen, saveBackgroundInboxOpen, saveInboxOpen } from './sidebarPersistence'
+import { backgroundSessionTypeLabel, sessionTypeOfRequest, signalSection } from '../../signalAttentionSections'
 import styles from './Chat.module.css'
 
 /**
- * Everything waiting on a human, across every session — the sidebar's "Needs you".
+ * Everything waiting on the operator, across every session — the sidebar's "Needs you" —
+ * and, under it, a quieter "Background agents" group for everything else.
+ *
+ * ## Two groups, by session type
+ *
+ * "Needs you" holds the signals of interactive and herald sessions only, and only its
+ * count is the operator's to clear. Autoworkers, delegates, scheduled tasks, system and
+ * external sessions — and any session whose type is unknown — raise far more signals
+ * than the operator does (319 of 408 open on 2026-10-19), so they are listed apart:
+ * collapsed by default, neutral in colour, with their own count. Which group a signal
+ * is in is chat-core's rule (`useOpenSignalsByAttention`), not this component's.
  *
  * ## Why a list, when the sidebar already marks the rows
  *
@@ -26,9 +37,9 @@ import styles from './Chat.module.css'
  *
  * ## What it costs
  *
- * Nothing extra. `useOpenSignals()` with no session id is the same cross-session read
- * the sidebar already makes for `useSessionsWithOpenQuestion`, and both go through
- * one 30s cache entry keyed by `''`. Names for sessions the sidebar has not loaded
+ * Nothing extra. `useOpenSignalsByAttention()` splits the same cross-session read the
+ * sidebar already makes for `useSessionsWithOpenOperatorQuestion`, through one 30s cache
+ * entry keyed by `''`. Names for sessions the sidebar has not loaded
  * come from one batched lookup — see `useSessionNames`.
  */
 export default function SignalsInbox({
@@ -40,16 +51,20 @@ export default function SignalsInbox({
   /** Show every signal on the thread pane's full width (`SignalsPage`). */
   onOpenSignalsPage: () => void
 }) {
-  const { signals, requests, available, error, reload } = useOpenSignals()
+  const { operator, background, sessionTypeOf, available, error, reload } = useOpenSignalsByAttention()
   const [open, setOpen] = useState(loadInboxOpen)
+  const [backgroundOpen, setBackgroundOpen] = useState(loadBackgroundInboxOpen)
 
-  const ordered = useMemo(() => questionsFirst(requests), [requests])
-  // Nothing while collapsed. Names are only ever rendered on the cards, so asking for
-  // them behind a shut panel is a request for something nobody can see — and a user
-  // who keeps the inbox closed would pay it on every load. Expanding fetches them.
+  const needsYou = useMemo(() => signalSection(operator), [operator])
+  const backgroundSection = useMemo(() => signalSection(background), [background])
+  // Names only for cards that are drawn. Asking for them behind a shut panel is a
+  // request for something nobody can see.
   const sessionIds = useMemo(
-    () => (open ? ordered.map(request => request.sessionId) : []),
-    [open, ordered],
+    () => [
+      ...(open ? needsYou.requests.map(request => request.sessionId) : []),
+      ...(backgroundOpen ? backgroundSection.requests.map(request => request.sessionId) : []),
+    ],
+    [open, backgroundOpen, needsYou, backgroundSection],
   )
   const sessionName = useSessionNames(sessionIds)
 
@@ -59,105 +74,119 @@ export default function SignalsInbox({
       return !previous
     })
   }, [])
-
-  // The count is of SIGNALS, not of request groups. One AskUserQuestion call mints a
-  // row per question and they resolve together, so the groups are what you act on —
-  // but "3" next to a panel holding 5 questions reads as a miscount to anyone who
-  // then counts them.
-  const waiting = signals.length
+  const toggleBackground = useCallback(() => {
+    setBackgroundOpen(previous => {
+      saveBackgroundInboxOpen(!previous)
+      return !previous
+    })
+  }, [])
 
   // Absent rather than empty. A bridge-server with no signals route answers 404
-  // (`available === false`), which is not "nothing is waiting" — and an empty inbox
-  // with nothing in it is chrome that says only that it exists.
-  if (!available || (waiting === 0 && error === null)) return null
+  // (`available === false`), which is not "nothing is waiting".
+  if (!available) return null
+  const showNeedsYou = needsYou.signalCount > 0 || error !== null
+  const showBackground = backgroundSection.signalCount > 0
+  if (!showNeedsYou && !showBackground) return null
 
-  return (
-    <div className={styles.inbox} role="region" aria-label="Signals needing you">
-      <div className={styles.inboxHeaderRow}>
-        <button
-          type="button"
-          className={styles.inboxHeader}
-          aria-expanded={open}
-          onClick={toggle}
-        >
-          <span className={styles.inboxCaret} aria-hidden>
-            {open ? '▾' : '▸'}
-          </span>
-          <span className={styles.inboxTitle}>Needs you</span>
-          <span className={styles.inboxCount}>{waiting}</span>
-        </button>
-      </div>
-
-      {/* Reported even while collapsed, because a failed read is why the panel might
-          be short — saying so only when expanded would hide the explanation behind
-          the very control the user has no reason to touch. */}
-      {error !== null && <p className={styles.inboxError}>Couldn’t load: {error}</p>}
-
-      {open && (
-        <div className={styles.inboxBody}>
-          {/* Inside the fold rather than beside the ribbon, so the ribbon is one control
-              and the way to the page sits with the cards it shows in full. */}
+  const renderRequests = (requests: readonly SignalRequest[], label: (request: SignalRequest) => ReactNode) =>
+    requests.map(request => (
+      <SignalRequestCard
+        // A derived group has no request id, so it is keyed by its one signal's
+        // id — never by the empty string, which every derived group shares.
+        key={request.requestId || request.signals[0]?.id}
+        request={request}
+        compact
+        onResolved={reload}
+        // ⚠️ The ONE surface that offers this. A signal here belongs to a session you
+        // are not looking at and very likely cannot answer — the agent that asked has
+        // usually stopped. Without it the only way to clear the row is to open the
+        // session and answer a question that no longer matters.
+        //
+        // The chat pane deliberately does NOT pass it: there, answering IS the close.
+        allowDismissWithoutAnswer
+        header={
           <button
             type="button"
-            className={styles.inboxOpenPage}
-            title="Show every signal in full, in place of the chat"
-            onClick={onOpenSignalsPage}
+            className={styles.inboxSessionButton}
+            title="Open this session"
+            onClick={() => onSelectSession(request.sessionId)}
           >
-            Open all on the signals page
+            {label(request)}
           </button>
-          {ordered.map(request => (
-            <SignalRequestCard
-              // A derived group has no request id, so it is keyed by its one signal's
-              // id — never by the empty string, which every derived group shares.
-              key={request.requestId || request.signals[0]?.id}
-              request={request}
-              compact
-              onResolved={reload}
-              // ⚠️ The ONE surface that offers this. A signal here belongs to a
-              // session you are not looking at and very likely cannot answer — the
-              // agent that asked has usually stopped. Without it the only way to
-              // clear the row is to open the session and answer a question that no
-              // longer matters, so the inbox would fill up and stay full.
-              //
-              // The chat pane deliberately does NOT pass it: there, answering IS the
-              // close, and the session is right in front of you.
-              allowDismissWithoutAnswer
-              header={
-                <button
-                  type="button"
-                  className={styles.inboxSessionButton}
-                  title="Open this session"
-                  onClick={() => onSelectSession(request.sessionId)}
-                >
-                  {sessionName(request.sessionId)}
-                </button>
-              }
-            />
-          ))}
+        }
+      />
+    ))
+
+  return (
+    <>
+      {showNeedsYou && (
+        <div className={styles.inbox} role="region" aria-label="Signals needing you">
+          <div className={styles.inboxHeaderRow}>
+            <button type="button" className={styles.inboxHeader} aria-expanded={open} onClick={toggle}>
+              <span className={styles.inboxCaret} aria-hidden>
+                {open ? '▾' : '▸'}
+              </span>
+              <span className={styles.inboxTitle}>Needs you</span>
+              <span className={styles.inboxCount}>{needsYou.signalCount}</span>
+            </button>
+          </div>
+
+          {/* Reported even while collapsed: a failed read is why the panel might be
+              short, and saying so only when expanded would hide the reason. */}
+          {error !== null && <p className={styles.inboxError}>Couldn’t load: {error}</p>}
+
+          {open && (
+            <div className={styles.inboxBody}>
+              <button
+                type="button"
+                className={styles.inboxOpenPage}
+                title="Show every signal in full, in place of the chat"
+                onClick={onOpenSignalsPage}
+              >
+                Open all on the signals page
+              </button>
+              {renderRequests(needsYou.requests, request => sessionName(request.sessionId))}
+            </div>
+          )}
         </div>
       )}
-    </div>
+
+      {showBackground && (
+        <div className={styles.backgroundInbox} role="region" aria-label="Background agents’ signals">
+          <div className={styles.inboxHeaderRow}>
+            <button
+              type="button"
+              className={styles.backgroundInboxHeader}
+              aria-expanded={backgroundOpen}
+              onClick={toggleBackground}
+              title="Questions and notifications from autoworkers and other background sessions. Not counted as needing you."
+            >
+              <span className={styles.inboxCaret} aria-hidden>
+                {backgroundOpen ? '▾' : '▸'}
+              </span>
+              <span className={styles.inboxTitle}>Background agents</span>
+              <span className={styles.backgroundInboxCount}>{backgroundSection.signalCount}</span>
+            </button>
+          </div>
+          {backgroundOpen && (
+            <div className={styles.inboxBody}>
+              {renderRequests(backgroundSection.requests, request =>
+                backgroundCardLabel(request, sessionName, sessionTypeOf),
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   )
 }
 
-/**
- * Questions before notifications, each keeping the server's order within its kind.
- *
- * A question blocks somebody; a notification is telling you something happened. On
- * this host notifications outnumber questions two to one, so leaving them interleaved
- * by recency buries the things that actually need an answer under a list of things
- * that do not.
- *
- * Sorted rather than filtered: a notification nobody has acknowledged is still
- * waiting, and dropping it here would leave chat with no surface that shows one at
- * all.
- */
-export function questionsFirst(requests: readonly SignalRequest[]): SignalRequest[] {
-  const holdsQuestion = (request: SignalRequest): boolean =>
-    request.signals.some(signal => signal.kind === SIGNAL_KIND_QUESTION)
-  // A stable partition, not a comparator: Array.prototype.sort is only guaranteed
-  // stable in modern engines and a two-bucket split says what is meant anyway.
-  const questions = requests.filter(holdsQuestion)
-  const rest = requests.filter(request => !holdsQuestion(request))
-  return [...questions, ...rest]
+/** A background card's session line: its name and what kind of session it is, since
+ *  in this group the kind is the first thing that says whether to read it. */
+function backgroundCardLabel(
+  request: SignalRequest,
+  sessionName: (sessionId: string) => string,
+  sessionTypeOf: (signal: Signal) => string,
+): string {
+  return `${sessionName(request.sessionId)} · ${backgroundSessionTypeLabel(sessionTypeOfRequest(request, sessionTypeOf))}`
 }

@@ -23,7 +23,8 @@ export interface ConductorFacts {
   /** The home session's state as llm-bridge reports it, or null while this client
    *  does not know the session. */
   homeSessionState: string | null
-  /** Open signals across every session — the sidebar's "Needs you". */
+  /** Open signals the operator is to answer, across every session — the sidebar's
+   *  "Needs you". Background agents' signals are not counted. */
   needsYou: number
   /** Of those, the ones raised since you last opened them from the conductor. Only these
    *  make it raise the alarm: a question weeks old is waiting, not urgent. */

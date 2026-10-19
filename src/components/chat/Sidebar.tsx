@@ -38,8 +38,8 @@ import {
 import { useProjectStore } from '../../useProjectStore'
 import { groupSessionsByProject } from '../../projects'
 import { FolderQuestionRollupMarker, SessionQuestionMarker } from './QuestionMarkers'
-import { isSessionAwaitingHuman } from './sessionAwaitingHuman'
-import { useSessionsWithOpenQuestion } from './sessionsWithOpenQuestion'
+import { isAwaitingHumanState, isOperatorSessionType, isSessionAwaitingOperator } from '@kayushkin/chat-core'
+import { useSessionsWithOpenOperatorQuestion } from './sessionsWithOpenQuestion'
 import NewSessionMenu from './NewSessionMenu'
 import type { NewSessionTarget } from './useNewSessionTarget'
 import { useSelectSession } from './useSelectSession'
@@ -157,8 +157,13 @@ export default function Sidebar({
   } = useSessionList()
   // The durable half of "this session is waiting on you". Session state is the transient
   // half and cannot answer for a session that has since finished — see the hook.
-  const { sessionIds: sessionsWithOpenQuestion } = useSessionsWithOpenQuestion()
-  /** Whether a row should carry the `?`. A UNION, and both halves are load-bearing:
+  const { sessionIds: sessionsWithOpenOperatorQuestion } = useSessionsWithOpenOperatorQuestion()
+  /** Whether a row should carry the `?`. Only ever for a session that is the operator's
+   *  to answer — interactive or herald, by chat-core's one rule; a background session
+   *  (autoworker, delegate, scheduled task, system, external) never raises it, by state
+   *  or by signal, and its signals are listed in the inbox's Background agents group.
+   *
+   *  A UNION, and both halves are load-bearing:
    *
    *   - an open QUESTION signal is durable and survives the session finishing, which is
    *     the case session state cannot see;
@@ -167,10 +172,10 @@ export default function Sidebar({
    *     state, and dropping the state half would have traded one blind spot for another.
    *
    * `awaiting_user` overlaps both and is harmless in either. */
-  const waitingOnHuman = useCallback(
-    (sessionId: string, state: string) =>
-      sessionsWithOpenQuestion.has(sessionId) || isSessionAwaitingHuman(state),
-    [sessionsWithOpenQuestion],
+  const waitingOnOperator = useCallback(
+    (session: SessionSummary) =>
+      sessionsWithOpenOperatorQuestion.has(session.sessionId) || isSessionAwaitingOperator(session),
+    [sessionsWithOpenOperatorQuestion],
   )
   const { id: activeId } = useActiveSession()
   // Not chat-core's bare `select`: opening a row also records the session as its
@@ -535,7 +540,7 @@ export default function Sidebar({
           harnessInfo={harnessMap.get(s.harness)}
           basePath={basePath}
           displayState={s.state}
-          hasOpenQuestion={sessionsWithOpenQuestion.has(s.sessionId)}
+          hasOpenOperatorQuestion={sessionsWithOpenOperatorQuestion.has(s.sessionId)}
           active={!workGraphOpen && !projectsOpen && s.sessionId === activeId}
           subagentCount={subagentsOf(s.sessionId).length}
           subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
@@ -599,7 +604,7 @@ export default function Sidebar({
               // store's copy of a child where the store holds one, so this is the
               // row the list stream keeps current, not the point-in-time fetch.
               displayState={child.state}
-              hasOpenQuestion={sessionsWithOpenQuestion.has(child.sessionId)}
+              hasOpenOperatorQuestion={sessionsWithOpenOperatorQuestion.has(child.sessionId)}
               active={!workGraphOpen && !projectsOpen && child.sessionId === activeId}
               // A child's own children are not drawn — see the note above on depth.
               subagentCount={0}
@@ -625,7 +630,7 @@ export default function Sidebar({
       for (const pg of projectGroups) {
         const collapsed = collapsedProjectGroups.has(pg.key)
         const waitingCount = pg.sessions.reduce(
-          (n, s) => (!isArchivedFolder(s.folderName) && waitingOnHuman(s.sessionId, s.state) ? n + 1 : n),
+          (n, s) => (!isArchivedFolder(s.folderName) && waitingOnOperator(s) ? n + 1 : n),
           0,
         )
         out.push(
@@ -706,7 +711,7 @@ export default function Sidebar({
       const waitingCount = isArchivedFolder(folder)
         ? 0
         : sessions.reduce(
-            (n, s) => (waitingOnHuman(s.sessionId, s.state) ? n + 1 : n),
+            (n, s) => (waitingOnOperator(s) ? n + 1 : n),
             0,
           )
       out.push(
@@ -755,8 +760,8 @@ export default function Sidebar({
     archive,
     unarchive,
     rename,
-    waitingOnHuman,
-    sessionsWithOpenQuestion,
+    waitingOnOperator,
+    sessionsWithOpenOperatorQuestion,
     openFolderMenu,
     openSessionMenu,
     openQuestionSessionId,
@@ -1363,10 +1368,11 @@ interface SessionRowProps {
   /** Resolves `harnessInfo.image` (a server-relative path) to a full URL. */
   basePath: string
   displayState: string
-  /** Whether an open QUESTION signal is recorded against this session, regardless of what
-   *  the session is doing now. Resolved once for the whole list and passed down, so a
-   *  sidebar of 200 rows costs one request rather than 200. */
-  hasOpenQuestion: boolean
+  /** Whether an open QUESTION signal the operator is to answer is recorded against this
+   *  session, regardless of what the session is doing now. Always false for a background
+   *  session. Resolved once for the whole list and passed down, so a sidebar of 200 rows
+   *  costs one request rather than 200. */
+  hasOpenOperatorQuestion: boolean
   active: boolean
   /** Whether THIS row's question dropdown is the one open. The sidebar allows one at a
    *  time and owns the id, so a row is only ever told about itself. */
@@ -1401,7 +1407,7 @@ const SessionRow = memo(function SessionRow({
   harnessInfo,
   basePath,
   displayState,
-  hasOpenQuestion,
+  hasOpenOperatorQuestion,
   active,
   questionOpen,
   onSelect,
@@ -1434,10 +1440,14 @@ const SessionRow = memo(function SessionRow({
   //    deliberately does not reach past the filter to count them — a filter is the user
   //    narrowing what they want to see, and a badge that ignored it would be a second,
   //    louder list.
-  // The union — see `waitingOnHuman` in `Sidebar`. A question outlives the state that
+  // The union — see `waitingOnOperator` in `Sidebar`. A question outlives the state that
   // raised it, so `completed` and `aborted` rows keep their `?`; `awaiting_permission`
-  // mints no signal, so the state half still has to be here.
-  const awaitingHuman = !isArchived && (hasOpenQuestion || isSessionAwaitingHuman(displayState))
+  // mints no signal, so the state half still has to be here. Both halves are the
+  // operator's only: a background session's row keeps its plain status dot.
+  const awaitingHuman =
+    !isArchived &&
+    (hasOpenOperatorQuestion || isSessionAwaitingOperator({ type: session.type, state: displayState }))
+  const backgroundWaiting = !isOperatorSessionType(session.type) && isAwaitingHumanState(displayState)
 
   // A subagent that is still working. Marked explicitly rather than left to the status
   // dot, because the dot's job is the state vocabulary and this list is opened to answer
@@ -1483,7 +1493,15 @@ const SessionRow = memo(function SessionRow({
         />
       ) : (
         <span className="bc-session-status" onClick={() => onSelect(session.sessionId)}>
-          <StatusDot state={displayState} title={displayState} />
+          {/* A background session waiting on a human keeps its true state, but drawn
+              still and grey: the pulsing amber `?` is what tells the operator a row is
+              theirs, and this one is not. Its signals are in the inbox's Background
+              agents group. */}
+          <StatusDot
+            state={displayState}
+            title={backgroundWaiting ? `${displayState} (background session — not counted as needing you)` : displayState}
+            className={backgroundWaiting ? 'bc-status-dot-background-waiting' : undefined}
+          />
         </span>
       )}
       <button className="bc-session-item-main" onClick={() => onSelect(session.sessionId)}>

@@ -1,19 +1,7 @@
-/** The canonical session states that mean "this session has stopped and is waiting on a
- *  human". Both are llm-bridge's own (`msg/provider.go`); chat-core's RefChip badges the
- *  same pair as `question` / `approval`.
- *
- *  They are listed rather than pattern-matched on the string because a state that merely
- *  LOOKS like waiting — `paused`, `rate_limited` — is not something a human can answer,
- *  and a `?` opened on one would have nothing to show. */
-const AWAITING_HUMAN_STATES: ReadonlySet<string> = new Set([
-  'awaiting_user',
-  'awaiting_permission',
-])
-
-/** Whether a session's effective UI state is one a human is expected to answer. */
-export function isSessionAwaitingHuman(state: string): boolean {
-  return AWAITING_HUMAN_STATES.has(state)
-}
+// Whether a session's state puts it in the operator's queue is chat-core's rule
+// (`isSessionAwaitingOperator`: an awaiting state AND an interactive or herald session),
+// shared by every surface that marks or counts what needs the operator. Only the wording
+// lives here.
 
 /** What the marker is asking for, in the user's words rather than the wire's. Used for the
  *  accessible names, so a screen reader hears "approval" and not `awaiting_permission`. */

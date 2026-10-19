@@ -671,6 +671,8 @@
 [data-theme="zine"] .bc-status-dot-disconnected { background-image: url('./zine/status-disconnected.png'); }
 [data-theme="zine"] .bc-status-dot-empty,
 [data-theme="zine"] .bc-status-dot-placeholder { background-image: url('./zine/status-empty.png'); }
+/* a background session waiting on a human: the asking picture, held still and grey */
+[data-theme="zine"] .bc-status-dot.bc-status-dot-background-waiting { background-color: transparent; animation: none; filter: grayscale(1); opacity: 0.5; }
 @keyframes zineFrames { to { background-position: calc(var(--zine-status-frames) * -1 * var(--zine-status-size)) 0; } }
 /* the header's ring round the dot belonged to the plain dot */
 [data-theme="zine"] .bc-header .bc-status-dot { box-shadow: none; --zine-status-size: 18px; }

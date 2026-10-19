@@ -1822,6 +1822,67 @@
   color: var(--text);
 }
 
+/* ---- Background agents' signals ----
+   The inbox's second group: what autoworkers and other background sessions raised.
+   Deliberately quieter than "Needs you" — no warning tint, a neutral count — because
+   none of it is the operator's to answer; it is there to be read when wanted. */
+.backgroundInbox {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+.backgroundInboxHeader {
+  display: flex;
+  flex: 1 0 auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.backgroundInboxHeader:hover {
+  color: var(--text);
+}
+.backgroundInboxCount {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-dim) 15%, transparent);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The signals page's background section: a <details> under the operator's own. */
+.signalsPageBackground {
+  width: 100%;
+  max-width: 860px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.signalsPageBackground > .signalsPageSection {
+  margin-top: 16px;
+}
+.signalsPageBackgroundSummary {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.signalsPageBackgroundNote {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 /* ---- Group by project ---- */
 
 /* The ↗ beside a project group's name opens that project's page. Quiet until the
