@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useBridgeConfig } from '../../context'
 import type { DiscordBridgeStatus } from '@kayushkin/multichat-types'
 import { bridgedChannelsOf, DISCORD_PLATFORM } from '../../discordLog'
 import { insertAtSelection } from '../../emojiPicker'
@@ -30,6 +31,12 @@ import { useEmojiCatalog, useDailyNitroCheck } from './useEmojiCatalog'
 import { captionsForFiles, humanFileSize, pendingAttachment, type PendingAttachment } from '../../messageAttachments'
 import { filesFromPaste } from '../../sessionFileAttachments'
 import styles from './Messages.module.css'
+import {
+  conversationAddress, messagesAddressOf, MESSAGES_SHORT_NAME_NAMESPACE, MULTICHAT_ROOM_ENTITY_TYPE, roomShortNames,
+  shortNameRenameBodyOf, type RoomShortName,
+} from '../../messageShortNames'
+import type { ShortName } from '../../types-short-name-store'
+import { useShortNameStore } from './useShortNameStore'
 import { ConversationPerson } from './PersonLinks'
 
 const CONVERSATIONS_POLL_MS = 30_000
@@ -45,7 +52,9 @@ const CUSTOM_EMOJI_IN_MESSAGE_REASON =
 /**
  * Every conversation multichat's bridges carry — WhatsApp, Telegram, Signal,
  * Messenger, Discord, Slack — and one of them open to read and answer.
- * `?room=<room_id>` picks the room, so a search hit links straight to it.
+ * `/messages/<short name>` opens the room short-name-store gives that name;
+ * `?room=<room_id>` opens a room by its id, which is how a room with no name
+ * yet is addressed, and wins over the path when both are given.
  *
  * A message sent here reaches a real person on that app.
  */
@@ -65,8 +74,19 @@ export function BridgeMessageConversations() {
   const [showHidden, setShowHidden] = useState(false)
   const [visibilitySettings, setVisibilitySettings] = useState<ConversationVisibilitySettings | null>(null)
   const [visibilitySettingsError, setVisibilitySettingsError] = useState<string | null>(null)
-  const [searchParams, setSearchParams] = useSearchParams()
-  const roomID = searchParams.get('room') ?? ''
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { search } = useLocation()
+  const { routes } = useBridgeConfig()
+  const shortNameStore = useShortNameStore()
+  const { listRoomNames, resolve: resolveShortName } = shortNameStore
+  const roomParameter = searchParams.get('room') ?? ''
+  const splat = useParams()['*'] ?? ''
+  const address = useMemo(() => messagesAddressOf(splat), [splat])
+  const addressedPath = address.kind === 'path' ? address.path : ''
+  const [shortNames, setShortNames] = useState<ShortName[] | null>(null)
+  const [shortNamesError, setShortNamesError] = useState<string | null>(null)
+  const [lookup, setLookup] = useState<AddressLookup | null>(null)
 
   const reloadTags = useCallback(async () => {
     const [nextTags, contactTagMap, conversationTagMap] = await Promise.all([
@@ -155,6 +175,64 @@ export function BridgeMessageConversations() {
     return () => window.clearInterval(timer)
   }, [configured, reload])
 
+  const reloadShortNames = useCallback(async () => {
+    try {
+      setShortNames(await listRoomNames())
+      setShortNamesError(null)
+    } catch (err) {
+      setShortNamesError(errorText(err))
+    }
+  }, [listRoomNames])
+
+  useEffect(() => {
+    if (configured && shortNameStore.configured) void reloadShortNames()
+  }, [configured, shortNameStore.configured, reloadShortNames])
+
+  const roomNames = useMemo(() => roomShortNames(shortNames ?? [], links), [shortNames, links])
+  /** Current path → the room that holds it, from the list already loaded. */
+  const roomOfOwnPath = useMemo(() => {
+    const byPath = new Map<string, string>()
+    for (const [roomID, name] of roomNames) if (name.namedRoomID === roomID) byPath.set(name.path, roomID)
+    return byPath
+  }, [roomNames])
+  const pathKnown = roomOfOwnPath.has(addressedPath)
+
+  // A path the loaded list does not hold — superseded, new since the list
+  // loaded, or not a name at all — is asked of the store. A superseded name
+  // is replaced in the URL by the room's current one.
+  useEffect(() => {
+    if (!addressedPath || roomParameter || pathKnown || !shortNameStore.configured) return
+    let cancelled = false
+    setLookup({ path: addressedPath, state: 'loading' })
+    resolveShortName(addressedPath).then(answer => {
+      if (cancelled) return
+      if (answer.kind === 'missing') { setLookup({ path: addressedPath, state: 'missing' }); return }
+      const { current } = answer.resolution
+      if (current.entity_type !== MULTICHAT_ROOM_ENTITY_TYPE) {
+        setLookup({ path: addressedPath, state: 'error', error: `${MESSAGES_SHORT_NAME_NAMESPACE}/${addressedPath} names a ${current.entity_type}, not a chat.` })
+        return
+      }
+      if (current.path !== addressedPath) {
+        navigate(`${routes.messageConversations}/${current.path}${search}`, { replace: true })
+        return
+      }
+      setLookup({ path: addressedPath, state: 'found', roomID: current.entity_id })
+    }).catch(err => { if (!cancelled) setLookup({ path: addressedPath, state: 'error', error: errorText(err) }) })
+    return () => { cancelled = true }
+  }, [addressedPath, roomParameter, pathKnown, shortNameStore.configured, resolveShortName, navigate, routes.messageConversations, search])
+
+  const currentLookup = lookup && lookup.path === addressedPath && !pathKnown && !roomParameter ? lookup : null
+  const roomID = roomParameter || roomOfOwnPath.get(addressedPath) || (currentLookup?.state === 'found' ? currentLookup.roomID : '')
+
+  // An old `?room=` link to a room that now holds a name moves to the name.
+  useEffect(() => {
+    if (address.kind !== 'none' || !roomParameter) return
+    const name = roomNames.get(roomParameter)
+    if (name && name.namedRoomID === roomParameter) {
+      navigate(conversationAddress(routes.messageConversations, roomParameter, roomNames, searchParams), { replace: true })
+    }
+  }, [address.kind, roomParameter, roomNames, navigate, routes.messageConversations, searchParams])
+
   const platforms = useMemo(() => conversationPlatforms(conversations ?? []), [conversations])
   const shown = useMemo(
     () => filterConversations(conversations ?? [], tagMaps, { platform, text, tagID, showHidden }),
@@ -169,17 +247,41 @@ export function BridgeMessageConversations() {
   const picked = conversations?.find(conversation => conversation.room_id === roomID) ?? null
 
   const pick = (nextRoomID: string) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('room', nextRoomID)
-    setSearchParams(next, { replace: true })
+    navigate(conversationAddress(routes.messageConversations, nextRoomID, roomNames, searchParams), { replace: true })
   }
 
   /** Back to the list, which a narrow screen shows in place of the open room. */
   const closeRoom = () => {
     const next = new URLSearchParams(searchParams)
     next.delete('room')
-    setSearchParams(next, { replace: true })
+    const rest = next.toString()
+    navigate(rest ? `${routes.messageConversations}?${rest}` : routes.messageConversations, { replace: true })
   }
+
+  /** After a rename: the names read back, then the room opened at its new one. */
+  const renamed = async (renamedRoomID: string) => {
+    let names: ShortName[]
+    try {
+      names = await listRoomNames()
+    } catch (err) {
+      setShortNamesError(errorText(err))
+      return
+    }
+    setShortNames(names)
+    setShortNamesError(null)
+    navigate(conversationAddress(routes.messageConversations, renamedRoomID, roomShortNames(names, links), searchParams), { replace: true })
+  }
+
+  /** What the page says about the address it was given, when it opens no room. */
+  const addressNotice = (() => {
+    if (address.kind === 'too-long') return `No chat is called ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path}: a short name has at most three parts.`
+    if (address.kind !== 'path' || roomID) return null
+    if (!shortNameStore.configured) return `This host does not carry short-name-store, so ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path} cannot be looked up.`
+    if (currentLookup?.state === 'missing') return `No chat is called ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path}.`
+    if (currentLookup?.state === 'error') return `Could not look up ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path}: ${currentLookup.error}`
+    return null
+  })()
+  const lookingUp = address.kind === 'path' && !roomID && (!currentLookup || currentLookup.state === 'loading') && shortNameStore.configured
 
   if (!configured) return <MultichatNotConfigured page="Conversations" />
 
@@ -195,6 +297,8 @@ export function BridgeMessageConversations() {
       {tagsError && <pre className={styles.error}>Tags are not shown: {tagsError}</pre>}
       {linksError && <pre className={styles.error}>Linked conversations are listed apart: {linksError}</pre>}
       {visibilitySettingsError && <pre className={styles.error}>The auto-hide rule could not be read: {visibilitySettingsError}</pre>}
+      {shortNamesError && <pre className={styles.error}>Short names are not shown: {shortNamesError}</pre>}
+      {addressNotice && <pre className={styles.error} data-short-name-notice="">{addressNotice}</pre>}
       {!conversations ? (loadError ? null : <div className={styles.empty}>Loading…</div>) : (
         <div className={`${styles.columns} ${roomID ? styles.columnsRoomOpen : ''}`}>
           <div className={styles.listColumn}>
@@ -225,6 +329,7 @@ export function BridgeMessageConversations() {
                 const newest = entry.conversations[0]
                 const selected = entry.conversations.some(conversation => conversation.room_id === roomID)
                 const entryTags = [...new Map(entry.conversations.flatMap(conversation => conversationTags(conversation, tagMaps)).map(tag => [tag.id, tag])).values()]
+                const entryName = roomNames.get(newest.room_id)
                 return (
                   <li key={newest.room_id}>
                     <button type="button" data-room-id={newest.room_id} data-link-id={entry.linkID ?? undefined}
@@ -235,6 +340,7 @@ export function BridgeMessageConversations() {
                         {newest.last_activity > 0 && <span className={styles.time}>{messageTimeLabel(newest.last_activity)}</span>}
                       </span>
                       <span className={styles.rowMeta}>
+                        {entryName && <span className={styles.rowShortName}>/{entryName.path}</span>}
                         {entry.conversations.map(conversation => conversation.platform && (
                           <span key={conversation.room_id} className={styles.platform}>{conversation.platform}</span>
                         ))}
@@ -256,6 +362,9 @@ export function BridgeMessageConversations() {
             )}
             {picked ? (
               <ConversationThread key={picked.room_id} conversation={picked} onSent={() => { void reload() }}
+                shortName={shortNameStore.configured
+                  ? <ConversationShortName key={picked.room_id} roomID={picked.room_id} shown={roomNames.get(picked.room_id) ?? null} onRenamed={() => renamed(picked.room_id)} />
+                  : null}
                 tagEditor={<>
                   <ConversationVisibilityEditor conversation={picked} settings={visibilitySettings} write={writeVisibility} />
                   <ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />
@@ -264,7 +373,9 @@ export function BridgeMessageConversations() {
                 </>} />
             ) : (
               <div className={styles.empty}>
-                {roomID ? `multichat lists no conversation ${roomID}.` : 'Pick a conversation to read it here.'}
+                {roomID ? `multichat lists no conversation ${roomID}.`
+                  : lookingUp ? `Looking up ${MESSAGES_SHORT_NAME_NAMESPACE}/${addressedPath}…`
+                  : addressNotice ?? 'Pick a conversation to read it here.'}
               </div>
             )}
           </div>
@@ -274,12 +385,78 @@ export function BridgeMessageConversations() {
   )
 }
 
+/** What the store said about the path in the URL. */
+type AddressLookup =
+  | { path: string; state: 'loading' }
+  | { path: string; state: 'found'; roomID: string }
+  | { path: string; state: 'missing' }
+  | { path: string; state: 'error'; error: string }
+
+/** The room's short name as an address, `messages/kat`, and a control to give
+ *  it a new one. The store keeps the old name working and refuses one another
+ *  record holds; its refusal shows as it gave it. */
+function ConversationShortName({ roomID, shown, onRenamed }: {
+  roomID: string
+  shown: RoomShortName | null
+  onRenamed: () => Promise<void>
+}) {
+  const { create } = useShortNameStore()
+  const [editing, setEditing] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const borrowed = shown !== null && shown.namedRoomID !== roomID
+  const save = async () => {
+    const result = shortNameRenameBodyOf(roomID, typed)
+    if (!result.ok) { setError(result.error); return }
+    setBusy(true)
+    const written = await create(result.body)
+    setBusy(false)
+    if (!written.ok) { setError(written.error); return }
+    setError(null)
+    setEditing(false)
+    await onRenamed()
+  }
+  const start = () => {
+    setTyped(shown && !borrowed ? shown.path : '')
+    setError(null)
+    setEditing(true)
+  }
+  return (
+    <span className={styles.shortName} data-short-name={shown?.path ?? ''}>
+      {editing ? (
+        <form className={styles.shortNameForm} onSubmit={event => { event.preventDefault(); void save() }}>
+          <span className={styles.muted}>{MESSAGES_SHORT_NAME_NAMESPACE}/</span>
+          <input className={styles.shortNameInput} value={typed} autoFocus disabled={busy} placeholder="kat"
+            aria-label="New short name" onChange={event => setTyped(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Escape') setEditing(false) }} />
+          <button type="submit" className={styles.tagSelect} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+          <button type="button" className={styles.tagSelect} disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+        </form>
+      ) : (
+        <>
+          {shown ? (
+            <code className={styles.shortNamePath}
+              title={borrowed ? 'The name of the chat this one is linked with; it opens that chat' : 'Type this after dash.kayushkin.com/ to open this chat'}>
+              {MESSAGES_SHORT_NAME_NAMESPACE}/{shown.path}
+            </code>
+          ) : <span className={styles.muted}>No short name yet</span>}
+          <button type="button" className={styles.tagSelect} onClick={start}>{shown && !borrowed ? 'Rename' : 'Name it'}</button>
+        </>
+      )}
+      {error && <span className={styles.shortNameError}>{error}</span>}
+    </span>
+  )
+}
+
 /** One room: its messages, oldest at the top, with older pages loaded on
  *  request and the newest page polled; and the box to answer in. Keyed by room,
  *  so switching rooms starts it afresh. */
-function ConversationThread({ conversation, onSent, tagEditor }: {
+function ConversationThread({ conversation, onSent, shortName, tagEditor }: {
   conversation: MultichatConversation
   onSent: () => void
+  /** Drawn at the end of the room's header: its short name and rename control. */
+  shortName: ReactNode
   /** Drawn under the room's name. */
   tagEditor: ReactNode
 }) {
@@ -578,10 +755,10 @@ function ConversationThread({ conversation, onSent, tagEditor }: {
       }}>
       {dragging && <div className={styles.dropHint}>Drop to attach — nothing is sent until you press Send</div>}
       <div className={styles.threadBar}>
-        <span className={styles.name} title={conversation.name}>{conversationShownName(conversation)}</span>
+        <span className={styles.name} title={`${conversation.name}\nMatrix room id: ${roomID}`}>{conversationShownName(conversation)}</span>
         {conversation.platform && <span className={styles.platform}>{conversation.platform}</span>}
         <MemberList conversation={conversation} />
-        <code className={styles.roomID} title="Matrix room id">{roomID}</code>
+        {shortName}
       </div>
       {tagEditor}
       {error && <pre className={styles.error}>{error}</pre>}

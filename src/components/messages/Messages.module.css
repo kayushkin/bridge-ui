@@ -63,7 +63,18 @@ a.name:hover { text-decoration: underline; }
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; padding: 8px 10px; font-size: 0.9em;
   border-bottom: 1px solid var(--border);
 }
-.threadBar .roomID { margin-left: auto; }
+.threadBar .shortName { margin-left: auto; }
+/* The address a person types to open the room, and the control to change it. */
+.shortName { display: inline-flex; align-items: baseline; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 0; }
+.shortNamePath { font-family: var(--font-mono, monospace); font-size: 0.85em; color: var(--text-muted); }
+.shortNameForm { display: inline-flex; align-items: baseline; gap: 4px; }
+.shortNameInput {
+  font: inherit; font-family: var(--font-mono, monospace); font-size: 0.85em; width: 14ch; padding: 1px 6px;
+  color: var(--text); background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px;
+}
+.shortNameInput:focus { outline: none; border-color: var(--accent); }
+.shortNameError { flex-basis: 100%; text-align: right; font-size: 0.8em; color: var(--error); white-space: pre-wrap; }
+.rowShortName { font-family: var(--font-mono, monospace); font-size: 0.72em; color: var(--text-dim); }
 /* The member list opens over the messages rather than pushing them down. */
 .memberList { position: relative; }
 .memberList > summary { cursor: pointer; }

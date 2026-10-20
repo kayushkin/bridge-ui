@@ -104,9 +104,11 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },
-  // Messages — multichat's inbox. Conversations sits at the prefix of the
-  // other two, so its tab is `end`.
-  { route: 'messageConversations', label: 'Conversations', group: 'messages', listed: true, end: true, available: c => !!c.multichatBasePath, component: BridgeMessageConversations },
+  // Messages — multichat's inbox. Conversations owns every path under
+  // /messages that no sub-page claims: `/messages/kat` opens the chat
+  // short-name-store calls messages/kat. React Router prefers a sub-page's
+  // literal route to the splat, and `activeNavEntry` lights the longer tab.
+  { route: 'messageConversations', label: 'Conversations', group: 'messages', listed: true, routeSuffix: '/*', available: c => !!c.multichatBasePath, component: BridgeMessageConversations },
   { route: 'messageSearch', label: 'Search', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessageSearch },
   { route: 'messageContacts', label: 'Contacts', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessageContacts },
   // The Discord message log, deleted messages with their text, and the bridge's
@@ -180,6 +182,25 @@ export function navEntriesFor(config: BridgeConfig, flags: ShellFlags, hostPages
   return [...own, ...host]
 }
 
+/** Whether an entry's path covers this one: exactly, for an `end` entry,
+ *  else as itself or a prefix ending at a segment boundary. */
+function navEntryCovers(entry: { to: string; end: boolean }, pathname: string): boolean {
+  if (!entry.to) return false
+  if (entry.end) return pathname === entry.to
+  return pathname === entry.to || pathname.startsWith(entry.to.endsWith('/') ? entry.to : entry.to + '/')
+}
+
+/** The tab to light in a row: of the entries whose path covers this one, the
+ *  longest, so `/messages/search` lights Search and `/messages/kat` lights
+ *  Conversations. Null when none covers it. */
+export function activeNavEntry<T extends { to: string; end: boolean }>(pathname: string, entries: readonly T[]): T | null {
+  let best: T | null = null
+  for (const entry of entries) {
+    if (navEntryCovers(entry, pathname) && (!best || entry.to.length > best.to.length)) best = entry
+  }
+  return best
+}
+
 /** Which group the current path belongs to: the group of the page whose route
  *  is the longest prefix of the path, listed or not, so a card page lights up
  *  Work even though no tab points at it. Null when nothing matches. */
@@ -188,11 +209,5 @@ export function groupForPath(pathname: string, routes: BridgeRoutes, hostPages: 
     ...BRIDGE_PAGES.map(p => ({ to: routes[p.route], group: p.group, end: p.end ?? false })),
     ...hostPages.map(p => ({ to: p.path, group: p.group, end: p.end ?? false })),
   ]
-  let best: { group: PageGroupKey; length: number } | null = null
-  for (const c of candidates) {
-    if (!c.to) continue
-    const matches = c.end ? pathname === c.to : pathname === c.to || pathname.startsWith(c.to.endsWith('/') ? c.to : c.to + '/')
-    if (matches && (!best || c.to.length > best.length)) best = { group: c.group, length: c.to.length }
-  }
-  return best?.group ?? null
+  return activeNavEntry(pathname, candidates)?.group ?? null
 }

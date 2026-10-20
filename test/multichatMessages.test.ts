@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BRIDGE_ROUTES, type BridgeConfig } from '../src/context'
-import { groupForPath, navEntriesFor } from '../src/pages'
+import { activeNavEntry, groupForPath, navEntriesFor } from '../src/pages'
 import {
   MESSAGE_PAGE_SIZE, contactListPlatforms, contactTagAssignBody, contactTagRemovePath, contactTags, conversationMessagesPath,
   conversationPlatforms, conversationSendPath, conversationShownName, conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterContacts, filterConversations, highlightSegments,
@@ -274,12 +274,19 @@ describe('the Messages group in the registry', () => {
     expect(labelsOf('/api/multichat')).toEqual(['Conversations', 'Search', 'Contacts', 'Discord', 'Emoji', 'Auto-reactions'])
   })
 
-  it('lights up Messages on every page of it, and Conversations only on its own path', () => {
+  it('lights up Messages on every page of it, and Conversations on its own path and on a chat\'s short name', () => {
     expect(groupForPath('/messages', DEFAULT_BRIDGE_ROUTES)).toBe('messages')
     expect(groupForPath('/messages/search', DEFAULT_BRIDGE_ROUTES)).toBe('messages')
     expect(groupForPath('/messages/contacts', DEFAULT_BRIDGE_ROUTES)).toBe('messages')
-    const conversations = navEntriesFor(config('/api/multichat'), flags).find(e => e.label === 'Conversations')
-    expect(conversations?.end).toBe(true)
+    expect(groupForPath('/messages/20s30s/general', DEFAULT_BRIDGE_ROUTES)).toBe('messages')
+    const row = navEntriesFor(config('/api/multichat'), flags).filter(e => e.group === 'messages')
+    const lit = (path: string) => activeNavEntry(path, row)?.label
+    expect(lit('/messages')).toBe('Conversations')
+    expect(lit('/messages/kat')).toBe('Conversations')
+    expect(lit('/messages/20s30s/general')).toBe('Conversations')
+    expect(lit('/messages/search')).toBe('Search')
+    expect(lit('/messages/auto-reactions')).toBe('Auto-reactions')
+    expect(lit('/messagesx')).toBeUndefined()
   })
 })
 

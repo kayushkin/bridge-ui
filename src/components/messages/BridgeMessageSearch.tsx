@@ -3,6 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../../context'
 import { highlightSegments, messageTimeLabel, orderedSearchGroups, searchPath } from '../../multichatMessages'
 import type { MultichatSearchAnswer } from '../../types-multichat'
+import type { ConversationLink } from '@kayushkin/multichat-types'
+import { conversationAddress, roomShortNames, type RoomShortName } from '../../messageShortNames'
+import { useShortNameStore } from './useShortNameStore'
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured } from './messagesShared'
 import styles from './Messages.module.css'
@@ -24,6 +27,20 @@ export function BridgeMessageSearch() {
   const [answerFor, setAnswerFor] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { listRoomNames, configured: shortNamesConfigured } = useShortNameStore()
+  const [roomNames, setRoomNames] = useState<ReadonlyMap<string, RoomShortName>>(new Map())
+  const [roomNamesError, setRoomNamesError] = useState<string | null>(null)
+
+  // Each hit links to its room by short name, read once with the links that
+  // let a linked room show its partner's name.
+  useEffect(() => {
+    if (!configured || !shortNamesConfigured) return
+    let cancelled = false
+    Promise.all([listRoomNames(), read<ConversationLink[] | null>('/conversations/links')])
+      .then(([names, links]) => { if (!cancelled) setRoomNames(roomShortNames(names, links ?? [])) })
+      .catch(err => { if (!cancelled) setRoomNamesError(errorText(err)) })
+    return () => { cancelled = true }
+  }, [configured, shortNamesConfigured, listRoomNames, read])
 
   const run = async (term: string) => {
     const path = searchPath(term)
@@ -70,6 +87,7 @@ export function BridgeMessageSearch() {
         <button type="submit" className="bi-save-btn" disabled={busy || !searchPath(draft)}>{busy ? 'Searching…' : 'Search'}</button>
       </form>
       {error && <pre className={styles.error}>{error}</pre>}
+      {roomNamesError && <pre className={styles.error}>Hits link to rooms by id; short names did not load: {roomNamesError}</pre>}
       {answer && answerFor !== null && (
         <div className={styles.muted}>
           {answer.total === 0 ? `Nothing matches "${answerFor}".`
@@ -80,7 +98,7 @@ export function BridgeMessageSearch() {
         {groups.map(group => (
           <li key={group.room_id} className={styles.row} data-room-id={group.room_id}>
             <div className={styles.rowHead}>
-              <Link className={styles.name} to={`${routes.messageConversations}?${new URLSearchParams({ room: group.room_id }).toString()}`}>
+              <Link className={styles.name} to={conversationAddress(routes.messageConversations, group.room_id, roomNames)}>
                 {group.room_name}
               </Link>
               {group.platform && <span className={styles.platform}>{group.platform}</span>}

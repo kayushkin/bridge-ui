@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
-import { PAGE_GROUPS, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
+import { PAGE_GROUPS, activeNavEntry, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
 import { useMinimalChrome } from './minimal/MinimalChromeContext'
 import { ShellNavigationContext } from './shellNavigation'
 
@@ -48,6 +48,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
   const matched = groupForPath(pathname, config.routes, hostPages)
   const activeGroup: PageGroupKey | null = matched && groups.some(g => g.key === matched) ? matched : (groups[0]?.key ?? null)
   const pages: NavEntry[] = entries.filter(e => e.group === activeGroup)
+  const activePage = activeNavEntry(pathname, pages)
   const entriesKey = entries.map(e => e.to).join('|')
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the routes, not on the arrays built each render
   const shellNavigation = useMemo(() => ({ groups, entries }), [entriesKey])
@@ -95,15 +96,15 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
         </header>
         <nav ref={pageRow} className="bridge-nav bridge-nav-pages" aria-label={`${groups.find(g => g.key === activeGroup)?.label ?? ''} pages`}>
           {pages.map(t => (
-            <NavLink
+            <Link
               key={t.to}
               to={t.to}
-              end={t.end}
               draggable={false}
-              className={({ isActive }) => `bridge-tab ${isActive ? 'bridge-tab-active' : ''}`}
+              className={`bridge-tab ${t === activePage ? 'bridge-tab-active' : ''}`}
+              aria-current={t === activePage ? 'page' : undefined}
             >
               {t.label}
-            </NavLink>
+            </Link>
           ))}
         </nav>
       </>}
