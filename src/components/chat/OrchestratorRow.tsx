@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FetchFn } from '../../types'
 
-// ProducerConfig mirrors the configView the producer service returns from
+// OrchestratorConfig mirrors the configView the orchestrator service returns from
 // GET/PUT /config and POST /config/reset-week.
-export interface ProducerConfig {
+export interface OrchestratorConfig {
   enabled: boolean
   week_limit_usd: number
   week_spent_usd: number
@@ -14,14 +14,14 @@ export interface ProducerConfig {
   home_session_id: string
 }
 
-export interface ProducerRowProps {
+export interface OrchestratorRowProps {
   apiFetch: FetchFn
-  /** Where this host proxies the producer service, from `producerBasePath` on
+  /** Where this host proxies the orchestrator service, from `orchestratorBasePath` on
    *  BridgeProvider. A host that proxies none should not render the row at all
    *  rather than pass an empty string — there is no path to guess. */
-  producerBasePath: string
+  orchestratorBasePath: string
   /** Opens the orchestrator's home session as a chat, the way a session row does.
-   *  The caller asks producerd for the id (`GET /home-session`) on each click —
+   *  The caller asks orchestratord for the id (`GET /home-session`) on each click —
    *  see `useHomeSession`. */
   onOpenHomeSession: () => void
   /** Why the home session could not be found or opened, verbatim; shown on the row. */
@@ -30,43 +30,43 @@ export interface ProducerRowProps {
   selected: boolean
 }
 
-// ProducerRow is the pinned "Orchestrator" entry at the top of the sidebar. A
+// OrchestratorRow is the pinned "Orchestrator" entry at the top of the sidebar. A
 // click opens the orchestrator's home session, an ordinary llm-bridge chat
-// session. The gear panel fetches its own settings from the producer service
-// (proxied at producerBasePath) using the same apiFetch the rest of the sidebar
+// session. The gear panel fetches its own settings from the orchestrator service
+// (proxied at orchestratorBasePath) using the same apiFetch the rest of the sidebar
 // uses. If the service is unreachable the row still renders, showing an offline
 // state rather than breaking the sidebar.
-export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, homeSessionError, selected }: ProducerRowProps) {
-  const [cfg, setCfg] = useState<ProducerConfig | null>(null)
+export function OrchestratorRow({ apiFetch, orchestratorBasePath, onOpenHomeSession, homeSessionError, selected }: OrchestratorRowProps) {
+  const [cfg, setCfg] = useState<OrchestratorConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [limitDraft, setLimitDraft] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
-    apiFetch(`${producerBasePath}/config`)
+    apiFetch(`${orchestratorBasePath}/config`)
       .then(async r => {
         if (!r.ok) throw new Error(`config ${r.status}`)
-        const c: ProducerConfig = await r.json()
+        const c: OrchestratorConfig = await r.json()
         setCfg(c)
         setLimitDraft(String(c.week_limit_usd))
         setError(null)
       })
       .catch(e => setError(String(e?.message ?? e)))
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   useEffect(() => { load() }, [load])
 
   const patch = useCallback(async (body: Record<string, unknown>) => {
     setBusy(true)
     try {
-      const r = await apiFetch(`${producerBasePath}/config`, {
+      const r = await apiFetch(`${orchestratorBasePath}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       if (!r.ok) throw new Error(`save ${r.status}`)
-      const c: ProducerConfig = await r.json()
+      const c: OrchestratorConfig = await r.json()
       setCfg(c)
       setLimitDraft(String(c.week_limit_usd))
       setError(null)
@@ -75,14 +75,14 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, hom
     } finally {
       setBusy(false)
     }
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   const resetWeek = useCallback(async () => {
     setBusy(true)
     try {
-      const r = await apiFetch(`${producerBasePath}/config/reset-week`, { method: 'POST' })
+      const r = await apiFetch(`${orchestratorBasePath}/config/reset-week`, { method: 'POST' })
       if (!r.ok) throw new Error(`reset ${r.status}`)
-      const c: ProducerConfig = await r.json()
+      const c: OrchestratorConfig = await r.json()
       setCfg(c)
       setError(null)
     } catch (e) {
@@ -90,7 +90,7 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, hom
     } finally {
       setBusy(false)
     }
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   const enabled = cfg?.enabled ?? false
   const unreachable = !cfg && !!error
@@ -105,20 +105,20 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, hom
     : 0
 
   return (
-    <div className={`bc-producer ${enabled ? 'bc-producer-enabled' : ''}`}>
-      <div className={`bc-session-item bc-producer-row ${selected ? 'bc-session-item-selected' : ''}`}>
+    <div className={`bc-orchestrator ${enabled ? 'bc-orchestrator-enabled' : ''}`}>
+      <div className={`bc-session-item bc-orchestrator-row ${selected ? 'bc-session-item-selected' : ''}`}>
         <button
           className="bc-session-item-main"
           onClick={onOpenHomeSession}
           aria-current={selected || undefined}
           title={unreachable ? 'Orchestrator service unreachable' : 'Open the orchestrator’s chat session'}
         >
-          <span className="bc-session-harness bc-producer-badge" aria-hidden>🎬</span>
-          <span className={`bc-producer-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
-          <span className="bc-session-label bc-producer-label">Orchestrator</span>
+          <span className="bc-session-harness bc-orchestrator-badge" aria-hidden>🎬</span>
+          <span className={`bc-orchestrator-dot ${unreachable ? 'off' : enabled ? 'on' : 'idle'}`} />
+          <span className="bc-session-label bc-orchestrator-label">Orchestrator</span>
         </button>
         <span
-          className="bc-session-menu-btn bc-producer-caret"
+          className="bc-session-menu-btn bc-orchestrator-caret"
           role="button"
           tabIndex={0}
           onClick={() => setExpanded(x => !x)}
@@ -127,19 +127,19 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, hom
       </div>
 
       {homeSessionError && (
-        <div className="bc-producer-error" role="alert">
+        <div className="bc-orchestrator-error" role="alert">
           Cannot open the orchestrator’s session: {homeSessionError}
         </div>
       )}
 
       {expanded && (
-        <div className="bc-producer-panel">
+        <div className="bc-orchestrator-panel">
           {unreachable ? (
-            <div className="bc-producer-error">Orchestrator offline ({error})</div>
+            <div className="bc-orchestrator-error">Orchestrator offline ({error})</div>
           ) : cfg ? (
             <>
               <button
-                className={`bc-producer-enable ${enabled ? 'on' : 'off'}`}
+                className={`bc-orchestrator-enable ${enabled ? 'on' : 'off'}`}
                 disabled={busy}
                 onClick={() => patch({ enabled: !enabled })}
                 title="Autonomous mode: lets the Orchestrator run scheduled sweeps and ping you. Chatting works either way."
@@ -147,7 +147,7 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, hom
                 {enabled ? '● Autonomous mode on — click to disable' : '○ Enable autonomous mode'}
               </button>
 
-              <label className="bc-producer-limit" title="0 means no limit">
+              <label className="bc-orchestrator-limit" title="0 means no limit">
                 <span>Weekly limit&nbsp;$</span>
                 <input
                   type="number"
@@ -161,27 +161,27 @@ export function ProducerRow({ apiFetch, producerBasePath, onOpenHomeSession, hom
                 />
               </label>
 
-              <div className="bc-producer-meter">
-                <div className="bc-producer-meter-bar">
-                  <div className="bc-producer-meter-fill" style={{ width: `${pct}%` }} />
+              <div className="bc-orchestrator-meter">
+                <div className="bc-orchestrator-meter-bar">
+                  <div className="bc-orchestrator-meter-fill" style={{ width: `${pct}%` }} />
                 </div>
-                <div className="bc-producer-meter-label">
+                <div className="bc-orchestrator-meter-label">
                   ${cfg.week_spent_usd.toFixed(2)} spent · {cfg.week_limit_usd > 0
                     ? `$${cfg.week_remaining_usd.toFixed(2)} left this week`
                     : 'no weekly limit'}
                 </div>
               </div>
 
-              <div className="bc-producer-actions">
-                <span className="bc-producer-reset-note">
+              <div className="bc-orchestrator-actions">
+                <span className="bc-orchestrator-reset-note">
                   resets {new Date(cfg.week_resets_at).toLocaleDateString()}
                 </span>
-                <button className="bc-producer-reset" disabled={busy} onClick={resetWeek}>Reset week</button>
+                <button className="bc-orchestrator-reset" disabled={busy} onClick={resetWeek}>Reset week</button>
               </div>
-              {error && <div className="bc-producer-error">{error}</div>}
+              {error && <div className="bc-orchestrator-error">{error}</div>}
             </>
           ) : (
-            <div className="bc-producer-loading">Loading…</div>
+            <div className="bc-orchestrator-loading">Loading…</div>
           )}
         </div>
       )}

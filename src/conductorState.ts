@@ -1,9 +1,9 @@
 // What the chat's conductor — the orchestrator, drawn at the foot of the sidebar — is
-// doing, decided from what the producer, its home session and the signals say. Pure,
+// doing, decided from what the orchestrator, its home session and the signals say. Pure,
 // so the order of the rules is tested rather than read out of a component.
 //
 // The orchestrator is one long-lived llm-bridge session (the "home session", whose id
-// producerd hands out at `GET /home-session`). Its job is to keep the work moving, not
+// orchestratord hands out at `GET /home-session`). Its job is to keep the work moving, not
 // to do it, so its usual state is `conducting`. It is the one that raises what needs a
 // person: the open questions and permission requests every session files as signals.
 
@@ -16,7 +16,7 @@ const HOME_SESSION_BUSY_STATES: ReadonlySet<string> = new Set(['running', 'tool_
 const HOME_SESSION_TROUBLE_STATES: ReadonlySet<string> = new Set(['error', 'disconnected'])
 
 export interface ConductorFacts {
-  /** The producer answered its last call. False when it did not; null before the first. */
+  /** The orchestrator answered its last call. False when it did not; null before the first. */
   reachable: boolean | null
   /** Autonomous mode (`/config`'s `enabled`): off, the orchestrator only answers when asked. */
   enabled: boolean | null

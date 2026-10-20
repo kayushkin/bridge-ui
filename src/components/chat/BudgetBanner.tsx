@@ -3,7 +3,7 @@ import { useBudgetHalt, useManagedSession } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
 import { formatCost } from '../../utils'
 import { budgetBannerTarget } from './budgetBannerTarget'
-import type { ProducerConfig } from './ProducerRow'
+import type { OrchestratorConfig } from './OrchestratorRow'
 
 /** The surface for llm-bridge-server's spend halt: the session reached its ceiling, the
  *  server interrupted it, and every further send, resume and mode switch is refused with
@@ -33,49 +33,49 @@ import type { ProducerConfig } from './ProducerRow'
  *  The halt's own figures still win where it has them: they are the numbers as of the
  *  moment the request was refused, while the row is whatever has been persisted since.
  *
- *  On the producer's home session the box edits the producer's weekly limit instead of
- *  the session ceiling, because the producer rewrites that ceiling from the limit at the
- *  start of every turn (`budgetBannerTarget`). The banner asks the producer's
+ *  On the orchestrator's home session the box edits the orchestrator's weekly limit instead of
+ *  the session ceiling, because the orchestrator rewrites that ceiling from the limit at the
+ *  start of every turn (`budgetBannerTarget`). The banner asks the orchestrator's
  *  `GET /config` which session is its home, only while a halt is showing. */
 export default function BudgetBanner({ sessionId }: { sessionId: string | null }) {
   const { halt, raiseCeiling, recheck } = useBudgetHalt(sessionId)
   const { session: managed } = useManagedSession(sessionId)
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
+  const { fetch: apiFetch, orchestratorBasePath } = useBridgeConfig()
   const halted = halt !== null
-  const [producerConfig, setProducerConfig] = useState<ProducerConfig | null>(null)
-  const [producerError, setProducerError] = useState<string | null>(null)
-  const [producerAnswered, setProducerAnswered] = useState(!producerBasePath)
+  const [orchestratorConfig, setOrchestratorConfig] = useState<OrchestratorConfig | null>(null)
+  const [orchestratorError, setOrchestratorError] = useState<string | null>(null)
+  const [orchestratorAnswered, setOrchestratorAnswered] = useState(!orchestratorBasePath)
 
-  const loadProducerConfig = useCallback(async () => {
+  const loadOrchestratorConfig = useCallback(async () => {
     try {
-      const response = await apiFetch(`${producerBasePath}/config`)
-      if (!response.ok) throw new Error(`producer /config: HTTP ${response.status}`)
-      setProducerConfig((await response.json()) as ProducerConfig)
-      setProducerError(null)
+      const response = await apiFetch(`${orchestratorBasePath}/config`)
+      if (!response.ok) throw new Error(`orchestrator /config: HTTP ${response.status}`)
+      setOrchestratorConfig((await response.json()) as OrchestratorConfig)
+      setOrchestratorError(null)
     } catch (e) {
-      setProducerError(e instanceof Error ? e.message : String(e))
+      setOrchestratorError(e instanceof Error ? e.message : String(e))
     } finally {
-      setProducerAnswered(true)
+      setOrchestratorAnswered(true)
     }
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   useEffect(() => {
-    if (halted && producerBasePath) void loadProducerConfig()
-  }, [halted, producerBasePath, loadProducerConfig])
+    if (halted && orchestratorBasePath) void loadOrchestratorConfig()
+  }, [halted, orchestratorBasePath, loadOrchestratorConfig])
 
   // A ceiling of ZERO means no ceiling, so it is not a figure to fall back to — a banner
   // reading "$3.00 of its $0.00 ceiling" describes a session that cannot exist.
   const rowCeiling = managed?.maxBudgetUsd
   const spendUSD = halt?.spendUSD ?? managed?.spendUsd
   const maxBudgetUSD = halt?.maxBudgetUSD ?? (rowCeiling !== undefined && rowCeiling > 0 ? rowCeiling : undefined)
-  const target = budgetBannerTarget(sessionId, producerConfig, { maxBudgetUSD, spendUSD })
+  const target = budgetBannerTarget(sessionId, orchestratorConfig, { maxBudgetUSD, spendUSD })
 
   // Seed the input from the figure that was breached, so the user edits a real number
   // rather than an empty box.
   const seed = target.current !== undefined && target.current > 0 ? String(target.current) : ''
   // A halt is identified by its session AND its figures: raising the ceiling and hitting
   // the new one later is a different halt on the same session, and it has to re-seed.
-  // The target is part of it too, since the producer's answer can arrive after the halt.
+  // The target is part of it too, since the orchestrator's answer can arrive after the halt.
   const haltKey = halt ? `${halt.sessionId}:${maxBudgetUSD ?? ''}:${spendUSD ?? ''}:${target.kind}:${target.current ?? ''}` : null
 
   const [nextCeiling, setNextCeiling] = useState(seed)
@@ -102,22 +102,22 @@ export default function BudgetBanner({ sessionId }: { sessionId: string | null }
   // less than letting the server prove it.
   const spent = target.spent
   const tooLow = valid && spent !== undefined && parsed <= spent
-  // Until the producer answers, the banner cannot know which number the box edits.
-  const canSubmit = valid && !tooLow && !submitting && producerAnswered
+  // Until the orchestrator answers, the banner cannot know which number the box edits.
+  const canSubmit = valid && !tooLow && !submitting && orchestratorAnswered
 
   const raiseWeeklyLimit = async (weekLimitUSD: number): Promise<string | null> => {
     try {
-      const response = await apiFetch(`${producerBasePath}/config`, {
+      const response = await apiFetch(`${orchestratorBasePath}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ week_limit_usd: weekLimitUSD }),
       })
       const body = await response.json().catch(() => null)
-      // A 502 means the limit was saved but the producer could not move the ceiling;
+      // A 502 means the limit was saved but the orchestrator could not move the ceiling;
       // its body says so and carries the saved config.
-      if (body?.config) setProducerConfig(body.config as ProducerConfig)
-      else if (response.ok && body) setProducerConfig(body as ProducerConfig)
-      if (!response.ok) return body?.error ?? `producer /config: HTTP ${response.status}`
+      if (body?.config) setOrchestratorConfig(body.config as OrchestratorConfig)
+      else if (response.ok && body) setOrchestratorConfig(body as OrchestratorConfig)
+      if (!response.ok) return body?.error ?? `orchestrator /config: HTTP ${response.status}`
     } catch (e) {
       return e instanceof Error ? e.message : String(e)
     }
@@ -143,8 +143,8 @@ export default function BudgetBanner({ sessionId }: { sessionId: string | null }
         {target.kind === 'weekly-limit' ? (
           <>
             The orchestrator has spent <strong>{formatCost(target.spent)}</strong> this week
-            against the producer's <strong>{formatCost(target.current)}</strong> weekly limit, so
-            the producer holds this session at what it has spent. Raise the weekly limit to let it
+            against the orchestrator's <strong>{formatCost(target.current)}</strong> weekly limit, so
+            the orchestrator holds this session at what it has spent. Raise the weekly limit to let it
             continue; the week resets {new Date(target.resetsAt).toLocaleDateString()}.
           </>
         ) : spendUSD !== undefined && maxBudgetUSD !== undefined && maxBudgetUSD > 0 ? (
@@ -182,7 +182,7 @@ export default function BudgetBanner({ sessionId }: { sessionId: string | null }
           title={tooLow && spent !== undefined
             ? `Must be above the ${formatCost(spent)} already spent`
             : target.kind === 'weekly-limit'
-              ? 'Raise the producer’s weekly limit and let the orchestrator continue'
+              ? 'Raise the orchestrator’s weekly limit and let the orchestrator continue'
               : 'Raise this session’s ceiling and let it continue'}
         >
           {submitting ? 'Raising…' : target.kind === 'weekly-limit' ? 'Raise weekly limit' : 'Raise ceiling'}
@@ -193,10 +193,10 @@ export default function BudgetBanner({ sessionId }: { sessionId: string | null }
           </span>
         )}
       </div>
-      {producerError && (
+      {orchestratorError && (
         <div className="bc-budget-banner-failure">
-          Could not ask the producer whether it sets this session’s ceiling, so the box edits the
-          session ceiling, which the producer overwrites on its home session: {producerError}
+          Could not ask the orchestrator whether it sets this session’s ceiling, so the box edits the
+          session ceiling, which the orchestrator overwrites on its home session: {orchestratorError}
         </div>
       )}
       {failure && (

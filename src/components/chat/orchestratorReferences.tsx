@@ -9,12 +9,12 @@ import type { RefChipProps } from './RefChip'
 import { useBridgeConfig } from '../../context'
 import type { BridgeRoutes } from '../../context'
 
-// How producer (orchestrator) text gets its `[session:…]` / `[todo:…]` /
+// How orchestrator text gets its `[session:…]` / `[todo:…]` /
 // `[note:…]` / `[task:…]` references rendered.
 //
 // The GRAMMAR lives in exactly one place for every surface here:
 // `@kayushkin/chat-core`'s `parseRefChips` / `remarkRefChips`, which understand
-// the producer's bracket dialect natively — each token matches whole, brackets
+// the orchestrator's bracket dialect natively — each token matches whole, brackets
 // consumed, and `[task:…]` resolves as kind `todo` because a kanban card id IS
 // a noteboard item id. Two hand-rolled `\[(session|task|todo):([^\]]+)\]`
 // copies used to live in this package (the orchestrator page's and this pane's)
@@ -25,7 +25,7 @@ import type { BridgeRoutes } from '../../context'
 // they read `ChatProvider`'s context and THROW ("chat-core hooks must be used
 // inside <ChatProvider>") when there is none above them. A host that mounts
 // `OrchestratorPanel` under `BridgeProvider` alone — with no `ChatProvider` — would
-// take the whole page down the first time the producer wrote a session id, which it
+// take the whole page down the first time the orchestrator wrote a session id, which it
 // does on every run. So:
 //
 //   - a surface INSIDE a `ChatProvider` (the `BridgeOrchestrator` page, which
@@ -104,20 +104,20 @@ function remarkPluginsFor(patterns: readonly string[] | null): MarkdownPlugins {
   return plugins
 }
 
-export interface ProducerMarkdownProps {
-  /** Producer prose — a conversation message, a run's reply. */
+export interface OrchestratorMarkdownProps {
+  /** Orchestrator prose — a conversation message, a run's reply. */
   text: string
   className?: string
 }
 
 /**
- * Producer prose as markdown, with every reference rendered as a chat-core chip.
+ * Orchestrator prose as markdown, with every reference rendered as a chat-core chip.
  *
  * ⚠️ Must be mounted inside chat-core's `<ChatProvider>` — the chips resolve
  * their ids against llm-bridge and noteboard through its context, and its hooks
  * throw without it.
  */
-export function ProducerMarkdown({ text, className }: ProducerMarkdownProps): JSX.Element {
+export function OrchestratorMarkdown({ text, className }: OrchestratorMarkdownProps): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
   const components = useMemo(
     () =>
@@ -131,11 +131,11 @@ export function ProducerMarkdown({ text, className }: ProducerMarkdownProps): JS
   const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns())
   // `bc-turns-md` by default, and not for want of a name of its own: it is the
   // markdown normalization this package's stylesheet already ships (first/last
-  // child margins, list indents, code and table rules), and producer prose is
+  // child margins, list indents, code and table rules), and orchestrator prose is
   // the same prose. A private class would have meant either shipping CSS from a
   // component or leaving every host to re-derive those rules.
   return (
-    <div className={className ?? 'bc-producer-md bc-turns-md'}>
+    <div className={className ?? 'bc-orchestrator-md bc-turns-md'}>
       <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
         {text}
       </ReactMarkdown>
@@ -144,7 +144,7 @@ export function ProducerMarkdown({ text, className }: ProducerMarkdownProps): JS
 }
 
 /**
- * Producer text kept VERBATIM, with its references as chat-core chips.
+ * Orchestrator text kept VERBATIM, with its references as chat-core chips.
  *
  * For the injected-context dump, which is a payload rather than prose: its
  * indentation, blank lines and bullet glyphs are what the model will actually
@@ -152,9 +152,9 @@ export function ProducerMarkdown({ text, className }: ProducerMarkdownProps): JS
  * markdown) and every character between the references survives to the DOM.
  * Renders inline, so the caller decides the block — a `<pre>`, usually.
  *
- * ⚠️ Same `<ChatProvider>` requirement as {@link ProducerMarkdown}.
+ * ⚠️ Same `<ChatProvider>` requirement as {@link OrchestratorMarkdown}.
  */
-export function ProducerTextWithReferenceChips({ text }: { text: string }): JSX.Element {
+export function OrchestratorTextWithReferenceChips({ text }: { text: string }): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
   const resolvableIdPatterns = useResolvableIdPatterns()
   const segments = useMemo(() => parseRefChips(text, { resolvableIdPatterns }), [text, resolvableIdPatterns])
@@ -181,14 +181,14 @@ export function ProducerTextWithReferenceChips({ text }: { text: string }): JSX.
 // ---------------------------------------------------------------------------
 
 /**
- * Producer text kept verbatim, with its references as routes-aware links.
+ * Orchestrator text kept verbatim, with its references as routes-aware links.
  *
  * The presentation for a surface that cannot promise a `ChatProvider` above it
  * (see this file's header). A reference whose target page this host does not
  * mount renders as a plain span, never as a link to a route that would 404 or
  * silently reload the current page.
  */
-export function ProducerTextWithReferenceLinks({ text }: { text: string }): ReactNode {
+export function OrchestratorTextWithReferenceLinks({ text }: { text: string }): ReactNode {
   const { routes } = useBridgeConfig()
   const segments = useMemo(() => parseRefChips(text), [text])
   return (
@@ -199,7 +199,7 @@ export function ProducerTextWithReferenceLinks({ text }: { text: string }): Reac
         return href ? (
           <a
             key={i}
-            className="bc-producer-ref-link"
+            className="bc-orchestrator-ref-link"
             href={href}
             data-ref-kind={segment.kind}
             data-ref-id={segment.refId}
@@ -210,7 +210,7 @@ export function ProducerTextWithReferenceLinks({ text }: { text: string }): Reac
         ) : (
           <span
             key={i}
-            className="bc-producer-ref-plain"
+            className="bc-orchestrator-ref-plain"
             data-ref-kind={segment.kind}
             data-ref-id={segment.refId}
           >

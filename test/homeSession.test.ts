@@ -11,17 +11,17 @@ function answering(status: number, body: unknown) {
 }
 
 describe('fetchHomeSessionId', () => {
-  it('asks producerd for the home session and returns its id', async () => {
+  it('asks orchestratord for the home session and returns its id', async () => {
     const { fetch, asked } = answering(200, { session_id: 'br_home' })
-    expect(await fetchHomeSessionId(fetch, '/api/producer')).toBe('br_home')
-    expect(asked).toEqual(['/api/producer/home-session'])
+    expect(await fetchHomeSessionId(fetch, '/api/orchestrator')).toBe('br_home')
+    expect(asked).toEqual(['/api/orchestrator/home-session'])
   })
-  it('throws producerd’s own reason on a 502', async () => {
+  it('throws orchestratord’s own reason on a 502', async () => {
     const { fetch } = answering(502, { error: 'llm-bridge refused the session' })
-    await expect(fetchHomeSessionId(fetch, '/api/producer')).rejects.toThrow('llm-bridge refused the session')
+    await expect(fetchHomeSessionId(fetch, '/api/orchestrator')).rejects.toThrow('llm-bridge refused the session')
   })
   it('throws on a 200 that names no session', async () => {
     const { fetch } = answering(200, {})
-    await expect(fetchHomeSessionId(fetch, '/api/producer')).rejects.toThrow('names no session_id')
+    await expect(fetchHomeSessionId(fetch, '/api/orchestrator')).rejects.toThrow('names no session_id')
   })
 })

@@ -38,10 +38,10 @@ export interface BridgeProviderProps {
   /** Base path for llm-bridge-adapter API. If omitted, bus_session links can't
    * resolve to a bridge_id and the chat button on those cards stays disabled. */
   bridgeAdapterBasePath?: string
-  /** Base path for the producer (orchestrator) API. If omitted, the sidebar's
+  /** Base path for the orchestrator API. If omitted, the sidebar's
    * Orchestrator row and the in-chat orchestrator-context pane say the
-   * producer isn't configured. */
-  producerBasePath?: string
+   * orchestrator isn't configured. */
+  orchestratorBasePath?: string
   /** Base path for the mailstack API as the host proxies it (dash: "/api/mail").
    * If omitted, the kanban card drawer hides its email preview and deep link. */
   mailBasePath?: string
@@ -124,7 +124,7 @@ export function BridgeProvider({
   noteboardBasePath = '',
   resolveEndpoint = '',
   bridgeAdapterBasePath = '',
-  producerBasePath = '',
+  orchestratorBasePath = '',
   usageStoreBasePath = '',
   schedulerBasePath = '',
   logStoreBasePath = '',
@@ -165,7 +165,7 @@ export function BridgeProvider({
     noteboardBasePath,
     resolveEndpoint,
     bridgeAdapterBasePath,
-    producerBasePath,
+    orchestratorBasePath,
     usageStoreBasePath,
     schedulerBasePath,
     logStoreBasePath,
@@ -181,7 +181,7 @@ export function BridgeProvider({
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, peoplePagePath, journalPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, producerBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, peoplePagePath, journalPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

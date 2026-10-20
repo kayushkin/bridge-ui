@@ -19,7 +19,7 @@ import { chatKey } from './storageKeys'
 // already holds (`useSessionStatus`), so it needs no poll of its own. Talking to the
 // orchestrator happens in that session's chat, so the dock has no composer.
 
-// How often to re-read the settings: autonomous mode, and whether producerd answers.
+// How often to re-read the settings: autonomous mode, and whether orchestratord answers.
 const CONFIG_POLL_MS = 30_000
 // The newest signal you have opened from the conductor. Older ones are waiting, not new.
 const SEEN_SIGNALS_KEY = chatKey('conductor-signals-seen-up-to')
@@ -32,14 +32,14 @@ function readSeenUpTo(): string | null {
   }
 }
 
-interface ProducerSettings {
+interface OrchestratorSettings {
   enabled: boolean
 }
 
 export interface ConductorDockProps {
-  /** The home session's id, from `GET /home-session`; null until producerd names it. */
+  /** The home session's id, from `GET /home-session`; null until orchestratord names it. */
   homeSessionId: string | null
-  /** Why producerd could not name the home session, verbatim. */
+  /** Why orchestratord could not name the home session, verbatim. */
   homeSessionError: string | null
   /** Open the home session's chat. */
   onOpenHomeSession: () => void
@@ -48,7 +48,7 @@ export interface ConductorDockProps {
 }
 
 export function ConductorDock({ homeSessionId, homeSessionError, onOpenHomeSession, onOpenSignalsPage }: ConductorDockProps) {
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
+  const { fetch: apiFetch, orchestratorBasePath } = useBridgeConfig()
   // The operator's signals only: a background agent's question or notification never
   // turns the conductor to `alert`. They are on the signals page, in their own group.
   const { operator } = useOpenSignalsByAttention()
@@ -75,9 +75,9 @@ export function ConductorDock({ homeSessionId, homeSessionError, onOpenHomeSessi
 
   const pollConfig = useCallback(async () => {
     try {
-      const response = await apiFetch(`${producerBasePath}/config`)
+      const response = await apiFetch(`${orchestratorBasePath}/config`)
       if (!response.ok) throw new Error(`/config: HTTP ${response.status}`)
-      const settings = (await response.json()) as ProducerSettings
+      const settings = (await response.json()) as OrchestratorSettings
       setEnabled(settings.enabled)
       setConfigReachable(true)
       setConfigError(null)
@@ -85,15 +85,15 @@ export function ConductorDock({ homeSessionId, homeSessionError, onOpenHomeSessi
       setConfigReachable(false)
       setConfigError(error instanceof Error ? error.message : String(error))
     }
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   useEffect(() => {
-    if (!producerBasePath) return
+    if (!orchestratorBasePath) return
     void pollConfig()
     // A hidden tab asks nothing: nobody is looking at the conductor.
     const timer = setInterval(() => !document.hidden && void pollConfig(), CONFIG_POLL_MS)
     return () => clearInterval(timer)
-  }, [producerBasePath, pollConfig])
+  }, [orchestratorBasePath, pollConfig])
 
   const unreachableBecause = configError ?? homeSessionError
   const facts: ConductorFacts = {
@@ -106,7 +106,7 @@ export function ConductorDock({ homeSessionId, homeSessionError, onOpenHomeSessi
   const state = conductorState(facts)
   const statusText = conductorStatusText(state, facts)
 
-  if (!producerBasePath) return null
+  if (!orchestratorBasePath) return null
 
   return (
     <div className="bc-conductor" data-state={state}>

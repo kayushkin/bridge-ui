@@ -50,7 +50,7 @@ export interface BridgeRoutes {
    *  model-store role, and each role's ordered model list, editable. Needs
    *  `modelStoreBasePath`. */
   models: string
-  /** The producer's full review surface (WAL, prior versions, filters), linked
+  /** The orchestrator's full review surface (WAL, prior versions, filters), linked
    *  from the sidebar's Orchestrator row and the in-chat orchestrator pane. */
   orchestrator: string
   /** The single-card page. The card id is appended as a path segment. */
@@ -173,11 +173,11 @@ export interface BridgeConfig {
    * card is linked by entity_type=bus_session. If empty, those cards' chat
    * deeplinks are disabled. */
   bridgeAdapterBasePath: string
-  /** Base path for the producer (orchestrator) API (e.g. "/api/producer"). No
+  /** Base path for the orchestrator API (e.g. "/api/orchestrator"). No
    * trailing slash. Used by the sidebar's Orchestrator row and the in-chat
-   * orchestrator-context pane. If empty, both say the producer isn't
+   * orchestrator-context pane. If empty, both say the orchestrator isn't
    * configured instead of guessing a path. */
-  producerBasePath: string
+  orchestratorBasePath: string
   /** Base path for usage-store API (e.g. "/api/usage"). No trailing slash.
    * If empty, the spend/limits sections of the Usage tab are hidden and only
    * per-session aggregates from llm-bridge-server are shown. */

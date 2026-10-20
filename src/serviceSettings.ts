@@ -31,7 +31,7 @@ const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName:
   { configKey: 'noteboardBasePath', serviceName: 'noteboard' },
   { configKey: 'mailBasePath', serviceName: 'mailstack' },
   { configKey: 'multichatBasePath', serviceName: 'multichat' },
-  { configKey: 'producerBasePath', serviceName: 'producer' },
+  { configKey: 'orchestratorBasePath', serviceName: 'orchestrator' },
   { configKey: 'bridgeAdapterBasePath', serviceName: 'llm-bridge-adapter' },
   { configKey: 'schedulerBasePath', serviceName: 'scheduler' },
   { configKey: 'logStoreBasePath', serviceName: 'log-store' },

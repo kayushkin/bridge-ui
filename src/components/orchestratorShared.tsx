@@ -3,14 +3,14 @@ import type { JSX } from 'react'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
 
-// What the Orchestrator page (`BridgeOrchestrator`) reads from the producer: the
+// What the Orchestrator page (`BridgeOrchestrator`) reads from the orchestrator: the
 // fetch helpers and the cost header. Talking to the orchestrator happens in its home
 // session, an ordinary chat session, so nothing here sends.
 
-/** Reads a producer response, or throws with the status. Every panel surfaces
+/** Reads a orchestrator response, or throws with the status. Every panel surfaces
  *  what this throws — an orchestrator view that quietly shows stale numbers when
- *  the producer is down is worse than one that says so. */
-export async function producerJSON<T>(response: Response): Promise<T> {
+ *  the orchestrator is down is worse than one that says so. */
+export async function orchestratorJSON<T>(response: Response): Promise<T> {
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return (await response.json()) as T
 }
@@ -19,27 +19,27 @@ export function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** The producer's own polling cadence for the read-only panels. */
+/** The orchestrator's own polling cadence for the read-only panels. */
 const REFRESH_MS = 20000
 
-/** Poll one producer endpoint, keeping whatever it last answered and the reason
+/** Poll one orchestrator endpoint, keeping whatever it last answered and the reason
  *  the latest attempt failed. Both, deliberately: a failed refresh must not blank
  *  a panel that is still showing the last good answer, and it must not be
  *  invisible either. */
-export function useProducerResource<T>(path: string, initial: T): { data: T; error: string | null } {
-  const { fetch: apiFetch, producerBasePath } = useBridgeConfig()
+export function useOrchestratorResource<T>(path: string, initial: T): { data: T; error: string | null } {
+  const { fetch: apiFetch, orchestratorBasePath } = useBridgeConfig()
   const [data, setData] = useState<T>(initial)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!producerBasePath) return
+    if (!orchestratorBasePath) return
     try {
-      setData(await producerJSON<T>(await apiFetch(`${producerBasePath}${path}`)))
+      setData(await orchestratorJSON<T>(await apiFetch(`${orchestratorBasePath}${path}`)))
       setError(null)
     } catch (e) {
       setError(messageOf(e))
     }
-  }, [apiFetch, producerBasePath, path])
+  }, [apiFetch, orchestratorBasePath, path])
 
   useEffect(() => {
     void load()
@@ -58,7 +58,7 @@ interface CostWindow {
   runs: number
 }
 /** `GET /cost`. */
-interface ProducerCost {
+interface OrchestratorCost {
   week_start: string
   week_resets_at: string
   week_limit_usd: number
@@ -70,7 +70,7 @@ interface ProducerCost {
 }
 
 export function CostHeader(): JSX.Element | null {
-  const { data, error } = useProducerResource<ProducerCost | null>('/cost', null)
+  const { data, error } = useOrchestratorResource<OrchestratorCost | null>('/cost', null)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLSpanElement | null>(null)
   useEffect(() => {

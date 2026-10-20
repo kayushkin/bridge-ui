@@ -709,7 +709,7 @@
   box-shadow: 2px 2px 0 var(--zine-ink);
 }
 [data-theme="zine"] .bc-sidebar-page-btn-selected { background: var(--zine-ink); color: var(--zine-cream); }
-[data-theme="zine"] .bc-producer {
+[data-theme="zine"] .bc-orchestrator {
   border: 2px solid var(--zine-ink);
   border-radius: 3px;
   background:
@@ -718,14 +718,14 @@
     var(--zine-pink-light);
   box-shadow: 2px 2px 0 var(--zine-ink);
 }
-[data-theme="zine"] .bc-producer .bc-session-item-main { font-family: 'Archivo Black', sans-serif; color: var(--zine-ink-dark); letter-spacing: 0.02em; }
-/* the ticket is the outer .bc-producer, so the inner row must not paint over it:
+[data-theme="zine"] .bc-orchestrator .bc-session-item-main { font-family: 'Archivo Black', sans-serif; color: var(--zine-ink-dark); letter-spacing: 0.02em; }
+/* the ticket is the outer .bc-orchestrator, so the inner row must not paint over it:
    bridge-ui's selected and hover fills are opaque and dulled the selected ticket.
    Selection lifts the ticket the way it lifts a session sticker. */
-[data-theme="zine"] .bc-producer .bc-session-item,
-[data-theme="zine"] .bc-producer .bc-session-item:hover,
-[data-theme="zine"] .bc-producer .bc-session-item-selected { background: transparent; box-shadow: none; }
-[data-theme="zine"] .bc-producer:has(.bc-session-item-selected) {
+[data-theme="zine"] .bc-orchestrator .bc-session-item,
+[data-theme="zine"] .bc-orchestrator .bc-session-item:hover,
+[data-theme="zine"] .bc-orchestrator .bc-session-item-selected { background: transparent; box-shadow: none; }
+[data-theme="zine"] .bc-orchestrator:has(.bc-session-item-selected) {
   box-shadow: 3px 3px 0 var(--zine-ink);
   transform: rotate(-0.7deg);
 }

@@ -18,7 +18,7 @@ import { useBridgeHarnesses } from '../../useBridgeHarnesses'
 import { useBridgeInstances } from '../../useBridgeInstances'
 import { useBridgeMachines } from '../../useBridgeMachines'
 import { EditableName } from './EditableName'
-import { ProducerRow } from './ProducerRow'
+import { OrchestratorRow } from './OrchestratorRow'
 import { ConductorDock } from './ConductorDock'
 import { useHomeSession } from './useHomeSession'
 import { StatusDot } from './StatusDot'
@@ -208,9 +208,9 @@ export default function Sidebar({
   const { harnessMap, basePath } = useBridgeHarnesses()
   // The Orchestrator row's path and fetch, both from the provider rather than literals:
   // `fetch` is the same credentialed fetch every other call on this page uses, and
-  // an empty `producerBasePath` means this host proxies no producer, in which case
+  // an empty `orchestratorBasePath` means this host proxies no orchestrator, in which case
   // the row is not rendered at all rather than pointed at a guessed path.
-  const { fetch: bridgeApiFetch, producerBasePath, workGraphStoreBasePath } = useBridgeConfig()
+  const { fetch: bridgeApiFetch, orchestratorBasePath, workGraphStoreBasePath } = useBridgeConfig()
   // Liveness of the session-list stream. `listLoading` only covers the FIRST fetch, so
   // without this an empty list after a dropped stream reads as "you have no sessions".
   // 'open' is the only state in which updates are flowing — see useConnState.
@@ -914,11 +914,11 @@ export default function Sidebar({
 
       {/* The pinned Orchestrator entry, between "+ New" and the search box. A click
           opens the orchestrator's home session as a chat, through the same `select` a
-          session row uses; the gear panel fetches its settings from the producer proxy. */}
-      {producerBasePath && (
-        <ProducerRow
+          session row uses; the gear panel fetches its settings from the orchestrator proxy. */}
+      {orchestratorBasePath && (
+        <OrchestratorRow
           apiFetch={bridgeApiFetch}
-          producerBasePath={producerBasePath}
+          orchestratorBasePath={orchestratorBasePath}
           onOpenHomeSession={() => void homeSession.open()}
           homeSessionError={homeSession.error}
           selected={!workGraphOpen && !projectsOpen && homeSession.sessionId !== null && homeSession.sessionId === activeId}
@@ -1179,7 +1179,7 @@ export default function Sidebar({
       {/* The orchestrator as a conductor, pinned to the foot of the column: what its
           home session is doing and what needs you. Last in the column, so the list
           above takes the height and this never scrolls away. */}
-      {producerBasePath && (
+      {orchestratorBasePath && (
         <ConductorDock
           homeSessionId={homeSession.sessionId}
           homeSessionError={homeSession.error}

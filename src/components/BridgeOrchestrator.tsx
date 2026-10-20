@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
 import { fetchHomeSessionId } from './chat/useHomeSession'
-import { ProducerMarkdown, ProducerTextWithReferenceChips } from './chat/producerReferences'
-import { CostHeader, useProducerResource } from './orchestratorShared'
+import { OrchestratorMarkdown, OrchestratorTextWithReferenceChips } from './chat/orchestratorReferences'
+import { CostHeader, useOrchestratorResource } from './orchestratorShared'
 
 // The orchestrator's dedicated page. The orchestrator itself is an ordinary
 // llm-bridge chat session, its home session (`GET /home-session`), and you talk
@@ -15,23 +15,23 @@ import { CostHeader, useProducerResource } from './orchestratorShared'
 //
 // Ported here from dash's own `pages/Orchestrator.tsx`, which is now a thin
 // mount of this component. References go through chat-core's chips
-// (`./chat/producerReferences`) and every navigation target comes from
+// (`./chat/orchestratorReferences`) and every navigation target comes from
 // `routes`.
 //
 // ⚠️ Mount inside chat-core's `<ChatProvider>` and a react-router router. The
 // reference chips resolve their ids against llm-bridge and noteboard through
 // chat-core's context, and its hooks throw without it. `BridgeProvider` is
-// required too, for `producerBasePath` and `routes`.
+// required too, for `orchestratorBasePath` and `routes`.
 
 export function BridgeOrchestrator(): JSX.Element {
-  const { producerBasePath } = useBridgeConfig()
+  const { orchestratorBasePath } = useBridgeConfig()
 
-  if (!producerBasePath) {
+  if (!orchestratorBasePath) {
     return (
       <div className="bc-orchestrator" style={page}>
         <h1 style={{ margin: 0 }}>🎬 Orchestrator</h1>
         <p style={{ opacity: 0.7 }}>
-          No producer configured — set <code>producerBasePath</code> on BridgeProvider.
+          No orchestrator configured — set <code>orchestratorBasePath</code> on BridgeProvider.
         </p>
       </div>
     )
@@ -55,20 +55,20 @@ export function BridgeOrchestrator(): JSX.Element {
 // --- the way into the orchestrator's chat ----------------------------------
 
 /** A link that opens the home session on the host's chat page, or the reason
- *  producerd could not name it. Nothing when the host mounts no chat route. */
+ *  orchestratord could not name it. Nothing when the host mounts no chat route. */
 function HomeSessionLink(): JSX.Element | null {
-  const { fetch: apiFetch, producerBasePath, routes } = useBridgeConfig()
+  const { fetch: apiFetch, orchestratorBasePath, routes } = useBridgeConfig()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    fetchHomeSessionId(apiFetch, producerBasePath).then(
+    fetchHomeSessionId(apiFetch, orchestratorBasePath).then(
       (id) => { if (!cancelled) { setSessionId(id); setError(null) } },
       (e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) },
     )
     return () => { cancelled = true }
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   if (!routes.chat) return null
   if (error) return <span style={{ color: '#ef4444', fontSize: 13 }}>home session: {error}</span>
@@ -86,7 +86,7 @@ function HomeSessionLink(): JSX.Element | null {
 
 // --- runs log ---------------------------------------------------------------
 
-interface ProducerRun {
+interface OrchestratorRun {
   id: string
   at: string
   trigger: string
@@ -102,7 +102,7 @@ interface ProducerRun {
 }
 
 function Runs(): JSX.Element {
-  const { data: runs, error } = useProducerResource<ProducerRun[]>('/runs?limit=50', [])
+  const { data: runs, error } = useOrchestratorResource<OrchestratorRun[]>('/runs?limit=50', [])
   const [open, setOpen] = useState<string | null>(null)
 
   return (
@@ -133,7 +133,7 @@ function Runs(): JSX.Element {
           {open === r.id && !r.error && (
             <div style={{ padding: '0 12px 10px', fontSize: 12 }}>
               <div style={{ opacity: 0.6, margin: '4px 0' }}>you: {r.message}</div>
-              <ProducerMarkdown text={r.reply} />
+              <OrchestratorMarkdown text={r.reply} />
               <div style={{ opacity: 0.5, marginTop: 6 }}>
                 {r.model} · {r.input_tokens} in / {r.output_tokens} out · {(r.duration_ms / 1000).toFixed(1)}s
               </div>
@@ -145,7 +145,7 @@ function Runs(): JSX.Element {
   )
 }
 
-// --- context inspector (the parts producerd injects into the orchestrator) ---
+// --- context inspector (the parts orchestratord injects into the orchestrator) ---
 
 interface ContextVersion {
   part: string
@@ -163,7 +163,7 @@ interface ContextPart {
 const ORDER = ['agents', 'tasks', 'convo_summary', 'convo_current']
 
 function ContextInspector(): JSX.Element {
-  const { data: parts, error } = useProducerResource<ContextPart[]>('/context', [])
+  const { data: parts, error } = useOrchestratorResource<ContextPart[]>('/context', [])
   // Which parts are unfolded, so a folded one renders no body at all. A
   // `<details>` keeps its children in the DOM while closed, and each reference
   // in there is a chip that resolves its id the moment it mounts — a folded
@@ -217,7 +217,7 @@ function ContextInspector(): JSX.Element {
                 overflow: 'auto',
               }}
             >
-              <ProducerTextWithReferenceChips text={p.latest.content} />
+              <OrchestratorTextWithReferenceChips text={p.latest.content} />
             </pre>
           )}
         </details>

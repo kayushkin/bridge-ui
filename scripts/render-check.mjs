@@ -20,7 +20,7 @@ import {
   OrchestratorPanel,
 } from '../src/index.ts'
 import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
-import { ProducerTextWithReferenceLinks } from '../src/components/chat/producerReferences.tsx'
+import { OrchestratorTextWithReferenceLinks } from '../src/components/chat/orchestratorReferences.tsx'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
 import { CardDetail } from '../src/components/BridgeKanban.tsx'
@@ -1216,7 +1216,7 @@ function sidePanelChecks() {
     fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
     basePath: '/api/bridge',
     kanbanStoreBasePath: '/api/kanban-store',
-    producerBasePath: '/api/producer',
+    orchestratorBasePath: '/api/orchestrator',
     routes: DEFAULT_BRIDGE_ROUTES,
   }
   const mount = element => renderToStaticMarkup(
@@ -1266,16 +1266,16 @@ function sidePanelChecks() {
     (orchestrator.html || '').slice(0, 300))
 }
 
-// --- producer references ----------------------------------------------------
+// --- orchestrator references ----------------------------------------------------
 //
-// The producer writes `[session:…]`, `[todo:…]`, `[note:…]` and `[task:…]`. Two
+// The orchestrator writes `[session:…]`, `[todo:…]`, `[note:…]` and `[task:…]`. Two
 // copies of a hand-rolled matcher for that dialect used to live here (the
 // orchestrator page's and the in-chat pane's); the grammar is now chat-core's
 // `parseRefChips` alone, and these assert what the LINK presentation — the one
 // that needs no `ChatProvider`, so the one the in-chat pane uses — makes of it.
-producerReferenceChecks()
-function producerReferenceChecks() {
-  console.log('\nProducer references — routes decide, and an unmounted page is never linked')
+orchestratorReferenceChecks()
+function orchestratorReferenceChecks() {
+  console.log('\nOrchestrator references — routes decide, and an unmounted page is never linked')
   const TODO_ID = '11111111-2222-4333-8444-555555555555'
   const text = `run [session:br_1234567890123456] then [task:${TODO_ID}]`
 
@@ -1287,7 +1287,7 @@ function producerReferenceChecks() {
           basePath: '/api/bridge',
           routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
         },
-      }, h(ProducerTextWithReferenceLinks, { text }))))
+      }, h(OrchestratorTextWithReferenceLinks, { text }))))
 
   const mounted = mount({ chat: '/', notes: '/notes' })
   check('a session reference links to the host\'s own chat route',
@@ -1303,7 +1303,7 @@ function producerReferenceChecks() {
   // never an anchor to a route it does not serve.
   const noNotes = mount({ chat: '/', notes: '' })
   check('a reference whose page this host does not mount renders as a plain span',
-    noNotes.includes(`<span class="bc-producer-ref-plain"`) && !noNotes.includes('href="/notes"'),
+    noNotes.includes(`<span class="bc-orchestrator-ref-plain"`) && !noNotes.includes('href="/notes"'),
     noNotes)
   check('and it still shows the id rather than dropping it',
     noNotes.includes(TODO_ID), noNotes)
@@ -1316,21 +1316,21 @@ function producerReferenceChecks() {
 // --- the orchestrator review page -------------------------------------------
 bridgeOrchestratorChecks()
 function bridgeOrchestratorChecks() {
-  console.log('\nBridgeOrchestrator says when the host carries no producer')
-  const mount = producerBasePath => renderToStaticMarkup(
+  console.log('\nBridgeOrchestrator says when the host carries no orchestrator')
+  const mount = orchestratorBasePath => renderToStaticMarkup(
     h(MemoryRouter, { initialEntries: ['/orchestrator'] },
       h(BridgeContext.Provider, {
         value: {
           fetch: async () => ({ ok: true, status: 200, json: async () => [] }),
           basePath: '/api/bridge',
-          producerBasePath,
+          orchestratorBasePath,
           routes: DEFAULT_BRIDGE_ROUTES,
         },
       }, h(BridgeOrchestrator))))
 
-  const configured = mount('/api/producer')
+  const configured = mount('/api/orchestrator')
   // The conversation lives in the home session's chat now, so the page has no
-  // composer of its own: it links to the chat once producerd names the session.
+  // composer of its own: it links to the chat once orchestratord names the session.
   check('a configured host gets the page, with no composer of its own',
     configured.includes('bc-orchestrator') && !configured.includes('bc-composer') && !configured.includes('bc-orchestrator-conversation'),
     configured.slice(0, 300))
@@ -1338,8 +1338,8 @@ function bridgeOrchestratorChecks() {
     configured.includes('bc-orchestrator-runs') && configured.includes('bc-orchestrator-context'),
     configured.slice(0, 300))
   const unconfigured = mount('')
-  check('a host with no producer proxy is told so, not shown empty panels',
-    unconfigured.includes('producerBasePath') && !unconfigured.includes('bc-orchestrator-runs'),
+  check('a host with no orchestrator proxy is told so, not shown empty panels',
+    unconfigured.includes('orchestratorBasePath') && !unconfigured.includes('bc-orchestrator-runs'),
     unconfigured.slice(0, 300))
 }
 

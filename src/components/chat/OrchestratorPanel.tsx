@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useBridgeConfig } from '../../context'
-import { ProducerTextWithReferenceLinks } from './producerReferences'
+import { OrchestratorTextWithReferenceLinks } from './orchestratorReferences'
 
 // Compact in-chat view of the orchestrator's injected context. The full review
 // surface (WAL, prior versions, filters) lives on the host's own orchestrator
@@ -12,8 +12,8 @@ import { ProducerTextWithReferenceLinks } from './producerReferences'
 // References in the dump used to be found by a local
 // `\[(session|task|todo):([^\]]+)\]` — a second copy of the grammar, which the
 // orchestrator page carried too and which had already drifted from it. Both
-// copies are gone: `ProducerTextWithReferenceLinks` reads chat-core's parser,
-// the one place that knows the producer's dialect. Read that module's header
+// copies are gone: `OrchestratorTextWithReferenceLinks` reads chat-core's parser,
+// the one place that knows the orchestrator's dialect. Read that module's header
 // for why this pane renders LINKS while the page renders chips — in short, this
 // pane's only host mounts no `ChatProvider`, and a chip without one throws.
 
@@ -28,25 +28,25 @@ export interface OrchestratorPanelProps {
 }
 
 export function OrchestratorPanel({ onToggleCollapse, style }: OrchestratorPanelProps) {
-  const { fetch: apiFetch, producerBasePath, routes } = useBridgeConfig()
+  const { fetch: apiFetch, orchestratorBasePath, routes } = useBridgeConfig()
   const [parts, setParts] = useState<PartState[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!producerBasePath) return
+    if (!orchestratorBasePath) return
     try {
-      const r = await apiFetch(`${producerBasePath}/context`)
+      const r = await apiFetch(`${orchestratorBasePath}/context`)
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       setParts(await r.json()); setError(null)
     } catch (e) { setError(String((e as Error).message ?? e)) }
-  }, [apiFetch, producerBasePath])
+  }, [apiFetch, orchestratorBasePath])
 
   useEffect(() => {
-    if (!producerBasePath) return
+    if (!orchestratorBasePath) return
     load()
     const t = setInterval(load, 15000)
     return () => clearInterval(t)
-  }, [load, producerBasePath])
+  }, [load, orchestratorBasePath])
 
   const ordered = [
     ...ORDER.map(id => parts.find(p => p.part === id)).filter(Boolean) as PartState[],
@@ -73,14 +73,14 @@ export function OrchestratorPanel({ onToggleCollapse, style }: OrchestratorPanel
         <span className="bc-split-collapse-btn" aria-hidden="true" style={{ marginLeft: 8 }}>×</span>
       </div>
       <div style={{ overflow: 'auto', padding: 8, fontSize: 12 }}>
-        {!producerBasePath && <div style={{ opacity: 0.7 }}>No producer configured — set producerBasePath on BridgeProvider.</div>}
-        {error && <div style={{ color: '#ef4444' }}>Producer offline ({error})</div>}
+        {!orchestratorBasePath && <div style={{ opacity: 0.7 }}>No orchestrator configured — set orchestratorBasePath on BridgeProvider.</div>}
+        {error && <div style={{ color: '#ef4444' }}>Orchestrator offline ({error})</div>}
         {ordered.map(p => (
           <details key={p.part} open={p.part === 'agents' || p.part === 'tasks'} style={{ marginBottom: 8 }}>
             <summary style={{ cursor: 'pointer', opacity: 0.85 }}>
               {p.title} <span style={{ opacity: 0.5 }}>· ~{p.latest.tokens.toLocaleString()} tok · v{p.version_count}</span>
             </summary>
-            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><ProducerTextWithReferenceLinks text={p.latest.content} /></pre>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><OrchestratorTextWithReferenceLinks text={p.latest.content} /></pre>
           </details>
         ))}
       </div>

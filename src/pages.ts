@@ -100,9 +100,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // Each email ticket beside the message it came from. Needs mail as well as
   // kanban, since the log is half emails.
   { route: 'emailTickets', label: 'Email tickets', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath && !!c.mailBasePath, component: BridgeEmailTickets },
-  // The page exists on every host; it is listed only where the producer is
+  // The page exists on every host; it is listed only where the orchestrator is
   // proxied, since without it the page can say nothing but "not configured".
-  { route: 'orchestrator', label: 'Orchestrator', group: 'work', listed: true, available: c => !!c.producerBasePath, component: BridgeOrchestrator },
+  { route: 'orchestrator', label: 'Orchestrator', group: 'work', listed: true, available: c => !!c.orchestratorBasePath, component: BridgeOrchestrator },
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },

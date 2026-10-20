@@ -178,7 +178,7 @@ export { BridgeCardPage } from './components/BridgeCardPage'
 // chrome differs, so only the chrome is repeated.
 export { CardDetail } from './components/BridgeKanban'
 export type { CardDetailProps } from './components/BridgeKanban'
-// The producer's review page — a link to the orchestrator's home session (the
+// The orchestrator's review page — a link to the orchestrator's home session (the
 // chat you talk to it in), the week's cost, the injected-context inspector and
 // the log of one-shot runs from before the home session.
 //
@@ -238,11 +238,11 @@ export type { UsageLineProps } from './components/chat/UsageLine'
 export { EditableName } from './components/chat/EditableName'
 export type { EditableNameProps } from './components/chat/EditableName'
 // The pinned "Orchestrator" sidebar entry. Its gear panel fetches its settings
-// from the host's producer proxy; a click calls `onOpenHomeSession`, which the
+// from the host's orchestrator proxy; a click calls `onOpenHomeSession`, which the
 // host points at its own session-open path (the chat's sidebar uses
 // `useHomeSession`).
-export { ProducerRow } from './components/chat/ProducerRow'
-export type { ProducerRowProps } from './components/chat/ProducerRow'
+export { OrchestratorRow } from './components/chat/OrchestratorRow'
+export type { OrchestratorRowProps } from './components/chat/OrchestratorRow'
 export { useHomeSession, fetchHomeSessionId } from './components/chat/useHomeSession'
 export type { HomeSession } from './components/chat/useHomeSession'
 
@@ -252,7 +252,7 @@ export type { HomeSession } from './components/chat/useHomeSession'
 // particular arrangement around it.
 //
 // Kanban and Orchestrator fetch their own state from the paths their
-// BridgeProvider was given (`kanbanStoreBasePath`, `producerBasePath`), and
+// BridgeProvider was given (`kanbanStoreBasePath`, `orchestratorBasePath`), and
 // render an empty pane when the host left those unset — an unconfigured host is
 // a legible state, not an error. GitPanel is the one that takes state in: its
 // repo list and selection are shared with the chat's repo dropdown, so the
