@@ -8,6 +8,7 @@ import {
   searchPath, foldEdits, conversationPreviewText, reactionPostPath, reactionTakeBackPath, reactionTargetEventID, sendMessageBodyOf, tagCreateBodyOf, tagDeletePath,
   contactKey, contactLinkBody, contactUnlinkBody, linkCandidates, personOfIdentity, OPERATOR_LINK_REASON,
   conversationEntries, conversationEntryOf, conversationLinkBody, conversationLinkCandidates, conversationTabLabel, conversationUnlinkBody,
+  conversationVisibilityPath, conversationVisibilityReason,
 } from '../src/multichatMessages'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatTag, MultichatUnifiedContact,
@@ -79,7 +80,7 @@ describe('merging pages', () => {
 })
 
 const conversation = (room_id: string, name: string, extra: Partial<MultichatConversation> = {}): MultichatConversation =>
-  ({ room_id, name, member_count: 2, last_activity: 0, ...extra })
+  ({ room_id, name, member_count: 2, last_activity: 0, visibility: 'auto', hidden: false, ...extra })
 const tag = (id: number, name: string): MultichatTag => ({ id, name, color: '#f5d40c' })
 const NO_TAGS = { contactTagMap: {}, conversationTagMap: {} }
 
@@ -95,14 +96,31 @@ describe('the conversation list', () => {
   })
 
   it('filters by app and by name or last message, in any case', () => {
-    expect(filterConversations(conversations, NO_TAGS, { platform: 'discord', text: '', tagID: null }).map(c => c.room_id)).toEqual(['!2'])
-    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: 'INVOICE', tagID: null }).map(c => c.room_id)).toEqual(['!1'])
-    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: ' food ', tagID: null }).map(c => c.room_id)).toEqual(['!2'])
-    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: '', tagID: null })).toHaveLength(3)
+    expect(filterConversations(conversations, NO_TAGS, { platform: 'discord', text: '', tagID: null, showHidden: false }).map(c => c.room_id)).toEqual(['!2'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: 'INVOICE', tagID: null, showHidden: false }).map(c => c.room_id)).toEqual(['!1'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: ' food ', tagID: null, showHidden: false }).map(c => c.room_id)).toEqual(['!2'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: '', tagID: null, showHidden: false })).toHaveLength(3)
+  })
+
+  it('leaves hidden rooms out unless they are asked for', () => {
+    const rooms = [...conversations, conversation('!big', 'Stock alerts', { member_count: 342, hidden: true })]
+    expect(filterConversations(rooms, NO_TAGS, { platform: '', text: '', tagID: null, showHidden: false }).map(c => c.room_id)).toEqual(['!1', '!2', '!3'])
+    expect(filterConversations(rooms, NO_TAGS, { platform: '', text: 'stock', tagID: null, showHidden: false })).toEqual([])
+    expect(filterConversations(rooms, NO_TAGS, { platform: '', text: 'stock', tagID: null, showHidden: true }).map(c => c.room_id)).toEqual(['!big'])
+  })
+
+  it('says why a room is hidden or shown', () => {
+    const rule = { auto_hide_enabled: true, auto_hide_member_count_threshold: 30 }
+    expect(conversationVisibilityPath(ROOM)).toBe('/conversations/!yyPKASKymivfZvWbDf%3Achat.kayushkin.com/visibility')
+    expect(conversationVisibilityReason(conversation('!a', 'a', { visibility: 'hidden', hidden: true }), rule)).toBe('Hidden by you')
+    expect(conversationVisibilityReason(conversation('!a', 'a', { visibility: 'shown', member_count: 99 }), rule)).toBe('Always shown, by you')
+    expect(conversationVisibilityReason(conversation('!a', 'a', { member_count: 31, hidden: true }), rule)).toBe('Hidden automatically: more than 30 members')
+    expect(conversationVisibilityReason(conversation('!a', 'a', { member_count: 30 }), rule)).toBe('Shown: 30 members or fewer')
+    expect(conversationVisibilityReason(conversation('!a', 'a'), { ...rule, auto_hide_enabled: false })).toBe('Shown; auto-hide is off')
   })
 
   it("matches a member's name even when the room name leaves it out", () => {
-    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: 'ruiz', tagID: null }).map(c => c.room_id)).toEqual(['!1'])
+    expect(filterConversations(conversations, NO_TAGS, { platform: '', text: 'ruiz', tagID: null, showHidden: false }).map(c => c.room_id)).toEqual(['!1'])
   })
 
   it('shows a room named after its members by the first three and a count of the rest', () => {
@@ -134,7 +152,7 @@ describe('the conversation list', () => {
 
     it('filters by a tag the room has by either route', () => {
       const rooms = [dm, channel]
-      const byTag = (tagID: number) => filterConversations(rooms, tagMaps, { platform: '', text: '', tagID }).map(c => c.room_id)
+      const byTag = (tagID: number) => filterConversations(rooms, tagMaps, { platform: '', text: '', tagID, showHidden: false }).map(c => c.room_id)
       expect(byTag(2)).toEqual(['!dm'])
       expect(byTag(3)).toEqual(['!channel'])
       expect(byTag(9)).toEqual([])

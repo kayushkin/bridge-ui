@@ -11,7 +11,7 @@ import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSearchAnswer, MultichatSearchGroup, MultichatSearchHit, MultichatTag, MultichatUnifiedContact,
 } from './types-multichat'
-import type { ConversationLink } from '@kayushkin/multichat-types'
+import type { ConversationLink, ConversationVisibilitySettings } from '@kayushkin/multichat-types'
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
 
 /** How many messages one page asks for. multichat takes 1–200. */
@@ -46,6 +46,10 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /conversations/links',
   'POST /conversations/links',
   'POST /conversations/links/remove',
+  // Hiding a room from the list, and the rule that hides rooms above a size.
+  'PUT /conversations/{room_id}/visibility',
+  'GET /conversations/visibility-settings',
+  'PUT /conversations/visibility-settings',
   // Images, custom emoji and custom reactions, loaded by <img> (MessageContent).
   'GET /media/{server_name}/{media_id}',
   // Channel names for a Discord room's `<#id>` tokens, and which server's
@@ -150,6 +154,8 @@ export interface ConversationFilter {
   text: string
   /** Null means any tag or none; else one of `conversationTags`. */
   tagID: number | null
+  /** Hidden rooms are left out unless this is set. */
+  showHidden: boolean
 }
 
 export function filterConversations(
@@ -157,6 +163,7 @@ export function filterConversations(
 ): MultichatConversation[] {
   const text = filter.text.trim().toLowerCase()
   return conversations.filter(conversation => {
+    if (conversation.hidden && !filter.showHidden) return false
     if (filter.platform && conversation.platform !== filter.platform) return false
     if (filter.tagID !== null && !conversationTags(conversation, tagMaps).some(tag => tag.id === filter.tagID)) return false
     if (!text) return true
@@ -164,6 +171,23 @@ export function filterConversations(
       || (conversation.members ?? []).some(member => (member.display_name ?? '').toLowerCase().includes(text))
       || (conversation.last_message ?? '').toLowerCase().includes(text)
   })
+}
+
+/** The path that sets a room's visibility. */
+export function conversationVisibilityPath(roomID: string): string {
+  return `/conversations/${roomSegment(roomID)}/visibility`
+}
+
+/** Why a room is in the list or out of it, in words, under the auto-hide
+ *  rule as multichat holds it. */
+export function conversationVisibilityReason(conversation: MultichatConversation, settings: ConversationVisibilitySettings | null): string {
+  if (conversation.visibility === 'hidden') return 'Hidden by you'
+  if (conversation.visibility === 'shown') return 'Always shown, by you'
+  if (!settings) return conversation.hidden ? 'Hidden by the auto-hide rule' : 'Shown'
+  if (!settings.auto_hide_enabled) return 'Shown; auto-hide is off'
+  return conversation.hidden
+    ? `Hidden automatically: more than ${settings.auto_hide_member_count_threshold} members`
+    : `Shown: ${settings.auto_hide_member_count_threshold} members or fewer`
 }
 
 /** How many members a room named after its members names before it counts

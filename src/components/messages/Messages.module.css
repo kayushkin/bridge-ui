@@ -22,6 +22,7 @@
 .input:focus { outline: none; border-color: var(--accent); }
 .filters > input.input { flex: 1 1 200px; }
 .check { display: flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text-muted); }
+.thresholdInput { width: 5em; }
 
 .columns { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2.5fr); gap: 12px; flex: 1; min-height: 0; }
 .listColumn { display: flex; flex-direction: column; gap: 8px; min-height: 0; max-height: 80vh; }
@@ -32,6 +33,8 @@
   border: 1px solid var(--border); border-radius: 6px; background: var(--bg-surface);
 }
 .rowSelected { border-color: var(--accent); }
+/* A hidden room, listed because Show hidden is on. */
+.rowHidden { opacity: 0.55; }
 .rowPick {
   width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer;
 }

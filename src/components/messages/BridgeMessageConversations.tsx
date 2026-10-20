@@ -8,6 +8,7 @@ import {
   conversationMessagesPath, conversationOwnTags, conversationPartnerTags, conversationPlatforms, conversationSendFilePath, conversationSendPath, conversationShownName,
   conversationTagAssignBody, conversationTagRemovePath, conversationTags, filterConversations, type ConversationTagMaps,
   conversationEntries, conversationEntryOf, conversationLinkBody, conversationLinkCandidates, conversationTabLabel, conversationUnlinkBody, type ConversationEntry,
+  conversationVisibilityPath, conversationVisibilityReason,
   conversationPreviewText, foldEdits, mergeNewestMessages, messageTimeLabel, pageMessages, prependOlderMessages, sameMessages, sendMessageBodyOf,
   reactionPostPath, reactionTakeBackPath, reactionTargetEventID, type ShownMessage,
 } from '../../multichatMessages'
@@ -16,7 +17,7 @@ import {
   allCustomEmoji, choiceNamed, colonQueryAt, colonQueryIsReactionCommand, reactionCommandOf, reactionGroupIsEmoji, roomDiscordServerID, type DiscordRoom,
   searchEmojiIndex, type EmojiChoice,
 } from '../../emojiCatalog'
-import type { ConversationLink, MessageReactionGroup } from '@kayushkin/multichat-types'
+import type { ConversationLink, ConversationVisibility, ConversationVisibilitySettings, MessageReactionGroup } from '@kayushkin/multichat-types'
 import type {
   MultichatContactTagMap, MultichatConversation, MultichatConversationTagMap, MultichatMessage, MultichatMessagePage,
   MultichatSendAnswer, MultichatSendFileAnswer, MultichatTag,
@@ -61,6 +62,9 @@ export function BridgeMessageConversations() {
   const [platform, setPlatform] = useState('')
   const [text, setText] = useState('')
   const [tagID, setTagID] = useState<number | null>(null)
+  const [showHidden, setShowHidden] = useState(false)
+  const [visibilitySettings, setVisibilitySettings] = useState<ConversationVisibilitySettings | null>(null)
+  const [visibilitySettingsError, setVisibilitySettingsError] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const roomID = searchParams.get('room') ?? ''
 
@@ -87,6 +91,13 @@ export function BridgeMessageConversations() {
       setLinksError(null)
     } catch (err) {
       setLinksError(errorText(err))
+    }
+    // The rule only explains why a room is hidden; multichat has already applied it.
+    try {
+      setVisibilitySettings(await read<ConversationVisibilitySettings>('/conversations/visibility-settings'))
+      setVisibilitySettingsError(null)
+    } catch (err) {
+      setVisibilitySettingsError(errorText(err))
     }
     // Tags only label and filter the rows, so the list still shows when they fail.
     try {
@@ -121,6 +132,22 @@ export function BridgeMessageConversations() {
     }
   }, [write, reloadTags])
 
+  /** A visibility write, then the list read back from multichat, which
+   *  decides what is hidden; the refusal, or null. */
+  const writeVisibility = useCallback(async (path: string, body: unknown): Promise<string | null> => {
+    const result = await write('PUT', path, body)
+    if (!result.ok) return result.error
+    try {
+      setConversations(await read<MultichatConversation[] | null>('/conversations') ?? [])
+      if (path === '/conversations/visibility-settings') {
+        setVisibilitySettings(await read<ConversationVisibilitySettings>('/conversations/visibility-settings'))
+      }
+      return null
+    } catch (err) {
+      return errorText(err)
+    }
+  }, [write, read])
+
   useEffect(() => {
     if (!configured) return
     void reload()
@@ -130,9 +157,10 @@ export function BridgeMessageConversations() {
 
   const platforms = useMemo(() => conversationPlatforms(conversations ?? []), [conversations])
   const shown = useMemo(
-    () => filterConversations(conversations ?? [], tagMaps, { platform, text, tagID }),
-    [conversations, tagMaps, platform, text, tagID],
+    () => filterConversations(conversations ?? [], tagMaps, { platform, text, tagID, showHidden }),
+    [conversations, tagMaps, platform, text, tagID, showHidden],
   )
+  const hiddenCount = useMemo(() => (conversations ?? []).filter(conversation => conversation.hidden).length, [conversations])
   const shownEntries = useMemo(() => conversationEntries(conversations ?? [], shown, links), [conversations, shown, links])
   const pickedEntry = useMemo(
     () => conversationEntryOf(conversationEntries(conversations ?? [], conversations ?? [], links), roomID),
@@ -166,6 +194,7 @@ export function BridgeMessageConversations() {
       {loadError && <pre className={styles.error}>{loadError}</pre>}
       {tagsError && <pre className={styles.error}>Tags are not shown: {tagsError}</pre>}
       {linksError && <pre className={styles.error}>Linked conversations are listed apart: {linksError}</pre>}
+      {visibilitySettingsError && <pre className={styles.error}>The auto-hide rule could not be read: {visibilitySettingsError}</pre>}
       {!conversations ? (loadError ? null : <div className={styles.empty}>Loading…</div>) : (
         <div className={`${styles.columns} ${roomID ? styles.columnsRoomOpen : ''}`}>
           <div className={styles.listColumn}>
@@ -182,6 +211,12 @@ export function BridgeMessageConversations() {
                 {tags.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
             </div>
+            <div className={styles.filters}>
+              <label className={styles.check}>
+                <input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> Show hidden ({hiddenCount})
+              </label>
+              {visibilitySettings && <AutoHideRuleEditor settings={visibilitySettings} write={writeVisibility} />}
+            </div>
             {shown.length === 0 && (
               <div className={styles.empty}>{conversations.length === 0 ? 'No conversations.' : 'No conversation matches.'}</div>
             )}
@@ -193,7 +228,7 @@ export function BridgeMessageConversations() {
                 return (
                   <li key={newest.room_id}>
                     <button type="button" data-room-id={newest.room_id} data-link-id={entry.linkID ?? undefined}
-                      className={`${styles.row} ${styles.rowPick} ${selected ? styles.rowSelected : ''}`}
+                      className={`${styles.row} ${styles.rowPick} ${selected ? styles.rowSelected : ''} ${entry.conversations.every(conversation => conversation.hidden) ? styles.rowHidden : ''}`}
                       onClick={() => pick(selected ? roomID : newest.room_id)}>
                       <span className={styles.rowHead}>
                         <span className={styles.name} title={newest.name}>{conversationShownName(newest)}</span>
@@ -204,6 +239,7 @@ export function BridgeMessageConversations() {
                           <span key={conversation.room_id} className={styles.platform}>{conversation.platform}</span>
                         ))}
                         {newest.member_count > 2 && <span className={styles.muted}>{newest.member_count} members</span>}
+                        {newest.hidden && <span className={styles.muted}>hidden</span>}
                         <TagChips tags={entryTags} />
                       </span>
                       {newest.last_message && <span className={styles.preview}>{conversationPreviewText(newest.last_message)}</span>}
@@ -221,6 +257,7 @@ export function BridgeMessageConversations() {
             {picked ? (
               <ConversationThread key={picked.room_id} conversation={picked} onSent={() => { void reload() }}
                 tagEditor={<>
+                  <ConversationVisibilityEditor conversation={picked} settings={visibilitySettings} write={writeVisibility} />
                   <ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />
                   {pickedEntry && <ConversationLinkEditor key={picked.room_id} conversation={picked} entry={pickedEntry} conversations={conversations} write={writeLinks} />}
                   {picked.direct_message_partner_user_id && <ConversationPerson key={picked.direct_message_partner_user_id} partnerUserID={picked.direct_message_partner_user_id} />}
@@ -753,6 +790,71 @@ function ConversationTagEditor({ conversation, tags, tagMaps, write }: {
       )}
       {error && <pre className={styles.error}>{error}</pre>}
     </div>
+  )
+}
+
+/** Hide the open room from the list, keep it shown whatever its size, or
+ *  leave it to the auto-hide rule. */
+function ConversationVisibilityEditor({ conversation, settings, write }: {
+  conversation: MultichatConversation
+  settings: ConversationVisibilitySettings | null
+  write: (path: string, body: unknown) => Promise<string | null>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const choose = async (visibility: ConversationVisibility) => {
+    setBusy(true)
+    setError(await write(conversationVisibilityPath(conversation.room_id), { visibility }))
+    setBusy(false)
+  }
+  return (
+    <div className={styles.threadTags} data-room-visibility={conversation.room_id}>
+      <span className={styles.muted}>In the list</span>
+      <select className={styles.tagSelect} value={conversation.visibility} disabled={busy}
+        onChange={e => { void choose(e.target.value) }}>
+        <option value="auto">Auto (hide when large)</option>
+        <option value="hidden">Hide</option>
+        <option value="shown">Always show</option>
+      </select>
+      <span className={styles.muted}>{conversationVisibilityReason(conversation, settings)}</span>
+      {error && <pre className={styles.error}>{error}</pre>}
+    </div>
+  )
+}
+
+/** The auto-hide rule: rooms left on Auto with more members than the
+ *  threshold are hidden. Each change saves at once, as on the Emoji page. */
+function AutoHideRuleEditor({ settings, write }: {
+  settings: ConversationVisibilitySettings
+  write: (path: string, body: unknown) => Promise<string | null>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [threshold, setThreshold] = useState(String(settings.auto_hide_member_count_threshold))
+  useEffect(() => { setThreshold(String(settings.auto_hide_member_count_threshold)) }, [settings.auto_hide_member_count_threshold])
+  const save = async (next: ConversationVisibilitySettings) => {
+    setBusy(true)
+    setError(await write('/conversations/visibility-settings', next))
+    setBusy(false)
+  }
+  const saveThreshold = () => {
+    const count = Number(threshold)
+    if (threshold === String(settings.auto_hide_member_count_threshold)) return
+    if (!Number.isInteger(count)) { setError(`${threshold} is not a whole number of members.`); return }
+    void save({ ...settings, auto_hide_member_count_threshold: count })
+  }
+  return (
+    <span className={styles.check} data-auto-hide-rule>
+      <label>
+        <input type="checkbox" checked={settings.auto_hide_enabled} disabled={busy}
+          onChange={e => { void save({ ...settings, auto_hide_enabled: e.target.checked }) }} /> Auto-hide rooms with more than
+      </label>{' '}
+      <input type="number" min={1} value={threshold} disabled={busy || !settings.auto_hide_enabled}
+        className={`${styles.input} ${styles.thresholdInput}`} aria-label="Auto-hide member threshold"
+        onChange={e => setThreshold(e.target.value)} onBlur={saveThreshold}
+        onKeyDown={e => { if (e.key === 'Enter') saveThreshold() }} /> members
+      {error && <pre className={styles.error}>{error}</pre>}
+    </span>
   )
 }
 

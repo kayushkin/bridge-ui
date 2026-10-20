@@ -30,7 +30,7 @@ export interface MultichatUnifiedContact {
   platforms?: string[]
 }
 
-import type { MessageReactionGroup } from '@kayushkin/multichat-types'
+import type { ConversationVisibility, MessageReactionGroup } from '@kayushkin/multichat-types'
 
 // The Messages pages (Conversations, Search, Contacts) read the records below.
 // They are hand-written for the same reason: the conversation, message and page
@@ -60,6 +60,12 @@ export interface MultichatConversation {
   /** The other person in a one-to-one DM; absent in a group, a server
    *  channel, or a DM whose bridge does not say it is one (Telegram). */
   direct_message_partner_user_id?: string
+  /** The operator's choice for the room: hidden, shown whatever its size, or
+   *  left to multichat's auto-hide rule. */
+  visibility: ConversationVisibility
+  /** What the choice and the rule come to: the list leaves the room out
+   *  unless hidden rooms are asked for. */
+  hidden: boolean
 }
 
 /** One person in a room — matrix.ConversationMember. `display_name` is the
