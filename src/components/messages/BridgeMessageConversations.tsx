@@ -452,7 +452,7 @@ function ConversationShortName({ roomID, shown, onRenamed }: {
 /** One room: its messages, oldest at the top, with older pages loaded on
  *  request and the newest page polled; and the box to answer in. Keyed by room,
  *  so switching rooms starts it afresh. */
-function ConversationThread({ conversation, onSent, shortName, tagEditor }: {
+export function ConversationThread({ conversation, onSent, shortName, tagEditor }: {
   conversation: MultichatConversation
   onSent: () => void
   /** Drawn at the end of the room's header: its short name and rename control. */

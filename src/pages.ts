@@ -7,6 +7,8 @@ import { BridgeSessions } from './components/BridgeSessions'
 import { BridgeAuth } from './components/BridgeAuth'
 import { BridgeUsage } from './components/BridgeUsage'
 import { BridgeMessageConversations } from './components/messages/BridgeMessageConversations'
+import { BridgeMessagesWaiting } from './components/messages/BridgeMessagesWaiting'
+import { AwaitingReplyCount } from './components/messages/AwaitingReplyCount'
 import { BridgeMessageSearch } from './components/messages/BridgeMessageSearch'
 import { BridgeMessageContacts } from './components/messages/BridgeMessageContacts'
 import { BridgeSettings } from './components/BridgeSettings'
@@ -87,6 +89,8 @@ export interface BridgePage {
    *  that says what is missing rather than on nothing. */
   available?: (config: BridgeConfig, flags: ShellFlags) => boolean
   component: ComponentType
+  /** Drawn inside the page's tab, after its label: a live count. */
+  badge?: ComponentType
 }
 
 export const BRIDGE_PAGES: readonly BridgePage[] = [
@@ -106,6 +110,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },
+  // Waiting on you comes first, so the Messages tab opens it: who wrote and
+  // is waiting on a reply.
+  { route: 'messageWaiting', label: 'Waiting on you', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessagesWaiting, badge: AwaitingReplyCount },
   // Messages — multichat's inbox. Conversations owns every path under
   // /messages that no sub-page claims: `/messages/kat` opens the chat
   // short-name-store calls messages/kat. React Router prefers a sub-page's
@@ -172,6 +179,7 @@ export interface NavEntry {
   label: string
   group: PageGroupKey
   end: boolean
+  badge?: ComponentType
 }
 
 /** The navigation for this host: every listed page that is available, in
@@ -179,7 +187,7 @@ export interface NavEntry {
 export function navEntriesFor(config: BridgeConfig, flags: ShellFlags, hostPages: readonly HostPage[] = []): NavEntry[] {
   const own: NavEntry[] = BRIDGE_PAGES
     .filter(p => p.listed && (p.available ? p.available(config, flags) : true))
-    .map(p => ({ to: config.routes[p.route], label: p.label, group: p.group, end: p.end ?? false }))
+    .map(p => ({ to: config.routes[p.route], label: p.label, group: p.group, end: p.end ?? false, ...(p.badge ? { badge: p.badge } : {}) }))
   const host: NavEntry[] = hostPages.map(p => ({ to: p.path, label: p.label, group: p.group, end: p.end ?? false }))
   return [...own, ...host]
 }

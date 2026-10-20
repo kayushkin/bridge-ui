@@ -16,7 +16,7 @@ describe('saveResultOf', () => {
 })
 
 describe('the scope index', () => {
-  const scopes: SettingsScope[] = ['global', 'harness', 'instance', 'board', 'principal', 'session']
+  const scopes: SettingsScope[] = ['global', 'harness', 'instance', 'board', 'principal', 'session', 'browser']
   it('names every scope exactly once, in override order (widest first)', () => {
     expect(SETTINGS_SCOPE_INDEX.map(r => r.scope)).toEqual(scopes)
   })

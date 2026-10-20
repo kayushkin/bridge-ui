@@ -344,3 +344,55 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
    emojiPanelBox in BridgeAutoReactions.tsx wherever its button sits. */
 .autoReactionEmojiFloat { position: fixed; z-index: 20; }
 .autoReactionEmojiFloat > .emojiPanel { position: static; width: 100%; }
+
+/* A narrow screen shows one column at a time: the list, or the open room with
+   a link back to the list. minmax(0, …) lets a long preview ellipsize instead
+   of widening the column past the screen. Last in the file so it overrides
+   the base rules above. Removed by accident on 2026-10-02 with the emoji
+   panel's old placement rules, which left the "← Conversations" bar showing on
+   a desktop and both columns on a phone. */
+.backToList { display: none; }
+@media (max-width: 900px) {
+  .columns { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .columns:not(.columnsRoomOpen) > .viewer { display: none; }
+  .columnsRoomOpen > .listColumn { display: none; }
+  .pageRoomOpen > .header { display: none; }
+  .listColumn { max-height: none; min-height: 0; }
+  .viewer { min-height: 0; max-height: none; }
+  .backToList {
+    display: block; align-self: flex-start; padding: 8px 10px; font: inherit; font-size: 0.9em;
+    color: var(--accent); background: none; border: none; cursor: pointer;
+  }
+  .threadBar .roomID { display: none; }
+  .message { max-width: 88%; }
+}
+
+/* Waiting on you: a dot on each waiting row, its dismiss button, the cleared
+   heading, and the alert settings above the list. */
+.waitingDot {
+  display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
+  background: var(--warning); vertical-align: middle;
+}
+.awaitingRow { display: flex; align-items: stretch; gap: 4px; }
+.awaitingRow > .row { flex: 1; }
+.awaitingDismiss {
+  flex: none; padding: 0 8px; font: inherit; color: var(--text-muted); background: none;
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+}
+.awaitingDismiss:hover { color: var(--text); border-color: var(--accent); }
+.awaitingSectionHeading {
+  margin: 12px 2px 0; font-size: 0.75em; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.awaitingSettingsToggle {
+  margin-left: 12px; padding: 2px 8px; font: inherit; font-size: 0.6em; vertical-align: middle;
+  color: var(--accent); background: none; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+}
+.awaitingSettings { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.awaitingSettingsRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.awaitingSettingsLabel { min-width: 11em; color: var(--text-muted); font-size: 0.9em; }
+
+/* A conversation opened in the chat's thread pane. */
+.chatConversationPane { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; padding: 8px 12px 12px; box-sizing: border-box; }
+.chatConversationBar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.chatConversationViewer { flex: 1; min-height: 0; max-height: none; }

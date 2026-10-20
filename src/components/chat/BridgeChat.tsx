@@ -1,3 +1,5 @@
+import { ChatConversationPane } from '../messages/ChatConversationPane'
+import { OPEN_CONVERSATION_IN_CHAT_EVENT, type OpenConversationInChatDetail } from '../../chatConversationEvents'
 import { Fragment, useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBridgeConfig } from '../../context'
@@ -57,12 +59,13 @@ import {
 } from './panePersistence'
 
 /** `?view=` values, each a surface drawn in place of the thread: the work graph,
- *  each repo's commits coloured by the session that made them, and the projects
- *  (`&project=` opens one project's page). The orchestrator is not one: it is an
- *  ordinary session, its home session, opened like any other. Nor is the signals
- *  page, which has its own route (`routes.signals`) because it shows no session;
- *  `?view=signals`, its old address, is sent there. */
-const WORKSPACE_VIEWS = ['work-graph', 'projects'] as const
+ *  each repo's commits coloured by the session that made them, the projects
+ *  (`&project=` opens one project's page), and a multichat conversation
+ *  (`&room=`), opened from the sidebar's Waiting on you section. The orchestrator
+ *  is not one: it is an ordinary session, its home session, opened like any
+ *  other. Nor is the signals page, which has its own route (`routes.signals`)
+ *  because it shows no session; `?view=signals`, its old address, is sent there. */
+const WORKSPACE_VIEWS = ['work-graph', 'projects', 'conversation'] as const
 type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 function workspaceViewOf(param: string | null): WorkspaceView | null {
@@ -226,6 +229,11 @@ function BridgeChatPage() {
   const [openProjectId, setOpenProjectId] = useState<string | null>(
     () => searchParams.get('project') || null,
   )
+  // The multichat room the conversation view shows, `?room=`. Written back by the
+  // same URL effect, for the same reason.
+  const [openConversationRoomId, setOpenConversationRoomId] = useState<string | null>(
+    () => searchParams.get('room') || null,
+  )
   // The work graph's repo (repo-store id) and selected commit, `?repo=` and
   // `?commit=`, so a repo or commit chip can link straight to them. Written
   // back by the same URL effect, for the same reason.
@@ -295,6 +303,12 @@ function BridgeChatPage() {
       else next.delete('project')
       changed = true
     }
+    const shownRoomId = workspaceView === 'conversation' ? openConversationRoomId : null
+    if ((next.get('room') || null) !== shownRoomId) {
+      if (shownRoomId) next.set('room', shownRoomId)
+      else next.delete('room')
+      changed = true
+    }
     const workGraphShown = workspaceView === 'work-graph'
     const shownRepo = workGraphShown && workGraphFocus.repoId !== null ? String(workGraphFocus.repoId) : null
     const shownCommit = workGraphShown ? workGraphFocus.commitSha : null
@@ -312,7 +326,7 @@ function BridgeChatPage() {
     // Replace, not push: browsing sessions must not fill the back stack with one entry
     // per session looked at.
     setSearchParams(next, { replace: true })
-  }, [activeId, workspaceView, openProjectId, workGraphFocus, searchParams, setSearchParams])
+  }, [activeId, workspaceView, openProjectId, openConversationRoomId, workGraphFocus, searchParams, setSearchParams])
 
   const afterOpenSession = useCallback(() => {
     setWorkspaceView(null)
@@ -326,6 +340,19 @@ function BridgeChatPage() {
     setWorkspaceView('work-graph')
     if (minimal) setDrawerOpen(false)
   }, [minimal, setDrawerOpen])
+  /** Open a multichat conversation where the thread is. */
+  const openConversation = useCallback((roomId: string) => {
+    setOpenConversationRoomId(roomId)
+    setWorkspaceView('conversation')
+    if (minimal) setDrawerOpen(false)
+  }, [minimal, setDrawerOpen])
+  // A pop-up drawn by the layout asks for a conversation this way: the chat
+  // reads `?view=` only when it mounts.
+  useEffect(() => {
+    const onOpen = (event: Event) => openConversation((event as CustomEvent<OpenConversationInChatDetail>).detail.roomID)
+    window.addEventListener(OPEN_CONVERSATION_IN_CHAT_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_CONVERSATION_IN_CHAT_EVENT, onOpen)
+  }, [openConversation])
   /** Open the projects view: one project's page, or the landing page for null. */
   const openProjects = useCallback((projectId: string | null) => {
     setOpenProjectId(projectId)
@@ -347,6 +374,8 @@ function BridgeChatPage() {
       workGraphOpen={workspaceView === 'work-graph'}
       onOpenProjects={openProjects}
       projectsOpen={workspaceView === 'projects'}
+      onOpenConversation={openConversation}
+      openConversationRoomID={workspaceView === 'conversation' ? openConversationRoomId : null}
     />
   )
 
@@ -361,6 +390,7 @@ function BridgeChatPage() {
           title={
             workspaceView === 'work-graph' ? 'Work graph'
               : workspaceView === 'projects' ? 'Projects'
+                : workspaceView === 'conversation' ? 'Conversation'
                 : activeSummary?.displayName || activeSummary?.sessionId || ''
           }
         />
@@ -391,6 +421,8 @@ function BridgeChatPage() {
               }}
               onClose={() => setWorkspaceView(null)}
             />
+          ) : workspaceView === 'conversation' && openConversationRoomId ? (
+            <ChatConversationPane roomID={openConversationRoomId} onClose={() => setWorkspaceView(null)} />
           ) : workspaceView === 'work-graph' ? (
             <WorkGraphView
               initialRepoId={workGraphFocus.repoId}

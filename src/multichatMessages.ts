@@ -13,6 +13,7 @@ import type {
 } from './types-multichat'
 import type { ConversationLink, ConversationVisibilitySettings } from '@kayushkin/multichat-types'
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
+import { AWAITING_REPLY_ROUTES_CALLED } from './awaitingReply'
 
 /** How many messages one page asks for. multichat takes 1–200. */
 export const MESSAGE_PAGE_SIZE = 50
@@ -57,6 +58,8 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   'GET /discord/status',
   // The emoji pickers, the quick-react bar and the Emoji page.
   ...EMOJI_ROUTES_CALLED,
+  // Who is waiting on a reply, its settings, and opening or dismissing a room.
+  ...AWAITING_REPLY_ROUTES_CALLED,
 ]
 
 const roomSegment = (roomID: string) => encodeURIComponent(roomID)

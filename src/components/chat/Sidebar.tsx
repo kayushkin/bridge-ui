@@ -19,6 +19,7 @@ import { useBridgeInstances } from '../../useBridgeInstances'
 import { useBridgeMachines } from '../../useBridgeMachines'
 import { EditableName } from './EditableName'
 import { OrchestratorRow } from './OrchestratorRow'
+import { AwaitingReplySidebarSection } from './AwaitingReplySidebarSection'
 import { ConductorDock } from './ConductorDock'
 import { useHomeSession } from './useHomeSession'
 import { StatusDot } from './StatusDot'
@@ -135,6 +136,10 @@ interface SidebarProps {
   onOpenProjects: (projectId: string | null) => void
   /** Whether the projects view is on screen, so its row reads as selected. */
   projectsOpen: boolean
+  /** Show a multichat conversation in place of the thread (a Waiting on you row). */
+  onOpenConversation: (roomID: string) => void
+  /** The conversation on screen, or null, so its row reads as selected. */
+  openConversationRoomID: string | null
 }
 
 export default function Sidebar({
@@ -146,6 +151,8 @@ export default function Sidebar({
   workGraphOpen,
   onOpenProjects,
   projectsOpen,
+  onOpenConversation,
+  openConversationRoomID,
 }: SidebarProps) {
   const {
     groups: allGroups,
@@ -921,9 +928,13 @@ export default function Sidebar({
           orchestratorBasePath={orchestratorBasePath}
           onOpenHomeSession={() => void homeSession.open()}
           homeSessionError={homeSession.error}
-          selected={!workGraphOpen && !projectsOpen && homeSession.sessionId !== null && homeSession.sessionId === activeId}
+          selected={!workGraphOpen && !projectsOpen && !openConversationRoomID && homeSession.sessionId !== null && homeSession.sessionId === activeId}
         />
       )}
+
+      {/* Conversations where someone tagged wrote after your last word, from
+          multichat. A row opens the conversation where the thread is. */}
+      <AwaitingReplySidebarSection openRoomID={openConversationRoomID} onOpenConversation={onOpenConversation} />
 
       <div className="bc-session-search">
         <input

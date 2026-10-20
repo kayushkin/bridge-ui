@@ -3,8 +3,9 @@ import { useCallback, useState, type ReactNode } from 'react'
 /** Where a setting applies. Each scope is edited on the page of the thing it
  *  applies to; the global Settings page holds only `global` and `harness`. A
  *  narrower scope overrides a wider one: session over board over instance over
- *  harness over global — when a setting exists at both. */
-export type SettingsScope = 'global' | 'harness' | 'instance' | 'board' | 'principal' | 'session'
+ *  harness over global — when a setting exists at both. `browser` is a setting
+ *  kept in this browser's localStorage, so each device has its own. */
+export type SettingsScope = 'global' | 'harness' | 'instance' | 'board' | 'principal' | 'session' | 'browser'
 
 export const SETTINGS_SCOPE_LABEL: Record<SettingsScope, string> = {
   global: 'Global',
@@ -13,6 +14,7 @@ export const SETTINGS_SCOPE_LABEL: Record<SettingsScope, string> = {
   board: 'Per board',
   principal: 'Per principal',
   session: 'Per session',
+  browser: 'This browser',
 }
 
 /** What one write came to: landed, or refused in the store's own words. */
@@ -153,11 +155,12 @@ export function SectionStatus({ saving, error, saved }: { saving: boolean; error
 
 /** The scopes and where each is edited, for the index at the top of the
  *  Settings page. `page` is a `BridgeRoutes` key or a plain description. */
-export const SETTINGS_SCOPE_INDEX: { scope: SettingsScope; where: string; route: 'settings' | 'instances' | 'tools' | 'kanban' | 'principals' | 'chat' }[] = [
+export const SETTINGS_SCOPE_INDEX: { scope: SettingsScope; where: string; route: 'settings' | 'instances' | 'tools' | 'kanban' | 'principals' | 'chat' | 'messageWaiting' }[] = [
   { scope: 'global', where: 'This page.', route: 'settings' },
   { scope: 'harness', where: 'This page, one section per harness.', route: 'settings' },
   { scope: 'instance', where: 'Instances (configuration, credentials), Tools (which tools an instance is offered) and Hooks (commands wired in at spawn, also global and per session).', route: 'instances' },
   { scope: 'board', where: 'Kanban → ⚙ Board settings: defaults, tag rules, classifier, ladder, working week, message triggers.', route: 'kanban' },
   { scope: 'principal', where: 'Principals: availability, time off, grants.', route: 'principals' },
   { scope: 'session', where: 'The chat header: model, effort, permission mode for one session.', route: 'chat' },
+  { scope: 'browser', where: 'Messages → Waiting on you → Alert settings: the sound and pop-ups for a new message, kept in this browser only.', route: 'messageWaiting' },
 ]

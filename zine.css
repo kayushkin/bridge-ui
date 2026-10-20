@@ -930,3 +930,22 @@
   [data-theme="zine"] .bridge-group-tab.bridge-tab-active::before { width: 14px; height: 14px; margin-right: 4px; }
   [data-theme="zine"] .page-title { font-size: 1.7rem; -webkit-text-stroke-width: 5px; text-shadow: 3px 3px 0 var(--zine-ink); }
 }
+
+/* Waiting on you: the count, the dot on a waiting row, and the pop-up, in the
+   zine's inks — orange marks with navy outlines on cream. */
+[data-theme="zine"] .bc-awaiting-count {
+  background: var(--zine-orange); color: var(--zine-cream); border: 1.5px solid var(--zine-ink); box-shadow: 1.5px 1.5px 0 var(--zine-ink);
+}
+[data-theme="zine"] .bc-awaiting-dot { background: var(--zine-orange); border: 1.5px solid var(--zine-ink); }
+[data-theme="zine"] .bc-awaiting-section .bc-folder-header { background: var(--zine-pink-light); }
+[data-theme="zine"] .bc-awaiting-row:hover .bc-session-label { text-decoration: none; }
+[data-theme="zine"] .bc-awaiting-row:hover .bc-awaiting-name { text-decoration: underline wavy var(--zine-pink); text-underline-offset: 3px; }
+[data-theme="zine"] .bc-awaiting-platform,
+[data-theme="zine"] .bc-awaiting-preview { color: var(--zine-ink); opacity: 0.75; }
+[data-theme="zine"] .bc-awaiting-dismiss { color: var(--zine-ink); }
+[data-theme="zine"] .bc-awaiting-popup {
+  background: var(--zine-cream); color: var(--zine-ink); border: 2.5px solid var(--zine-ink);
+  border-radius: 10px; box-shadow: 5px 5px 0 var(--zine-ink);
+}
+[data-theme="zine"] .bc-awaiting-popup-meta,
+[data-theme="zine"] .bc-awaiting-popup-close { color: var(--zine-ink); opacity: 0.7; }

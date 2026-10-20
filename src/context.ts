@@ -61,6 +61,7 @@ export interface BridgeRoutes {
    *  Needs `multichatBasePath`. Its own path is a prefix of the other two
    *  Messages pages, so its tab is `end`. */
   messageConversations: string
+  messageWaiting: string
   /** Search across the messages of every multichat conversation (`?q=`). */
   messageSearch: string
   /** multichat's contacts, merged across apps, and the tags on them. */
@@ -117,6 +118,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   card: '/card',
   emailTickets: '/email-tickets',
   messageConversations: '/messages',
+  messageWaiting: '/messages/waiting',
   messageSearch: '/messages/search',
   messageContacts: '/messages/contacts',
   previews: '/previews',

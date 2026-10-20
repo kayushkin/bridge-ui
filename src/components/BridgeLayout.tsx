@@ -5,6 +5,7 @@ import { useBridgeConfig } from '../context'
 import { PAGE_GROUPS, activeNavEntry, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
 import { useMinimalChrome } from './minimal/MinimalChromeContext'
 import { ShellNavigationContext } from './shellNavigation'
+import { AwaitingReplyAlerts } from './messages/AwaitingReplyAlerts'
 
 interface BridgeLayoutProps {
   /** If true, include the Conformance page. Default: true. */
@@ -88,6 +89,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
                 aria-current={g.key === activeGroup ? 'true' : undefined}
               >
                 {g.label}
+                {entries.filter(e => e.group === g.key && e.badge).map(e => { const Badge = e.badge!; return <Badge key={e.to} /> })}
               </Link>
             )
           })}
@@ -104,6 +106,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
               aria-current={t === activePage ? 'page' : undefined}
             >
               {t.label}
+              {t.badge && <t.badge />}
             </Link>
           ))}
         </nav>
@@ -111,6 +114,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
       <div className="bridge-content">
         <Outlet />
       </div>
+      {config.multichatBasePath && <AwaitingReplyAlerts />}
     </div>
     </ShellNavigationContext.Provider>
   )
