@@ -1,14 +1,19 @@
-import { useMemo } from 'react'
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useOpenSignalsByAttention, useSessionNames, type Signal, type SignalRequest } from '@kayushkin/chat-core'
 import { SignalRequestCard } from './SignalCard'
 import { RefChip } from './RefChip'
-import { backgroundSessionTypeLabel, signalSection } from '../../signalAttentionSections'
+import { backgroundSessionTypeLabel, sessionTypeOfRequest, signalSection } from '../../signalAttentionSections'
 import { timeAgo } from '../../utils'
 import styles from './Chat.module.css'
 
+/** How many background cards the open background section draws at a time. There
+ *  were 319 on 2026-10-20, nearly all notifications with a markdown body, and
+ *  drawing them all at once froze the page for over a second. */
+const BACKGROUND_PAGE_SIZE = 50
+
 /**
- * Every open signal on the thread pane's full width — the sidebar's "Needs you",
- * opened out so several can be read and answered in one sitting.
+ * Every open signal on a page of its own — the sidebar's "Needs you", opened out
+ * so several can be read and answered in one sitting.
  *
  * The sidebar panel is capped at a third of the sidebar's height and draws compact
  * cards, which drop each signal's body and each option's description. That is right
@@ -20,16 +25,18 @@ import styles from './Chat.module.css'
  * Same read and same split as the sidebar (`useOpenSignalsByAttention()`), so the two
  * share one cache entry and a card answered here leaves the sidebar count too. "Needs
  * you" is the operator's (interactive and herald sessions); background agents'
- * signals follow in a collapsed section of their own, with their own count.
+ * signals follow in a collapsed section of their own, with their own count, whose
+ * cards are drawn only once it is opened.
  */
 export default function SignalsPage({
   onSelectSession,
-  onClose,
+  backControl,
 }: {
-  /** Open the session a card belongs to. */
+  /** Open the session a card belongs to. Must keep one identity across renders:
+   *  every card is memoized on it. */
   onSelectSession: (sessionId: string) => void
-  /** Go back to the chat thread. */
-  onClose: () => void
+  /** The header's way off the page, drawn by the host. */
+  backControl: ReactNode
 }) {
   const { operator, background, sessionTypeOf, available, loading, error, reload } = useOpenSignalsByAttention()
   const needsYou = useMemo(() => signalSection(operator), [operator])
@@ -40,26 +47,29 @@ export default function SignalsPage({
   )
   const sessionName = useSessionNames(sessionIds)
 
+  // A shut <details> still mounts its children, so the background cards are drawn
+  // only once the section is opened, and then a page at a time.
+  const [backgroundOpen, setBackgroundOpen] = useState(false)
+  const [backgroundShown, setBackgroundShown] = useState(BACKGROUND_PAGE_SIZE)
+
   const renderRequest = (request: SignalRequest) => (
-    <SignalRequestCard
+    <SignalsPageRequest
       // A derived group has no request id, so it is keyed by its one signal's id.
       key={request.requestId || request.signals[0]?.id}
       request={request}
+      sessionName={sessionName(request.sessionId)}
+      sessionType={sessionTypeOfRequest(request, sessionTypeOf)}
+      onSelectSession={onSelectSession}
       onResolved={reload}
-      // As in the sidebar inbox: the session that asked has usually stopped, and
-      // without this the only way to clear the row is to answer a question that no
-      // longer matters.
-      allowDismissWithoutAnswer
-      header={
-        <SignalRequestDetails
-          request={request}
-          sessionName={sessionName(request.sessionId)}
-          sessionTypeOf={sessionTypeOf}
-          onSelectSession={onSelectSession}
-        />
-      }
     />
   )
+
+  const backgroundQuestions = backgroundSection.questionRequests.slice(0, backgroundShown)
+  const backgroundNotifications = backgroundSection.notificationRequests.slice(
+    0,
+    Math.max(0, backgroundShown - backgroundSection.questionRequests.length),
+  )
+  const backgroundHidden = backgroundSection.requests.length - backgroundShown
 
   return (
     <div className={styles.signalsPage} role="region" aria-label="Signals needing you">
@@ -70,9 +80,7 @@ export default function SignalsPage({
         <button type="button" className="bc-ctrl-btn" onClick={reload} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
-        <button type="button" className="bc-ctrl-btn" onClick={onClose}>
-          Back to chat
-        </button>
+        {backControl}
       </div>
 
       <div className={styles.signalsPageBody}>
@@ -103,7 +111,11 @@ export default function SignalsPage({
             <details> that starts shut, so the page opens on the operator's own and the
             background pile is one line with its count until asked for. */}
         {backgroundSection.requests.length > 0 && (
-          <details className={styles.signalsPageBackground}>
+          <details
+            className={styles.signalsPageBackground}
+            open={backgroundOpen}
+            onToggle={event => setBackgroundOpen(event.currentTarget.open)}
+          >
             <summary className={styles.signalsPageBackgroundSummary}>
               Background agents · {backgroundSection.signalCount}
               <span className={styles.signalsPageBackgroundNote}>
@@ -111,21 +123,30 @@ export default function SignalsPage({
                 needing you
               </span>
             </summary>
-            {backgroundSection.questionRequests.length > 0 && (
+            {backgroundOpen && backgroundQuestions.length > 0 && (
               <section className={styles.signalsPageSection}>
                 <h3 className={styles.signalsPageSectionTitle}>
                   Questions · {backgroundSection.questionRequests.length}
                 </h3>
-                {backgroundSection.questionRequests.map(renderRequest)}
+                {backgroundQuestions.map(renderRequest)}
               </section>
             )}
-            {backgroundSection.notificationRequests.length > 0 && (
+            {backgroundOpen && backgroundNotifications.length > 0 && (
               <section className={styles.signalsPageSection}>
                 <h3 className={styles.signalsPageSectionTitle}>
                   Notifications · {backgroundSection.notificationRequests.length}
                 </h3>
-                {backgroundSection.notificationRequests.map(renderRequest)}
+                {backgroundNotifications.map(renderRequest)}
               </section>
+            )}
+            {backgroundOpen && backgroundHidden > 0 && (
+              <button
+                type="button"
+                className="bc-ctrl-btn"
+                onClick={() => setBackgroundShown(shown => shown + BACKGROUND_PAGE_SIZE)}
+              >
+                Show {Math.min(BACKGROUND_PAGE_SIZE, backgroundHidden)} more of {backgroundHidden}
+              </button>
             )}
           </details>
         )}
@@ -133,6 +154,46 @@ export default function SignalsPage({
     </div>
   )
 }
+
+/**
+ * One card and the line above it. Memoized, and given only values that keep their
+ * identity while nothing about this card changes: the page re-renders on every
+ * signals read and every resolved name, and re-drawing hundreds of markdown cards
+ * each time is what made the page lag.
+ */
+const SignalsPageRequest = memo(function SignalsPageRequest({
+  request,
+  sessionName,
+  sessionType,
+  onSelectSession,
+  onResolved,
+}: {
+  request: SignalRequest
+  sessionName: string
+  sessionType: string
+  onSelectSession: (sessionId: string) => void
+  onResolved: () => void
+}) {
+  const openSession = useCallback(() => onSelectSession(request.sessionId), [onSelectSession, request.sessionId])
+  return (
+    <SignalRequestCard
+      request={request}
+      onResolved={onResolved}
+      // As in the sidebar inbox: the session that asked has usually stopped, and
+      // without this the only way to clear the row is to answer a question that no
+      // longer matters.
+      allowDismissWithoutAnswer
+      header={
+        <SignalRequestDetails
+          request={request}
+          sessionName={sessionName}
+          sessionType={sessionType}
+          onOpenSession={openSession}
+        />
+      }
+    />
+  )
+})
 
 /**
  * The line above a card: which session, when, raised by what, for whom, and the todo
@@ -144,14 +205,14 @@ export default function SignalsPage({
 function SignalRequestDetails({
   request,
   sessionName,
-  sessionTypeOf,
-  onSelectSession,
+  sessionType,
+  onOpenSession,
 }: {
   request: SignalRequest
   sessionName: string
-  /** chat-core's resolver: the signal's own type, else its session row's, else ''. */
-  sessionTypeOf: (signal: Signal) => string
-  onSelectSession: (sessionId: string) => void
+  /** The raising session's type as chat-core's split saw it, or '' when unknown. */
+  sessionType: string
+  onOpenSession: () => void
 }) {
   const first: Signal | undefined = request.signals[0]
   if (!first) return null
@@ -164,7 +225,7 @@ function SignalRequestDetails({
           type="button"
           className={styles.inboxSessionButton}
           title="Open this session"
-          onClick={() => onSelectSession(request.sessionId)}
+          onClick={onOpenSession}
         >
           {sessionName}
         </button>
@@ -172,7 +233,7 @@ function SignalRequestDetails({
         {first.source !== '' && <span>from {first.source}</span>}
         {/* Always said, and an unknown type is said to be unknown: on this page the
             kind of session is what separates the operator's from a background agent's. */}
-        <span>{backgroundSessionTypeLabel(sessionTypeOf(first))} session</span>
+        <span>{backgroundSessionTypeLabel(sessionType)} session</span>
         {first.audience !== '' && <span>for the {first.audience}</span>}
         {first.linkedTodoId !== '' && <RefChip kind="todo" refId={first.linkedTodoId} />}
       </div>

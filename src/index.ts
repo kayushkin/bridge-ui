@@ -186,6 +186,7 @@ export type { CardDetailProps } from './components/BridgeKanban'
 // the reference chips' hooks throw without it. `<Bridge>` mounts both; a host
 // composing pages by hand must too.
 export { BridgeOrchestrator } from './components/BridgeOrchestrator'
+export { BridgeSignals } from './components/BridgeSignals'
 export { BridgeAttach } from './components/BridgeAttach'
 export type { BridgeAttachProps } from './components/BridgeAttach'
 

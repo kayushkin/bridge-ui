@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useBridgeConfig } from '../../context'
 import {
   useActiveSession,
   useSessionStatus,
@@ -18,7 +19,6 @@ import { SessionDrawer } from '../minimal/SessionDrawer'
 import { LinkedKanbanPanel } from './LinkedKanbanPanel'
 import { SplitDragHandle } from './SplitDragHandle'
 import Sidebar from './Sidebar'
-import SignalsPage from './SignalsPage'
 import { WorkGraphView } from './WorkGraphView'
 import { ProjectsView } from './ProjectsView'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
@@ -56,11 +56,13 @@ import {
   type PanesHidden,
 } from './panePersistence'
 
-/** `?view=` values, each a surface drawn in place of the thread: the signals page,
- *  the work graph, each repo's commits coloured by the session that made them, and
- *  the projects (`&project=` opens one project's page). The orchestrator is not one:
- *  it is an ordinary session, its home session, opened like any other. */
-const WORKSPACE_VIEWS = ['signals', 'work-graph', 'projects'] as const
+/** `?view=` values, each a surface drawn in place of the thread: the work graph,
+ *  each repo's commits coloured by the session that made them, and the projects
+ *  (`&project=` opens one project's page). The orchestrator is not one: it is an
+ *  ordinary session, its home session, opened like any other. Nor is the signals
+ *  page, which has its own route (`routes.signals`) because it shows no session;
+ *  `?view=signals`, its old address, is sent there. */
+const WORKSPACE_VIEWS = ['work-graph', 'projects'] as const
 type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 function workspaceViewOf(param: string | null): WorkspaceView | null {
@@ -101,6 +103,15 @@ const STREAMING_STATES = new Set([
  *  time rather than trusting the value it was mounted with: a session clicked in the
  *  sidebar while prefs were still in flight must not be replaced by a new chat. */
 export function BridgeChat() {
+  const [searchParams] = useSearchParams()
+  const { routes } = useBridgeConfig()
+  // The signals page's old address. Sent on before the chat mounts, so a bookmark
+  // neither opens a session nor starts a new chat on its way through.
+  if (searchParams.get('view') === 'signals') return <Navigate to={routes.signals} replace />
+  return <BridgeChatPage />
+}
+
+function BridgeChatPage() {
   const target = useNewSessionTarget()
   const { newSession } = useSessionActions()
   const { id: activeId, summary: activeSummary, select } = useActiveSession()
@@ -152,6 +163,8 @@ export function BridgeChat() {
   // Note `routes.chat` still resolves to `/` — the producers above land on the ORIGINAL
   // chat, not here. Repointing them is the daily-driver cutover's call, not this one's.
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { routes } = useBridgeConfig()
   const deeplink = useRef<SessionDeeplinkState>(initialSessionDeeplinkState)
 
   // Whole-sidebar collapse. It lives HERE rather than in `Sidebar` because the collapsed
@@ -306,9 +319,9 @@ export function BridgeChat() {
     if (minimal) setDrawerOpen(false)
   }, [minimal, setDrawerOpen])
   const openSignalsPage = useCallback(() => {
-    setWorkspaceView('signals')
     if (minimal) setDrawerOpen(false)
-  }, [minimal, setDrawerOpen])
+    navigate(routes.signals)
+  }, [minimal, setDrawerOpen, navigate, routes.signals])
   const openWorkGraph = useCallback(() => {
     setWorkspaceView('work-graph')
     if (minimal) setDrawerOpen(false)
@@ -368,15 +381,7 @@ export function BridgeChat() {
           </button>
         ) : sidebar)}
         <div className="bc-workspaces">
-          {workspaceView === 'signals' ? (
-            <SignalsPage
-              onSelectSession={sessionId => {
-                select(sessionId)
-                setWorkspaceView(null)
-              }}
-              onClose={() => setWorkspaceView(null)}
-            />
-          ) : workspaceView === 'projects' ? (
+          {workspaceView === 'projects' ? (
             <ProjectsView
               projectId={openProjectId}
               onOpenProject={setOpenProjectId}

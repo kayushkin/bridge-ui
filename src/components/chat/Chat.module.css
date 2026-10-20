@@ -1696,6 +1696,15 @@
    The header stays put and the body scrolls, so Refresh and Back stay in reach
    however many cards there are.
    =========================================================================== */
+/* The signals page's own route: the page fills what the layout gives it, and
+   its body scrolls inside. */
+.signalsRoute {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
 .signalsPage {
   display: flex;
   flex: 1;
@@ -1744,6 +1753,11 @@
    question's. The question's own frame is dropped inside, so it is one box,
    not a box in a box. */
 .signalsPageSection > :global(.signal-request) {
+  /* A card off screen is neither laid out nor painted. The page can hold
+     hundreds, and laying them all out is what made scrolling stall. The
+     intrinsic size is a typical card's, so the scrollbar stays about right. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;

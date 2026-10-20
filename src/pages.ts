@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { BridgeConfig, BridgeRoutes } from './context'
 import { BridgeChat } from './components/chat/BridgeChat'
+import { BridgeSignals } from './components/BridgeSignals'
 import { BridgeInstances } from './components/BridgeInstances'
 import { BridgeSessions } from './components/BridgeSessions'
 import { BridgeAuth } from './components/BridgeAuth'
@@ -91,6 +92,7 @@ export interface BridgePage {
 export const BRIDGE_PAGES: readonly BridgePage[] = [
   // Work
   { route: 'chat', label: 'Chat', group: 'work', listed: true, end: true, component: BridgeChat },
+  { route: 'signals', label: 'Signals', group: 'work', listed: true, component: BridgeSignals },
   { route: 'sessions', label: 'Sessions', group: 'work', listed: true, component: BridgeSessions },
   { route: 'kanban', label: 'Kanban', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath, component: BridgeKanban },
   { route: 'kanbanSettings', label: 'Board settings', group: 'work', listed: false, component: BridgeKanbanSettings },

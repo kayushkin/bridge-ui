@@ -7,6 +7,8 @@ export interface BridgeRoutes {
   // root and routes these itself, so the defaults are the truth for every host
   // that mounts it; a host composing pages by hand under a prefix overrides them.
   chat: string
+  /** Every open signal across sessions, on a page of its own. */
+  signals: string
   instances: string
   sessions: string
   auth: string
@@ -88,6 +90,7 @@ export interface BridgeRoutes {
 
 export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   chat: '/',
+  signals: '/signals',
   instances: '/instances',
   sessions: '/sessions',
   auth: '/auth',

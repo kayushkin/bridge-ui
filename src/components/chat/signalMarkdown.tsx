@@ -1,4 +1,4 @@
-import type { ComponentProps, JSX } from 'react';
+import { memo, type ComponentProps, type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -31,8 +31,10 @@ const INLINE_COMPONENTS: MarkdownComponents = {
 };
 
 /** A card's body: full markdown, in a `div`, styled by the same
- *  `bc-turns-md` rules as the transcript. */
-export function SignalBodyMarkdown({ text }: { text: string }): JSX.Element {
+ *  `bc-turns-md` rules as the transcript. Memoized on its text, as is the inline
+ *  form below: parsing is the costly part of drawing a card, and a card re-renders
+ *  far more often than its text changes. */
+export const SignalBodyMarkdown = memo(function SignalBodyMarkdown({ text }: { text: string }): JSX.Element {
   return (
     <div className="signal-body bc-turns-md">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={BLOCK_COMPONENTS}>
@@ -40,7 +42,7 @@ export function SignalBodyMarkdown({ text }: { text: string }): JSX.Element {
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 /** A title or an option description: emphasis and code only. Any other
  *  element is unwrapped to its text rather than dropped with it.
@@ -48,7 +50,7 @@ export function SignalBodyMarkdown({ text }: { text: string }): JSX.Element {
  *  Line-start block markers are escaped first, because unwrapping keeps a
  *  list item's text but not its marker: `1. Which approach?` would lose the
  *  `1.`. Escaped, it stays text and every character survives. */
-export function SignalInlineMarkdown({ text }: { text: string }): JSX.Element {
+export const SignalInlineMarkdown = memo(function SignalInlineMarkdown({ text }: { text: string }): JSX.Element {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -59,7 +61,7 @@ export function SignalInlineMarkdown({ text }: { text: string }): JSX.Element {
       {escapeBlockMarkers(text)}
     </ReactMarkdown>
   );
-}
+});
 
 /** Backslash-escape what would start a block at the head of a line — a
  *  heading `#`, a quote `>`, a bullet `-` `*` `+`, an ordered `1.` or `1)` —
