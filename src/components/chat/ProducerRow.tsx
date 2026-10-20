@@ -3,7 +3,7 @@ import type { FetchFn } from '../../types'
 
 // ProducerConfig mirrors the configView the producer service returns from
 // GET/PUT /config and POST /config/reset-week.
-interface ProducerConfig {
+export interface ProducerConfig {
   enabled: boolean
   week_limit_usd: number
   week_spent_usd: number
