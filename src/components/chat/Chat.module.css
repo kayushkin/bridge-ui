@@ -1639,35 +1639,6 @@
   border-left-color: var(--accent);
 }
 
-/* The span's demoted history (TurnList SpanRow): every pre-final segment behind
-   ONE collapsible. Inside it, report prose stays fully visible — the collapsible
-   itself is the demotion. */
-.progressGroup {
-  margin: 2px 0;
-}
-.progressGroupSummary {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5em;
-  cursor: pointer;
-  color: var(--bc-muted, #8a8f98);
-  font-size: 0.9em;
-}
-.progressGroupSummary:hover {
-  color: var(--bc-fg, #e6e6e6);
-}
-.progressGroupErrorCount {
-  color: var(--error, #ef4444);
-}
-.progressGroupBody {
-  border-left: 2px solid var(--bc-border, #2c2f36);
-  padding-left: 10px;
-  margin: 4px 0 4px 2px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 /* A surfaced harness task-notification (TurnList NotificationChip): the seam a
    background task made, formatted and auto-collapsed; expands to the raw text. */
 .notificationChip {

@@ -397,11 +397,11 @@ export default function TurnList({
       // message at all — a wire fragment) CONTINUES the previous span: the model
       // yielded, a background task finished, the harness re-prompted it. The
       // whole span renders as ONE message row (owner: "they are still 5 separate
-      // messages" — they must not be): one header, every pre-final segment
-      // demoted into ONE collapsible of progress reports (prose visible inside,
-      // narration collapsed), each notification surfaced as a formatted
-      // auto-collapsed chip at the seam it explains, and the final segment's
-      // answer at full prose weight. A real user message always ends the span.
+      // messages" — they must not be): one header, then each segment in order —
+      // its notification as a formatted auto-collapsed chip at the seam it
+      // explains, narration collapsed, its answer at full prose weight. A bridge
+      // report (a button's outcome, a deploy's) opens a segment the same way.
+      // A real user message always ends the span.
       let span: SpanSegment[] = []
       let spanStreaming = false
       const flushSpan = () => {
@@ -750,14 +750,23 @@ interface TurnItemProps {
   resultedToolIds: ReadonlySet<string>
 }
 
-/** Harness-injected notification, surfaced through the history-replay path as a
- *  user_message whose entire body is one `<task-notification>…</task-notification>`
- *  block. It is not something the user typed, so it must not render as a user turn.
- *  Anchored start+end (matching bridge-ui's isHarnessNotification) so a real prompt that
- *  merely quotes a notification still renders. */
+/** A message the person did not write, though it arrives as a user_message because
+ *  that is the only way to start the agent's turn:
+ *   - Claude Code's `<task-notification>…</task-notification>`: a background task ended;
+ *   - llm-bridge's `<bridge-report kind="…">…</bridge-report>` (msg.WrapBridgeReport):
+ *     a button's outcome, or how a deploy this session started ended;
+ *   - the same two reports as the server and deploy-gate wrote them before 2026-10-21,
+ *     untagged, starting `[session action] ` or `[deploy-gate] `. 28 such messages are
+ *     in history; nothing writes the untagged form any more.
+ *  Anchored at both ends, so a real prompt that merely quotes one still renders. */
 function isHarnessNotification(text: string): boolean {
   const t = text.trim()
-  return t.startsWith('<task-notification>') && t.endsWith('</task-notification>')
+  return (
+    (t.startsWith('<task-notification>') && t.endsWith('</task-notification>')) ||
+    (/^<bridge-report kind="[a-z-]+">/.test(t) && t.endsWith('</bridge-report>')) ||
+    t.startsWith('[session action] ') ||
+    t.startsWith('[deploy-gate] ')
+  )
 }
 
 /** One rendered row derived from a turn's CONTENT (not from turn.role). A chat-core turn
@@ -1344,11 +1353,17 @@ interface SpanSegment {
   items: RenderItem[]
 }
 
-/** The salvageable meaning of a `<task-notification>` blob: the human summary
- *  when the harness provided one, else the text stripped of its tags. */
+/** The salvageable meaning of a notification: a task-notification's human summary
+ *  when the harness provided one; a bridge report's first sentence, without its
+ *  `[session action]` or `[deploy-gate]` tag; else the text stripped of its tags. */
 function taskNotificationLabel(text: string): string {
   const summary = text.match(/<summary>([\s\S]*?)<\/summary>/)?.[1]?.trim()
   if (summary) return summary
+  const report = text
+    .trim()
+    .replace(/^<bridge-report kind="[a-z-]+">\s*/, '')
+    .match(/^\[(?:session action|deploy-gate)\] ([^\n]+)/)?.[1]
+  if (report) return report.length > 140 ? `${report.slice(0, 140)}…` : report
   const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   return stripped.length > 140 ? `${stripped.slice(0, 140)}…` : stripped || 'background notification'
 }
@@ -1373,8 +1388,7 @@ function NotificationChip({ text, ts }: { text: string; ts: string }) {
 /** One segment's content: its notification chip, then per item — reasoning and
  *  narration as collapsed asides, prose through ProseBody, errors as chips.
  *  `live` opens the LAST item's asides (only the final segment of a streaming
- *  span passes true). `demoted` renders inside the progress collapsible: prose
- *  stays fully visible there — the collapsible itself is the demotion. */
+ *  span passes true). */
 function SegmentContent({
   segment,
   live,
@@ -1433,11 +1447,18 @@ function SegmentContent({
 }
 
 /** ONE message row for a whole response span (owner-designed, 2026-08-25): one
- *  header; every pre-final segment demoted into ONE collapsible of progress
- *  reports — prose visible inside it, narration collapsed, each seam's
- *  notification chip above its segment; the final segment's notification chip
- *  and content at top level, its answer at full prose weight. Keyed by the
- *  span's FIRST turn id, which growing never changes. */
+ *  header, and each segment in order — its notification chip at the seam it
+ *  explains, its reasoning and narration folded, its answer at full prose weight.
+ *  Keyed by the span's FIRST turn id, which growing never changes.
+ *
+ *  Until 2026-10-21 every segment but the last folded into one "N progress
+ *  reports" group. That hid answers: in br_1792035273491008381 a two-line note
+ *  after a late upload became the last segment and the findings went behind the
+ *  fold. Measured over 2330 sessions, no rule on what opened the next segment
+ *  told a status line from an answer — "fold a segment when the next one is a
+ *  task's first completion" would have hidden 55 answers over 500 characters,
+ *  39 of them the first reply to the person's own message. So every segment's
+ *  answer shows, as Claude Code's own terminal shows every turn's text. */
 function SpanRow({
   segments,
   agentName,
@@ -1457,19 +1478,14 @@ function SpanRow({
 }) {
   const arriving = useArrivingRow(`span:${segments[0]!.turnId}`, latest)
   const final = segments[segments.length - 1]!
-  const intermediate = segments.slice(0, -1)
   const finalLast = [...final.items].reverse().find((it) => it.kind === 'assistant')
   const lastAssistant = finalLast && finalLast.kind === 'assistant' ? finalLast : null
   const asideLive = streaming && !!(lastAssistant?.thinking || lastAssistant?.narration)
-  // Only the final segment decides whether the row reads as failed: it is the answer the
-  // user reads at full weight. An earlier segment's error stays in the progress reports,
-  // with its chip, and the summary counts it. Colouring the whole row for one made a
-  // successful answer read as a failure when an interrupt left a 138 ms errored turn in
-  // front of it (br_1790618948251389077, 2026-09-28).
-  const segmentHasError = (seg: SpanSegment) =>
-    seg.items.some((it) => it.kind === 'assistant' && it.errors.length > 0)
-  const finalSegmentHasError = segmentHasError(final)
-  const intermediateSegmentsWithErrorCount = intermediate.filter(segmentHasError).length
+  // Only the final segment decides whether the row reads as failed. An earlier
+  // segment's error shows in that segment, as a chip. Colouring the whole row for one
+  // made a successful answer read as a failure when an interrupt left a 138 ms errored
+  // turn in front of it (br_1790618948251389077, 2026-09-28).
+  const finalSegmentHasError = final.items.some((it) => it.kind === 'assistant' && it.errors.length > 0)
   const headerTs = segments[0]!.ts
 
   return (
@@ -1491,38 +1507,15 @@ function SpanRow({
         )}
         {streaming && !asideLive && <span className="bc-turns-streaming-tag">streaming…</span>}
       </div>
-      {intermediate.length > 0 && (
-        <details className={`bc-turns-progress ${styles.progressGroup}`}>
-          <summary className={styles.progressGroupSummary}>
-            <span aria-hidden>▍</span>
-            <span>
-              {intermediate.length} progress report{intermediate.length === 1 ? '' : 's'}
-            </span>
-            {intermediateSegmentsWithErrorCount > 0 && (
-              <span className={styles.progressGroupErrorCount}>
-                {intermediateSegmentsWithErrorCount} with an error
-              </span>
-            )}
-          </summary>
-          <div className={styles.progressGroupBody}>
-            {intermediate.map((seg, i) => (
-              <SegmentContent
-                key={`${seg.turnId}:${i}`}
-                segment={seg}
-                live={false}
-                markdown={markdown}
-                onActivateSessionRef={onActivateSessionRef}
-              />
-            ))}
-          </div>
-        </details>
-      )}
-      <SegmentContent
-        segment={final}
-        live={streaming}
-        markdown={markdown}
-        onActivateSessionRef={onActivateSessionRef}
-      />
+      {segments.map((seg, i) => (
+        <SegmentContent
+          key={`${seg.turnId}:${i}`}
+          segment={seg}
+          live={streaming && seg === final}
+          markdown={markdown}
+          onActivateSessionRef={onActivateSessionRef}
+        />
+      ))}
     </div>
   )
 }
