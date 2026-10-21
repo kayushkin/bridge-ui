@@ -48,6 +48,10 @@ async function readJSON<T>(response: Response, what: string): Promise<T> {
  *  work-graph-store, repo-store and noteboard behind project-store. */
 const ACTIVITY_CONCURRENCY = 4
 
+function commitsText(count: number): string {
+  return `${count} ${count === 1 ? 'commit' : 'commits'}`
+}
+
 type ActivitySlot = { events: ActivityAnswer['events']; error: null } | { events: null; error: string }
 
 // ---------------------------------------------------------------------------
@@ -318,7 +322,7 @@ export function StageBoard({
                   </div>
                   {project.goal && <p className={styles.stageCardGoal}>{project.goal}</p>}
                   {rollup && <StepProgressBar rollup={rollup} />}
-                  {rollup && <span className={styles.muted}>{recentCommitCount(rollup)} commits in 14 days</span>}
+                  {rollup && <span className={styles.muted}>{commitsText(recentCommitCount(rollup))} in 14 days</span>}
                   {moving === project.id && <span className={styles.muted}>Moving…</span>}
                 </article>
               )
@@ -373,7 +377,7 @@ export function EffortChart({
               <button type="button" className={styles.linkButton} onClick={() => onOpenProject(row.project.id)}>{row.project.name}</button>
             </span>
             <span role="cell" className={styles.effortBars}>
-              <span className={styles.effortTrack} title={`${row.commits} commits, ${percent(row.commitShare)} of all`}>
+              <span className={styles.effortTrack} title={`${commitsText(row.commits)}, ${percent(row.commitShare)} of all`}>
                 <span className={styles.effortCommits} style={{ width: `${(row.commitShare / widest) * 100}%` }} />
               </span>
               <span className={styles.effortTrack} title={`${formatCost(row.spendUsd)}, ${percent(row.spendShare)} of all`}>
@@ -385,7 +389,7 @@ export function EffortChart({
               )}
             </span>
             <span role="cell" className={styles.effortNumbers}>
-              {row.commits} commits · {formatCost(row.spendUsd)}
+              {commitsText(row.commits)} · {formatCost(row.spendUsd)}
               {row.targetShare !== null && (
                 <span className={row.spendShare > row.targetShare ? styles.stateWaiting : styles.muted}>
                   {' '}· target {percent(row.targetShare)}, at {percent(row.spendShare)}

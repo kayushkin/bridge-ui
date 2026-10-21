@@ -633,7 +633,7 @@ function Activity({ projectId, onActivateSession }: { projectId: string; onActiv
       actions={
         <span className={styles.segmented} role="group" aria-label="How far back">
           {ACTIVITY_DAY_CHOICES.map((choice) => (
-            <button key={choice} type="button" className={`bc-ctrl-btn ${choice === days ? styles.segmentOn : ''}`}
+            <button key={choice} type="button" className={`bc-ctrl-btn ${choice === days ? 'bc-ctrl-btn-active' : ''}`}
               aria-pressed={choice === days} onClick={() => setDays(choice)}>
               {choice}d
             </button>

@@ -345,7 +345,7 @@ function Landing({
       <div className={styles.viewTabs} role="tablist" aria-label="How to show the projects">
         {LANDING_VIEWS.map((choice) => (
           <button key={choice} type="button" role="tab" aria-selected={choice === view}
-            className={`bc-ctrl-btn ${choice === view ? styles.viewTabOn : ''}`} onClick={() => chooseView(choice)}>
+            className={`bc-ctrl-btn ${choice === view ? 'bc-ctrl-btn-active' : ''}`} onClick={() => chooseView(choice)}>
             {LANDING_VIEW_LABELS[choice]}
           </button>
         ))}

@@ -128,8 +128,6 @@
 .issueRow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 
 .segmented { display: inline-flex; gap: 2px; }
-/* Two classes, so the chosen span outranks .bc-ctrl-btn's own colours. */
-.segmented .segmentOn { color: var(--accent-on); background: var(--accent); border-color: var(--accent); font-weight: 700; }
 
 .activityDay { margin: 0 0 10px; }
 .activityDayTitle {
@@ -152,7 +150,6 @@
 
 /* The landing's view tabs. */
 .viewTabs { display: inline-flex; gap: 2px; margin: 0 0 14px; }
-.viewTabs .viewTabOn { color: var(--accent-on); background: var(--accent); border-color: var(--accent); font-weight: 700; }
 
 /* Steps done of all, as a bar. */
 .progress { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0; }
@@ -178,7 +175,9 @@
 .questionFrom { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 0.9em; }
 
 /* The timeline: a row per project, a column per day. */
-.timeline { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; padding-bottom: 6px; }
+/* The right padding leaves the zine skin's crab, which peeks in over the page's
+   right edge, room beside the totals. */
+.timeline { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; padding: 0 56px 6px 0; }
 .timelineRow { display: grid; align-items: stretch; gap: 2px; min-width: 760px; }
 .timelineName { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.88em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .timelineHeadCell { font-size: 0.68em; color: var(--text-muted); white-space: nowrap; overflow: visible; align-self: end; }
@@ -204,9 +203,10 @@
 .monthStripCells .timelineCell { height: 16px; }
 
 /* The stage board: a column per stage. */
-.stageBoard { display: flex; gap: 10px; overflow-x: auto; align-items: flex-start; padding-bottom: 8px; }
-.stageColumn {
-  flex: 0 0 220px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; padding: 8px;
+.stageBoard {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: start; padding-bottom: 8px;
+}
+.stageColumn { display: flex; flex-direction: column; gap: 8px; min-height: 120px; padding: 8px;
   border-radius: 8px; background: var(--bg-surface); border: 1px dashed var(--border);
 }
 .stageColumnOver { border-color: var(--accent); background: var(--info-bg); }
