@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent, JSX, ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
-import type { SessionSummary } from '@kayushkin/chat-core'
+import type { SessionSummary, SignalRequest } from '@kayushkin/chat-core'
 import type { ActivityEvent, LinkedNote, Project, RepoRollup, Rollup, Suggestion } from '@kayushkin/project-store-types'
 import { useBridgeConfig } from '../../context'
 import { formatCost, timeAgo } from '../../utils'
@@ -32,6 +32,9 @@ import {
   type SuggestionListAnswer,
 } from '../../projects'
 import { RefChip } from './RefChip'
+import { SignalRequestList } from './SessionSignals'
+import { ProjectMonthStrip, StepProgressBar } from './ProjectsLandingViews'
+import { questionCount } from '../../projectViews'
 import styles from './ProjectsView.module.css'
 
 // One project's page in the projects view: what it is for (editable), its next
@@ -57,6 +60,13 @@ function agoFromSeconds(seconds: number): string {
 
 export type RollupSlot = { rollup: Rollup; error: null } | { rollup: null; error: string }
 
+/** The open question groups of the sessions at work on a project, split as
+ *  the chat splits them: the operator's, and background agents'. */
+export interface ProjectQuestions {
+  operator: SignalRequest[]
+  background: SignalRequest[]
+}
+
 export interface ProjectPageProps {
   project: Project
   slot: RollupSlot | null
@@ -67,6 +77,12 @@ export interface ProjectPageProps {
   onSelectSession: (sessionId: string) => void
   /** Read the project and its rollup again after a write. */
   onChanged: () => void
+  /** null until the rollup says which sessions are the project's. */
+  questions: ProjectQuestions | null
+  /** The signals read's failure, verbatim. */
+  questionsError: string | null
+  /** Re-read the open signals after an answer lands. */
+  onQuestionAnswered: () => void
 }
 
 export function ProjectPage({
@@ -78,6 +94,9 @@ export function ProjectPage({
   onOpenProject,
   onSelectSession,
   onChanged,
+  questions,
+  questionsError,
+  onQuestionAnswered,
 }: ProjectPageProps): JSX.Element {
   const rollup = slot?.rollup ?? null
   const parent = projectsById.get(project.parent_id)
@@ -97,7 +116,8 @@ export function ProjectPage({
             Part of <button type="button" className={styles.linkButton} onClick={() => onOpenProject(parent.id)}>{parent.name}</button>
           </p>
         )}
-        <ProjectPurpose project={project} stages={vocabulary?.stages ?? null} onChanged={onChanged} />
+        <ProjectPurpose project={project} rollup={rollup} stages={vocabulary?.stages ?? null} onChanged={onChanged} />
+        <ProjectMonthStrip projectId={project.id} />
       </section>
 
       {slot?.error && <p className={styles.error}>{slot.error}</p>}
@@ -106,6 +126,7 @@ export function ProjectPage({
       {rollup && (
         <div className={styles.pageColumns}>
           <div className={styles.mainColumn}>
+            <Questions questions={questions} error={questionsError} onAnswered={onQuestionAnswered} />
             <NextSteps project={project} rollup={rollup} onChanged={onChanged} />
             <SuggestedSteps project={project} suggestions={rollup.suggestions ?? []} onChanged={onChanged} />
             <OpenIssues rollup={rollup} onActivateSession={openSession} />
@@ -158,7 +179,17 @@ function Panel({ title, count, actions, children }: { title: string; count?: num
 // Goal, done when, stage
 // ---------------------------------------------------------------------------
 
-function ProjectPurpose({ project, stages, onChanged }: { project: Project; stages: string[] | null; onChanged: () => void }): JSX.Element {
+function ProjectPurpose({
+  project,
+  rollup,
+  stages,
+  onChanged,
+}: {
+  project: Project
+  rollup: Rollup | null
+  stages: string[] | null
+  onChanged: () => void
+}): JSX.Element {
   const { fetch: fetchFn, projectStoreBasePath } = useBridgeConfig()
   const [editing, setEditing] = useState(false)
   const [goal, setGoal] = useState(project.goal)
@@ -205,15 +236,26 @@ function ProjectPurpose({ project, stages, onChanged }: { project: Project; stag
   }
 
   if (!editing) {
+    const now = rollup ? openNextSteps(rollup)[0] : undefined
     return (
-      <div className={styles.purpose}>
-        <dl className={styles.facts}>
-          <dt>Goal</dt>
-          <dd>{project.goal || <span className={styles.muted}>not set</span>}</dd>
-          <dt>Done when</dt>
-          <dd>{project.done_when || <span className={styles.muted}>not set</span>}</dd>
-        </dl>
-        <button type="button" className="bc-ctrl-btn" onClick={() => setEditing(true)}>Edit goal</button>
+      <div className={styles.direction}>
+        <div className={styles.directionGoal}>
+          <span className={styles.directionLabel}>Goal</span>
+          <p className={styles.directionGoalText}>{project.goal || <span className={styles.muted}>No goal set yet.</span>}</p>
+        </div>
+        <div className={styles.directionFinish}>
+          <span className={styles.directionLabel}>Done when</span>
+          <p>{project.done_when || <span className={styles.muted}>Not set: say what done looks like, so progress can be judged.</span>}</p>
+        </div>
+        <div className={styles.directionFoot}>
+          {rollup && <StepProgressBar rollup={rollup} />}
+          {now && (
+            <span className={styles.directionNow}>
+              <span className={styles.directionLabel}>Now</span> <RefChip kind="todo" refId={now.note_id} />
+            </span>
+          )}
+          <button type="button" className="bc-ctrl-btn" onClick={() => setEditing(true)}>Edit goal</button>
+        </div>
       </div>
     )
   }
@@ -247,6 +289,51 @@ function ProjectPurpose({ project, stages, onChanged }: { project: Project; stag
 // ---------------------------------------------------------------------------
 // Next steps and suggested ones
 // ---------------------------------------------------------------------------
+
+function Questions({
+  questions,
+  error,
+  onAnswered,
+}: {
+  questions: ProjectQuestions | null
+  error: string | null
+  onAnswered: () => void
+}): JSX.Element | null {
+  const [showBackground, setShowBackground] = useState(false)
+  if (error) return <p className={styles.error}>Couldn’t load the sessions’ questions: {error}</p>
+  if (!questions) return null
+  const operatorCount = questionCount(questions.operator)
+  const backgroundCount = questionCount(questions.background)
+  if (operatorCount === 0 && backgroundCount === 0) return null
+  return (
+    <Panel title="Questions for you" count={operatorCount}>
+      <p className={styles.muted}>Sessions at work on this project — filed under it, on its branches, or behind its recent commits — are waiting on these.</p>
+      {questions.operator.map((request) => (
+        <div key={request.requestId || request.signals[0]?.id} className={styles.questionGroup}>
+          <div className={styles.questionFrom}>
+            <span className={styles.muted}>from</span> <RefChip kind="session" refId={request.sessionId} />
+          </div>
+          <SignalRequestList requests={[request]} onResolved={onAnswered} />
+        </div>
+      ))}
+      {backgroundCount > 0 && (
+        <div className={styles.group}>
+          <button type="button" className={styles.linkButton} onClick={() => setShowBackground((v) => !v)}>
+            {showBackground ? 'Hide' : 'Show'} {backgroundCount} from background agents
+          </button>
+          {showBackground && questions.background.map((request) => (
+            <div key={request.requestId || request.signals[0]?.id} className={styles.questionGroup}>
+              <div className={styles.questionFrom}>
+                <span className={styles.muted}>from</span> <RefChip kind="session" refId={request.sessionId} />
+              </div>
+              <SignalRequestList requests={[request]} compact onResolved={onAnswered} />
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  )
+}
 
 function NextSteps({ project, rollup, onChanged }: { project: Project; rollup: Rollup; onChanged: () => void }): JSX.Element {
   const { fetch: fetchFn, projectStoreBasePath, noteboardBasePath } = useBridgeConfig()

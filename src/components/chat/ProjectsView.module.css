@@ -149,3 +149,90 @@
 .repoList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .repoRow { display: flex; flex-direction: column; gap: 2px; }
 .repoHead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+
+/* The landing's view tabs. */
+.viewTabs { display: inline-flex; gap: 2px; margin: 0 0 14px; }
+.viewTabs .viewTabOn { color: var(--accent-on); background: var(--accent); border-color: var(--accent); font-weight: 700; }
+
+/* Steps done of all, as a bar. */
+.progress { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0; }
+.progressTrack { display: inline-block; width: 120px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.progressFill { display: block; height: 100%; background: var(--success); }
+
+/* A project's direction, at the top of its page. */
+.direction {
+  display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px 18px; margin: 10px 0 8px;
+  padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface);
+}
+@media (max-width: 860px) { .direction { grid-template-columns: minmax(0, 1fr); } }
+.directionLabel { font-size: 0.72em; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.directionGoal p, .directionFinish p { margin: 2px 0 0; }
+.directionGoalText { font-size: 1.15em; font-weight: 600; line-height: 1.35; }
+.directionFinish { padding-left: 14px; border-left: 3px solid var(--success); }
+.directionFoot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.directionNow { display: inline-flex; align-items: baseline; gap: 6px; }
+
+/* Questions the project's sessions ask. */
+.questionGroup { margin: 0 0 10px; padding: 0 0 8px; border-bottom: 1px solid var(--border-subtle); }
+.questionGroup:last-child { border-bottom: none; }
+.questionFrom { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 0.9em; }
+
+/* The timeline: a row per project, a column per day. */
+.timeline { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; padding-bottom: 6px; }
+.timelineRow { display: grid; align-items: stretch; gap: 2px; min-width: 760px; }
+.timelineName { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.88em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timelineHeadCell { font-size: 0.68em; color: var(--text-muted); white-space: nowrap; overflow: visible; align-self: end; }
+.timelineTotal { font-size: 0.8em; color: var(--text-muted); text-align: right; align-self: center; font-variant-numeric: tabular-nums; }
+.timelineError, .timelineLoading { font-size: 0.8em; color: var(--text-muted); align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timelineError { color: var(--error); }
+.timelineCell {
+  position: relative; height: 24px; border-radius: 3px; background: var(--bg-surface);
+  border: 1px solid var(--border-subtle); overflow: hidden; cursor: default;
+}
+.timelineToday { outline: 1px solid var(--accent); outline-offset: -1px; }
+.timelineHeadCell.timelineToday { outline: none; color: var(--accent); font-weight: 700; }
+.timelineHeat { position: absolute; inset: 0; background: var(--accent); }
+.timelineMarks { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; font-size: 9px; line-height: 1; gap: 0 1px; }
+.markDeploy { color: var(--success); text-shadow: 0 0 2px var(--bg); }
+.markMerge { color: var(--info); text-shadow: 0 0 2px var(--bg); }
+.markStep { color: var(--success); font-weight: 700; text-shadow: 0 0 2px var(--bg); }
+.markStage { color: var(--warning); text-shadow: 0 0 2px var(--bg); }
+
+.monthStrip { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; }
+.monthStripLabel { font-size: 0.72em; color: var(--text-muted); white-space: nowrap; }
+.monthStripCells { flex: 1 1 auto; display: grid; gap: 2px; }
+.monthStripCells .timelineCell { height: 16px; }
+
+/* The stage board: a column per stage. */
+.stageBoard { display: flex; gap: 10px; overflow-x: auto; align-items: flex-start; padding-bottom: 8px; }
+.stageColumn {
+  flex: 0 0 220px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; padding: 8px;
+  border-radius: 8px; background: var(--bg-surface); border: 1px dashed var(--border);
+}
+.stageColumnOver { border-color: var(--accent); background: var(--info-bg); }
+.stageColumnTitle { margin: 0 0 2px; font-size: 0.85em; font-weight: 700; text-transform: capitalize; color: var(--text); }
+.stageCard {
+  display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border); cursor: grab;
+}
+.stageCard:active { cursor: grabbing; }
+.stageCardDragging { opacity: 0.4; }
+.stageCardHead { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.stageCardGoal {
+  margin: 0; font-size: 0.8em; color: var(--text-muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* The effort chart: a commits bar and a spend bar per project, and a tick at the target. */
+.effort { display: flex; flex-direction: column; gap: 8px; }
+.effortRow { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) minmax(12em, max-content); gap: 12px; align-items: center; font-size: 0.88em; }
+.effortName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.effortBars { position: relative; display: flex; flex-direction: column; gap: 2px; }
+.effortTrack { display: block; height: 8px; border-radius: 2px; background: var(--border-subtle); }
+.effortCommits { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.effortSpend { display: block; height: 100%; border-radius: 2px; background: var(--warning); }
+.effortTarget { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); }
+.effortNumbers { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.legendCommits { color: var(--accent); }
+.legendSpend { color: var(--warning); }
+.legendTarget { color: var(--text); font-weight: 700; }

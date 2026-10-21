@@ -496,6 +496,9 @@ export function undeployedCommitCount(repo: Pick<RepoRollup, 'recent_commits' | 
 
 /** What on one project wants a person, counted. */
 export interface ProjectAttention {
+  /** Questions the project's sessions ask (`projectSessionIds` in
+   *  `projectViews.ts`), counted by the caller from the open signals. */
+  openQuestions: number
   waitingCards: number
   openPullRequests: number
   strandedBranches: number
@@ -507,8 +510,10 @@ export interface ProjectAttention {
 export function projectAttention(
   rollup: Pick<Rollup, 'cards_by_work_state' | 'repos' | 'suggestions' | 'missing_note_ids'>,
   nowSeconds: number,
+  openQuestions: number,
 ): ProjectAttention {
   const attention: ProjectAttention = {
+    openQuestions,
     waitingCards: rollup.cards_by_work_state?.[WAITING_WORK_STATE] ?? 0,
     openPullRequests: 0,
     strandedBranches: 0,

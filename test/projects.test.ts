@@ -298,9 +298,9 @@ describe('projectAttention', () => {
           { name: 'stranded', head_sha: '', committed_at: now - STRANDED_BRANCH_AGE_SECONDS - 1, worktree_path: '', session_ids: [] },
         ],
       }],
-    }, now)
-    expect(attention).toEqual({ waitingCards: 2, openPullRequests: 0, strandedBranches: 1, undeployedCommits: 1, suggestionsToDecide: 0, missingNotes: 1 })
-    expect(attentionTotal(attention)).toBe(5)
+    }, now, 3)
+    expect(attention).toEqual({ openQuestions: 3, waitingCards: 2, openPullRequests: 0, strandedBranches: 1, undeployedCommits: 1, suggestionsToDecide: 0, missingNotes: 1 })
+    expect(attentionTotal(attention)).toBe(8)
   })
 })
 

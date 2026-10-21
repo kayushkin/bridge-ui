@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { useChatContext, type SessionSummary } from '@kayushkin/chat-core'
+import { useChatContext, useOpenSignalsByAttention, type SessionSummary, type SignalRequest } from '@kayushkin/chat-core'
 import type { Project, RepoRollup, Rollup } from '@kayushkin/project-store-types'
 import { useBridgeConfig } from '../../context'
 import { formatAgeCompact, formatCost } from '../../utils'
@@ -25,7 +25,18 @@ import {
   type ProjectTreeRow,
   type ProjectVocabulary,
 } from '../../projects'
-import { ProjectPage, StageChip, type RollupSlot } from './ProjectPage'
+import {
+  LANDING_VIEWS,
+  LANDING_VIEW_LABELS,
+  LANDING_VIEW_STORAGE_KEY,
+  parseLandingView,
+  projectSessionIds,
+  questionCount,
+  questionRequestsOfSessions,
+  type LandingView,
+} from '../../projectViews'
+import { ProjectPage, StageChip, type ProjectQuestions, type RollupSlot } from './ProjectPage'
+import { EffortChart, ProjectTimeline, StageBoard, StepProgressBar } from './ProjectsLandingViews'
 import { RefChip } from './RefChip'
 import styles from './ProjectsView.module.css'
 
@@ -154,6 +165,23 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
     setReloadSignal((n) => n + 1)
   }, [refresh])
 
+  // Every session's open signals, from the one read the chat shares, split
+  // into the operator's and background agents'. Each project takes the
+  // question groups of the sessions at work on it.
+  const openSignals = useOpenSignalsByAttention()
+  const questionsByProject = useMemo(() => {
+    const out = new Map<string, ProjectQuestions>()
+    for (const [id, slot] of rollups) {
+      if (!slot.rollup) continue
+      const sessionIds = projectSessionIds(slot.rollup)
+      out.set(id, {
+        operator: questionRequestsOfSessions<SignalRequest>(openSignals.operator.requests, sessionIds),
+        background: questionRequestsOfSessions<SignalRequest>(openSignals.background.requests, sessionIds),
+      })
+    }
+    return out
+  }, [rollups, openSignals.operator.requests, openSignals.background.requests])
+
   if (!projectStoreBasePath) {
     return (
       <div className="bc-workspace bc-workspace-focused">
@@ -193,6 +221,9 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
               onOpenProject={onOpenProject}
               onSelectSession={onSelectSession}
               onChanged={reload}
+              questions={questionsByProject.get(open.id) ?? null}
+              questionsError={openSignals.error}
+              onQuestionAnswered={openSignals.reload}
             />
           ) : (
             <p className={styles.notice}>project-store has no live project {projectId}.</p>
@@ -203,7 +234,10 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
             rollups={rollups}
             filedByProject={filedByProject}
             summaries={summaries}
+            vocabulary={vocabulary}
+            questionsByProject={questionsByProject}
             onOpenProject={onOpenProject}
+            onChanged={reload}
           />
         )}
       </div>
@@ -255,20 +289,38 @@ function Landing({
   rollups,
   filedByProject,
   summaries,
+  vocabulary,
+  questionsByProject,
   onOpenProject,
+  onChanged,
 }: {
   projects: Project[]
   rollups: ReadonlyMap<string, RollupSlot>
   filedByProject: ReadonlyMap<string, string[]>
   summaries: ReadonlyMap<string, SessionSummary>
+  vocabulary: ProjectVocabulary | null
+  questionsByProject: ReadonlyMap<string, ProjectQuestions>
   onOpenProject: (projectId: string) => void
+  onChanged: () => void
 }): JSX.Element {
   const sections = useMemo(() => projectSections(projects), [projects])
+  const [view, setView] = useState<LandingView>(() => parseLandingView(localStorage.getItem(LANDING_VIEW_STORAGE_KEY)))
+  const chooseView = (next: LandingView) => {
+    setView(next)
+    localStorage.setItem(LANDING_VIEW_STORAGE_KEY, next)
+  }
   const nowSeconds = Math.floor(Date.now() / 1000)
+  // Only the operator's questions count as needing you; a background agent's
+  // are on the project's page, as they are in the chat.
+  const attentionOf = (projectId: string): ProjectAttention | null => {
+    const rollup = rollups.get(projectId)?.rollup
+    if (!rollup) return null
+    return projectAttention(rollup, nowSeconds, questionCount(questionsByProject.get(projectId)?.operator ?? []))
+  }
   const needsYou = projects
     .map((project) => {
-      const rollup = rollups.get(project.id)?.rollup
-      return rollup ? { project, attention: projectAttention(rollup, nowSeconds) } : null
+      const attention = attentionOf(project.id)
+      return attention ? { project, attention } : null
     })
     .filter((row): row is { project: Project; attention: ProjectAttention } => row !== null && attentionTotal(row.attention) > 0)
     .sort((a, b) => attentionTotal(b.attention) - attentionTotal(a.attention))
@@ -282,6 +334,7 @@ function Landing({
           slot={rollups.get(row.project.id) ?? null}
           filedSessionIds={filedByProject.get(row.project.id) ?? []}
           summaries={summaries}
+          attention={attentionOf(row.project.id)}
           onOpen={() => onOpenProject(row.project.id)}
         />
       ))}
@@ -289,6 +342,14 @@ function Landing({
   )
   return (
     <>
+      <div className={styles.viewTabs} role="tablist" aria-label="How to show the projects">
+        {LANDING_VIEWS.map((choice) => (
+          <button key={choice} type="button" role="tab" aria-selected={choice === view}
+            className={`bc-ctrl-btn ${choice === view ? styles.viewTabOn : ''}`} onClick={() => chooseView(choice)}>
+            {LANDING_VIEW_LABELS[choice]}
+          </button>
+        ))}
+      </div>
       {needsYou.length > 0 && (
         <section className={styles.section}>
           <h2 className={`${styles.sectionTitle} page-title`}>Needs you</h2>
@@ -302,13 +363,21 @@ function Landing({
           </ul>
         </section>
       )}
-      {sections.projects.length > 0 && (
+      {view === 'timeline' && <ProjectTimeline projects={projects} onOpenProject={onOpenProject} />}
+      {view === 'stages' && (
+        <StageBoard projects={projects} stages={vocabulary?.stages ?? null} rollups={rollups} attentionOf={attentionOf}
+          onOpenProject={onOpenProject} onChanged={onChanged} />
+      )}
+      {view === 'effort' && (
+        <EffortChart projects={projects} rollups={rollups} filedByProject={filedByProject} summaries={summaries} onOpenProject={onOpenProject} />
+      )}
+      {view === 'cards' && sections.projects.length > 0 && (
         <section className={styles.section}>
           <h2 className={`${styles.sectionTitle} page-title`}>Projects</h2>
           {cards(sections.projects)}
         </section>
       )}
-      {sections.streams.length > 0 && (
+      {view === 'cards' && sections.streams.length > 0 && (
         <section className={styles.section}>
           <h2 className={`${styles.sectionTitle} page-title`}>Streams</h2>
           <p className={styles.muted}>Work that never finishes and needs a steady trickle of attention.</p>
@@ -324,12 +393,14 @@ function ProjectCard({
   slot,
   filedSessionIds,
   summaries,
+  attention,
   onOpen,
 }: {
   row: ProjectTreeRow
   slot: RollupSlot | null
   filedSessionIds: string[]
   summaries: ReadonlyMap<string, SessionSummary>
+  attention: ProjectAttention | null
   onOpen: () => void
 }): JSX.Element {
   const { project, depth } = row
@@ -351,6 +422,7 @@ function ProjectCard({
         {rollup && <CommitBars repos={rollup.repos} nowSeconds={nowSeconds} />}
       </header>
       {project.goal && <p className={styles.goal}>{project.goal}</p>}
+      {rollup && <StepProgressBar rollup={rollup} />}
       {slot?.error && <p className={styles.error}>{slot.error}</p>}
       {!slot && <p className={styles.muted}>Loading…</p>}
       {rollup && (
@@ -384,7 +456,7 @@ function ProjectCard({
           {nextSteps.length > 1 && <span className={styles.muted}> and {nextSteps.length - 1} more</span>}
         </p>
       )}
-      {rollup && <AttentionChips attention={projectAttention(rollup, nowSeconds)} />}
+      {attention && <AttentionChips attention={attention} />}
       {rollup && rollup.repos.length > 0 && (
         <p className={styles.deploys} title="Last deploy of each repo">
           {rollup.repos.map((repo) => {
@@ -428,6 +500,7 @@ function CommitBars({ repos, nowSeconds }: { repos: RepoRollup[]; nowSeconds: nu
 }
 
 const ATTENTION_LABELS: Array<[keyof ProjectAttention, string, string]> = [
+  ['openQuestions', 'question for you', 'questions for you'],
   ['waitingCards', 'waiting card', 'waiting cards'],
   ['suggestionsToDecide', 'suggestion to decide', 'suggestions to decide'],
   ['openPullRequests', 'open pull request', 'open pull requests'],
