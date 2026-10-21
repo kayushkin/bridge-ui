@@ -9,7 +9,17 @@
 // Go side, so only their envelopes are written here.
 
 import type { SessionSummary } from '@kayushkin/chat-core'
-import type { EntityTypeInfo, Link, Project, Rollup } from '@kayushkin/project-store-types'
+import type {
+  ActivityEvent,
+  Commit,
+  EntityTypeInfo,
+  Link,
+  LinkedNote,
+  Project,
+  RepoRollup,
+  Rollup,
+  Suggestion,
+} from '@kayushkin/project-store-types'
 
 /** `GET /projects` */
 export interface ProjectListAnswer {
@@ -27,6 +37,26 @@ export interface ProjectVocabulary {
   stages: string[]
   default_stage: string
   entity_types: EntityTypeInfo[]
+  activity_kinds: string[]
+  suggestion_statuses: string[]
+}
+
+/** `GET /projects/{id}/activity` */
+export interface ActivityAnswer {
+  /** Unix seconds: the oldest moment the events reach back to. */
+  since: number
+  events: ActivityEvent[]
+}
+
+/** `GET` and `POST /projects/{id}/suggestions` */
+export interface SuggestionListAnswer {
+  suggestions: Suggestion[]
+}
+
+/** `POST /suggestions/{id}/accept` */
+export interface AcceptedSuggestionAnswer {
+  suggestion: Suggestion
+  note: LinkedNote
 }
 
 /** The entity type a filed session carries in project-store. */
@@ -58,6 +88,31 @@ export function sessionLinksPath(base: string): string {
 
 export function vocabularyPath(base: string): string {
   return `${base}/vocabulary`
+}
+
+export function projectPath(base: string, projectId: string): string {
+  return `${base}/projects/${encodeURIComponent(projectId)}`
+}
+
+export function projectActivityPath(base: string, projectId: string, days: number): string {
+  return `${projectPath(base, projectId)}/activity?days=${days}`
+}
+
+export function projectNextStepsPath(base: string, projectId: string): string {
+  return `${projectPath(base, projectId)}/next-steps`
+}
+
+export function projectSuggestionsPath(base: string, projectId: string): string {
+  return `${projectPath(base, projectId)}/suggestions`
+}
+
+export function suggestionDecisionPath(base: string, suggestionId: string, decision: 'accept' | 'dismiss'): string {
+  return `${base}/suggestions/${encodeURIComponent(suggestionId)}/${decision}`
+}
+
+/** noteboard's route for one item, under the host's noteboard base path. */
+export function noteboardItemPath(noteboardBase: string, noteId: string): string {
+  return `${noteboardBase}/api/items/${encodeURIComponent(noteId)}`
 }
 
 /** The body that files a session under a project. */
@@ -298,8 +353,8 @@ export function filedSessionSpend(
 
 /**
  * The newest moment anything happened in a project, in unix seconds: the
- * project's own change, a link added, a deploy, a commit on an unmerged
- * branch, or a filed session moving. 0 when nothing carries a time.
+ * project's own change, a link added, a deploy, a commit on the default
+ * branch or an unmerged one, or a filed session moving. 0 when nothing carries a time.
  */
 export function lastActivitySeconds(
   rollup: Pick<Rollup, 'project' | 'links' | 'repos'>,
@@ -317,6 +372,7 @@ export function lastActivitySeconds(
   for (const repo of rollup.repos ?? []) {
     if (repo.latest_deploy) newest = Math.max(newest, repo.latest_deploy.created_at)
     for (const branch of repo.unmerged_branches ?? []) newest = Math.max(newest, branch.committed_at)
+    for (const commit of repo.recent_commits ?? []) newest = Math.max(newest, commit.committed_at)
   }
   return newest
 }
@@ -370,4 +426,164 @@ export function sessionMovePlan(
     fileUnder: targetProjectId !== null && !alreadyThere ? targetProjectId : null,
     unfile: currentLinks.filter((l) => l.project_id !== targetProjectId),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Next steps, open issues and activity
+// ---------------------------------------------------------------------------
+
+/** Who the projects page names as the author of what it writes, in
+ *  project-store's `created_by`, `changed_by` and `decided_by`. */
+export const PROJECTS_PAGE_AUTHOR = 'bridge-ui projects page'
+
+/** The spans of activity the page offers, in days. */
+export const ACTIVITY_DAY_CHOICES = [7, 14, 30, 90] as const
+
+/** A branch whose last commit is older than this is called stranded: nobody
+ *  is at work on it, and its work has not landed. ~/CLAUDE.md counts a tree
+ *  untouched for 30 minutes as nobody's; a day leaves room for a session
+ *  that paused. */
+export const STRANDED_BRANCH_AGE_SECONDS = 24 * 60 * 60
+
+/** How the chat writes a repo so it becomes a chip: `repo:<name>`. */
+export function repoMention(repoName: string): string {
+  return `repo:${repoName}`
+}
+
+/** How the chat writes a commit so it becomes a chip: `<repo>@<sha>`, seven
+ *  characters of sha. */
+export function commitMention(repoName: string, sha: string): string {
+  return `${repoName}@${sha.slice(0, 7)}`
+}
+
+function isOpenTodo(note: LinkedNote): boolean {
+  return note.type === 'todo' && note.status === 'open'
+}
+
+/** The project's next steps: its linked todos still open, in the rollup's
+ *  order (most urgent first). */
+export function openNextSteps(rollup: Pick<Rollup, 'notes'>): LinkedNote[] {
+  return (rollup.notes ?? []).filter(isOpenTodo)
+}
+
+/** Linked todos already finished, newest first. */
+export function finishedNextSteps(rollup: Pick<Rollup, 'notes'>): LinkedNote[] {
+  return (rollup.notes ?? [])
+    .filter((n) => n.type === 'todo' && n.status === 'done')
+    .sort((a, b) => b.completed_at.localeCompare(a.completed_at))
+}
+
+/** Linked notes that are not todos: decisions and designs, and anything of
+ *  another noteboard type. */
+export function linkedNotesOtherThanTodos(rollup: Pick<Rollup, 'notes'>): LinkedNote[] {
+  return (rollup.notes ?? []).filter((n) => n.type !== 'todo')
+}
+
+/**
+ * How many of the repo's recent default-branch commits are newer than what is
+ * deployed. The deployed sha's place in the list says it exactly; a deploy
+ * older than the list falls back to comparing times. null when the repo was
+ * never deployed, since "undeployed" means nothing for a repo with no deploy.
+ */
+export function undeployedCommitCount(repo: Pick<RepoRollup, 'recent_commits' | 'latest_deploy'>): number | null {
+  const deploy = repo.latest_deploy
+  if (!deploy) return null
+  const commits = repo.recent_commits ?? []
+  const index = commits.findIndex((c) => c.sha === deploy.commit_sha || c.sha.startsWith(deploy.commit_sha))
+  if (index >= 0) return index
+  return commits.filter((c) => c.committed_at > deploy.created_at).length
+}
+
+/** What on one project wants a person, counted. */
+export interface ProjectAttention {
+  waitingCards: number
+  openPullRequests: number
+  strandedBranches: number
+  undeployedCommits: number
+  suggestionsToDecide: number
+  missingNotes: number
+}
+
+export function projectAttention(
+  rollup: Pick<Rollup, 'cards_by_work_state' | 'repos' | 'suggestions' | 'missing_note_ids'>,
+  nowSeconds: number,
+): ProjectAttention {
+  const attention: ProjectAttention = {
+    waitingCards: rollup.cards_by_work_state?.[WAITING_WORK_STATE] ?? 0,
+    openPullRequests: 0,
+    strandedBranches: 0,
+    undeployedCommits: 0,
+    suggestionsToDecide: (rollup.suggestions ?? []).length,
+    missingNotes: (rollup.missing_note_ids ?? []).length,
+  }
+  for (const repo of rollup.repos ?? []) {
+    attention.openPullRequests += (repo.open_pull_requests ?? []).length
+    attention.strandedBranches += (repo.unmerged_branches ?? []).filter(
+      (b) => nowSeconds - b.committed_at > STRANDED_BRANCH_AGE_SECONDS,
+    ).length
+    attention.undeployedCommits += undeployedCommitCount(repo) ?? 0
+  }
+  return attention
+}
+
+export function attentionTotal(attention: ProjectAttention): number {
+  return Object.values(attention).reduce((n, v) => n + v, 0)
+}
+
+/** The start of the local day holding `seconds`, in unix seconds. */
+export function localDayStart(seconds: number): number {
+  const date = new Date(seconds * 1000)
+  date.setHours(0, 0, 0, 0)
+  return Math.floor(date.getTime() / 1000)
+}
+
+/**
+ * Commits on the default branches per local day, the oldest day first and
+ * today last, over `days` days. Each commit counts once however many of the
+ * project's repos list it.
+ */
+export function commitsPerDay(repos: ReadonlyArray<Pick<RepoRollup, 'recent_commits'>>, days: number, nowSeconds: number): number[] {
+  const counts = new Array<number>(days).fill(0)
+  const today = localDayStart(nowSeconds)
+  const seen = new Set<string>()
+  for (const repo of repos) {
+    for (const commit of repo.recent_commits ?? []) {
+      if (seen.has(commit.sha)) continue
+      seen.add(commit.sha)
+      const daysAgo = Math.round((today - localDayStart(commit.committed_at)) / 86_400)
+      if (daysAgo >= 0 && daysAgo < days) counts[days - 1 - daysAgo] += 1
+    }
+  }
+  return counts
+}
+
+/** One local day of activity. */
+export interface ActivityDay {
+  /** Unix seconds at the day's local midnight. */
+  dayStart: number
+  events: ActivityEvent[]
+}
+
+/** Events grouped by local day, keeping their order (the store's, newest
+ *  first). */
+export function activityByDay(events: readonly ActivityEvent[]): ActivityDay[] {
+  const days: ActivityDay[] = []
+  for (const event of events) {
+    const dayStart = localDayStart(event.at)
+    const last = days[days.length - 1]
+    if (last && last.dayStart === dayStart) last.events.push(event)
+    else days.push({ dayStart, events: [event] })
+  }
+  return days
+}
+
+/** The newest commit across the project's repos, or null. */
+export function newestCommit(repos: ReadonlyArray<Pick<RepoRollup, 'recent_commits'>>): Commit | null {
+  let newest: Commit | null = null
+  for (const repo of repos) {
+    for (const commit of repo.recent_commits ?? []) {
+      if (!newest || commit.committed_at > newest.committed_at) newest = commit
+    }
+  }
+  return newest
 }

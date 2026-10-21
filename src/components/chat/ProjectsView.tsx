@@ -1,28 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
 import { useChatContext, type SessionSummary } from '@kayushkin/chat-core'
-import type { Project, Rollup } from '@kayushkin/project-store-types'
+import type { Project, RepoRollup, Rollup } from '@kayushkin/project-store-types'
 import { useBridgeConfig } from '../../context'
-import { formatAgeCompact, formatCost, timeAgo } from '../../utils'
+import { formatAgeCompact, formatCost } from '../../utils'
 import { useProjectStore } from '../../useProjectStore'
 import {
   WAITING_WORK_STATE,
-  cardsByWorkState,
-  entityTypeHeading,
+  attentionTotal,
+  commitsPerDay,
   filedSessionSpend,
   lastActivitySeconds,
   openCardCounts,
-  ownedThingsByType,
+  openNextSteps,
+  projectAttention,
   projectPathName,
   projectRollupPath,
   projectSections,
   sessionsFiledByProject,
   unmergedBranchCount,
   vocabularyPath,
+  repoMention,
+  type ProjectAttention,
   type ProjectTreeRow,
   type ProjectVocabulary,
 } from '../../projects'
+import { ProjectPage, StageChip, type RollupSlot } from './ProjectPage'
+import { RefChip } from './RefChip'
 import styles from './ProjectsView.module.css'
 
 // The projects, opened in the chat's workspace in place of the thread, as the
@@ -38,8 +42,6 @@ import styles from './ProjectsView.module.css'
 /** How many rollups the landing page asks for at once. Each reaches
  *  kanban-store, work-graph-store and repo-store behind project-store. */
 const ROLLUP_CONCURRENCY = 4
-
-type RollupSlot = { rollup: Rollup; error: null } | { rollup: null; error: string }
 
 async function readJSON<T>(response: Response, what: string): Promise<T> {
   if (!response.ok) {
@@ -190,6 +192,7 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
               summaries={summaries}
               onOpenProject={onOpenProject}
               onSelectSession={onSelectSession}
+              onChanged={reload}
             />
           ) : (
             <p className={styles.notice}>project-store has no live project {projectId}.</p>
@@ -261,6 +264,14 @@ function Landing({
   onOpenProject: (projectId: string) => void
 }): JSX.Element {
   const sections = useMemo(() => projectSections(projects), [projects])
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const needsYou = projects
+    .map((project) => {
+      const rollup = rollups.get(project.id)?.rollup
+      return rollup ? { project, attention: projectAttention(rollup, nowSeconds) } : null
+    })
+    .filter((row): row is { project: Project; attention: ProjectAttention } => row !== null && attentionTotal(row.attention) > 0)
+    .sort((a, b) => attentionTotal(b.attention) - attentionTotal(a.attention))
   if (projects.length === 0) return <p className={styles.notice}>project-store holds no live project.</p>
   const cards = (rows: ProjectTreeRow[]) => (
     <div className={styles.cardList}>
@@ -278,6 +289,19 @@ function Landing({
   )
   return (
     <>
+      {needsYou.length > 0 && (
+        <section className={styles.section}>
+          <h2 className={`${styles.sectionTitle} page-title`}>Needs you</h2>
+          <ul className={styles.needsYou}>
+            {needsYou.map(({ project, attention }) => (
+              <li key={project.id} className={styles.needsYouRow}>
+                <button type="button" className={styles.cardName} onClick={() => onOpenProject(project.id)}>{project.name}</button>
+                <AttentionChips attention={attention} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {sections.projects.length > 0 && (
         <section className={styles.section}>
           <h2 className={`${styles.sectionTitle} page-title`}>Projects</h2>
@@ -312,6 +336,8 @@ function ProjectCard({
   const rollup = slot?.rollup ?? null
   const spend = filedSessionSpend(filedSessionIds, summaries)
   const lastActivity = rollup ? ageFromSeconds(lastActivitySeconds(rollup, summaries)) : null
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const nextSteps = rollup ? openNextSteps(rollup) : []
   return (
     <article
       className={`${styles.card} ${depth > 0 ? styles.cardChild : ''}`}
@@ -322,6 +348,7 @@ function ProjectCard({
         <button type="button" className={styles.cardName} onClick={onOpen}>{project.name}</button>
         <StageChip stage={project.stage} />
         {lastActivity && <span className={styles.muted} title="Last activity">{lastActivity} ago</span>}
+        {rollup && <CommitBars repos={rollup.repos} nowSeconds={nowSeconds} />}
       </header>
       {project.goal && <p className={styles.goal}>{project.goal}</p>}
       {slot?.error && <p className={styles.error}>{slot.error}</p>}
@@ -343,6 +370,7 @@ function ProjectCard({
               ))
             )}
           </Stat>
+          <Stat label={nextSteps.length === 1 ? 'next step' : 'next steps'}>{nextSteps.length}</Stat>
           <Stat label="unmerged branches">{unmergedBranchCount(rollup)}</Stat>
           <Stat label={`filed ${spend.count === 1 ? 'session' : 'sessions'}`}>
             {spend.count}
@@ -350,14 +378,20 @@ function ProjectCard({
           </Stat>
         </div>
       )}
+      {nextSteps.length > 0 && (
+        <p className={styles.nextStepLine}>
+          <span className={styles.muted}>Next:</span> <RefChip kind="todo" refId={nextSteps[0].note_id} />
+          {nextSteps.length > 1 && <span className={styles.muted}> and {nextSteps.length - 1} more</span>}
+        </p>
+      )}
+      {rollup && <AttentionChips attention={projectAttention(rollup, nowSeconds)} />}
       {rollup && rollup.repos.length > 0 && (
         <p className={styles.deploys} title="Last deploy of each repo">
-          {rollup.repos.map((repo, i) => {
+          {rollup.repos.map((repo) => {
             const age = repo.latest_deploy ? ageFromSeconds(repo.latest_deploy.created_at) : null
             return (
-              <span key={repo.repo_store_id}>
-                {i > 0 && ' · '}
-                <span className={styles.mono}>{repo.name}</span> {age ? `${age}` : 'never deployed'}
+              <span key={repo.repo_store_id} className={styles.deployItem}>
+                <RefChip kind="registered" refId={repoMention(repo.name)} /> {age ? `deployed ${age} ago` : 'never deployed'}
               </span>
             )
           })}
@@ -376,195 +410,42 @@ function Stat({ label, children }: { label: string; children: ReactNode }): JSX.
   )
 }
 
-function StageChip({ stage }: { stage: string }): JSX.Element {
-  return <span className={styles.stageChip} data-stage={stage}>{stage.replace(/_/g, ' ')}</span>
+/** Fourteen bars, one per local day, today on the right: commits on the
+ *  project's default branches. */
+function CommitBars({ repos, nowSeconds }: { repos: RepoRollup[]; nowSeconds: number }): JSX.Element | null {
+  const counts = commitsPerDay(repos, 14, nowSeconds)
+  const total = counts.reduce((n, c) => n + c, 0)
+  if (repos.length === 0) return null
+  const tallest = Math.max(1, ...counts)
+  return (
+    <span className={styles.commitBars} title={`${total} commits on the default branches in 14 days`} aria-label={`${total} commits in 14 days`}>
+      {counts.map((count, index) => (
+        <span key={index} className={styles.commitBar} style={{ height: `${count === 0 ? 2 : 3 + (count / tallest) * 15}px` }}
+          data-empty={count === 0 || undefined} />
+      ))}
+    </span>
+  )
 }
 
-// ---------------------------------------------------------------------------
-// One project's page
-// ---------------------------------------------------------------------------
+const ATTENTION_LABELS: Array<[keyof ProjectAttention, string, string]> = [
+  ['waitingCards', 'waiting card', 'waiting cards'],
+  ['suggestionsToDecide', 'suggestion to decide', 'suggestions to decide'],
+  ['openPullRequests', 'open pull request', 'open pull requests'],
+  ['undeployedCommits', 'commit not deployed', 'commits not deployed'],
+  ['strandedBranches', 'stranded branch', 'stranded branches'],
+  ['missingNotes', 'missing note', 'missing notes'],
+]
 
-function ProjectPage({
-  project,
-  slot,
-  projectsById,
-  vocabulary,
-  summaries,
-  onOpenProject,
-  onSelectSession,
-}: {
-  project: Project
-  slot: RollupSlot | null
-  projectsById: ReadonlyMap<string, Project>
-  vocabulary: ProjectVocabulary | null
-  summaries: ReadonlyMap<string, SessionSummary>
-  onOpenProject: (projectId: string) => void
-  onSelectSession: (sessionId: string) => void
-}): JSX.Element {
-  const { routes } = useBridgeConfig()
-  const rollup = slot?.rollup ?? null
-  const sessionLinks = rollup?.links.filter((l) => l.entity_type === 'session') ?? []
-  const owned = rollup ? ownedThingsByType(rollup.links, vocabulary?.entity_types ?? []) : []
-  const parent = projectsById.get(project.parent_id)
-  const sessionName = (id: string) => summaries.get(id)?.displayName || id
-
+function AttentionChips({ attention }: { attention: ProjectAttention }): JSX.Element | null {
+  const shown = ATTENTION_LABELS.filter(([key]) => attention[key] > 0)
+  if (shown.length === 0) return null
   return (
-    <div className={styles.projectPage} data-project-id={project.id}>
-      <section className={styles.section}>
-        <div className={styles.cardHead}>
-          <h2 className={`${styles.pageTitle} page-title`}>{project.name}</h2>
-          <StageChip stage={project.stage} />
-          <span className={styles.muted}>{project.kind}</span>
-          <span className={`${styles.mono} ${styles.muted}`}>{project.id}</span>
-        </div>
-        {parent && (
-          <p className={styles.muted}>
-            Part of <button type="button" className={styles.linkButton} onClick={() => onOpenProject(parent.id)}>{parent.name}</button>
-          </p>
-        )}
-        <dl className={styles.facts}>
-          <dt>Goal</dt>
-          <dd>{project.goal || <span className={styles.muted}>not set</span>}</dd>
-          <dt>Done when</dt>
-          <dd>{project.done_when || <span className={styles.muted}>not set</span>}</dd>
-        </dl>
-      </section>
-
-      {slot?.error && <p className={styles.error}>{slot.error}</p>}
-      {!slot && <p className={styles.notice}>Loading…</p>}
-
-      {rollup && rollup.children.length > 0 && (
-        <section className={styles.section}>
-          <h3 className={styles.subTitle}>Sub-projects</h3>
-          <ul className={styles.plainList}>
-            {rollup.children.map((child) => (
-              <li key={child.id}>
-                <button type="button" className={styles.linkButton} onClick={() => onOpenProject(child.id)}>{child.name}</button>{' '}
-                <StageChip stage={child.stage} /> <span className={styles.muted}>{child.goal}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {rollup && (
-        <section className={styles.section}>
-          <h3 className={styles.subTitle}>Cards</h3>
-          {rollup.cards.length === 0 ? (
-            <p className={styles.muted}>No card is linked to this project.</p>
-          ) : (
-            cardsByWorkState(rollup).map(({ workState, cards }) => (
-              <div key={workState} className={styles.group}>
-                <h4 className={`${styles.groupTitle} ${workState === WAITING_WORK_STATE ? styles.stateWaiting : ''}`}>
-                  {workState ? workState.replace(/_/g, ' ') : 'in a column with no state'} ({cards.length})
-                </h4>
-                <ul className={styles.plainList}>
-                  {cards.map((card) => (
-                    <li key={card.card_id}>
-                      {routes.card ? (
-                        <RouterLink to={`${routes.card}/${encodeURIComponent(card.card_id)}`}>{card.title || card.card_id}</RouterLink>
-                      ) : (
-                        card.title || card.card_id
-                      )}{' '}
-                      <span className={styles.muted}>{card.status}</span>{' '}
-                      <span className={`${styles.mono} ${styles.muted}`}>{card.card_id}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
-          )}
-        </section>
-      )}
-
-      {rollup && rollup.repos.length > 0 && (
-        <section className={styles.section}>
-          <h3 className={styles.subTitle}>Repos</h3>
-          {rollup.repos.map((repo) => (
-            <div key={repo.repo_store_id} className={styles.group}>
-              <h4 className={styles.groupTitle}>
-                <span className={styles.mono}>{repo.name}</span>{' '}
-                <span className={styles.muted}>
-                  {repo.latest_deploy
-                    ? `deployed ${timeAgo(new Date(repo.latest_deploy.created_at * 1000).toISOString())} at ${repo.latest_deploy.commit_sha.slice(0, 7)} by ${repo.latest_deploy.deployed_by}`
-                    : 'never deployed'}
-                </span>
-              </h4>
-              {repo.unmerged_branches.length === 0 ? (
-                <p className={styles.muted}>No unmerged branch.</p>
-              ) : (
-                <ul className={styles.plainList}>
-                  {repo.unmerged_branches.map((branch) => (
-                    <li key={branch.name}>
-                      <span className={`${styles.mono} ${styles.branch}`}>{branch.name}</span>{' '}
-                      <span className={styles.muted}>last commit {timeAgo(new Date(branch.committed_at * 1000).toISOString())}</span>
-                      {branch.worktree_path && <span className={`${styles.mono} ${styles.muted}`}> {branch.worktree_path}</span>}
-                      {branch.session_ids.map((id) => (
-                        <button key={id} type="button" className={styles.sessionPill} onClick={() => onSelectSession(id)} title={id}>
-                          {sessionName(id)}
-                        </button>
-                      ))}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {rollup && (
-        <section className={styles.section}>
-          <h3 className={styles.subTitle}>Filed sessions ({sessionLinks.length})</h3>
-          {sessionLinks.length === 0 ? (
-            <p className={styles.muted}>No session is filed under this project. File one from its header.</p>
-          ) : (
-            <ul className={styles.plainList}>
-              {sessionLinks.map((link) => {
-                const summary = summaries.get(link.entity_ref)
-                return (
-                  <li key={link.id} className={styles.sessionRow}>
-                    <button type="button" className={styles.linkButton} onClick={() => onSelectSession(link.entity_ref)}>
-                      {summary?.displayName || link.label || link.entity_ref}
-                    </button>
-                    <span className={`${styles.mono} ${styles.muted}`}>{link.entity_ref}</span>
-                    {summary && <span className={styles.muted}>{summary.state}</span>}
-                    {typeof summary?.spendUsd === 'number' && <span className={styles.muted}>{formatCost(summary.spendUsd)}</span>}
-                    {summary?.updatedAt && <span className={styles.muted}>{timeAgo(summary.updatedAt)}</span>}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {rollup && owned.length > 0 && (
-        <section className={styles.section}>
-          <h3 className={styles.subTitle}>What it owns</h3>
-          {owned.map(({ entityType, info, links }) => (
-            <div key={entityType} className={styles.group}>
-              <h4 className={styles.groupTitle} title={info?.meaning}>
-                {entityTypeHeading(entityType)} <span className={styles.muted}>({info?.service ?? 'unknown store'})</span>
-              </h4>
-              <ul className={styles.plainList}>
-                {links.map((link) => (
-                  <li key={link.id}>
-                    {/* The label is the owning store's name for the thing; the ref is
-                        that store's id, said as such so a bare number reads as an id. */}
-                    {link.label && link.label !== link.entity_ref ? `${link.label} ` : ''}
-                    <span className={styles.muted}>
-                      {info?.service ?? 'its store'} id{' '}
-                      <span className={styles.mono}>{link.entity_ref}</span>
-                    </span>
-                    {link.note && <span className={styles.muted}> — {link.note}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      )}
-    </div>
+    <span className={styles.attention}>
+      {shown.map(([key, one, many]) => (
+        <span key={key} className={`${styles.stateChip} ${styles.stateWaiting}`} data-attention={key}>
+          {attention[key]} {attention[key] === 1 ? one : many}
+        </span>
+      ))}
+    </span>
   )
 }

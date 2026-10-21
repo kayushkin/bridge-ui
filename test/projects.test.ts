@@ -17,7 +17,20 @@ import {
   sessionMovePlan,
   sessionsFiledByProject,
   unmergedBranchCount,
+  activityByDay,
+  attentionTotal,
+  commitMention,
+  commitsPerDay,
+  finishedNextSteps,
+  linkedNotesOtherThanTodos,
+  localDayStart,
+  openNextSteps,
+  projectAttention,
+  repoMention,
+  undeployedCommitCount,
+  STRANDED_BRANCH_AGE_SECONDS,
 } from '../src/projects'
+import type { ActivityEvent, Commit, LinkedNote } from '@kayushkin/project-store-types'
 
 function project(id: string, name: string, extra: Partial<Project> = {}): Project {
   return {
@@ -176,9 +189,11 @@ describe('what a project card counts', () => {
           { name: 'b', head_sha: 'y', committed_at: 50, worktree_path: '', session_ids: [] },
         ],
         latest_deploy: { commit_sha: 'z', deployed_by: 'me', created_at: 350 },
+        recent_commits: [], open_pull_requests: [],
       },
-      { repo_store_id: 27, name: 'llm-bridge', unmerged_branches: [] },
+      { repo_store_id: 27, name: 'llm-bridge', unmerged_branches: [], latest_deploy: null, recent_commits: [], open_pull_requests: [] },
     ],
+    notes: [], missing_note_ids: [], suggestions: [],
   }
 
   it('puts waiting first and drops states with no cards', () => {
@@ -217,5 +232,91 @@ describe('what a project card counts', () => {
     expect(owned.map((g) => g.entityType)).toEqual(['repo', 'scheduler_job', 'widget'])
     expect(owned[2]?.info).toBeNull()
     expect(entityTypeHeading('scheduler_job')).toBe('Scheduler jobs')
+  })
+})
+
+function commit(sha: string, committedAt: number): Commit {
+  return { sha, subject: sha, author_name: 'a', committed_at: committedAt, session_id: '', on_origin_branch: true }
+}
+
+function note(noteId: string, extra: Partial<LinkedNote> = {}): LinkedNote {
+  return {
+    link_id: 1, note_id: noteId, type: 'todo', title: noteId, status: 'open', priority: 0, tags: [],
+    due_at: '', created_at: '', updated_at: '', completed_at: '', ...extra,
+  }
+}
+
+describe('chip mentions', () => {
+  it('writes repos and commits the way the chat turns them into chips', () => {
+    expect(repoMention('dash')).toBe('repo:dash')
+    expect(commitMention('dash', 'c41ed053fbb978450e54791c8b9d39f848937808')).toBe('dash@c41ed05')
+  })
+})
+
+describe('next steps', () => {
+  const notes = [
+    note('open-urgent', { priority: 3 }),
+    note('design', { type: 'note' }),
+    note('done-old', { status: 'done', completed_at: '2026-10-01T00:00:00Z' }),
+    note('done-new', { status: 'done', completed_at: '2026-10-10T00:00:00Z' }),
+    note('open-later'),
+  ]
+  it('keeps open todos in the store order and finished ones newest first', () => {
+    expect(openNextSteps({ notes }).map((n) => n.note_id)).toEqual(['open-urgent', 'open-later'])
+    expect(finishedNextSteps({ notes }).map((n) => n.note_id)).toEqual(['done-new', 'done-old'])
+    expect(linkedNotesOtherThanTodos({ notes }).map((n) => n.note_id)).toEqual(['design'])
+  })
+})
+
+describe('undeployedCommitCount', () => {
+  const commits = [commit('ccc', 300), commit('bbb', 200), commit('aaa', 100)]
+  it('counts the commits above the deployed one', () => {
+    expect(undeployedCommitCount({ recent_commits: commits, latest_deploy: { commit_sha: 'bbb', deployed_by: '', created_at: 250 } })).toBe(1)
+    expect(undeployedCommitCount({ recent_commits: commits, latest_deploy: { commit_sha: 'ccc', deployed_by: '', created_at: 350 } })).toBe(0)
+  })
+  it('compares times when the deploy is older than the list', () => {
+    expect(undeployedCommitCount({ recent_commits: commits, latest_deploy: { commit_sha: 'old', deployed_by: '', created_at: 150 } })).toBe(2)
+  })
+  it('says nothing for a repo never deployed', () => {
+    expect(undeployedCommitCount({ recent_commits: commits, latest_deploy: null })).toBeNull()
+  })
+})
+
+describe('projectAttention', () => {
+  it('counts what wants a person', () => {
+    const now = 10_000_000
+    const attention = projectAttention({
+      cards_by_work_state: { waiting: 2, working: 5 },
+      missing_note_ids: ['gone'],
+      suggestions: [],
+      repos: [{
+        repo_store_id: 1, name: 'dash', latest_deploy: { commit_sha: 'b', deployed_by: '', created_at: now - 10 },
+        recent_commits: [commit('c', now - 5), commit('b', now - 100)],
+        open_pull_requests: [],
+        unmerged_branches: [
+          { name: 'fresh', head_sha: '', committed_at: now - 60, worktree_path: '', session_ids: [] },
+          { name: 'stranded', head_sha: '', committed_at: now - STRANDED_BRANCH_AGE_SECONDS - 1, worktree_path: '', session_ids: [] },
+        ],
+      }],
+    }, now)
+    expect(attention).toEqual({ waitingCards: 2, openPullRequests: 0, strandedBranches: 1, undeployedCommits: 1, suggestionsToDecide: 0, missingNotes: 1 })
+    expect(attentionTotal(attention)).toBe(5)
+  })
+})
+
+describe('commits and activity by local day', () => {
+  const now = localDayStart(Math.floor(Date.parse('2026-10-20T12:00:00') / 1000)) + 12 * 3600
+  it('counts each commit once on its local day, today last', () => {
+    const repos = [
+      { recent_commits: [commit('t1', now - 60), commit('y1', now - 86_400)] },
+      { recent_commits: [commit('t1', now - 60), commit('old', now - 20 * 86_400)] },
+    ]
+    expect(commitsPerDay(repos, 3, now)).toEqual([0, 1, 1])
+  })
+  it('groups events by day keeping their order', () => {
+    const event = (at: number) => ({ kind: 'deployed', at }) as ActivityEvent
+    const days = activityByDay([event(now), event(now - 60), event(now - 86_400)])
+    expect(days.map((d) => d.events.length)).toEqual([2, 1])
+    expect(days[0].dayStart).toBe(localDayStart(now))
   })
 })

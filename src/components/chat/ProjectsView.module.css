@@ -72,3 +72,79 @@
   margin-left: 6px; padding: 0 6px; font: inherit; font-size: 0.85em; border-radius: 999px;
   color: var(--accent); background: none; border: 1px solid var(--accent); cursor: pointer;
 }
+
+/* Landing: what needs a person, and each card's activity and next step. */
+.needsYou { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.needsYouRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.attention { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
+.nextStepLine { margin: 4px 0; font-size: 0.9em; }
+.deployItem { display: inline-flex; align-items: baseline; gap: 4px; margin-right: 12px; }
+.commitBars { display: inline-flex; align-items: flex-end; gap: 2px; height: 18px; margin-left: auto; }
+.commitBar { width: 4px; border-radius: 1px; background: var(--accent); }
+.commitBar[data-empty] { background: var(--border); }
+
+/* One project's page: a main column and a side column, stacked when narrow. */
+.projectPage { max-width: 1200px; }
+.pageColumns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .pageColumns { grid-template-columns: minmax(0, 1fr); } }
+.mainColumn, .sideColumn { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.panel { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface); }
+.panelHead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.panelHead .subTitle { margin: 0; }
+.panelActions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.countBadge {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 0.8em; font-weight: 600;
+  color: var(--text-muted); border: 1px solid var(--border);
+}
+
+.purpose { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.purpose .facts { flex: 1 1 320px; }
+.purposeForm { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-width: 720px; }
+.field { display: flex; flex-direction: column; gap: 2px; }
+.fieldLabel { font-size: 0.8em; color: var(--text-muted); }
+.textInput {
+  font: inherit; font-size: 0.9em; padding: 5px 8px; border-radius: 6px;
+  color: var(--text); background: var(--bg); border: 1px solid var(--border);
+}
+.formButtons { display: flex; gap: 8px; }
+
+.stepList { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.stepRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.9em; }
+.stepDone { opacity: 0.65; }
+.priority { font-size: 0.75em; font-weight: 700; color: var(--warning); }
+.addStep { display: flex; gap: 6px; }
+.addStep .textInput { flex: 1 1 auto; }
+
+.suggestionList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.suggestion {
+  display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 6px;
+  border: 1px dashed var(--accent); background: var(--info-bg);
+}
+.suggestionText { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.suggestionTitle { font-weight: 600; }
+.suggestionButtons { display: flex; gap: 6px; flex: 0 0 auto; }
+
+.issueRow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+
+.segmented { display: inline-flex; gap: 2px; }
+.segmentOn { color: var(--accent-on); background: var(--accent); border-color: var(--accent); }
+
+.activityDay { margin: 0 0 10px; }
+.activityDayTitle {
+  margin: 0 0 4px; font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle); padding-bottom: 2px;
+}
+.activityList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.activityRow { display: grid; grid-template-columns: 3.4em 1.4em minmax(0, 1fr); align-items: baseline; font-size: 0.88em; }
+.activityTime { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: 0.9em; }
+.activityIcon { text-align: center; color: var(--text-muted); }
+.activityRow[data-kind='deployed'] .activityIcon,
+.activityRow[data-kind='pull_request_merged'] .activityIcon,
+.activityRow[data-kind='note_completed'] .activityIcon { color: var(--success); }
+.activityBody { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; min-width: 0; }
+.oldValue { text-decoration: line-through; color: var(--text-muted); }
+
+.repoList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.repoRow { display: flex; flex-direction: column; gap: 2px; }
+.repoHead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
