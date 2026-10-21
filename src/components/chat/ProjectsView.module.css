@@ -128,7 +128,8 @@
 .issueRow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 
 .segmented { display: inline-flex; gap: 2px; }
-.segmentOn { color: var(--accent-on); background: var(--accent); border-color: var(--accent); }
+/* Two classes, so the chosen span outranks .bc-ctrl-btn's own colours. */
+.segmented .segmentOn { color: var(--accent-on); background: var(--accent); border-color: var(--accent); font-weight: 700; }
 
 .activityDay { margin: 0 0 10px; }
 .activityDayTitle {
@@ -136,8 +137,8 @@
   border-bottom: 1px solid var(--border-subtle); padding-bottom: 2px;
 }
 .activityList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.activityRow { display: grid; grid-template-columns: 3.4em 1.4em minmax(0, 1fr); align-items: baseline; font-size: 0.88em; }
-.activityTime { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: 0.9em; }
+.activityRow { display: grid; grid-template-columns: max-content 1.6em minmax(0, 1fr); align-items: baseline; font-size: 0.88em; }
+.activityTime { white-space: nowrap; min-width: 4.2em; color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: 0.9em; }
 .activityIcon { text-align: center; color: var(--text-muted); }
 .activityRow[data-kind='deployed'] .activityIcon,
 .activityRow[data-kind='pull_request_merged'] .activityIcon,

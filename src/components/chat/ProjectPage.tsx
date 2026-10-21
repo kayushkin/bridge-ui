@@ -221,16 +221,16 @@ function ProjectPurpose({ project, stages, onChanged }: { project: Project; stag
     <form className={styles.purposeForm} onSubmit={save}>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Goal</span>
-        <textarea className={styles.textInput} rows={2} value={goal} onChange={(e) => setGoal(e.target.value)} />
+        <textarea name="goal" className={styles.textInput} rows={2} value={goal} onChange={(e) => setGoal(e.target.value)} />
       </label>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Done when</span>
-        <textarea className={styles.textInput} rows={2} value={doneWhen} onChange={(e) => setDoneWhen(e.target.value)} />
+        <textarea name="done_when" className={styles.textInput} rows={2} value={doneWhen} onChange={(e) => setDoneWhen(e.target.value)} />
       </label>
       {stages && (
         <label className={styles.field}>
           <span className={styles.fieldLabel}>Stage</span>
-          <select className={styles.textInput} value={stage} onChange={(e) => setStage(e.target.value)}>
+          <select name="stage" className={styles.textInput} value={stage} onChange={(e) => setStage(e.target.value)}>
             {stages.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
         </label>
@@ -303,6 +303,7 @@ function NextSteps({ project, rollup, onChanged }: { project: Project; rollup: R
           <li key={note.note_id} className={styles.stepRow}>
             <input
               type="checkbox"
+              name={`step-${note.note_id}`}
               checked={false}
               disabled={busy !== null}
               onChange={() => void setStatus(note, 'done')}
@@ -317,6 +318,7 @@ function NextSteps({ project, rollup, onChanged }: { project: Project; rollup: R
       </ul>
       <form className={styles.addStep} onSubmit={add}>
         <input
+          name="next_step_title"
           className={styles.textInput}
           placeholder="Add a next step…"
           value={title}
@@ -339,6 +341,7 @@ function NextSteps({ project, rollup, onChanged }: { project: Project; rollup: R
                 <li key={note.note_id} className={`${styles.stepRow} ${styles.stepDone}`}>
                   <input
                     type="checkbox"
+                    name={`step-${note.note_id}`}
                     checked
                     disabled={busy !== null}
                     onChange={() => void setStatus(note, 'open')}
