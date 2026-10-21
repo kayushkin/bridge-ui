@@ -754,10 +754,11 @@ interface TurnItemProps {
  *  that is the only way to start the agent's turn:
  *   - Claude Code's `<task-notification>…</task-notification>`: a background task ended;
  *   - llm-bridge's `<bridge-report kind="…">…</bridge-report>` (msg.WrapBridgeReport):
- *     a button's outcome, or how a deploy this session started ended;
- *   - the same two reports as the server and deploy-gate wrote them before 2026-10-21,
- *     untagged, starting `[session action] ` or `[deploy-gate] `. 28 such messages are
- *     in history; nothing writes the untagged form any more.
+ *     a button's outcome, how a deploy this session started ended, or that the
+ *     harness was restarted under the session;
+ *   - the same reports as the server and deploy-gate wrote them before 2026-10-21,
+ *     untagged, starting `[session action] `, `[deploy-gate] ` or `[llm-bridge] `.
+ *     Nothing writes the untagged form any more.
  *  Anchored at both ends, so a real prompt that merely quotes one still renders. */
 function isHarnessNotification(text: string): boolean {
   const t = text.trim()
@@ -765,7 +766,8 @@ function isHarnessNotification(text: string): boolean {
     (t.startsWith('<task-notification>') && t.endsWith('</task-notification>')) ||
     (/^<bridge-report kind="[a-z-]+">/.test(t) && t.endsWith('</bridge-report>')) ||
     t.startsWith('[session action] ') ||
-    t.startsWith('[deploy-gate] ')
+    t.startsWith('[deploy-gate] ') ||
+    t.startsWith('[llm-bridge] ')
   )
 }
 
@@ -1355,14 +1357,14 @@ interface SpanSegment {
 
 /** The salvageable meaning of a notification: a task-notification's human summary
  *  when the harness provided one; a bridge report's first sentence, without its
- *  `[session action]` or `[deploy-gate]` tag; else the text stripped of its tags. */
+ *  `[session action]`, `[deploy-gate]` or `[llm-bridge]` tag; else the text stripped of its tags. */
 function taskNotificationLabel(text: string): string {
   const summary = text.match(/<summary>([\s\S]*?)<\/summary>/)?.[1]?.trim()
   if (summary) return summary
   const report = text
     .trim()
     .replace(/^<bridge-report kind="[a-z-]+">\s*/, '')
-    .match(/^\[(?:session action|deploy-gate)\] ([^\n]+)/)?.[1]
+    .match(/^\[(?:session action|deploy-gate|llm-bridge)\] ([^\n]+?\.)(?:\s|$)/)?.[1]
   if (report) return report.length > 140 ? `${report.slice(0, 140)}…` : report
   const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   return stripped.length > 140 ? `${stripped.slice(0, 140)}…` : stripped || 'background notification'
