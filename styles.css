@@ -5283,6 +5283,24 @@
   font-size: 0.82rem;
 }
 
+/* A cited photo: a small thumbnail in its chip, a larger one in the panel. */
+.ref-chip-photo-thumb {
+  height: 1.25em;
+  width: auto;
+  max-width: 2.5em;
+  border-radius: 3px;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+.ref-chip-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 18rem;
+  margin: 0 auto 6px;
+  border-radius: 4px;
+}
+
 /* A cited message's text, in a message chip's panel. */
 .ref-chip-panel-body {
   margin: 6px 0 2px;

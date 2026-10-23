@@ -263,6 +263,11 @@ export interface BridgeConfig {
    * "/api/journal"): the operator's own writing, `entry_000001`. Read by the
    * service settings page. Empty means the host does not carry it. */
   journalStoreBasePath: string
+  /** Base path for photo-store as the host proxies it (dash: "/api/photos"):
+   * the operator's own photos, `photo_000001`. A photo chip draws its
+   * thumbnail from `{base}/photos/{id}/thumbnail`. Empty means the host does
+   * not carry it, and a photo chip shows no picture. */
+  photoStoreBasePath: string
   /** Path to the HOST's own people page (dash: "/people"), which a person chip
    * opens as `{path}?id=person_000001`. A plain path for the same reason as
    * `mailPagePath`. Empty hides the chip's "Open person" link. */

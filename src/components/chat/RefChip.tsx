@@ -11,6 +11,8 @@ import type { Entry } from '@kayushkin/journal-store-types';
 import { calendarDayOf, entryChipLabel, hostPageHref } from '../../journalRefs';
 import type { LoggedMessage } from '@kayushkin/multichat-types';
 import { messageChipLabel, messageConversationHref, messageOfAnswer } from '../../messageRefs';
+import type { Photo } from '@kayushkin/photo-store-types';
+import { photoChipLabel, photoDateSourceLabel, photoMapUrl, photoThumbnailUrl } from '../../photoRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
@@ -801,6 +803,9 @@ function UnclassifiedRefChip({
     if (match.type === 'entry') {
       return <EntryRefChip refId={refId} entry={match.data as Entry} className={className} />;
     }
+    if (match.type === 'photo') {
+      return <PhotoRefChip refId={refId} photo={match.data as Photo} className={className} />;
+    }
     if (match.type === 'message') {
       const message = messageOfAnswer(match.data);
       if (message) return <MessageRefChip refId={refId} message={message} className={className} />;
@@ -988,6 +993,71 @@ function PersonRefChip({
             <div className="ref-chip-panel-actions">
               <a className="ref-chip-panel-btn" href={href}>
                 Open person
+              </a>
+            </div>
+          )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A photo id (`photo_000123`), resolved by photo-store: a small thumbnail
+ *  and the day on the chip, and in the panel the picture, when and how sure,
+ *  where, and its description. */
+function PhotoRefChip({
+  refId,
+  photo,
+  className,
+}: {
+  refId: string;
+  photo: Photo;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { photoStoreBasePath } = useBridgeConfig();
+  const thumbnail = photoThumbnailUrl(photoStoreBasePath, refId);
+  const label = photoChipLabel(photo);
+  const mapUrl = photoMapUrl(photo);
+  const deleted = photo.deleted_at !== 0;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="photo" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${label} (${refId})`}
+      >
+        {thumbnail ? (
+          <img className="ref-chip-photo-thumb" src={thumbnail} alt="" loading="lazy" />
+        ) : (
+          <span className="ref-chip-glyph" aria-hidden>
+            📷
+          </span>
+        )}
+        <span className="ref-chip-label">{label}</span>
+        {deleted && <span className="ref-chip-badge ref-chip-badge-deleted">deleted</span>}
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Photo details" refId={refId} refKind="photo">
+          {thumbnail && (
+            <a href={thumbnail} target="_blank" rel="noreferrer">
+              <img className="ref-chip-photo" src={thumbnail} alt={photo.description || label} />
+            </a>
+          )}
+          <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          {photo.taken_at !== 0 && <RefRow label="Taken" value={new Date(photo.taken_at * 1000).toLocaleString()} />}
+          <RefRow label="Date" value={photoDateSourceLabel(photo.date_source)} />
+          {photo.folder && <RefRow label="Folder" value={photo.folder} />}
+          {photo.description && <div className="ref-chip-panel-body">{photo.description}</div>}
+          {mapUrl && (
+            <div className="ref-chip-panel-actions">
+              <a className="ref-chip-panel-btn" href={mapUrl} target="_blank" rel="noreferrer">
+                Where it was taken
               </a>
             </div>
           )}
