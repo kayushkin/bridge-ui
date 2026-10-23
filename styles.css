@@ -5283,6 +5283,17 @@
   font-size: 0.82rem;
 }
 
+/* A cited message's text, in a message chip's panel. */
+.ref-chip-panel-body {
+  margin: 6px 0 2px;
+  max-height: 12rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
 .ref-chip-panel-row {
   display: flex;
   gap: 8px;

@@ -9,6 +9,8 @@ import type { Repo as RepoStoreRepo } from '@kayushkin/repo-store-types';
 import type { PersonDetail } from '@kayushkin/people-store-types';
 import type { Entry } from '@kayushkin/journal-store-types';
 import { calendarDayOf, entryChipLabel, hostPageHref } from '../../journalRefs';
+import type { LoggedMessage } from '@kayushkin/multichat-types';
+import { messageChipLabel, messageConversationHref, messageOfAnswer } from '../../messageRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
@@ -799,6 +801,10 @@ function UnclassifiedRefChip({
     if (match.type === 'entry') {
       return <EntryRefChip refId={refId} entry={match.data as Entry} className={className} />;
     }
+    if (match.type === 'message') {
+      const message = messageOfAnswer(match.data);
+      if (message) return <MessageRefChip refId={refId} message={message} className={className} />;
+    }
     if (match.type === 'repo') {
       return <RepoRefChip refId={refId} repo={match.data as RepoStoreRepo} className={className} />;
     }
@@ -982,6 +988,62 @@ function PersonRefChip({
             <div className="ref-chip-panel-actions">
               <a className="ref-chip-panel-btn" href={href}>
                 Open person
+              </a>
+            </div>
+          )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A message id (`message_000123`), resolved by multichat's message log: who
+ *  sent it and the day on the chip, and in the panel the conversation, the
+ *  time and the text, with a link to the conversation on the Messages page. */
+function MessageRefChip({
+  refId,
+  message,
+  className,
+}: {
+  refId: string;
+  message: LoggedMessage;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { routes, multichatBasePath } = useBridgeConfig();
+  const href = multichatBasePath ? messageConversationHref(routes.messageConversations, message.room_id) : '';
+  const label = messageChipLabel(message);
+  const deleted = message.redacted_at !== null;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="message" data-ref-id={refId}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${label} (${refId})`}
+      >
+        <span className="ref-chip-glyph" aria-hidden>
+          💬
+        </span>
+        <span className="ref-chip-label">{truncate(label)}</span>
+        {deleted && <span className="ref-chip-badge ref-chip-badge-deleted">deleted</span>}
+        <span className="ref-chip-caret-inline" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Message details" refId={refId} refKind="message">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          {message.room_name && <RefRow label="Chat" value={message.room_name} />}
+          <RefRow label="App" value={message.platform} />
+          <RefRow label="Sent" value={new Date(message.sent_at).toLocaleString()} />
+          {message.body && <div className="ref-chip-panel-body">{message.body}</div>}
+          {href && (
+            <div className="ref-chip-panel-actions">
+              <a className="ref-chip-panel-btn" href={href}>
+                Open conversation
               </a>
             </div>
           )}
