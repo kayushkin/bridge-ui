@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { FetchFn } from '../types'
 import {
-  PROMPT_OUTPUT_STATE_LABEL, allTags, annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation,
+  PROMPT_OUTPUT_STATE_LABEL, allTags, annotationFromLabelDrafts, collectionNeedsRender, describeDriftOperation, fileEditStateLabel,
   collectionsForTabs, contextCollectionCreateBody, contextResolveQuery, filterSectionGroups, groupSections, promptOutputState, sectionWriteBody,
   type PromptCollectionView, type PromptDeliveryOptions, type PromptDrift, type PromptHarnessDelivery,
   type PromptRenderResult, type PromptSection, type PromptSectionRevision, type ResolvedContext,
@@ -133,10 +133,12 @@ export function PromptSourcePanel({ apiFetch, basePath, reloadSignal, onViews, o
       {drifts.length > 0 && (
         <div className="bfiles-preview-section bprompt-drift-inbox">
           <div className="bfiles-preview-header">
-            <strong>Edited on disk — waiting for you</strong>
+            <strong>Edits made in the file — waiting for you</strong>
             <span className="bfiles-preview-hint">
-              A rendered file was changed by hand or by a harness. Approve to carry the change into the sections (and out to the
-              collection's other files); dismiss to let the next render overwrite it. Either way the edited text is kept.
+              Someone edited a rendered file instead of its sections. Text changes apply by themselves, and so do added sections once
+              each is tagged. What waits here removes a section, renames a heading, or adds sections still without tags. Approve to
+              carry it into the sections (and out to the collection's other files); dismiss to let the next render overwrite the file.
+              Either way the edited text is kept.
             </span>
           </div>
           {drifts.map(drift => (
@@ -236,7 +238,7 @@ function DriftCard({ drift, sections, apiFetch, basePath, onSettled }: Api & {
     <div className="bfiles-version-preview bprompt-drift-card">
       <div className="bfiles-version-preview-header">
         {editedPaths.map(path => <code key={path}>{path}</code>)}
-        <span className="bprompt-state bprompt-state-edited_on_disk">{drift.status}</span>
+        <span className="bprompt-state bprompt-state-edited_on_disk">{fileEditStateLabel(drift.status)}</span>
         <span className="bfiles-preview-hint">seen {formatTime(drift.created_at)}</span>
       </div>
       {drift.held_reason && <p className="bfiles-preview-skip">{drift.held_reason}</p>}

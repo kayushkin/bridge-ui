@@ -79,6 +79,9 @@ export interface PromptDriftOperation {
   after_section_id?: number
   before_section_id?: number
   heading?: string
+  /** On an update that changes the heading: the heading it had when the edit
+   *  was found. agent-store holds such an edit for a person. */
+  previous_heading?: string
   body?: string
   title?: string
   tags?: string[]
@@ -259,8 +262,8 @@ export function describeDriftOperation(operation: PromptDriftOperation, sections
   const known = operation.section_id ? sectionsById.get(operation.section_id) : undefined
   switch (operation.kind) {
     case 'update': {
-      const was = known?.heading ?? `section ${operation.section_id}`
-      return operation.heading && known && operation.heading !== known.heading
+      const was = operation.previous_heading ?? known?.heading ?? `section ${operation.section_id}`
+      return operation.heading && was !== operation.heading && (operation.previous_heading || known)
         ? `edits ${was} and renames it to ${operation.heading}`
         : `edits ${was || 'the preamble'}`
     }
@@ -400,4 +403,11 @@ export function collectionsForTabs(views: PromptCollectionView[]): { host: Promp
     projects: shown.filter(view => view.collection.scope === 'project').sort(byRoot),
     context: views.filter(view => view.collection.scope === 'context').sort(byRoot),
   }
+}
+
+/** What an edit card says about its state. agent-store's `held` means the edit
+ *  waits: for tags on its new sections, or for a person; `held_reason` says
+ *  which, and the card shows it verbatim. */
+export function fileEditStateLabel(status: string): string {
+  return status === 'held' ? 'waiting' : status
 }

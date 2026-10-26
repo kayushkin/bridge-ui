@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  annotationFromLabelDrafts, collectionNeedsRender, collectionsForTabs, contextCollectionCreateBody, contextResolveQuery, parseCardTagInput, renderedOutputsByPath, describeDriftOperation, filterSectionGroups, groupSections, parseTagInput,
+  annotationFromLabelDrafts, collectionNeedsRender, collectionsForTabs, contextCollectionCreateBody, contextResolveQuery, parseCardTagInput, renderedOutputsByPath, describeDriftOperation, fileEditStateLabel, filterSectionGroups, groupSections, parseTagInput,
   promptOutputState, sectionMatchesFilter,
   type PromptCollectionOutput, type PromptDrift, type PromptSection,
 } from '../src/promptSource'
@@ -136,5 +136,19 @@ describe('ticket context', () => {
   })
   it('creates a context collection with a blank root for every directory', () => {
     expect(contextCollectionCreateBody('  ', ' Billing ')).toEqual({ scope: 'context', root_path: '', title: 'Billing' })
+  })
+})
+
+describe('edits made in a rendered file', () => {
+  it('names a rename by the heading recorded when the edit was found', () => {
+    const byId = new Map()
+    expect(describeDriftOperation({ kind: 'update', section_id: 9, heading: '## Cron', previous_heading: '## Scheduler' }, byId))
+      .toBe('edits ## Scheduler and renames it to ## Cron')
+    expect(describeDriftOperation({ kind: 'update', section_id: 9, heading: '## Cron', previous_heading: '## Scheduler' }, new Map([[9, { heading: '## Cron' }]]) as never))
+      .toBe('edits ## Scheduler and renames it to ## Cron')
+  })
+  it('calls a held edit waiting and leaves the other states as the store names them', () => {
+    expect(fileEditStateLabel('held')).toBe('waiting')
+    expect(fileEditStateLabel('open')).toBe('open')
   })
 })
