@@ -24,6 +24,8 @@ export function photoDateSourceLabel(dateSource: string): string {
     case 'exif': return 'from the camera'
     case 'filename': return 'from the file name'
     case 'mtime': return 'from the file date, which a copy can change'
+    case 'message': return 'when it was sent in a chat'
+    case 'upload': return 'when it was posted online'
     default: return 'unknown'
   }
 }
