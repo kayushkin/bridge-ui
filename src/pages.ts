@@ -5,6 +5,8 @@ import { BridgeSignals } from './components/BridgeSignals'
 import { BridgeInstances } from './components/BridgeInstances'
 import { BridgeSessions } from './components/BridgeSessions'
 import { BridgeAuth } from './components/BridgeAuth'
+import { BridgePeers } from './components/BridgePeers'
+import { BridgePeerLink } from './components/BridgePeerLink'
 import { BridgeUsage } from './components/BridgeUsage'
 import { BridgeMessageConversations } from './components/messages/BridgeMessageConversations'
 import { BridgeMessagesWaiting } from './components/messages/BridgeMessagesWaiting'
@@ -148,6 +150,10 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   { route: 'grants', label: 'Grants', group: 'access', listed: true, available: c => !!c.grantStoreBasePath, component: BridgeGrants },
   { route: 'permissions', label: 'Permissions', group: 'access', listed: true, available: c => !!c.permissionStoreBasePath, component: BridgePermissions },
   { route: 'auth', label: 'Auth', group: 'access', listed: true, component: BridgeAuth },
+  // Other llm-bridge-servers: what this one may do there and they may do
+  // here. Reads only the bridge server, so no store path gates it.
+  { route: 'peers', label: 'Peers', group: 'access', listed: true, component: BridgePeers },
+  { route: 'peerLink', label: 'Linked server', group: 'access', listed: false, routeSuffix: '/:linkId', component: BridgePeerLink },
   // System
   { route: 'settings', label: 'Settings', group: 'system', listed: true, component: BridgeSettings },
   { route: 'usage', label: 'Usage', group: 'system', listed: true, component: BridgeUsage },

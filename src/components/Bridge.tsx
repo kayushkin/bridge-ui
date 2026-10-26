@@ -3,7 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { ChatProvider } from '@kayushkin/chat-core'
 import { BridgeProvider, type BridgeProviderProps } from '../provider'
 import { DEFAULT_BRIDGE_ROUTES, useBridgeConfig } from '../context'
-import type { FetchFn } from '../types'
+import { chatFetchOver } from '../chatFetch'
 import { BridgeLayout } from './BridgeLayout'
 import { BRIDGE_PAGES, type HostPage } from '../pages'
 
@@ -80,14 +80,4 @@ function ChatStore({ children }: { children: React.ReactNode }): JSX.Element {
       {children}
     </ChatProvider>
   )
-}
-
-// Adapt the host's fetch (bridge-ui's `FetchFn`, string-only) to the full
-// `typeof fetch` signature ChatProvider expects. ApiClient only ever passes string
-// URLs, but URL/Request are covered too so the types are honest.
-function chatFetchOver(fetchFn: FetchFn): typeof fetch {
-  return (input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-    return fetchFn(url, init)
-  }
 }

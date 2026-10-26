@@ -6517,3 +6517,28 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-awaiting-popup-meta { font-size: 0.75em; color: var(--text-muted); }
 .bc-awaiting-popup-close { padding: 8px 10px; font: inherit; color: var(--text-muted); background: none; border: none; cursor: pointer; }
 .bss-scope-browser { border-color: var(--info); color: var(--info); }
+
+/* Peers page and a linked server's sessions (BridgePeers, BridgePeerLink). */
+.pr-section { display: flex; flex-direction: column; gap: 10px; }
+.pr-section-title { margin: 0; font-size: 1em; }
+.pr-url-field { flex: 1 1 260px; }
+.pr-table code, .pr-passphrase code { font-family: var(--mono, ui-monospace, monospace); font-size: 0.9em; }
+.pr-check { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; }
+.pr-check-result { white-space: normal; text-align: left; }
+.pr-reason { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pr-reason .bp-input { width: 180px; }
+.pr-reason-note { white-space: normal; }
+.pr-passphrase { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed var(--accent); border-radius: 6px; font-size: 0.85em; }
+.pr-passphrase-value { user-select: all; padding: 2px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; word-break: break-all; }
+.pr-link-page { max-width: none; height: calc(100vh - 140px); }
+.pr-link-columns { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
+.pr-link-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.pr-link-list .bp-list { max-height: none; flex: 1; }
+.pr-session-row { width: 100%; text-align: left; background: none; color: inherit; font: inherit; }
+.pr-new-session { display: flex; gap: 6px; }
+.pr-new-session select { flex: 1; min-width: 0; }
+.pr-link-thread { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border); border-radius: 8px; }
+.pr-thread { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pr-composer { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
+.pr-composer textarea { resize: vertical; }
+.pr-composer-actions { display: flex; gap: 6px; justify-content: flex-end; }

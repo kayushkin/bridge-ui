@@ -12,6 +12,12 @@ export interface BridgeRoutes {
   instances: string
   sessions: string
   auth: string
+  /** Other llm-bridge-servers: links this server holds, and the invites and
+   *  tokens that let others in. */
+  peers: string
+  /** One linked server's sessions, through its link's proxy. Mounted at
+   *  `peerLink/:linkId`. */
+  peerLink: string
   usage: string
   settings: string
   agents: string
@@ -95,6 +101,8 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   instances: '/instances',
   sessions: '/sessions',
   auth: '/auth',
+  peers: '/peers',
+  peerLink: '/peers',
   usage: '/usage',
   settings: '/settings',
   agents: '/agents',
