@@ -19,8 +19,11 @@ import {
   durationLabel,
   placeChipLabel,
   pointMapUrl,
+  daySpanLabel,
+  isJourney,
+  tripBetweenLabel,
   tripChipLabel,
-  tripModeGlyph,
+  tripGlyph,
   tripRouteUrl,
   visitChipLabel,
 } from '../../locationRefs';
@@ -1215,16 +1218,19 @@ function TripRefChip({ refId, trip, className }: { refId: string; trip: Trip; cl
   const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
   const label = tripChipLabel(trip);
   const deleted = trip.deleted_at !== 0;
-  const between = [trip.start_place_name, trip.end_place_name].filter(Boolean).join(' → ');
+  const journey = isJourney(trip);
+  const between = tripBetweenLabel(trip);
   return (
     <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="trip" data-ref-id={refId}>
-      <LocationChipButton glyph={tripModeGlyph(trip.mode)} label={label} refId={refId} deleted={deleted} open={open} toggle={toggle} className={className} />
+      <LocationChipButton glyph={tripGlyph(trip)} label={label} refId={refId} deleted={deleted} open={open} toggle={toggle} className={className} />
       {open && (
-        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Trip details" refId={refId} refKind="trip">
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label={journey ? 'Journey details' : 'Trip details'} refId={refId} refKind="trip">
           <div className="ref-chip-panel-title">{label}</div>
           <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          {journey && <RefRow label="Kind" value={trip.source === 'generated' ? 'journey, grouped by location-group-journeys' : 'journey'} />}
           <RefRow label="Mode" value={trip.mode} />
           {between && <RefRow label="Between" value={between} />}
+          {journey && <RefRow label="Days" value={daySpanLabel(trip.started_at, trip.ended_at)} />}
           <RefRow label="From" value={new Date(trip.started_at * 1000).toLocaleString()} />
           <RefRow label="For" value={durationLabel(trip.started_at, trip.ended_at)} />
           {trip.distance_meters != null && <RefRow label="Distance" value={distanceLabel(trip.distance_meters)} />}

@@ -4,7 +4,7 @@
 // location-store's answer to GET /places/{id}, /visits/{id} or /trips/{id},
 // passed through by the host's resolver.
 
-import type { Place, Trip, Visit } from '@kayushkin/location-store-types'
+import type { Locality, Place, Trip, Visit } from '@kayushkin/location-store-types'
 import { calendarDayOf } from './journalRefs'
 
 /** A distance in words: metres under a kilometre, else kilometres. */
@@ -36,12 +36,53 @@ export function visitChipLabel(visit: Pick<Visit, 'place_name' | 'started_at'>):
   return `${visit.place_name || 'visit'} ${calendarDayOf(visit.started_at)}`
 }
 
-/** A trip's name on a chip: its title, or its mode, day and distance. */
-export function tripChipLabel(trip: Pick<Trip, 'title' | 'mode' | 'started_at' | 'distance_meters'>): string {
+/** Whether a trip is a journey: a span away from home made of other trips. */
+export function isJourney(trip: Pick<Trip, 'kind'>): boolean {
+  return trip.kind === 'journey'
+}
+
+/** The days a span covers: "2026-06-26 – 2026-06-30", or one day. */
+export function daySpanLabel(startedAt: number, endedAt: number): string {
+  const first = calendarDayOf(startedAt)
+  const last = calendarDayOf(endedAt)
+  return first === last ? first : `${first} – ${last}`
+}
+
+/** A trip's name on a chip. A movement: its title, or its mode, day and
+ *  distance. A journey: its title, or "journey" and its days; then how many
+ *  trips it is made of. */
+export function tripChipLabel(
+  trip: Pick<Trip, 'title' | 'mode' | 'started_at' | 'ended_at' | 'distance_meters' | 'kind' | 'child_trips'>,
+): string {
+  if (isJourney(trip)) {
+    const name = trip.title || `journey ${daySpanLabel(trip.started_at, trip.ended_at)}`
+    return trip.child_trips > 0 ? `${name} · ${trip.child_trips} trip${trip.child_trips === 1 ? '' : 's'}` : name
+  }
   if (trip.title) return trip.title
   const mode = trip.mode === 'unknown' ? 'trip' : trip.mode
   const distance = distanceLabel(trip.distance_meters)
   return [mode, calendarDayOf(trip.started_at), distance].filter(Boolean).join(' ')
+}
+
+/** The glyph a trip draws with: a suitcase for a journey, else its mode's. */
+export function tripGlyph(trip: Pick<Trip, 'kind' | 'mode'>): string {
+  return isJourney(trip) ? '🧳' : tripModeGlyph(trip.mode)
+}
+
+/** A town in words: "Fartown, Example Region", or '' when none is named. */
+export function localityLabel(locality: Locality | null | undefined): string {
+  if (!locality) return ''
+  const second = locality.region || locality.country
+  return second && second !== locality.city ? `${locality.city}, ${second}` : locality.city
+}
+
+/** Where a trip went between, in words: its places' names, else its towns. */
+export function tripBetweenLabel(
+  trip: Pick<Trip, 'start_place_name' | 'end_place_name' | 'start_locality' | 'end_locality'>,
+): string {
+  const start = trip.start_place_name || localityLabel(trip.start_locality)
+  const end = trip.end_place_name || localityLabel(trip.end_locality)
+  return [start, end].filter(Boolean).join(' → ')
 }
 
 /** The glyph a trip's mode draws with. */
