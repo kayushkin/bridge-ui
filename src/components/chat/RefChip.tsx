@@ -13,6 +13,17 @@ import type { LoggedMessage } from '@kayushkin/multichat-types';
 import { messageChipLabel, messageConversationHref, messageOfAnswer } from '../../messageRefs';
 import type { Photo } from '@kayushkin/photo-store-types';
 import { photoChipLabel, photoDateSourceLabel, photoMapUrl, photoThumbnailUrl } from '../../photoRefs';
+import type { Place, Trip, Visit } from '@kayushkin/location-store-types';
+import {
+  distanceLabel,
+  durationLabel,
+  placeChipLabel,
+  pointMapUrl,
+  tripChipLabel,
+  tripModeGlyph,
+  tripRouteUrl,
+  visitChipLabel,
+} from '../../locationRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
@@ -828,6 +839,15 @@ function UnclassifiedRefChip({
     if (match.type === 'photo') {
       return <PhotoRefChip refId={refId} photo={match.data as Photo} className={className} />;
     }
+    if (match.type === 'place') {
+      return <PlaceRefChip refId={refId} place={match.data as Place} className={className} />;
+    }
+    if (match.type === 'visit') {
+      return <VisitRefChip refId={refId} visit={match.data as Visit} className={className} />;
+    }
+    if (match.type === 'trip') {
+      return <TripRefChip refId={refId} trip={match.data as Trip} className={className} />;
+    }
     if (match.type === 'message') {
       const message = messageOfAnswer(match.data);
       if (message) return <MessageRefChip refId={refId} message={message} className={className} />;
@@ -1083,6 +1103,136 @@ function PhotoRefChip({
               </a>
             </div>
           )}
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** The chip button every location-store chip shares: a glyph, a label, and
+ *  a "deleted" badge. */
+function LocationChipButton({
+  glyph,
+  label,
+  refId,
+  deleted,
+  open,
+  toggle,
+  className,
+}: {
+  glyph: string;
+  label: string;
+  refId: string;
+  deleted: boolean;
+  open: boolean;
+  toggle: () => void;
+  className?: string;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={`${className ?? 'ref-chip'} ref-chip-item${open ? ' ref-chip-open' : ''}`}
+      onClick={toggle}
+      aria-expanded={open}
+      title={`${label} (${refId})`}
+    >
+      <span className="ref-chip-glyph" aria-hidden>
+        {glyph}
+      </span>
+      <span className="ref-chip-label">{truncate(label)}</span>
+      {deleted && <span className="ref-chip-badge ref-chip-badge-deleted">deleted</span>}
+      <span className="ref-chip-caret-inline" aria-hidden>
+        ▾
+      </span>
+    </button>
+  );
+}
+
+function MapLink({ href, label }: { href: string; label: string }): JSX.Element | null {
+  if (!href) return null;
+  return (
+    <div className="ref-chip-panel-actions">
+      <a className="ref-chip-panel-btn" href={href} target="_blank" rel="noreferrer">
+        {label}
+      </a>
+    </div>
+  );
+}
+
+/** A place id (`place_000123`), resolved by location-store: its name on the
+ *  chip, and in the panel its kind, address, description and a map link. */
+function PlaceRefChip({ refId, place, className }: { refId: string; place: Place; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const label = placeChipLabel(place);
+  const deleted = place.deleted_at !== 0;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="place" data-ref-id={refId}>
+      <LocationChipButton glyph="📍" label={label} refId={refId} deleted={deleted} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Place details" refId={refId} refKind="place">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          <RefRow label="Kind" value={place.kind} />
+          {place.address && <RefRow label="Address" value={place.address} />}
+          {place.tags.length > 0 && <RefRow label="Tags" value={place.tags.join(', ')} />}
+          {place.description && <div className="ref-chip-panel-body">{place.description}</div>}
+          <MapLink href={pointMapUrl(place.latitude, place.longitude)} label="On the map" />
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A visit id (`visit_000123`), resolved by location-store: where and the day
+ *  on the chip, and in the panel when, for how long, and a map link. */
+function VisitRefChip({ refId, visit, className }: { refId: string; visit: Visit; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const label = visitChipLabel(visit);
+  const deleted = visit.deleted_at !== 0;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="visit" data-ref-id={refId}>
+      <LocationChipButton glyph="📍" label={label} refId={refId} deleted={deleted} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Visit details" refId={refId} refKind="visit">
+          <div className="ref-chip-panel-title">{visit.place_name || 'Visit'}</div>
+          <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          {visit.place_id && <RefRow label="Place" value={visit.place_id} />}
+          <RefRow label="From" value={new Date(visit.started_at * 1000).toLocaleString()} />
+          <RefRow label="For" value={durationLabel(visit.started_at, visit.ended_at)} />
+          {visit.tags.length > 0 && <RefRow label="Tags" value={visit.tags.join(', ')} />}
+          {visit.description && <div className="ref-chip-panel-body">{visit.description}</div>}
+          <MapLink href={pointMapUrl(visit.latitude, visit.longitude)} label="On the map" />
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A trip id (`trip_000123`), resolved by location-store: its title, or its
+ *  mode, day and distance, on the chip, and in the panel where it went, when,
+ *  how far, what it is part of or made of, and a route link. */
+function TripRefChip({ refId, trip, className }: { refId: string; trip: Trip; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const label = tripChipLabel(trip);
+  const deleted = trip.deleted_at !== 0;
+  const between = [trip.start_place_name, trip.end_place_name].filter(Boolean).join(' → ');
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="trip" data-ref-id={refId}>
+      <LocationChipButton glyph={tripModeGlyph(trip.mode)} label={label} refId={refId} deleted={deleted} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Trip details" refId={refId} refKind="trip">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} badge={deleted ? 'deleted' : undefined} />
+          <RefRow label="Mode" value={trip.mode} />
+          {between && <RefRow label="Between" value={between} />}
+          <RefRow label="From" value={new Date(trip.started_at * 1000).toLocaleString()} />
+          <RefRow label="For" value={durationLabel(trip.started_at, trip.ended_at)} />
+          {trip.distance_meters != null && <RefRow label="Distance" value={distanceLabel(trip.distance_meters)} />}
+          {trip.parent_trip_id && <RefRow label="Part of" value={trip.parent_trip_id} />}
+          {trip.child_trips > 0 && <RefRow label="Made of" value={`${trip.child_trips} trip${trip.child_trips === 1 ? '' : 's'}`} />}
+          {trip.tags.length > 0 && <RefRow label="Tags" value={trip.tags.join(', ')} />}
+          {trip.description && <div className="ref-chip-panel-body">{trip.description}</div>}
+          <MapLink href={tripRouteUrl(trip)} label="The route" />
         </AnchoredPanel>
       )}
     </span>
