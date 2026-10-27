@@ -25,13 +25,17 @@ import {
   type PeerConnectionView,
   type PeerGrantRequest,
   type PeerReasonRequest,
+  type PeerUserMapping,
+  type PeerUserMappingRequest,
   type ServiceSettings,
 } from '@kayushkin/llm-bridge-types'
+import type { Principal } from '@kayushkin/principal-store-types'
 import type { BridgeConfig } from './context'
 
 export const PEER_CONNECTION_INVITES_PATH = '/peer-connection-invites'
 export const PEER_CONNECTIONS_PATH = '/peer-connections'
 export const PEER_ACCESS_LEVELS_PATH = '/peer-access-levels'
+export const PEER_USER_MAPPINGS_PATH = '/peer-user-mappings'
 
 export function peerConnectionPath(connectionID: string): string {
   return `${PEER_CONNECTIONS_PATH}/${encodeURIComponent(connectionID)}`
@@ -55,6 +59,46 @@ export function peerConnectionCheckPath(connectionID: string): string {
 
 export function peerAccessLevelProvisionPath(levelKey: string): string {
   return `${PEER_ACCESS_LEVELS_PATH}/${encodeURIComponent(levelKey)}/provision`
+}
+
+/** The people of one connected server mapped to principals here, by the
+ *  principal this server made for that server when it gave it access. */
+export function peerUserMappingsListPath(peerPrincipalID: string): string {
+  return `${PEER_USER_MAPPINGS_PATH}?peer_principal_id=${encodeURIComponent(peerPrincipalID)}`
+}
+
+export function peerUserMappingRemovePath(mappingID: string): string {
+  return `${PEER_USER_MAPPINGS_PATH}/${encodeURIComponent(mappingID)}/remove`
+}
+
+/** The mapping form as typed, trimmed. The server checks that each id names
+ *  a principal and says why when one does not, so nothing is checked here. */
+export function peerUserMappingRequestBody(
+  peerPrincipalID: string, remotePrincipalID: string, localPrincipalID: string,
+): PeerUserMappingRequest {
+  return {
+    peer_principal_id: peerPrincipalID.trim(),
+    remote_principal_id: remotePrincipalID.trim(),
+    local_principal_id: localPrincipalID.trim(),
+  }
+}
+
+export function peerUserMappingIsRemoved(mapping: PeerUserMapping): boolean {
+  return !!mapping.removed_at
+}
+
+/** The principals here a person from another server may be mapped to: those
+ *  principal-store says act as a caller (it refuses the others with
+ *  `local_principal_cannot_act`), and are not disabled. */
+export function peerUserMappingLocalChoices(principals: readonly Principal[]): Principal[] {
+  return principals.filter(p => p.acts_as_caller && !p.disabled_at)
+}
+
+/** Who removed a connection, in words. The other server removing it and
+ *  saying so over the connection leaves no administrator here. */
+export function peerConnectionRemovedBy(connection: PeerConnection): string {
+  if (connection.removed_by_other_server) return 'the other server removed it'
+  return connection.removed_by ? `removed by ${connection.removed_by}` : 'removed'
 }
 
 /** Where the connected server answers: every route of it, under this server's
@@ -186,6 +230,20 @@ const PEER_REFUSAL_EXPLANATIONS: Readonly<Record<string, string>> = {
     'The other server has not given this one any access yet. Its administrator grants a level on its own Peers page.',
   peer_not_connected:
     'The other server is not connected now: its socket to this one is closed. It reconnects by itself when it is running and online.',
+  mapping_incomplete:
+    'A mapping needs all three ids: the connected server, its person, and the principal here they act as.',
+  unknown_peer_principal:
+    'This server has no principal for that connected server any more. Give it access again, then map its people.',
+  unknown_local_principal:
+    'No principal here has that id. Pick one from the list.',
+  local_principal_cannot_act:
+    'That principal cannot make requests (a group or a contact), so nobody can act as it. Pick a person or a server.',
+  peer_user_mapping_exists:
+    'That person from the connected server is already mapped. Remove the old mapping first to change it.',
+  peer_user_mapping_not_found:
+    'This server has no such mapping any more. Reload the page.',
+  peer_user_not_mapped:
+    'That person on the connected server is not mapped to anyone here, so this server refuses what they ask. Map them on this page.',
 }
 
 /** The error text of a refused peer route: llm-bridge-server answers

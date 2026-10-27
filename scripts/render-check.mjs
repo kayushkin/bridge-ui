@@ -2012,6 +2012,27 @@ console.log('BridgePeers — the page before anything loads')
     html.includes('Make passphrase') && !html.includes('Its address'))
 }
 
+console.log('BridgePeers — people from a connected server this one gives access to')
+{
+  const answers = {
+    '/api/bridge/peer-connections': [{
+      connection: { id: 'peer_connection_000001', display_name: 'laptop', transport: 'dial_out', role: 'accepting',
+        peer_principal_id: 'principal_000145', created_by: 'principal_000001', created_at: '2026-10-27T10:00:00Z' },
+      socket_connected: true,
+    }],
+  }
+  const html = renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/peers'] },
+      h(BridgeContext.Provider, { value: {
+        fetch: async url => ({ ok: true, status: 200, text: async () => '', json: async () => answers[url] ?? [] }),
+        basePath: '/api/bridge', principalStoreBasePath: '/api/principals', routes: DEFAULT_BRIDGE_ROUTES,
+      } }, h(BridgePeers))))
+  check('it says an unmapped person is refused and an administrator acts as the whole server',
+    html.includes('A person nobody mapped is refused') && html.includes('acts as the whole server'), html.slice(0, 300))
+  check('before the list loads it says so, rather than that nobody is mapped',
+    html.includes('Loading'))
+}
+
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)

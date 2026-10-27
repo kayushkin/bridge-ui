@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { PeerAccessLevel, PeerConnection, PeerConnectionInvite, PeerConnectionView, ServiceSettings } from '@kayushkin/llm-bridge-types'
+import type { PeerAccessLevel, PeerConnection, PeerConnectionInvite, PeerConnectionView, PeerUserMapping, ServiceSettings } from '@kayushkin/llm-bridge-types'
+import type { Principal } from '@kayushkin/principal-store-types'
 import { DEFAULT_BRIDGE_ROUTES, type BridgeConfig } from '../src/context'
 import {
   EMPTY_PEER_CONNECT_FORM,
@@ -14,11 +15,17 @@ import {
   peerConnectionProxyBasePath,
   peerConnectionReach,
   peerConnectionRemovePath,
+  peerConnectionRemovedBy,
   peerConnectionRevokeGrantPath,
   peerGrantRequestBody,
   peerReasonRequestBody,
   peerRouteErrorText,
   peerTransportDescription,
+  peerUserMappingIsRemoved,
+  peerUserMappingLocalChoices,
+  peerUserMappingRemovePath,
+  peerUserMappingRequestBody,
+  peerUserMappingsListPath,
   thisServerPublicURL,
 } from '../src/peers'
 
@@ -184,5 +191,52 @@ describe('peerConnectionBridgeConfig', () => {
     const peer = peerConnectionBridgeConfig(local, 'peer_connection_000001')
     expect(peer.fetch).toBe(fetchFn)
     expect(peer.routes).toBe(DEFAULT_BRIDGE_ROUTES)
+  })
+})
+
+describe('people from connected servers', () => {
+  it('lists one server\'s mappings by its peer principal, escaped', () => {
+    expect(peerUserMappingsListPath('principal_000145')).toBe('/peer-user-mappings?peer_principal_id=principal_000145')
+    expect(peerUserMappingsListPath('a b&c')).toBe('/peer-user-mappings?peer_principal_id=a%20b%26c')
+    expect(peerUserMappingRemovePath('peer_user_mapping_000001')).toBe('/peer-user-mappings/peer_user_mapping_000001/remove')
+  })
+
+  it('sends the three ids trimmed', () => {
+    expect(peerUserMappingRequestBody(' principal_000145 ', ' principal_000001 ', 'principal_000002 ')).toEqual({
+      peer_principal_id: 'principal_000145',
+      remote_principal_id: 'principal_000001',
+      local_principal_id: 'principal_000002',
+    })
+  })
+
+  it('treats a mapping with removed_at as removed', () => {
+    const mapping: PeerUserMapping = {
+      id: 'peer_user_mapping_000001', peer_principal_id: 'principal_000145', remote_principal_id: 'principal_000001',
+      local_principal_id: 'principal_000002', created_by: 'principal_000001', created_at: '2026-10-27T10:00:00Z',
+    }
+    expect(peerUserMappingIsRemoved(mapping)).toBe(false)
+    expect(peerUserMappingIsRemoved({ ...mapping, removed_at: '2026-10-27T11:00:00Z' })).toBe(true)
+  })
+
+  it('offers only principals that act as a caller and are not disabled', () => {
+    const principal = (id: string, actsAsCaller: boolean, disabledAt = 0): Principal => ({
+      id, seq: 1, kind: actsAsCaller ? 'human' : 'group', display_name: id, email: '', disabled_at: disabledAt,
+      created_at: 0, updated_at: 0, is_administrator: false, acts_in_this_deployment: true,
+      acts_as_caller: actsAsCaller, restricted_to_its_grants: false,
+    } as Principal)
+    const choices = peerUserMappingLocalChoices([principal('person', true), principal('group', false), principal('left', true, 5)])
+    expect(choices.map(p => p.id)).toEqual(['person'])
+  })
+
+  it('says when the other server removed the connection', () => {
+    expect(peerConnectionRemovedBy(connection({ removed_at: 'x', removed_by_other_server: true }))).toBe('the other server removed it')
+    expect(peerConnectionRemovedBy(connection({ removed_at: 'x', removed_by: 'principal_000001' }))).toBe('removed by principal_000001')
+  })
+
+  it('explains an unmapped person in plain words before the server\'s message', async () => {
+    const res = new Response(JSON.stringify({ error: { code: 'peer_user_not_mapped', message: 'principal_000009 of principal_000145 is not mapped' } }), { status: 403 })
+    const text = await peerRouteErrorText(res, 'Open')
+    expect(text).toContain('not mapped to anyone here')
+    expect(text).toContain('(peer_user_not_mapped)')
   })
 })

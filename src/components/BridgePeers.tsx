@@ -8,6 +8,7 @@ import {
   type PeerConnectionView,
   type PeerGrantRevoked,
   type PeerGrantSelf,
+  type PeerUserMapping,
   type ServiceSettings,
 } from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
@@ -19,6 +20,7 @@ import {
   PEER_CONNECTIONS_PATH,
   PEER_CONNECTION_INVITES_PATH,
   PEER_CONNECTION_INVITE_LIFETIMES,
+  PEER_USER_MAPPINGS_PATH,
   liveFirstNewestFirst,
   peerAccessLevelIsReady,
   peerAccessLevelName,
@@ -31,11 +33,17 @@ import {
   peerConnectionIsRemoved,
   peerConnectionReach,
   peerConnectionRemovePath,
+  peerConnectionRemovedBy,
   peerConnectionRevokeGrantPath,
   peerGrantRequestBody,
   peerReasonRequestBody,
   peerRouteErrorText,
   peerTransportDescription,
+  peerUserMappingIsRemoved,
+  peerUserMappingLocalChoices,
+  peerUserMappingRemovePath,
+  peerUserMappingRequestBody,
+  peerUserMappingsListPath,
   thisServerPublicURL,
   type PeerConnectForm,
 } from '../peers'
@@ -168,11 +176,12 @@ export function BridgePeers() {
       <section className="pr-section" aria-label="People from connected servers">
         <h3 className="pr-section-title">People from connected servers</h3>
         <p className="bp-hint">
-          A request from a connected server can name which of its people is asking. Once this server maps that person
-          to one of its own principals, the request may do only what both the server&apos;s access and that principal
-          allow, and a person nobody mapped is refused. This server does not offer the mapping routes yet, so nothing
-          can be mapped here; until then a connected server acts here only as itself.
+          A request from a connected server names which of its people is asking. Map that person to one of this
+          server&apos;s principals, and the request may do only what both the server&apos;s access and that principal
+          allow. A person nobody mapped is refused. An administrator on the connected server names nobody and acts
+          as the whole server, with exactly the access this server gave it.
         </p>
+        <PeopleFromConnectedServers connections={connections.rows} />
       </section>
     </div>
   )
@@ -214,9 +223,10 @@ function ConnectionsTable({ connections, levels, onChanged, onLevelsChanged }: {
                 <div className="bp-hint"><code>{connection.id}</code> · connected {formatWhen(connection.created_at)}</div>
                 {removed && (
                   <span className="bp-badge bp-badge-disabled" title={connection.remove_reason}>
-                    removed {formatWhen(connection.removed_at)}{connection.remove_reason ? `: ${connection.remove_reason}` : ''}
+                    {peerConnectionRemovedBy(connection)} {formatWhen(connection.removed_at)}{connection.remove_reason ? `: ${connection.remove_reason}` : ''}
                   </span>
                 )}
+                {removed && connection.removal_notice && <div className="bp-hint pr-removal-notice">{connection.removal_notice}</div>}
               </td>
               <td>
                 {peerTransportDescription(connection)}
@@ -598,5 +608,128 @@ function InvitesTable({ invites }: { invites: PeerConnectionInvite[] | null }) {
         })}
       </tbody>
     </table>
+  )
+}
+
+/** For each connected server this one gives access to, which of its people
+ *  act here as which principal. The mapping keys on the principal this server
+ *  made for that server, so a server with no access given has nobody to map. */
+function PeopleFromConnectedServers({ connections }: { connections: PeerConnectionView[] | null }) {
+  if (connections === null) return <div className="bp-empty-inline">Loading…</div>
+  const mappable = connections.filter(view => !peerConnectionIsRemoved(view) && !!view.connection.peer_principal_id)
+  if (mappable.length === 0) {
+    return <div className="bp-empty-inline">This server gives no connected server access, so there is nobody to map yet.</div>
+  }
+  return (
+    <>
+      {mappable.map(view => (
+        <PeopleOfOneServer
+          key={view.connection.id}
+          serverName={view.connection.display_name}
+          peerPrincipalID={view.connection.peer_principal_id as string}
+        />
+      ))}
+    </>
+  )
+}
+
+function PeopleOfOneServer({ serverName, peerPrincipalID }: { serverName: string; peerPrincipalID: string }) {
+  const mappings = usePeerList<PeerUserMapping>(peerUserMappingsListPath(peerPrincipalID))
+  const principals = usePrincipals()
+  const sorted = useMemo(() => liveFirstNewestFirst(mappings.rows ?? [], m => !peerUserMappingIsRemoved(m)), [mappings.rows])
+  const nameOf = (id: string) => principals.byId.get(id)?.display_name
+  return (
+    <div className="pr-people" data-peer-principal-id={peerPrincipalID}>
+      <h4 className="pr-people-title">
+        {serverName} <span className="bp-hint">acts here as <code>{peerPrincipalID}</code></span>
+      </h4>
+      {mappings.error && <div className="bridge-error bp-error">{mappings.error}</div>}
+      <table className="bg-table pr-table" aria-label={`People from ${serverName}`}>
+        <thead>
+          <tr><th>Their person</th><th>Acts here as</th><th>Mapped by</th><th></th></tr>
+        </thead>
+        <tbody>
+          {mappings.rows === null && <tr><td colSpan={4} className="bp-empty-inline">Loading…</td></tr>}
+          {mappings.rows !== null && mappings.rows.length === 0 && (
+            <tr><td colSpan={4} className="bp-empty-inline">Nobody from {serverName} is mapped, so only its administrators get anything here.</td></tr>
+          )}
+          {sorted.map(mapping => {
+            const removed = peerUserMappingIsRemoved(mapping)
+            const localName = nameOf(mapping.local_principal_id)
+            return (
+              <tr key={mapping.id} className={removed ? 'bg-row-revoked' : ''} data-peer-user-mapping-id={mapping.id}>
+                <td><code>{mapping.remote_principal_id}</code></td>
+                <td>{localName ? <>{localName} </> : null}<code>{mapping.local_principal_id}</code></td>
+                <td>
+                  <code>{mapping.created_by}</code><div className="bp-hint">{formatWhen(mapping.created_at)}</div>
+                  {removed && (
+                    <span className="bp-badge bp-badge-disabled" title={mapping.remove_reason}>
+                      removed {formatWhen(mapping.removed_at)}{mapping.removed_by ? ` by ${mapping.removed_by}` : ''}{mapping.remove_reason ? `: ${mapping.remove_reason}` : ''}
+                    </span>
+                  )}
+                </td>
+                <td className="bg-actions">
+                  {!removed && <ReasonAction label="Remove" path={peerUserMappingRemovePath(mapping.id)} onDone={mappings.reload} />}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <MapPersonForm peerPrincipalID={peerPrincipalID} serverName={serverName} onMapped={mappings.reload} />
+    </div>
+  )
+}
+
+function MapPersonForm({ peerPrincipalID, serverName, onMapped }: {
+  peerPrincipalID: string
+  serverName: string
+  onMapped: () => void
+}) {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const principals = usePrincipals()
+  const [remotePrincipalID, setRemotePrincipalID] = useState('')
+  const [localPrincipalID, setLocalPrincipalID] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const choices = peerUserMappingLocalChoices(principals.list)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const body = peerUserMappingRequestBody(peerPrincipalID, remotePrincipalID, localPrincipalID)
+      const res = await fetchFn(`${basePath}${PEER_USER_MAPPINGS_PATH}`, jsonPost(body))
+      if (!res.ok) { setError(await peerRouteErrorText(res, 'Map person')); return }
+      setRemotePrincipalID('')
+      setLocalPrincipalID('')
+      onMapped()
+    } catch (err) {
+      setError(`Map person: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form className="bg-form pr-map-person" onSubmit={submit} aria-label={`Map a person from ${serverName}`}>
+      <label className="bg-filter">
+        <span>Their principal id on {serverName}</span>
+        <input type="text" placeholder="principal_000001" value={remotePrincipalID} onChange={e => setRemotePrincipalID(e.target.value)} required />
+      </label>
+      <label className="bg-filter">
+        <span>Acts here as</span>
+        {principals.enabled ? (
+          <select value={localPrincipalID} onChange={e => setLocalPrincipalID(e.target.value)} required aria-label="Principal here">
+            <option value="">{principals.loading ? 'Loading principals…' : 'Pick a principal'}</option>
+            {choices.map(p => <option key={p.id} value={p.id}>{p.display_name} ({p.id})</option>)}
+          </select>
+        ) : (
+          <span className="bp-hint">principal-store is not proxied here, so there is no principal to pick.</span>
+        )}
+      </label>
+      <button type="submit" className="bp-submit bg-submit" disabled={busy || !principals.enabled}>{busy ? 'Mapping…' : 'Map'}</button>
+      {principals.error && <div className="bridge-error bp-error bg-form-error">principal-store: {principals.error}</div>}
+      {error && <div className="bridge-error bp-error bg-form-error">{error}</div>}
+    </form>
   )
 }
