@@ -86,7 +86,7 @@ function usePeerList<T>(path: string): { rows: T[] | null; error: string | null;
 }
 
 /** This server's own description of its settings, read once, for its
- *  `public_url`. */
+ *  `peer_connections.public_url`. */
 function useThisServerSettings(): { settings: ServiceSettings | null; error: string | null } {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
   const [settings, setSettings] = useState<ServiceSettings | null>(null)
@@ -487,7 +487,7 @@ function PassphraseForm({ onMade }: { onMade: () => void }) {
           <span>The other server connects to <code>{publicURL}</code>.</span>
         ) : (
           <span className="bp-hint">
-            This server&apos;s own address is not set (<code>LLMBRIDGE_PUBLIC_URL</code>, on Service settings), so this
+            This server&apos;s own address is not set (<code>LLMBRIDGE_PEER_CONNECTIONS_PUBLIC_URL</code>, on Service settings), so this
             page cannot say which address the other server should use. Tell its administrator the https address this
             server answers at.
             {thisServer.error && <> Could not read this server&apos;s settings: {thisServer.error}</>}

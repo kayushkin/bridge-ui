@@ -212,11 +212,11 @@ export function peerConnectionInviteState(invite: PeerConnectionInvite, now: Dat
   return new Date(invite.expires_at).getTime() <= now.getTime() ? 'expired' : 'waiting'
 }
 
-/** This server's own https address, from its `public_url` setting, which the
+/** This server's own https address, from its `peer_connections.public_url` setting, which the
  *  server's `/settings` serves. Empty when it is not set: the page then says
  *  so rather than guess an address from the browser's location. */
 export function thisServerPublicURL(settings: ServiceSettings | null): string {
-  return settings?.settings.find(setting => setting.key === 'public_url')?.value.trim() ?? ''
+  return settings?.settings.find(setting => setting.key === 'peer_connections.public_url')?.value.trim() ?? ''
 }
 
 /** Plain words for the refusals a person can act on, keyed by the code the

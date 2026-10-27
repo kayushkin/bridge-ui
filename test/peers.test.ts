@@ -136,11 +136,11 @@ describe('liveFirstNewestFirst', () => {
 describe('thisServerPublicURL', () => {
   const settings = (value: string): ServiceSettings => ({
     service: 'llm-bridge-server',
-    settings: [{ key: 'public_url', environment_variable: 'LLMBRIDGE_PUBLIC_URL', value } as ServiceSettings['settings'][number]],
+    settings: [{ key: 'peer_connections.public_url', environment_variable: 'LLMBRIDGE_PEER_CONNECTIONS_PUBLIC_URL', value } as ServiceSettings['settings'][number]],
     kinds: [],
     sources: [],
   })
-  it("reads the server's public_url setting, and nothing when it is unset", () => {
+  it("reads the server's peer_connections.public_url setting, and nothing when it is unset", () => {
     expect(thisServerPublicURL(settings(' https://a.example.com/bridge '))).toBe('https://a.example.com/bridge')
     expect(thisServerPublicURL(settings(''))).toBe('')
     expect(thisServerPublicURL(null)).toBe('')
