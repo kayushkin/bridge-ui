@@ -42,6 +42,7 @@ import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
+import { BridgePeers } from '../src/components/BridgePeers.tsx'
 import { composerAutoGrowHeightPx } from '../src/components/chat/composerAutoGrow.ts'
 import { StatusDot } from '../src/components/chat/StatusDot.tsx'
 import { MemoryRouter } from 'react-router-dom'
@@ -1993,6 +1994,22 @@ console.log('\nSessionHeader: a panel re-checks the capability its button needs'
     check('CONTROL a repaired line is found and accepted',
       repairedLines.length === 1 && repairedLines.every(line => line.includes('toolsCapabilityHeld')))
   }
+}
+
+console.log('BridgePeers — the page before anything loads')
+{
+  const html = renderToStaticMarkup(
+    h(MemoryRouter, { initialEntries: ['/peers'] },
+      h(BridgeContext.Provider, { value: {
+        fetch: async () => ({ ok: true, status: 200, text: async () => '', json: async () => [] }),
+        basePath: '/api/bridge', principalStoreBasePath: '/api/principals', routes: DEFAULT_BRIDGE_ROUTES,
+      } }, h(BridgePeers))))
+  check('it has the connections, the connect form and the people slot',
+    html.includes('Connected servers') && html.includes('Make a connection') && html.includes('People from connected servers'), html.slice(0, 300))
+  check('it offers both sides of making a connection',
+    html.includes('make a passphrase for the other server') && html.includes('Connect to a server that has an address'))
+  check('the passphrase side is drawn first, and the connect form only when picked',
+    html.includes('Make passphrase') && !html.includes('Its address'))
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(

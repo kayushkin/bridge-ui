@@ -9,71 +9,100 @@ import {
   useSessionActions,
   useSessionList,
 } from '@kayushkin/chat-core'
-import type { PeerLink } from '@kayushkin/llm-bridge-types'
+import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import { BridgeContext, useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
-import { PEER_LINKS_PATH, peerLinkBridgeConfig, peerLinkIsRemoved, peerRouteErrorText } from '../peers'
+import {
+  peerConnectionBridgeConfig,
+  peerConnectionPath,
+  peerConnectionReach,
+  peerRouteErrorText,
+  peerTransportDescription,
+} from '../peers'
 import { chatFetchOver } from '../chatFetch'
 import TurnList from './chat/TurnList'
 
-// One linked server's sessions, read and driven through this server's proxy
-// for the link (`{basePath}/peer-links/{id}/proxy`). Everything below the
-// providers runs against that server: a second chat-core store whose
-// `basePath` is the proxy, and a `BridgeConfig` whose every other path is
-// emptied (`peerLinkBridgeConfig`), because this host's stores know nothing of
-// the other server's ids. The second store keeps nothing in the browser — no
-// drafts, filters or IndexedDB cache — so it cannot mix with the chat's own.
-// The other server decides what is listed and allowed, by the peer principal
-// the link's token acts as there.
+// One connected server's sessions, read and driven through this server's
+// proxy for the connection (`{basePath}/peer-connections/{id}/proxy`), which
+// goes direct or over the dial-out socket as the connection says. Everything
+// below the providers runs against that server: a second chat-core store
+// whose `basePath` is the proxy, and a `BridgeConfig` whose every other path
+// is emptied (`peerConnectionBridgeConfig`), because this host's stores know
+// nothing of the other server's ids. The second store keeps nothing in the
+// browser — no drafts, filters or IndexedDB cache — so it cannot mix with the
+// chat's own. The other server decides what is listed and allowed, by the
+// level of access it gave this one.
 
-export function BridgePeerLink() {
+/** Why the connected server cannot be opened now, in plain words, or null
+ *  when it can. The proxy would refuse with the same reason; saying it first
+ *  spares a page of failed reads. */
+function whyNotOpenable(view: PeerConnectionView): string | null {
+  const { connection } = view
+  if (connection.removed_at) {
+    return `${connection.display_name} was disconnected at ${new Date(connection.removed_at).toLocaleString()}${connection.remove_reason ? `: ${connection.remove_reason}` : ''}.`
+  }
+  if (!view.access_held) {
+    return `${connection.display_name} has not given this server any access yet, so there is nothing to open. Its administrator gives a level on its own Peers page.`
+  }
+  if (peerConnectionReach(view) === 'socket closed') {
+    return `${connection.display_name} is not connected now: the socket between the two servers is closed. It reconnects by itself when the server that dials out is running and online.`
+  }
+  return null
+}
+
+export function BridgePeerConnection() {
   const config = useBridgeConfig()
   const { fetch: fetchFn, basePath, routes } = config
-  const { linkId = '' } = useParams<{ linkId: string }>()
-  const [link, setLink] = useState<PeerLink | null>(null)
+  const { connectionId = '' } = useParams<{ connectionId: string }>()
+  const [view, setView] = useState<PeerConnectionView | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      const path = peerConnectionPath(connectionId)
       try {
-        const res = await fetchFn(`${basePath}${PEER_LINKS_PATH}`)
-        if (!res.ok) { if (!cancelled) setError(await peerRouteErrorText(res, `GET ${PEER_LINKS_PATH}`)); return }
-        const links = ((await res.json()) as PeerLink[] | null) ?? []
-        const found = links.find(l => l.id === linkId)
-        if (cancelled) return
-        if (!found) setError(`No link has id ${linkId}.`)
-        else if (peerLinkIsRemoved(found)) setError(`${found.display_name} was unlinked at ${new Date(found.removed_at ?? '').toLocaleString()}: ${found.remove_reason ?? ''}`)
-        else setLink(found)
+        const res = await fetchFn(`${basePath}${path}`)
+        if (!res.ok) { if (!cancelled) setError(await peerRouteErrorText(res, `GET ${path}`)); return }
+        const found = (await res.json()) as PeerConnectionView
+        if (!cancelled) setView(found)
       } catch (err) {
-        if (!cancelled) setError(`GET ${PEER_LINKS_PATH}: ${err instanceof Error ? err.message : String(err)}`)
+        if (!cancelled) setError(`GET ${path}: ${err instanceof Error ? err.message : String(err)}`)
       }
     })()
     return () => { cancelled = true }
-  }, [fetchFn, basePath, linkId])
+  }, [fetchFn, basePath, connectionId])
 
-  const peerConfig = useMemo(() => peerLinkBridgeConfig(config, linkId), [config, linkId])
+  const peerConfig = useMemo(() => peerConnectionBridgeConfig(config, connectionId), [config, connectionId])
   const chatFetch = useMemo(() => chatFetchOver(fetchFn), [fetchFn])
+  const blocked = view ? whyNotOpenable(view) : null
 
   return (
     <div className="bp-container pr-link-page">
       <header className="bg-head">
         <h2 className="bg-title">
-          <Link to={routes.peers}>Peers</Link> / {link ? link.display_name : linkId}
+          <Link to={routes.peers}>Peers</Link> / {view ? view.connection.display_name : connectionId}
         </h2>
-        {link && <p className="bp-hint">{link.base_url} · acting there as <code>{link.remote_peer_principal_id}</code></p>}
+        {view && (
+          <p className="bp-hint">
+            {peerTransportDescription(view.connection)}
+            {view.connection.remote_base_url ? <> · {view.connection.remote_base_url}</> : null}
+            {view.access_held ? <> · acting there as <code>{view.access_held.remote_peer_principal_id}</code></> : null}
+          </p>
+        )}
       </header>
       {error && <div className="bridge-error bp-error">{error}</div>}
-      {link && (
+      {blocked && <div className="bridge-error bp-error">{blocked}</div>}
+      {view && !blocked && (
         <BridgeContext.Provider value={peerConfig}>
           <ChatProvider
-            key={link.id}
+            key={view.connection.id}
             fetch={chatFetch}
             basePath={peerConfig.basePath}
             cache={false}
             keepDraftsAndFiltersInBrowser={false}
           >
-            <LinkedServerSessions />
+            <ConnectedServerSessions />
           </ChatProvider>
         </BridgeContext.Provider>
       )}
@@ -81,17 +110,17 @@ export function BridgePeerLink() {
   )
 }
 
-function LinkedServerSessions() {
+function ConnectedServerSessions() {
   const { groups, loading, moreSessions, loadOlderSessions } = useSessionList()
   const { id: activeID, select, summary } = useActiveSession()
   const pending = usePendingSession()
   const sessions = useMemo(() => groups.flatMap(g => g.sessions), [groups])
   return (
     <div className="pr-link-columns">
-      <aside className="pr-link-list" aria-label="Sessions on the linked server">
+      <aside className="pr-link-list" aria-label="Sessions on the connected server">
         <NewSessionControl />
         {loading && sessions.length === 0 && <p className="bp-empty-inline">Loading…</p>}
-        {!loading && sessions.length === 0 && <p className="bp-empty-inline">The linked server shows no session to this server&apos;s principal.</p>}
+        {!loading && sessions.length === 0 && <p className="bp-empty-inline">The connected server shows no session to this server.</p>}
         <ul className="bp-list">
           {sessions.map(s => (
             <li key={s.sessionId}>
@@ -113,16 +142,16 @@ function LinkedServerSessions() {
       </aside>
       <section className="pr-link-thread">
         {activeID || pending ? (
-          <LinkedServerThread sessionID={activeID} streaming={!!summary && isRunningState(summary.state)} />
+          <ConnectedServerThread sessionID={activeID} streaming={!!summary && isRunningState(summary.state)} />
         ) : (
-          <p className="bp-empty">Pick a session, or start one on an instance of the linked server.</p>
+          <p className="bp-empty">Pick a session, or start one on an instance of the connected server.</p>
         )}
       </section>
     </div>
   )
 }
 
-/** Opens a new session on one of the linked server's instances. The session is
+/** Opens a new session on one of the connected server's instances. The session is
  *  created on the first send, as the chat does it. */
 function NewSessionControl() {
   const { instances, error } = useBridgeInstances()
@@ -136,17 +165,17 @@ function NewSessionControl() {
   }
   return (
     <form className="pr-new-session" onSubmit={start}>
-      <select value={instanceID} onChange={e => setInstanceID(e.target.value)} aria-label="Instance on the linked server">
+      <select value={instanceID} onChange={e => setInstanceID(e.target.value)} aria-label="Instance on the connected server">
         <option value="">{enabled.length === 0 ? 'No instance to start on' : 'Start on…'}</option>
         {enabled.map(i => <option key={i.id} value={i.id}>{i.name} ({i.harness_type})</option>)}
       </select>
       <button type="submit" className="bp-submit" disabled={!instanceID}>New</button>
-      {error && <div className="bridge-error bp-error">Could not read the linked server&apos;s instances: {error}</div>}
+      {error && <div className="bridge-error bp-error">Could not read the connected server&apos;s instances: {error}</div>}
     </form>
   )
 }
 
-function LinkedServerThread({ sessionID, streaming }: { sessionID: string | null; streaming: boolean }) {
+function ConnectedServerThread({ sessionID, streaming }: { sessionID: string | null; streaming: boolean }) {
   const composer = useComposer(sessionID)
   const composerStatus = useMemo(
     () => ({ paused: composer.paused, resumable: composer.resumable, error: composer.error, failedAction: null }),
@@ -174,7 +203,7 @@ function LinkedServerThread({ sessionID, streaming }: { sessionID: string | null
           value={composer.draft}
           onChange={e => composer.setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void composer.send(composer.draft) } }}
-          placeholder={sessionID ? 'Message the session on the linked server' : 'First message starts the session on the linked server'}
+          placeholder={sessionID ? 'Message the session on the connected server' : 'First message starts the session on the connected server'}
           aria-label="Message"
         />
         <div className="pr-composer-actions">

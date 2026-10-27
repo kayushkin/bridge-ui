@@ -1,30 +1,50 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import type { PeerInvite, PeerInviteCreated, PeerLink, PeerSelf, PeerToken } from '@kayushkin/llm-bridge-types'
+import {
+  PeerAccessLevelGroup,
+  type PeerAccessLevel,
+  type PeerConnectionInvite,
+  type PeerConnectionInviteCreated,
+  type PeerConnectionView,
+  type PeerGrantRevoked,
+  type PeerGrantSelf,
+  type ServiceSettings,
+} from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
 import { usePrincipals } from '../usePrincipals'
+import { fetchServiceSettings } from '../serviceSettings'
 import {
-  PEER_INVITES_PATH,
-  PEER_INVITE_LIFETIMES,
-  PEER_LINKS_PATH,
-  PEER_TOKENS_PATH,
+  EMPTY_PEER_CONNECT_FORM,
+  PEER_ACCESS_LEVELS_PATH,
+  PEER_CONNECTIONS_PATH,
+  PEER_CONNECTION_INVITES_PATH,
+  PEER_CONNECTION_INVITE_LIFETIMES,
   liveFirstNewestFirst,
-  peerInviteRequestBody,
-  peerInviteState,
-  peerLinkCheckPath,
-  peerLinkIsRemoved,
-  peerLinkRemovePath,
-  peerLinkRequestBody,
+  peerAccessLevelIsReady,
+  peerAccessLevelName,
+  peerAccessLevelProvisionPath,
+  peerConnectRequestBody,
+  peerConnectionCheckPath,
+  peerConnectionGrantPath,
+  peerConnectionInviteRequestBody,
+  peerConnectionInviteState,
+  peerConnectionIsRemoved,
+  peerConnectionReach,
+  peerConnectionRemovePath,
+  peerConnectionRevokeGrantPath,
+  peerGrantRequestBody,
   peerReasonRequestBody,
   peerRouteErrorText,
-  peerTokenIsRevoked,
-  peerTokenRevokePath,
+  peerTransportDescription,
+  thisServerPublicURL,
+  type PeerConnectForm,
 } from '../peers'
 
-// Other llm-bridge-servers, both directions: the servers this one holds a
-// link to, and the invites and tokens that let other servers act here. Every
-// route is an operator route, so a person who is not an administrator sees the
-// server's 403 in each section. Rules in `src/peers.ts`.
+// Other llm-bridge-servers this one is connected to, and the access each way.
+// A connection only says how the two servers reach each other; each server
+// then grants the other a level on itself. Every route is an operator route,
+// so a person who is not an administrator sees the server's 403 in each
+// section. Rules in `src/peers.ts`.
 
 function formatWhen(iso: string | undefined): string {
   return iso ? new Date(iso).toLocaleString() : ''
@@ -57,128 +77,167 @@ function usePeerList<T>(path: string): { rows: T[] | null; error: string | null;
   return { rows, error, reload }
 }
 
+/** This server's own description of its settings, read once, for its
+ *  `public_url`. */
+function useThisServerSettings(): { settings: ServiceSettings | null; error: string | null } {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const [settings, setSettings] = useState<ServiceSettings | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void fetchServiceSettings(fetchFn, basePath).then(answer => {
+      if (cancelled) return
+      if (answer.phase === 'described') setSettings(answer.described)
+      else if (answer.phase === 'failed') setError(answer.message)
+      else setError(`GET ${basePath}/settings answered HTTP ${answer.status}`)
+    })
+    return () => { cancelled = true }
+  }, [fetchFn, basePath])
+  return { settings, error }
+}
+
+type ConnectPath = 'give-passphrase' | 'enter-passphrase'
+
 export function BridgePeers() {
-  const links = usePeerList<PeerLink>(PEER_LINKS_PATH)
-  const tokens = usePeerList<PeerToken>(PEER_TOKENS_PATH)
-  const invites = usePeerList<PeerInvite>(PEER_INVITES_PATH)
-  const principals = usePrincipals()
-  const principalName = useCallback(
-    (id: string) => principals.byId.get(id)?.display_name ?? id,
-    [principals.byId],
-  )
+  const connections = usePeerList<PeerConnectionView>(PEER_CONNECTIONS_PATH)
+  const invites = usePeerList<PeerConnectionInvite>(PEER_CONNECTION_INVITES_PATH)
+  const levels = usePeerList<PeerAccessLevel>(PEER_ACCESS_LEVELS_PATH)
+  const [connectPath, setConnectPath] = useState<ConnectPath>('give-passphrase')
+  const reloadConnections = connections.reload
+  const reloadInvites = invites.reload
   return (
     <div className="bp-container bg-container pr-container">
       <header className="bg-head">
         <h2 className="bg-title">Peers</h2>
         <p className="bp-hint">
-          Other llm-bridge-servers. Each direction is its own link: a server reaches another with a token that the other
-          server issued, and acts there as one principal of kind <code>peer</code>, which may do only what its grants,
-          its groups or its administrator flag allow.
+          Other llm-bridge-servers. A connection only says how two servers reach each other, and gives no access. Each
+          server then gives the other a level of access on itself, and takes it back, on its own: what this server lets
+          the other do here is set on this page, and what the other lets this one do is set on that server&apos;s page.
         </p>
       </header>
 
-      <section className="pr-section" aria-label="Servers this one reaches">
-        <h3 className="pr-section-title">Servers this one reaches</h3>
-        <p className="bp-hint">
-          Ask the other server&apos;s operator for an invite passphrase, then link to it here. The token it issues is kept
-          in auth-store, and the link opens that server&apos;s sessions.
-        </p>
-        <LinkForm onLinked={links.reload} />
-        {links.error && <div className="bridge-error bp-error">{links.error}</div>}
-        <LinksTable links={links.rows} onChanged={links.reload} />
+      <section className="pr-section" aria-label="Connected servers">
+        <h3 className="pr-section-title">Connected servers</h3>
+        {connections.error && <div className="bridge-error bp-error">{connections.error}</div>}
+        {levels.error && <div className="bridge-error bp-error">{levels.error}</div>}
+        <ConnectionsTable
+          connections={connections.rows}
+          levels={levels.rows}
+          onChanged={reloadConnections}
+          onLevelsChanged={levels.reload}
+        />
       </section>
 
-      <section className="pr-section" aria-label="Servers that reach this one">
-        <h3 className="pr-section-title">Servers that reach this one</h3>
+      <section className="pr-section" aria-label="Make a connection">
+        <h3 className="pr-section-title">Make a connection</h3>
         <p className="bp-hint">
-          Make an invite for a principal of kind <code>peer</code> and hand its passphrase to the other server&apos;s
-          operator. A peer that holds no grant may do nothing, so grant it what it needs on the Grants page.
+          At least one of the two servers needs an https address. The one with an address makes a passphrase; the
+          other enters that address and the passphrase. A server with no address of its own keeps a socket open to the
+          other, so it can be reached wherever it is.
         </p>
-        <InviteForm
-          peerPrincipals={principals.list.filter(p => p.kind === 'peer' && !p.disabled_at)}
-          principalStoreEnabled={principals.enabled}
-          principalStoreError={principals.error}
-          onInvited={invites.reload}
-        />
-        {tokens.error && <div className="bridge-error bp-error">{tokens.error}</div>}
-        <TokensTable tokens={tokens.rows} principalName={principalName} onChanged={tokens.reload} />
-        {invites.error && <div className="bridge-error bp-error">{invites.error}</div>}
-        <InvitesTable invites={invites.rows} principalName={principalName} />
+        <div className="pr-connect-paths" role="radiogroup" aria-label="Which side this server is">
+          <label className="pr-connect-path">
+            <input
+              type="radio"
+              name="pr-connect-path"
+              checked={connectPath === 'give-passphrase'}
+              onChange={() => setConnectPath('give-passphrase')}
+            />
+            <span>This server has an address: make a passphrase for the other server</span>
+          </label>
+          <label className="pr-connect-path">
+            <input
+              type="radio"
+              name="pr-connect-path"
+              checked={connectPath === 'enter-passphrase'}
+              onChange={() => setConnectPath('enter-passphrase')}
+            />
+            <span>Connect to a server that has an address</span>
+          </label>
+        </div>
+        {connectPath === 'give-passphrase' && (
+          <>
+            <PassphraseForm onMade={reloadInvites} />
+            {invites.error && <div className="bridge-error bp-error">{invites.error}</div>}
+            <InvitesTable invites={invites.rows} />
+          </>
+        )}
+        {connectPath === 'enter-passphrase' && <ConnectForm onConnected={reloadConnections} />}
+      </section>
+
+      <section className="pr-section" aria-label="People from connected servers">
+        <h3 className="pr-section-title">People from connected servers</h3>
+        <p className="bp-hint">
+          A request from a connected server can name which of its people is asking. Once this server maps that person
+          to one of its own principals, the request may do only what both the server&apos;s access and that principal
+          allow, and a person nobody mapped is refused. This server does not offer the mapping routes yet, so nothing
+          can be mapped here; until then a connected server acts here only as itself.
+        </p>
       </section>
     </div>
   )
 }
 
-function LinkForm({ onLinked }: { onLinked: () => void }) {
-  const { fetch: fetchFn, basePath } = useBridgeConfig()
-  const [form, setForm] = useState({ baseURL: '', displayName: '', passphrase: '' })
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetchFn(`${basePath}${PEER_LINKS_PATH}`, jsonPost(peerLinkRequestBody(form)))
-      if (!res.ok) { setError(await peerRouteErrorText(res, 'Link')); return }
-      setForm({ baseURL: '', displayName: '', passphrase: '' })
-      onLinked()
-    } catch (err) {
-      setError(`Link: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <form className="bg-form" onSubmit={submit} aria-label="Link to a server">
-      <label className="bg-filter pr-url-field">
-        <span>Address</span>
-        <input type="text" placeholder="https://bridge.example.com" value={form.baseURL} onChange={e => setForm({ ...form, baseURL: e.target.value })} required />
-      </label>
-      <label className="bg-filter">
-        <span>Name</span>
-        <input type="text" placeholder="laptop bridge" value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} required />
-      </label>
-      <label className="bg-filter">
-        <span>Passphrase</span>
-        <input type="password" autoComplete="off" value={form.passphrase} onChange={e => setForm({ ...form, passphrase: e.target.value })} required />
-      </label>
-      <button type="submit" className="bp-submit bg-submit" disabled={busy}>{busy ? 'Linking…' : 'Link'}</button>
-      {error && <div className="bridge-error bp-error bg-form-error">{error}</div>}
-    </form>
-  )
-}
-
-function LinksTable({ links, onChanged }: { links: PeerLink[] | null; onChanged: () => void }) {
+function ConnectionsTable({ connections, levels, onChanged, onLevelsChanged }: {
+  connections: PeerConnectionView[] | null
+  levels: PeerAccessLevel[] | null
+  onChanged: () => void
+  onLevelsChanged: () => void
+}) {
   const { routes } = useBridgeConfig()
-  const sorted = useMemo(() => liveFirstNewestFirst(links ?? [], l => !peerLinkIsRemoved(l)), [links])
+  const sorted = useMemo(
+    () => [...(connections ?? [])].sort((a, b) => {
+      const liveOrder = Number(peerConnectionIsRemoved(a)) - Number(peerConnectionIsRemoved(b))
+      if (liveOrder !== 0) return liveOrder
+      return new Date(b.connection.created_at).getTime() - new Date(a.connection.created_at).getTime()
+    }),
+    [connections],
+  )
   return (
     <table className="bg-table pr-table">
       <thead>
-        <tr><th>Server</th><th>Acts there as</th><th>Linked</th><th></th></tr>
+        <tr><th>Server</th><th>How they reach each other</th><th>Access this server gives it</th><th>Access it gives this server</th><th></th></tr>
       </thead>
       <tbody>
-        {links === null && <tr><td colSpan={4} className="bp-empty-inline">Loading…</td></tr>}
-        {links !== null && links.length === 0 && <tr><td colSpan={4} className="bp-empty-inline">This server holds no link.</td></tr>}
-        {sorted.map(link => {
-          const removed = peerLinkIsRemoved(link)
+        {connections === null && <tr><td colSpan={5} className="bp-empty-inline">Loading…</td></tr>}
+        {connections !== null && connections.length === 0 && <tr><td colSpan={5} className="bp-empty-inline">This server is connected to no other.</td></tr>}
+        {sorted.map(view => {
+          const { connection } = view
+          const removed = peerConnectionIsRemoved(view)
+          const reach = peerConnectionReach(view)
           return (
-            <tr key={link.id} className={removed ? 'bg-row-revoked' : ''} data-peer-link-id={link.id}>
+            <tr key={connection.id} className={removed ? 'bg-row-revoked' : ''} data-peer-connection-id={connection.id}>
               <td>
-                {removed ? link.display_name : <Link to={`${routes.peerLink}/${encodeURIComponent(link.id)}`}>{link.display_name}</Link>}
-                <div className="bp-hint">{link.base_url}</div>
+                {removed
+                  ? connection.display_name
+                  : <Link to={`${routes.peerConnection}/${encodeURIComponent(connection.id)}`}>{connection.display_name}</Link>}
+                <div className="bp-hint"><code>{connection.id}</code> · connected {formatWhen(connection.created_at)}</div>
+                {removed && (
+                  <span className="bp-badge bp-badge-disabled" title={connection.remove_reason}>
+                    removed {formatWhen(connection.removed_at)}{connection.remove_reason ? `: ${connection.remove_reason}` : ''}
+                  </span>
+                )}
               </td>
-              <td title="The other server's principal-store id">
-                <code>{link.remote_peer_principal_id}</code>
-                <div className="bp-hint">token <code>{link.remote_peer_token_id}</code></div>
+              <td>
+                {peerTransportDescription(connection)}
+                {connection.remote_base_url && <div className="bp-hint">{connection.remote_base_url}</div>}
+                {!removed && <span className={`bp-badge pr-reach pr-reach-${reach.replace(' ', '-')}`}>{reach}</span>}
               </td>
-              <td className="bg-when">
-                {formatWhen(link.created_at)}
-                {removed && <span className="bp-badge bp-badge-disabled" title={link.remove_reason}>removed {formatWhen(link.removed_at)}</span>}
+              <td>
+                {!removed && (
+                  <AccessGivenCell
+                    view={view}
+                    levels={levels}
+                    onChanged={onChanged}
+                    onLevelsChanged={onLevelsChanged}
+                  />
+                )}
+              </td>
+              <td>
+                {!removed && <AccessHeldCell view={view} levels={levels} />}
               </td>
               <td className="bg-actions">
-                {!removed && <CheckLink link={link} />}
-                {!removed && <ReasonAction label="Remove" path={peerLinkRemovePath(link.id)} onDone={onChanged} doneNote={answer => (answer as { note?: string }).note ?? ''} />}
+                {!removed && <ReasonAction label="Remove" path={peerConnectionRemovePath(connection.id)} onDone={onChanged} />}
               </td>
             </tr>
           )
@@ -188,17 +247,139 @@ function LinksTable({ links, onChanged }: { links: PeerLink[] | null; onChanged:
   )
 }
 
-/** Asks the other server who the link's token acts as there. */
-function CheckLink({ link }: { link: PeerLink }) {
+/** What this server lets the other do here: the live grant with Revoke, or
+ *  the form that gives a level. */
+function AccessGivenCell({ view, levels, onChanged, onLevelsChanged }: {
+  view: PeerConnectionView
+  levels: PeerAccessLevel[] | null
+  onChanged: () => void
+  onLevelsChanged: () => void
+}) {
+  const grant = view.access_given
+  if (!grant) {
+    return <GiveAccessForm connectionID={view.connection.id} levels={levels} onGiven={onChanged} onLevelsChanged={onLevelsChanged} />
+  }
+  return (
+    <div className="pr-access">
+      <span>{peerAccessLevelName(levels, grant.level)}</span>
+      <div className="bp-hint">
+        acts here as <code>{grant.peer_principal_id}</code>
+        {grant.delivered_at ? ` · since ${formatWhen(grant.delivered_at)}` : ' · not delivered, so it cannot be used'}
+      </div>
+      <ReasonAction
+        label="Revoke"
+        path={peerConnectionRevokeGrantPath(view.connection.id)}
+        onDone={onChanged}
+        doneNote={answer => (answer as PeerGrantRevoked).notice}
+      />
+    </div>
+  )
+}
+
+function GiveAccessForm({ connectionID, levels, onGiven, onLevelsChanged }: {
+  connectionID: string
+  levels: PeerAccessLevel[] | null
+  onGiven: () => void
+  onLevelsChanged: () => void
+}) {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
-  const [result, setResult] = useState<{ ok: true; self: PeerSelf } | { ok: false; error: string } | null>(null)
+  const principals = usePrincipals()
+  const [levelKey, setLevelKey] = useState('')
+  const [groupID, setGroupID] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const level = levels?.find(l => l.key === levelKey) ?? null
+  const groups = principals.list.filter(p => p.kind === 'group' && !p.disabled_at)
+
+  const provision = async () => {
+    if (!level) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetchFn(`${basePath}${peerAccessLevelProvisionPath(level.key)}`, jsonPost({}))
+      if (!res.ok) { setError(await peerRouteErrorText(res, 'Set up this level')); return }
+      onLevelsChanged()
+    } catch (err) {
+      setError(`Set up this level: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const grant = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetchFn(`${basePath}${peerConnectionGrantPath(connectionID)}`, jsonPost(peerGrantRequestBody(levelKey, groupID)))
+      if (!res.ok) { setError(await peerRouteErrorText(res, 'Give access')); return }
+      setLevelKey('')
+      setGroupID('')
+      onGiven()
+    } catch (err) {
+      setError(`Give access: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const needsGroupPick = levelKey === PeerAccessLevelGroup
+  const ready = !!level && peerAccessLevelIsReady(level) && (!needsGroupPick || !!groupID)
+  return (
+    <form className="pr-give-access" onSubmit={grant} aria-label="Give access">
+      <span className="bp-hint">No access given.</span>
+      <select value={levelKey} onChange={e => { setLevelKey(e.target.value); setError(null) }} aria-label="Level of access">
+        <option value="">{levels === null ? 'Loading levels…' : 'Pick a level'}</option>
+        {(levels ?? []).map(l => <option key={l.key} value={l.key}>{l.display_name}</option>)}
+      </select>
+      {level && <div className="bp-hint">{level.description}</div>}
+      {level && level.grants && level.grants.length > 0 && (
+        <ul className="bp-hint pr-level-grants">
+          {level.grants.map(g => (
+            <li key={`${g.relation}:${g.resource_type}:${g.resource_id}`}>
+              <code>{g.relation}</code> {g.resource_type} <code>{g.resource_id}</code>
+            </li>
+          ))}
+        </ul>
+      )}
+      {level && !peerAccessLevelIsReady(level) && (
+        <div className="pr-provision">
+          <span className="bp-hint">This level is not set up on this server yet: it needs its group and grants made first.</span>
+          <button type="button" className="bp-cancel" disabled={busy} onClick={() => { void provision() }}>
+            {busy ? 'Setting up…' : 'Set up this level'}
+          </button>
+        </div>
+      )}
+      {needsGroupPick && (
+        principals.enabled ? (
+          <select value={groupID} onChange={e => setGroupID(e.target.value)} aria-label="Group">
+            <option value="">{groups.length === 0 ? 'No group: make one on Principals' : 'Pick a group'}</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.display_name} ({g.id})</option>)}
+          </select>
+        ) : (
+          <span className="bp-hint">principal-store is not proxied here, so there is no group to pick.</span>
+        )
+      )}
+      <button type="submit" className="bp-submit" disabled={busy || !ready}>{busy ? 'Giving…' : 'Give access'}</button>
+      {error && <div className="bridge-error bp-error">{error}</div>}
+    </form>
+  )
+}
+
+/** What the other server lets this one do there, and a check that the token
+ *  still works. */
+function AccessHeldCell({ view, levels }: { view: PeerConnectionView; levels: PeerAccessLevel[] | null }) {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const [result, setResult] = useState<{ ok: true; self: PeerGrantSelf } | { ok: false; error: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const held = view.access_held
+  if (!held) return <span className="bp-hint">None yet. That server&apos;s administrator gives it on its own Peers page.</span>
   const check = async () => {
     setBusy(true)
     try {
-      const res = await fetchFn(`${basePath}${peerLinkCheckPath(link.id)}`, jsonPost({}))
+      const res = await fetchFn(`${basePath}${peerConnectionCheckPath(view.connection.id)}`, jsonPost({}))
       if (!res.ok) { setResult({ ok: false, error: await peerRouteErrorText(res, 'Check') }); return }
-      setResult({ ok: true, self: (await res.json()) as PeerSelf })
+      setResult({ ok: true, self: (await res.json()) as PeerGrantSelf })
     } catch (err) {
       setResult({ ok: false, error: `Check: ${err instanceof Error ? err.message : String(err)}` })
     } finally {
@@ -206,15 +387,21 @@ function CheckLink({ link }: { link: PeerLink }) {
     }
   }
   return (
-    <span className="pr-check">
-      <button type="button" className="bp-cancel" disabled={busy} onClick={() => { void check() }}>{busy ? 'Checking…' : 'Check'}</button>
-      {result?.ok === true && (
-        <span className="bp-hint pr-check-result">
-          works: acts as <code>{result.self.peer_principal_id}</code>{result.self.is_administrator ? ', an administrator' : ''}
-        </span>
-      )}
-      {result?.ok === false && <span className="bridge-error bp-error pr-check-result">{result.error}</span>}
-    </span>
+    <div className="pr-access">
+      {/* The level key is the other server's; this server's list names it when both offer it. */}
+      <span>{peerAccessLevelName(levels, held.level)}</span>
+      <div className="bp-hint">acts there as <code>{held.remote_peer_principal_id}</code> · since {formatWhen(held.received_at)}</div>
+      <span className="pr-check">
+        <button type="button" className="bp-cancel" disabled={busy} onClick={() => { void check() }}>{busy ? 'Checking…' : 'Check'}</button>
+        {result?.ok === true && (
+          <span className="bp-hint pr-check-result">
+            works: acts as <code>{result.self.peer_principal_id}</code> at level <code>{result.self.level}</code>
+            {result.self.is_administrator ? ', an administrator' : ''}
+          </span>
+        )}
+        {result?.ok === false && <span className="bridge-error bp-error pr-check-result">{result.error}</span>}
+      </span>
+    </div>
   )
 }
 
@@ -259,58 +446,59 @@ function ReasonAction({ label, path, onDone, doneNote }: {
   )
 }
 
-function InviteForm({ peerPrincipals, principalStoreEnabled, principalStoreError, onInvited }: {
-  peerPrincipals: { id: string; display_name: string }[]
-  principalStoreEnabled: boolean
-  principalStoreError: string | null
-  onInvited: () => void
-}) {
+function PassphraseForm({ onMade }: { onMade: () => void }) {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
-  const [principalID, setPrincipalID] = useState('')
-  const [lifetime, setLifetime] = useState(PEER_INVITE_LIFETIMES[0].seconds)
+  const thisServer = useThisServerSettings()
+  const publicURL = thisServerPublicURL(thisServer.settings)
+  const [lifetime, setLifetime] = useState(PEER_CONNECTION_INVITE_LIFETIMES[0].seconds)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [created, setCreated] = useState<PeerInviteCreated | null>(null)
-  if (!principalStoreEnabled) {
-    return <p className="bp-hint">principal-store is not proxied here, so there is no peer principal to invite.</p>
-  }
+  const [created, setCreated] = useState<PeerConnectionInviteCreated | null>(null)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setBusy(true)
     setError(null)
     setCreated(null)
     try {
-      const res = await fetchFn(`${basePath}${PEER_INVITES_PATH}`, jsonPost(peerInviteRequestBody(principalID, lifetime)))
-      if (!res.ok) { setError(await peerRouteErrorText(res, 'Invite')); return }
-      setCreated((await res.json()) as PeerInviteCreated)
-      onInvited()
+      const res = await fetchFn(`${basePath}${PEER_CONNECTION_INVITES_PATH}`, jsonPost(peerConnectionInviteRequestBody(lifetime)))
+      if (!res.ok) { setError(await peerRouteErrorText(res, 'Make passphrase')); return }
+      setCreated((await res.json()) as PeerConnectionInviteCreated)
+      onMade()
     } catch (err) {
-      setError(`Invite: ${err instanceof Error ? err.message : String(err)}`)
+      setError(`Make passphrase: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setBusy(false)
     }
   }
   return (
-    <form className="bg-form" onSubmit={submit} aria-label="Invite a server">
-      {principalStoreError && <div className="bridge-error bp-error bg-form-error">Could not read principal-store: {principalStoreError}</div>}
+    <form className="bg-form" onSubmit={submit} aria-label="Make a connection passphrase">
+      <div className="pr-public-url">
+        {publicURL ? (
+          <span>The other server connects to <code>{publicURL}</code>.</span>
+        ) : (
+          <span className="bp-hint">
+            This server&apos;s own address is not set (<code>LLMBRIDGE_PUBLIC_URL</code>, on Service settings), so this
+            page cannot say which address the other server should use. Tell its administrator the https address this
+            server answers at.
+            {thisServer.error && <> Could not read this server&apos;s settings: {thisServer.error}</>}
+          </span>
+        )}
+      </div>
       <label className="bg-filter">
-        <span>Acts here as</span>
-        <select value={principalID} onChange={e => setPrincipalID(e.target.value)} required>
-          <option value="">{peerPrincipals.length === 0 ? 'No peer principal: make one on Principals' : 'Pick a peer principal'}</option>
-          {peerPrincipals.map(p => <option key={p.id} value={p.id}>{p.display_name} ({p.id})</option>)}
-        </select>
-      </label>
-      <label className="bg-filter">
-        <span>Redeem within</span>
+        <span>Use within</span>
         <select value={lifetime} onChange={e => setLifetime(Number(e.target.value))}>
-          {PEER_INVITE_LIFETIMES.map(l => <option key={l.seconds} value={l.seconds}>{l.label}</option>)}
+          {PEER_CONNECTION_INVITE_LIFETIMES.map(l => <option key={l.seconds} value={l.seconds}>{l.label}</option>)}
         </select>
       </label>
-      <button type="submit" className="bp-submit bg-submit" disabled={busy || !principalID}>{busy ? 'Inviting…' : 'Make invite'}</button>
+      <button type="submit" className="bp-submit bg-submit" disabled={busy}>{busy ? 'Making…' : 'Make passphrase'}</button>
       {error && <div className="bridge-error bp-error bg-form-error">{error}</div>}
       {created && (
         <div className="bg-form-outcome pr-passphrase">
-          <span>Passphrase for <code>{created.invite.id}</code>, shown only this once. Give it to the other server&apos;s operator; it works once, until {formatWhen(created.invite.expires_at)}.</span>
+          <span>
+            Passphrase for <code>{created.invite.id}</code>, shown only this once. Give it to the other server&apos;s
+            administrator{publicURL ? <> with the address <code>{publicURL}</code></> : null}; it works once, until{' '}
+            {formatWhen(created.invite.expires_at)}. Connecting gives no access either way.
+          </span>
           <code className="pr-passphrase-value">{created.passphrase}</code>
           <button type="button" className="bp-cancel" onClick={() => { void navigator.clipboard.writeText(created.passphrase) }}>Copy</button>
         </div>
@@ -319,62 +507,90 @@ function InviteForm({ peerPrincipals, principalStoreEnabled, principalStoreError
   )
 }
 
-function TokensTable({ tokens, principalName, onChanged }: {
-  tokens: PeerToken[] | null
-  principalName: (id: string) => string
-  onChanged: () => void
-}) {
-  const sorted = useMemo(() => liveFirstNewestFirst(tokens ?? [], t => !peerTokenIsRevoked(t)), [tokens])
+function ConnectForm({ onConnected }: { onConnected: () => void }) {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const [form, setForm] = useState<PeerConnectForm>(EMPTY_PEER_CONNECT_FORM)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [connected, setConnected] = useState<PeerConnectionView | null>(null)
+  const set = (field: keyof PeerConnectForm) => (value: string) => setForm(current => ({ ...current, [field]: value }))
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    setConnected(null)
+    try {
+      const res = await fetchFn(`${basePath}${PEER_CONNECTIONS_PATH}`, jsonPost(peerConnectRequestBody(form)))
+      if (!res.ok) { setError(await peerRouteErrorText(res, 'Connect')); return }
+      setConnected((await res.json()) as PeerConnectionView)
+      setForm(EMPTY_PEER_CONNECT_FORM)
+      onConnected()
+    } catch (err) {
+      setError(`Connect: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
-    <table className="bg-table pr-table" aria-label="Peer tokens">
-      <thead>
-        <tr><th>Token</th><th>Acts here as</th><th>Issued</th><th></th></tr>
-      </thead>
-      <tbody>
-        {tokens === null && <tr><td colSpan={4} className="bp-empty-inline">Loading…</td></tr>}
-        {tokens !== null && tokens.length === 0 && <tr><td colSpan={4} className="bp-empty-inline">No server holds a token for this one.</td></tr>}
-        {sorted.map(token => {
-          const revoked = peerTokenIsRevoked(token)
-          return (
-            <tr key={token.id} className={revoked ? 'bg-row-revoked' : ''} data-peer-token-id={token.id}>
-              <td><code>{token.id}</code><div className="bp-hint">from <code>{token.peer_invite_id}</code></div></td>
-              <td title={token.peer_principal_id}>{principalName(token.peer_principal_id)}</td>
-              <td className="bg-when">
-                {formatWhen(token.created_at)}
-                {revoked && <span className="bp-badge bp-badge-disabled" title={token.revoke_reason}>revoked {formatWhen(token.revoked_at)}</span>}
-              </td>
-              <td className="bg-actions">
-                {!revoked && <ReasonAction label="Revoke" path={peerTokenRevokePath(token.id)} onDone={onChanged} />}
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <form className="bg-form pr-connect-form" onSubmit={submit} aria-label="Connect to a server">
+      <label className="bg-filter pr-url-field">
+        <span>Its address</span>
+        <input type="text" placeholder="https://bridge.example.com" value={form.baseURL} onChange={e => set('baseURL')(e.target.value)} required />
+      </label>
+      <label className="bg-filter">
+        <span>Passphrase it gave you</span>
+        <input type="password" autoComplete="off" value={form.passphrase} onChange={e => set('passphrase')(e.target.value)} required />
+      </label>
+      <label className="bg-filter">
+        <span>Call it</span>
+        <input type="text" placeholder="main server" value={form.displayName} onChange={e => set('displayName')(e.target.value)} required />
+      </label>
+      <label className="bg-filter">
+        <span>It calls this server</span>
+        <input type="text" placeholder="laptop" value={form.nameForThisServer} onChange={e => set('nameForThisServer')(e.target.value)} required />
+      </label>
+      <label className="bg-filter pr-url-field">
+        <span>This server&apos;s own address (optional)</span>
+        <input type="text" placeholder="leave empty if this server has none" value={form.thisServerBaseURL} onChange={e => set('thisServerBaseURL')(e.target.value)} />
+      </label>
+      <p className="bp-hint pr-connect-note">
+        With this server&apos;s own https address, each server calls the other directly. Left empty, this server dials
+        out to the other and keeps a socket open, and requests both ways travel over it, so this server needs no
+        address and can move between networks.
+      </p>
+      <button type="submit" className="bp-submit bg-submit" disabled={busy}>{busy ? 'Connecting…' : 'Connect'}</button>
+      {error && <div className="bridge-error bp-error bg-form-error">{error}</div>}
+      {connected && (
+        <div className="bg-form-outcome">
+          Connected to {connected.connection.display_name} ({peerTransportDescription(connected.connection)}). No access
+          is given either way yet: give that server a level in the table above, and ask its administrator to give this
+          one a level there.
+        </div>
+      )}
+    </form>
   )
 }
 
-function InvitesTable({ invites, principalName }: { invites: PeerInvite[] | null; principalName: (id: string) => string }) {
+function InvitesTable({ invites }: { invites: PeerConnectionInvite[] | null }) {
   const now = new Date()
-  const sorted = useMemo(() => liveFirstNewestFirst(invites ?? [], i => peerInviteState(i, new Date()) === 'waiting'), [invites])
+  const sorted = useMemo(() => liveFirstNewestFirst(invites ?? [], i => peerConnectionInviteState(i, new Date()) === 'waiting'), [invites])
   return (
-    <table className="bg-table pr-table" aria-label="Peer invites">
+    <table className="bg-table pr-table" aria-label="Connection passphrases">
       <thead>
-        <tr><th>Invite</th><th>For</th><th>Made by</th><th>State</th></tr>
+        <tr><th>Passphrase</th><th>Made by</th><th>State</th></tr>
       </thead>
       <tbody>
-        {invites === null && <tr><td colSpan={4} className="bp-empty-inline">Loading…</td></tr>}
-        {invites !== null && invites.length === 0 && <tr><td colSpan={4} className="bp-empty-inline">No invite has been made.</td></tr>}
+        {invites === null && <tr><td colSpan={3} className="bp-empty-inline">Loading…</td></tr>}
+        {invites !== null && invites.length === 0 && <tr><td colSpan={3} className="bp-empty-inline">No passphrase has been made.</td></tr>}
         {sorted.map(invite => {
-          const state = peerInviteState(invite, now)
+          const state = peerConnectionInviteState(invite, now)
           return (
-            <tr key={invite.id} className={state === 'waiting' ? '' : 'bg-row-revoked'} data-peer-invite-id={invite.id}>
+            <tr key={invite.id} className={state === 'waiting' ? '' : 'bg-row-revoked'} data-peer-connection-invite-id={invite.id}>
               <td><code>{invite.id}</code><div className="bp-hint">{formatWhen(invite.created_at)}</div></td>
-              <td title={invite.peer_principal_id}>{principalName(invite.peer_principal_id)}</td>
-              <td title={invite.created_by}>{principalName(invite.created_by)}</td>
+              <td><code>{invite.created_by}</code></td>
               <td>
                 {state === 'waiting' && <>waiting until {formatWhen(invite.expires_at)}</>}
-                {state === 'redeemed' && <>redeemed {formatWhen(invite.redeemed_at)} as <code>{invite.peer_token_id}</code></>}
+                {state === 'used' && <>used {formatWhen(invite.redeemed_at)}{invite.connection_id ? <> for <code>{invite.connection_id}</code></> : null}</>}
                 {state === 'expired' && <>expired {formatWhen(invite.expires_at)}</>}
               </td>
             </tr>

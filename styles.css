@@ -6642,10 +6642,20 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-awaiting-popup-close { padding: 8px 10px; font: inherit; color: var(--text-muted); background: none; border: none; cursor: pointer; }
 .bss-scope-browser { border-color: var(--info); color: var(--info); }
 
-/* Peers page and a linked server's sessions (BridgePeers, BridgePeerLink). */
+/* Peers page and a connected server's sessions (BridgePeers, BridgePeerConnection). */
 .pr-section { display: flex; flex-direction: column; gap: 10px; }
 .pr-section-title { margin: 0; font-size: 1em; }
 .pr-url-field { flex: 1 1 260px; }
+.pr-connect-paths { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 10px; }
+.pr-connect-path { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pr-connect-note { flex-basis: 100%; margin: 0; }
+.pr-public-url { flex-basis: 100%; }
+.pr-access, .pr-give-access { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pr-give-access select { max-width: 260px; }
+.pr-level-grants { margin: 0; padding-left: 18px; }
+.pr-provision { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pr-reach { margin-top: 4px; display: inline-block; }
+.pr-reach-socket-closed { border-color: var(--error); }
 .pr-table code, .pr-passphrase code { font-family: var(--mono, ui-monospace, monospace); font-size: 0.9em; }
 .pr-check { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; }
 .pr-check-result { white-space: normal; text-align: left; }
