@@ -1,14 +1,15 @@
-import { useEffect, useState, type ComponentProps } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useChatContext, type SessionFile, type ToolResultImage } from '@kayushkin/chat-core'
+import { useChatContext, type ApiClient, type SessionFile, type ToolResultImage } from '@kayushkin/chat-core'
 import { formatBytes } from '../../toolPayloadPreview'
 import { mayDrawAsImage, mayPlayAsVideo, textPreviewKind, type TextPreviewKind } from '../../sessionFileAttachments'
+import { sharedFileGalleryKey, toolImageGalleryKey, useOpenImage, type GalleryImage } from './ImageGallery'
 
 /**
- * Images, videos and files in the chat: an image viewer, a card for a file shared into
- * the session, and the strip of images a tool result carried.
+ * Images, videos and files in the chat: a card for a file shared into the session, a
+ * compact grid for several images shared together, and the strip of images a tool
+ * result carried. Each image opens the viewer in `ImageGallery.tsx`.
  *
  * Every byte comes from the bridge through the host's proxy — a shared file from
  * file-store (`ApiClient.sessionFileContentUrl`), a settled tool image from log-store
@@ -19,50 +20,61 @@ import { mayDrawAsImage, mayPlayAsVideo, textPreviewKind, type TextPreviewKind }
  * browser cannot.
  */
 
-/** A full-window view of one image. Escape or a click outside the image closes it. */
-export function ImageViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
-  // A data: URL cannot be opened as a page — browsers refuse top-level data:
-  // navigation — so the link is offered only for bytes that have an address.
-  const openable = !src.startsWith('data:')
-  return createPortal(
-    <div className="bc-image-viewer" role="dialog" aria-modal="true" aria-label={alt} onClick={onClose}>
-      <div className="bc-image-viewer-bar" onClick={(event) => event.stopPropagation()}>
-        <span className="bc-image-viewer-name">{alt}</span>
-        {openable && (
-          <a className="bc-image-viewer-action" href={src} target="_blank" rel="noreferrer">
-            Open original
-          </a>
-        )}
-        <button type="button" className="bc-image-viewer-action" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
-      <img className="bc-image-viewer-image" src={src} alt={alt} onClick={(event) => event.stopPropagation()} />
-    </div>,
-    document.body,
+/** A thumbnail that opens the viewer at its image, inside the session's gallery when
+ *  the image is in it. `onUndrawable` fires when the browser cannot draw the bytes, so
+ *  the caller can show a link instead of a broken image. */
+function ImageThumbnail({
+  image,
+  className = 'bc-image-thumb',
+  onUndrawable,
+  children,
+}: {
+  image: GalleryImage
+  className?: string
+  onUndrawable?: () => void
+  children?: ReactNode
+}) {
+  const { open, viewer } = useOpenImage(image)
+  return (
+    <>
+      <button type="button" className={className} onClick={open} title={`View ${image.name}`}>
+        <img src={image.src} alt={image.name} loading="lazy" onError={onUndrawable} />
+        {children}
+      </button>
+      {viewer}
+    </>
   )
 }
 
-/** A thumbnail that opens the viewer. `onUndrawable` fires when the browser cannot
- *  draw the bytes, so the caller can show a link instead of a broken image. */
-function ImageThumbnail({ src, alt, onUndrawable }: { src: string; alt: string; onUndrawable?: () => void }) {
-  const [viewing, setViewing] = useState(false)
-  return (
-    <>
-      <button type="button" className="bc-image-thumb" onClick={() => setViewing(true)} title={`View ${alt}`}>
-        <img src={src} alt={alt} loading="lazy" onError={onUndrawable} />
-      </button>
-      {viewing && <ImageViewer src={src} alt={alt} onClose={() => setViewing(false)} />}
-    </>
-  )
+/** A shared file as the viewer shows it. */
+export function galleryImageOfSharedFile(api: { sessionFileContentUrl: ApiClient['sessionFileContentUrl'] }, file: SessionFile): GalleryImage {
+  return {
+    key: sharedFileGalleryKey(file.file_id),
+    fileId: file.file_id,
+    src: api.sessionFileContentUrl(file.session_id, file.file_id, { inline: true }),
+    name: file.filename,
+    downloadHref: api.sessionFileContentUrl(file.session_id, file.file_id),
+    sizeBytes: file.size_bytes,
+    sharedAt: file.created_at,
+  }
+}
+
+/** An image a tool result carried, as the viewer shows it; null when its bytes are
+ *  neither in the event nor addressable yet. */
+export function galleryImageOfToolResult(
+  api: { toolResultImageUrl: ApiClient['toolResultImageUrl'] },
+  sessionId: string | null,
+  entryId: string,
+  image: ToolResultImage,
+  name: string,
+): GalleryImage | null {
+  const key = toolImageGalleryKey(entryId, image.index)
+  if (image.base64Data !== undefined) return { key, src: `data:${image.mediaType};base64,${image.base64Data}`, name }
+  if (image.eventId !== undefined && sessionId) {
+    const src = api.toolResultImageUrl(sessionId, image.eventId, image.index)
+    return { key, src, name, downloadHref: src }
+  }
+  return null
 }
 
 /** Links in a previewed file leave the app in a new tab, so following one does not
@@ -133,15 +145,16 @@ function TextFilePreview({ file, kind }: { file: SessionFile; kind: TextPreviewK
 export function SharedFileCard({ file }: { file: SessionFile }) {
   const { api } = useChatContext()
   const [undrawable, setUndrawable] = useState(false)
-  const inlineSrc = api.sessionFileContentUrl(file.session_id, file.file_id, { inline: true })
-  const downloadHref = api.sessionFileContentUrl(file.session_id, file.file_id)
+  const image = galleryImageOfSharedFile(api, file)
+  const inlineSrc = image.src
+  const downloadHref = image.downloadHref
   const drawn = mayDrawAsImage(file.media_type) && !undrawable
   const played = mayPlayAsVideo(file.media_type) && !undrawable
   const previewKind = textPreviewKind(file)
   return (
     <div className="bc-shared-file" data-file-id={file.file_id}>
       {drawn ? (
-        <ImageThumbnail src={inlineSrc} alt={file.filename} onUndrawable={() => setUndrawable(true)} />
+        <ImageThumbnail image={image} onUndrawable={() => setUndrawable(true)} />
       ) : null}
       {played ? (
         <video
@@ -163,31 +176,54 @@ export function SharedFileCard({ file }: { file: SessionFile }) {
   )
 }
 
+/**
+ * Several images shared one after another, as one grid of tiles with each name under
+ * its tile, rather than a full-size card each down the page. A tile opens the viewer;
+ * the name downloads the original.
+ */
+export function SharedImageGrid({ files }: { files: readonly SessionFile[] }) {
+  const { api } = useChatContext()
+  return (
+    <div className="bc-image-grid" role="group" aria-label={`${files.length} images`}>
+      {files.map((file) => {
+        const image = galleryImageOfSharedFile(api, file)
+        return (
+          <figure key={file.file_id} className="bc-image-grid-item" data-file-id={file.file_id}>
+            <ImageThumbnail image={image} className="bc-image-grid-tile" />
+            <figcaption className="bc-image-grid-caption">
+              <a href={image.downloadHref} download={file.filename} title={`Download ${file.filename} (${formatBytes(file.size_bytes)})`}>
+                {file.filename}
+              </a>
+            </figcaption>
+          </figure>
+        )
+      })}
+    </div>
+  )
+}
+
 /** The images a tool result carried — a screenshot, an image file the agent read. */
 export function ToolResultImageStrip({
   sessionId,
+  entryId,
   images,
   toolName,
 }: {
   sessionId: string | null
+  entryId: string
   images: readonly ToolResultImage[]
   toolName: string
 }) {
   const { api } = useChatContext()
-  const sources = images.flatMap((image) => {
-    if (image.base64Data !== undefined) {
-      return [{ key: `live-${image.index}`, src: `data:${image.mediaType};base64,${image.base64Data}` }]
-    }
-    if (image.eventId !== undefined && sessionId) {
-      return [{ key: `${image.eventId}-${image.index}`, src: api.toolResultImageUrl(sessionId, image.eventId, image.index) }]
-    }
-    return []
+  const shown = images.flatMap((image, position) => {
+    const galleryImage = galleryImageOfToolResult(api, sessionId, entryId, image, `${toolName} image ${position + 1}`)
+    return galleryImage ? [galleryImage] : []
   })
-  if (sources.length === 0) return null
+  if (shown.length === 0) return null
   return (
     <div className="bc-tool-images">
-      {sources.map((source, position) => (
-        <ImageThumbnail key={source.key} src={source.src} alt={`${toolName} image ${position + 1}`} />
+      {shown.map((image) => (
+        <ImageThumbnail key={image.key} image={image} />
       ))}
     </div>
   )

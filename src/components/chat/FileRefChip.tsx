@@ -7,6 +7,9 @@ import {
   type FileNamedByTools,
 } from '@kayushkin/chat-core';
 import { AnchoredPanel, timeAgo, useAnchoredPanel } from './RefChip';
+import { useOpenImage, useSessionImages, type GalleryImage } from './ImageGallery';
+import { imageNamedByMention } from '../../sessionImageMentions';
+import { formatBytes } from '../../toolPayloadPreview';
 
 /**
  * Where a file chip is: the session whose tools named the files, and when the
@@ -35,6 +38,92 @@ export const FileMentionPlaceContext = createContext<FileMentionPlace | null>(nu
 export function FileRefChip({ mentionText, className }: { mentionText: string; className?: string }): JSX.Element {
   const place = useContext(FileMentionPlaceContext);
   const mention = fileMentionOf(mentionText);
+  // An image shared into the session wins: its chip shows the picture, where the
+  // files-named-by-tools chip would show the bytes as text.
+  const sessionImages = useSessionImages();
+  const image = useMemo(
+    () => (sessionImages && mention ? imageNamedByMention(sessionImages.images, mention.path, place?.writtenAt ?? null) : null),
+    [sessionImages, mention?.path, place?.writtenAt],
+  );
+  if (image) return <ImageRefChip mentionText={mentionText} image={image} className={className} />;
+  return <FileRefChipFromTools mentionText={mentionText} className={className} place={place} mention={mention} />;
+}
+
+/**
+ * A mention of an image shared into the session — its name in a code span, or its
+ * file id — as a small thumbnail and the name. It
+ * opens a panel with the picture; the picture, or View, opens the viewer at it, among
+ * the session's other images.
+ */
+export function ImageRefChip({
+  mentionText,
+  image,
+  className,
+}: {
+  mentionText: string;
+  image: GalleryImage;
+  className?: string;
+}): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const viewer = useOpenImage(image);
+  // A long page shows its top across the panel's width rather than as a sliver.
+  const [tall, setTall] = useState(false);
+  return (
+    <span ref={wrapRef} className="ref-chip-wrap" data-ref-kind="image" data-ref-id={image.key}>
+      <button
+        type="button"
+        className={`${className ?? 'ref-chip'} ref-chip-image${open ? ' ref-chip-open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={`${image.name} — click to show`}
+      >
+        <img className="ref-chip-image-thumb" src={image.src} alt="" loading="lazy" />
+        {mentionText}
+        <span className="ref-chip-file-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label={`Image ${image.name}`} refId={image.key} refKind="image">
+          <div className="ref-chip-panel-image">
+            <button
+              type="button"
+              className={`ref-chip-image-preview${tall ? ' ref-chip-image-preview-tall' : ''}`}
+              onClick={viewer.open}
+              title="Open in the viewer"
+            >
+              <img
+                src={image.src}
+                alt={image.name}
+                onLoad={(event) => setTall(event.currentTarget.naturalHeight > event.currentTarget.naturalWidth * 2)}
+              />
+            </button>
+            <div className="ref-chip-image-meta">
+              <span className="ref-chip-image-name">{image.name}</span>
+              {image.sizeBytes !== undefined && <span>{formatBytes(image.sizeBytes)}</span>}
+              <span className="ref-chip-image-spacer" />
+              <button type="button" className="ref-chip-image-action" onClick={viewer.open}>View</button>
+              {image.downloadHref && (
+                <a className="ref-chip-image-action" href={image.downloadHref} download={image.name}>Download</a>
+              )}
+            </div>
+          </div>
+        </AnchoredPanel>
+      )}
+      {viewer.viewer}
+    </span>
+  );
+}
+
+function FileRefChipFromTools({
+  mentionText,
+  className,
+  place,
+  mention,
+}: {
+  mentionText: string;
+  className?: string;
+  place: FileMentionPlace | null;
+  mention: ReturnType<typeof fileMentionOf>;
+}): JSX.Element {
   const files = useFilesNamedByTools(place?.sessionId ?? '');
   const matches = useMemo(
     () => (files.data && mention ? filesMatchingMention(files.data, mention.path) : []),

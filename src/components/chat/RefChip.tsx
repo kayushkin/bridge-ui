@@ -27,7 +27,8 @@ import { SignalRequestList } from './SessionSignals';
 import { SessionChipOpenQuestions } from './SessionChipOpenQuestions';
 import { useOpenSignalRequestsOfSession } from './sessionsWithOpenQuestion';
 import { SessionActionInText } from './SessionActions';
-import { FileRefChip } from './FileRefChip';
+import { FileRefChip, ImageRefChip } from './FileRefChip';
+import { sharedFileGalleryKey, useSessionImages } from './ImageGallery';
 
 /** Props for the {@link RefChip} renderer. When used as a ReactMarkdown custom
  *  component the mdast hProperties (`kind` / `refId`) arrive as props; rehype may
@@ -97,7 +98,12 @@ export function RefChip(props: RefChipProps): JSX.Element {
     // A button this session's agent offered and placed here by writing its id.
     return <SessionActionInText actionId={refId} />;
   }
-  if (kind === 'uuid' || kind === 'registered') {
+  if (kind === 'registered') {
+    // The session's own shared-image ids are registered patterns too (TurnList adds
+    // them); one of those draws as the picture, anything else goes to the resolver.
+    return <RegisteredRefChip refId={refId} className={props.className} onActivate={props.onActivate} />;
+  }
+  if (kind === 'uuid') {
     // A bare uuid, or an id of a type the resolver registered (`project_000001`):
     // either way the resolver says what it names.
     return (
@@ -105,6 +111,22 @@ export function RefChip(props: RefChipProps): JSX.Element {
     );
   }
   return <NoteboardRefChip refId={refId} kind={kind} className={props.className} />;
+}
+
+function RegisteredRefChip({
+  refId,
+  className,
+  onActivate,
+}: {
+  refId: string;
+  className?: string;
+  onActivate?: (kind: string, refId: string) => void;
+}): JSX.Element {
+  const sessionImages = useSessionImages();
+  const key = sharedFileGalleryKey(refId);
+  const image = sessionImages?.images.find((candidate) => candidate.key === key);
+  if (image) return <ImageRefChip mentionText={image.name} image={image} className={className} />;
+  return <UnclassifiedRefChip refId={refId} className={className} onActivate={onActivate} />;
 }
 
 /** Gap in px between the chip and its panel, and the margin the panel keeps

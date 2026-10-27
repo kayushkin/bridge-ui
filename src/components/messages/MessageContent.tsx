@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
+import { createElement, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useBridgeConfig } from '../../context'
@@ -10,6 +10,7 @@ import {
 import { attachmentKind, mediaCaption, mediaFileName } from '../../messageAttachments'
 import { groupReactions, reactionChipAction, reactionFace, reactionTooltip } from '../../messageReactions'
 import type { MessageReactionGroup } from '@kayushkin/multichat-types'
+import { ImageGalleryViewer } from '../chat/ImageGallery'
 import styles from './Messages.module.css'
 
 /** The fields of a message the renderer reads. Both multichat records carry
@@ -68,7 +69,7 @@ function MessageMedia({ message, messageType, multichatBasePath }: {
         <button type="button" className={styles.imageLink} title={`${fileName} — view larger`} onClick={() => setViewing(true)}>
           <img className={styles.messageImage} src={thumbnail} alt={caption || fileName} loading="lazy" />
         </button>
-        {viewing && <ImageViewer src={full} alt={caption || fileName} onClose={() => setViewing(false)} />}
+        {viewing && <ImageGalleryViewer images={[{ key: full, src: full, name: caption || fileName, downloadHref: full }]} startIndex={0} onClose={() => setViewing(false)} />}
       </>
     )
   } else if (kind === 'video') {
@@ -87,24 +88,6 @@ function MessageMedia({ message, messageType, multichatBasePath }: {
     <div className={styles.mediaMessage}>
       {media}
       {caption && <div className={styles.plainText}>{caption}</div>}
-    </div>
-  )
-}
-
-/** An image shown large over the page; a click outside it or Escape closes it. */
-function ImageViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
-    document.addEventListener('keydown', closeOnEscape)
-    return () => document.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
-  return (
-    <div className={styles.imageViewer} role="dialog" aria-label={alt} onClick={onClose}>
-      <img src={src} alt={alt} onClick={event => event.stopPropagation()} />
-      <div className={styles.imageViewerBar} onClick={event => event.stopPropagation()}>
-        <a href={src} target="_blank" rel="noopener noreferrer">Open the original</a>
-        <button type="button" onClick={onClose}>Close</button>
-      </div>
     </div>
   )
 }

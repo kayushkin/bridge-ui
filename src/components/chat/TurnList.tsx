@@ -13,7 +13,7 @@ import { Fragment,
 import { VList, type VListHandle } from 'virtua'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useTurns, remarkRefChips, useResolvableIdPatterns, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse } from '@kayushkin/chat-core'
+import { useTurns, remarkRefChips, useResolvableIdPatterns, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse, useChatContext } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import { FileMentionPlaceContext } from './FileRefChip'
 import type { Entry, SessionAction, SessionFile, Turn } from '@kayushkin/chat-core'
@@ -35,7 +35,9 @@ import SessionStatusLine, {
 } from './SessionStatusLine'
 import styles from './Chat.module.css'
 import { useBeforePaintEffect } from '../../useBeforePaintEffect'
-import { SharedFileCard, ToolResultImageStrip } from './SharedFiles'
+import { SharedFileCard, SharedImageGrid, ToolResultImageStrip, galleryImageOfSharedFile, galleryImageOfToolResult } from './SharedFiles'
+import { SessionImagesProvider, useSessionImages, type GalleryImage } from './ImageGallery'
+import { mayDrawAsImage } from '../../sessionFileAttachments'
 import { SessionActionEntry, SessionActionsContext } from './SessionActions'
 
 // react-markdown types `components` over intrinsic elements only; `ref-chip` is the
@@ -66,15 +68,26 @@ const REMARK_PLUGINS = [remarkGfm, remarkRefChips, remarkVibes] as unknown as Md
 // `prediction_…`, …) handed to `remarkRefChips`, so those ids become chips too. One list
 // per patterns array: chat-core hands every reader the same array, so every row shares
 // one plugins identity and ReactMarkdown re-parses a row only when the patterns arrive.
-const remarkPluginsByPatterns = new WeakMap<readonly string[], MdPlugins>()
-function remarkPluginsFor(patterns: readonly string[] | null): MdPlugins {
-  if (!patterns) return REMARK_PLUGINS
-  let plugins = remarkPluginsByPatterns.get(patterns)
+//
+// The session's shared-image ids (`file_000305`) ride along as patterns of their own: an
+// id written in prose then becomes a chip that RefChip draws as the picture. The ids are
+// the session's own, read from its transcript, so nothing here knows file-store's id
+// shape. Cached by the list's contents, so every row shares one plugins identity.
+const remarkPluginsByPatterns = new Map<string, MdPlugins>()
+function remarkPluginsFor(patterns: readonly string[] | null, imageFileIds: readonly string[]): MdPlugins {
+  if (!patterns && imageFileIds.length === 0) return REMARK_PLUGINS
+  const all = [...(patterns ?? []), ...imageFileIds.map(escapeRegExp)]
+  const key = all.join('\u0000')
+  let plugins = remarkPluginsByPatterns.get(key)
   if (!plugins) {
-    plugins = [remarkGfm, [remarkRefChips, { resolvableIdPatterns: patterns }], remarkVibes] as unknown as MdPlugins
-    remarkPluginsByPatterns.set(patterns, plugins)
+    plugins = [remarkGfm, [remarkRefChips, { resolvableIdPatterns: all }], remarkVibes] as unknown as MdPlugins
+    remarkPluginsByPatterns.set(key, plugins)
   }
   return plugins
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** How long the provisional-narration guess may stand after the transcript last
@@ -307,6 +320,38 @@ export default function TurnList({
   // Memoized: a fresh object here would re-render every mounted tool card on every
   // folded event, and the cards are the most expensive rows in the pane.
   const toolContextValue = useMemo(() => ({ sessionId: sessionId ?? '' }), [sessionId])
+  // Every image in the loaded transcript, in order, for the viewer to step through:
+  // files shared into the session, and — in Raw, the only view that draws them — the
+  // images tool results carried.
+  const { api } = useChatContext()
+  const previousGalleryImages = useRef<GalleryImage[]>([])
+  const galleryImages = useMemo(() => {
+    const out: GalleryImage[] = []
+    for (const turn of turns) {
+      for (const id of visibleEntryIds(turn.id)) {
+        const entry = entries[id]
+        if (!entry) continue
+        if (entry.kind === 'file' && entry.sessionFile && mayDrawAsImage(entry.sessionFile.media_type)) {
+          out.push(galleryImageOfSharedFile(api, entry.sessionFile))
+        }
+        if (view === 'raw' && entry.toolResultImages) {
+          entry.toolResultImages.forEach((image, position) => {
+            const name = `${toolImageLabel(entry)} image ${position + 1}`
+            const galleryImage = galleryImageOfToolResult(api, sessionId || null, entry.id, image, name)
+            if (galleryImage) out.push(galleryImage)
+          })
+        }
+      }
+    }
+    // The same array while nothing in it changed: `entries` changes on every streamed
+    // token, and a new array would redraw every message that reads the context.
+    const previous = previousGalleryImages.current
+    if (previous.length === out.length && previous.every((image, position) => sameGalleryImage(image, out[position]!))) {
+      return previous
+    }
+    previousGalleryImages.current = out
+    return out
+  }, [turns, entries, visibleEntryIds, view, api, sessionId])
   // A session action's button sits where the agent wrote its id, or at its offer when
   // it wrote none, and reads its state from the newest of its records, which arrive as
   // later entries.
@@ -672,6 +717,7 @@ export default function TurnList({
           exactly like a tool that changed nothing. */}
       <ToolContext.Provider value={toolContextValue}>
       <SessionActionsContext.Provider value={sessionActions}>
+      <SessionImagesProvider images={galleryImages}>
       <VList ref={listRef} className="bc-turns-body" onScroll={onScroll} shift={itemEdges.rowsWereAddedAbove}>
         {more ? (
           <button key="__older__" className={styles.loadOlder} onClick={loadOlder}>
@@ -680,6 +726,7 @@ export default function TurnList({
         ) : null}
         {items}
       </VList>
+      </SessionImagesProvider>
       </SessionActionsContext.Provider>
       </ToolContext.Provider>
       {/* "Compacting context…" — the only thing on screen that says a compaction is
@@ -1389,6 +1436,39 @@ function NotificationChip({ text, ts }: { text: string; ts: string }) {
   )
 }
 
+function sameGalleryImage(a: GalleryImage, b: GalleryImage): boolean {
+  return a.key === b.key && a.src === b.src && a.name === b.name && a.sizeBytes === b.sizeBytes
+}
+
+/** What a tool's images are called in the strip and the viewer. */
+function toolImageLabel(entry: Entry): string {
+  return entry.toolName ?? (entry.kind === 'tool_call' ? 'tool' : 'result')
+}
+
+type SegmentItem = RenderItem | { kind: 'imageGroup'; key: string; files: SessionFile[] }
+
+/** Runs of two or more images shared back to back, folded into one grid item, so a
+ *  batch of screenshots reads as one compact block rather than a card per line. */
+function groupSharedImages(items: RenderItem[]): SegmentItem[] {
+  const out: SegmentItem[] = []
+  let run: Extract<RenderItem, { kind: 'file' }>[] = []
+  const flush = () => {
+    if (run.length >= 2) out.push({ kind: 'imageGroup', key: run[0]!.key, files: run.map((it) => it.file) })
+    else out.push(...run)
+    run = []
+  }
+  for (const it of items) {
+    if (it.kind === 'file' && mayDrawAsImage(it.file.media_type)) {
+      run.push(it)
+      continue
+    }
+    flush()
+    out.push(it)
+  }
+  flush()
+  return out
+}
+
 /** One segment's content: its notification chip, then per item — reasoning and
  *  narration as collapsed asides, prose through ProseBody, errors as chips.
  *  `live` opens the LAST item's asides (only the final segment of a streaming
@@ -1412,8 +1492,9 @@ function SegmentContent({
   return (
     <>
       {segment.notification && <NotificationChip text={segment.notification} ts={segment.ts} />}
-      {segment.items.map((it) => {
+      {groupSharedImages(segment.items).map((it) => {
         if (it.kind === 'marker') return <CompactBoundary key={it.key} ts={it.ts} />
+        if (it.kind === 'imageGroup') return <SharedImageGrid key={it.key} files={it.files} />
         if (it.kind === 'file') return <SharedFileCard key={it.key} file={it.file} />
         if (it.kind === 'action') return <SessionActionEntry key={it.key} action={it.action} />
         if (it.kind !== 'assistant') return null
@@ -1579,7 +1660,12 @@ const ProseBody = memo(function ProseBody({
       }) as unknown as MdComponents,
     [onActivateSessionRef],
   )
-  const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns())
+  const sessionImages = useSessionImages()
+  const imageFileIds = useMemo(
+    () => (sessionImages?.images ?? []).flatMap((image) => (image.fileId ? [image.fileId] : [])),
+    [sessionImages],
+  )
+  const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns(), imageFileIds)
   // The plain-text toggle wins, and it takes the vibes with it: TXT is the "show me
   // exactly what the model sent" mode, and a rail drawn beside unparsed source would be
   // claiming a structure the user just asked not to have interpreted.
@@ -1727,7 +1813,7 @@ function EntryToolCall({ entry, resultedToolIds }: { entry: Entry; resultedToolI
     <>
       <ToolItem tool={toToolEvent(full.entry)} running={isToolRunning(full.entry, resultedToolIds)} />
       {entry.toolResultImages && (
-        <ToolResultImageStrip sessionId={sessionId || null} images={entry.toolResultImages} toolName={entry.toolName ?? 'tool'} />
+        <ToolResultImageStrip sessionId={sessionId || null} entryId={entry.id} images={entry.toolResultImages} toolName={toolImageLabel(entry)} />
       )}
       <ShortenedPayloadBar
         entry={entry}
@@ -1760,7 +1846,7 @@ function EntryToolResult({ entry }: { entry: Entry }) {
         />
       )}
       {entry.toolResultImages && (
-        <ToolResultImageStrip sessionId={sessionId || null} images={entry.toolResultImages} toolName={entry.toolName ?? 'result'} />
+        <ToolResultImageStrip sessionId={sessionId || null} entryId={entry.id} images={entry.toolResultImages} toolName={toolImageLabel(entry)} />
       )}
       <ShortenedPayloadBar
         entry={entry}

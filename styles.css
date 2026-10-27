@@ -6304,9 +6304,11 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 }
 
 .bc-image-thumb {
-  display: block; padding: 0; border: 1px solid var(--bc-edge, var(--border));
+  position: relative; display: block; padding: 0; border: 1px solid var(--bc-edge, var(--border));
   border-radius: 8px; background: transparent; cursor: zoom-in; overflow: hidden;
+  transition: border-color 120ms, box-shadow 120ms;
 }
+.bc-image-thumb:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgb(0 0 0 / 25%); }
 .bc-image-thumb img { display: block; max-width: min(360px, 100%); max-height: 240px; object-fit: contain; }
 .bc-shared-file-video {
   display: block; max-width: min(640px, 100%); max-height: 400px;
@@ -6315,22 +6317,144 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-tool-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .bc-tool-images .bc-image-thumb img { max-width: 200px; max-height: 140px; }
 
-.bc-image-viewer {
+/* Several images shared together: one grid of tiles, each name under its tile. */
+.bc-image-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px;
+  max-width: 760px; margin: 6px 0;
+}
+.bc-image-grid-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; margin: 0; }
+.bc-image-grid-tile {
+  display: block; aspect-ratio: 4 / 3; padding: 0; overflow: hidden; cursor: zoom-in;
+  border: 1px solid var(--bc-edge, var(--border)); border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  transition: border-color 120ms, transform 120ms, box-shadow 120ms;
+}
+.bc-image-grid-tile:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 3px 12px rgb(0 0 0 / 25%); }
+.bc-image-grid-tile img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.bc-image-grid-caption {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75em;
+}
+.bc-image-grid-caption a { color: var(--text-muted); text-decoration: none; }
+.bc-image-grid-caption a:hover { color: var(--text); text-decoration: underline; }
+
+/* The image viewer (src/components/chat/ImageGallery.tsx): a bar of controls, the
+   stage with one pane or two side by side, and a strip of thumbnails. */
+.bc-gallery {
   position: fixed; inset: 0; z-index: 1000;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  padding: 16px; background: rgba(0, 0, 0, 0.82); cursor: zoom-out;
+  display: flex; flex-direction: column;
+  background: rgb(10 10 12 / 97%); color: #eee;
+  backdrop-filter: blur(6px);
+  font-family: system-ui, sans-serif; font-size: 14px;
+  animation: bc-gallery-in 120ms ease-out;
 }
-.bc-image-viewer-bar {
-  display: flex; align-items: center; gap: 12px; max-width: 100%;
-  color: #eee; font-size: 0.85em; cursor: default;
+@keyframes bc-gallery-in { from { opacity: 0; } to { opacity: 1; } }
+.bc-gallery-bar {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 8px 12px; border-bottom: 1px solid rgb(255 255 255 / 8%);
 }
-.bc-image-viewer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bc-image-viewer-action {
-  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 6px; padding: 3px 10px;
-  background: transparent; color: #eee; text-decoration: none; cursor: pointer; font: inherit;
+.bc-gallery-count { color: #aaa; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bc-gallery-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; min-width: 0; }
+.bc-gallery-size { color: #888; white-space: nowrap; font-size: 0.9em; }
+.bc-gallery-spacer { flex: 1; }
+.bc-gallery-group { display: inline-flex; }
+.bc-gallery-group .bc-gallery-btn { border-radius: 0; }
+.bc-gallery-group .bc-gallery-btn:first-child { border-radius: 6px 0 0 6px; }
+.bc-gallery-group .bc-gallery-btn:last-child { border-radius: 0 6px 6px 0; }
+.bc-gallery-group .bc-gallery-btn + .bc-gallery-btn { margin-left: -1px; }
+.bc-gallery-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 30px; height: 30px; padding: 0 10px; box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 18%); border-radius: 6px;
+  background: rgb(255 255 255 / 4%); color: #eee; font: inherit; text-decoration: none;
+  cursor: pointer; white-space: nowrap;
 }
-.bc-image-viewer-action:hover { border-color: #fff; }
-.bc-image-viewer-image { max-width: 100%; max-height: calc(100% - 48px); object-fit: contain; cursor: default; }
+.bc-gallery-btn:hover:not(:disabled) { background: rgb(255 255 255 / 12%); border-color: rgb(255 255 255 / 35%); }
+.bc-gallery-btn:disabled { opacity: 0.35; cursor: default; }
+.bc-gallery-btn-on { background: var(--accent, #4a9eff); border-color: var(--accent, #4a9eff); color: #fff; }
+.bc-gallery-btn-on:hover:not(:disabled) { background: var(--accent, #4a9eff); filter: brightness(1.1); }
+.bc-gallery-zoom { min-width: 58px; font-variant-numeric: tabular-nums; }
+
+.bc-gallery-stage { position: relative; flex: 1; display: flex; gap: 2px; min-height: 0; }
+.bc-gallery-pane {
+  position: relative; flex: 1; min-width: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none; user-select: none; cursor: zoom-in;
+}
+.bc-gallery-pane-zoomed { cursor: grab; }
+.bc-gallery-pane-zoomed:active { cursor: grabbing; }
+.bc-gallery-stage-split .bc-gallery-pane { outline: 1px solid rgb(255 255 255 / 8%); outline-offset: -1px; }
+.bc-gallery-stage-split .bc-gallery-pane-focused { outline: 2px solid var(--accent, #4a9eff); outline-offset: -2px; }
+/* Placed and sized inline from the measured pane once the image has loaded; until
+   then it is fitted by CSS and faint. */
+.bc-gallery-image {
+  position: absolute; left: 50%; top: 50%; max-width: none; max-height: none;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
+}
+.bc-gallery-image-loading {
+  position: static; max-width: calc(100% - 24px); max-height: calc(100% - 24px);
+  object-fit: contain; opacity: 0.25;
+}
+.bc-gallery-failed { color: #bbb; padding: 24px; text-align: center; }
+.bc-gallery-failed a { color: var(--accent, #4a9eff); }
+.bc-gallery-pane-label { display: none; }
+.bc-gallery-stage-split .bc-gallery-pane-label {
+  display: block; position: absolute; left: 10px; top: 10px; max-width: calc(100% - 20px);
+  padding: 2px 8px; border-radius: 4px; background: rgb(0 0 0 / 65%);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85em; pointer-events: none;
+}
+.bc-gallery-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 44px; height: 72px; border: 0; border-radius: 8px;
+  background: rgb(0 0 0 / 35%); color: #fff; font-size: 34px; line-height: 1;
+  cursor: pointer; opacity: 0.55; transition: opacity 120ms, background 120ms;
+}
+.bc-gallery-nav:hover { opacity: 1; background: rgb(0 0 0 / 60%); }
+.bc-gallery-nav-prev { left: 10px; }
+.bc-gallery-nav-next { right: 10px; }
+
+.bc-gallery-strip {
+  flex: none; display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto;
+  border-top: 1px solid rgb(255 255 255 / 8%); scrollbar-width: thin;
+}
+.bc-gallery-tile {
+  position: relative; flex: none; width: 72px; height: 54px; padding: 0; overflow: hidden;
+  border: 2px solid transparent; border-radius: 6px; background: rgb(255 255 255 / 6%);
+  cursor: pointer; opacity: 0.55; transition: opacity 120ms, border-color 120ms;
+}
+.bc-gallery-tile:hover { opacity: 0.9; }
+.bc-gallery-tile img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.bc-gallery-tile-current, .bc-gallery-tile-compare { opacity: 0.85; border-color: rgb(255 255 255 / 45%); }
+.bc-gallery-tile-focused { opacity: 1; border-color: var(--accent, #4a9eff); }
+
+@media (max-width: 700px) {
+  .bc-gallery-bar { flex-wrap: wrap; }
+  .bc-gallery-name { flex-basis: calc(100% - 60px); order: -1; }
+  .bc-gallery-spacer { display: none; }
+  .bc-gallery-stage-split { flex-direction: column; }
+  .bc-gallery-nav { width: 36px; height: 56px; font-size: 28px; }
+}
+
+/* An image shared into the session, named in prose: a chip with a small thumbnail,
+   and the picture in its panel (src/components/chat/FileRefChip.tsx). */
+.ref-chip-image-thumb {
+  height: 1.3em; width: auto; max-width: 2.2em; border-radius: 2px;
+  object-fit: cover; object-position: top; vertical-align: middle;
+}
+.ref-chip-panel-image { display: flex; flex-direction: column; gap: 6px; }
+.ref-chip-image-preview {
+  display: block; padding: 0; border: 0; border-radius: 4px; overflow: hidden;
+  background: color-mix(in srgb, var(--text) 6%, transparent); cursor: zoom-in;
+}
+.ref-chip-image-preview img { display: block; max-width: 100%; max-height: 300px; margin: 0 auto; object-fit: contain; }
+.ref-chip-image-preview-tall img { width: 100%; height: 300px; max-height: none; object-fit: cover; object-position: top; }
+.ref-chip-image-meta { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted); }
+.ref-chip-image-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ref-chip-image-spacer { flex: 1; }
+.ref-chip-image-action {
+  padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
+  background: transparent; color: var(--text); font: inherit; text-decoration: none; cursor: pointer;
+}
+.ref-chip-image-action:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ===== Composer buttons: icon and word ===== */
 /* Each composer action carries an icon and a word (Composer.tsx). A wide screen
