@@ -542,6 +542,12 @@
   /* torn ends */
   clip-path: polygon(0 12%, 4% 0, 96% 6%, 100% 0, 98% 50%, 100% 100%, 3% 94%, 0 100%, 2% 50%);
 }
+/* A server's top-level folder: an ink tape rather than a folder's orange one,
+   so the two levels read apart. */
+[data-theme="zine"] .bc-server-folder-header {
+  background: color-mix(in srgb, var(--zine-ink) 22%, var(--zine-cream));
+}
+[data-theme="zine"] .bc-server-folder-blocked { opacity: 0.55; }
 [data-theme="zine"] .bc-session-row-grid {
   border-bottom: 1px dotted color-mix(in srgb, var(--zine-ink) 28%, transparent);
   transition: background 0.15s, transform 0.2s cubic-bezier(0.34, 1.8, 0.64, 1);

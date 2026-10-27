@@ -15,10 +15,10 @@ import { useBridgeInstances } from '../useBridgeInstances'
 import {
   peerConnectionBridgeConfig,
   peerConnectionPath,
-  peerConnectionReach,
   peerRouteErrorText,
   peerTransportDescription,
 } from '../peers'
+import { connectedServerBlockedReason } from '../serverFolders'
 import { chatFetchOver } from '../chatFetch'
 import TurnList from './chat/TurnList'
 
@@ -32,23 +32,6 @@ import TurnList from './chat/TurnList'
 // browser — no drafts, filters or IndexedDB cache — so it cannot mix with the
 // chat's own. The other server decides what is listed and allowed, by the
 // level of access it gave this one.
-
-/** Why the connected server cannot be opened now, in plain words, or null
- *  when it can. The proxy would refuse with the same reason; saying it first
- *  spares a page of failed reads. */
-function whyNotOpenable(view: PeerConnectionView): string | null {
-  const { connection } = view
-  if (connection.removed_at) {
-    return `${connection.display_name} was disconnected at ${new Date(connection.removed_at).toLocaleString()}${connection.remove_reason ? `: ${connection.remove_reason}` : ''}.`
-  }
-  if (!view.access_held) {
-    return `${connection.display_name} has not given this server any access yet, so there is nothing to open. Its administrator gives a level on its own Peers page.`
-  }
-  if (peerConnectionReach(view) === 'socket closed') {
-    return `${connection.display_name} is not connected now: the socket between the two servers is closed. It reconnects by itself when the server that dials out is running and online.`
-  }
-  return null
-}
 
 export function BridgePeerConnection() {
   const config = useBridgeConfig()
@@ -75,7 +58,7 @@ export function BridgePeerConnection() {
 
   const peerConfig = useMemo(() => peerConnectionBridgeConfig(config, connectionId), [config, connectionId])
   const chatFetch = useMemo(() => chatFetchOver(fetchFn), [fetchFn])
-  const blocked = view ? whyNotOpenable(view) : null
+  const blocked = view ? connectedServerBlockedReason(view) : null
 
   return (
     <div className="bp-container pr-link-page">
@@ -151,9 +134,10 @@ function ConnectedServerSessions() {
   )
 }
 
-/** Opens a new session on one of the connected server's instances. The session is
+/** Opens a new session on one of the connected server's instances. Also used
+ *  by the chat's connected-server pane (`ConnectedServerPane`). The session is
  *  created on the first send, as the chat does it. */
-function NewSessionControl() {
+export function NewSessionControl() {
   const { instances, error } = useBridgeInstances()
   const { newSession } = useSessionActions()
   const enabled = instances.filter(i => i.enabled)
@@ -175,7 +159,7 @@ function NewSessionControl() {
   )
 }
 
-function ConnectedServerThread({ sessionID, streaming }: { sessionID: string | null; streaming: boolean }) {
+export function ConnectedServerThread({ sessionID, streaming }: { sessionID: string | null; streaming: boolean }) {
   const composer = useComposer(sessionID)
   const composerStatus = useMemo(
     () => ({ paused: composer.paused, resumable: composer.resumable, error: composer.error, failedAction: null }),

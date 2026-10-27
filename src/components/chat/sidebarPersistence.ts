@@ -31,6 +31,10 @@ const BACKGROUND_INBOX_OPEN_KEY = chatKey('background-inbox-open')
 const GROUP_BY_PROJECT_KEY = chatKey('group-by-project')
 const PROJECT_GROUP_COLLAPSED_KEY = chatKey('project-group-collapsed')
 const HIDE_ARCHIVED_KEY = chatKey('hide-archived')
+// Top-level server folders: this server's and each connected server's,
+// keyed by `THIS_SERVER_FOLDER_KEY` or the connection id. New with the
+// connected servers, so nothing old to migrate.
+const SERVER_FOLDER_COLLAPSED_KEY = chatKey('server-folder-collapsed')
 const MIGRATED_KEYS: readonly string[] = [
   SIDEBAR_COLLAPSED_KEY, FOLDER_COLLAPSED_KEY, FILTERS_OPEN_KEY, INBOX_OPEN_KEY,
   GROUP_BY_PROJECT_KEY, PROJECT_GROUP_COLLAPSED_KEY,
@@ -289,6 +293,45 @@ export function saveCollapsedProjectGroups(collapsed: ReadonlySet<string>): void
     }
     store.setItem(
       PROJECT_GROUP_COLLAPSED_KEY,
+      JSON.stringify([...collapsed].slice(-MAX_PERSISTED_COLLAPSED_FOLDERS)),
+    )
+  } catch {
+    // As above.
+  }
+}
+
+/** The key this server's own top-level folder is collapsed under. A
+ *  connection id never takes this form, so the two cannot collide. */
+export const THIS_SERVER_FOLDER_KEY = ':this-server'
+
+/** Which top-level server folders are collapsed, as connection ids and
+ *  `THIS_SERVER_FOLDER_KEY`. */
+export function loadCollapsedServerFolders(): Set<string> {
+  const store = storage()
+  if (!store) return new Set()
+  try {
+    const raw = store.getItem(SERVER_FOLDER_COLLAPSED_KEY)
+    if (!raw) return new Set()
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(
+      parsed.filter((v): v is string => typeof v === 'string').slice(-MAX_PERSISTED_COLLAPSED_FOLDERS),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveCollapsedServerFolders(collapsed: ReadonlySet<string>): void {
+  const store = storage()
+  if (!store) return
+  try {
+    if (collapsed.size === 0) {
+      store.removeItem(SERVER_FOLDER_COLLAPSED_KEY)
+      return
+    }
+    store.setItem(
+      SERVER_FOLDER_COLLAPSED_KEY,
       JSON.stringify([...collapsed].slice(-MAX_PERSISTED_COLLAPSED_FOLDERS)),
     )
   } catch {

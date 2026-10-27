@@ -7,6 +7,11 @@ interface NewSessionMenuProps {
   /** Called with the picked instance + its harness → useSessionActions().newSession. */
   onPick: (opts: { instanceId: string; harness: string }) => void
   onClose: () => void
+  /** Connected servers a new session can start on instead, each opening that
+   *  server's own instance picker where the thread is. Inside the menu rather
+   *  than beside it, because a press outside the menu closes it before the
+   *  click lands. */
+  otherServers?: readonly { key: string; label: string; onPick: () => void }[]
 }
 
 /** Harness/instance picker grouped by harness, mirroring bridge-ui's NewSessionMenu
@@ -24,7 +29,7 @@ interface NewSessionMenuProps {
  *  alone still leaves a row that lies. The click guard is not redundant with
  *  `disabled`: `disabled` is a property of the rendered button and says nothing
  *  about what the handler does when it is reached another way. */
-export default function NewSessionMenu({ onPick, onClose }: NewSessionMenuProps) {
+export default function NewSessionMenu({ onPick, onClose, otherServers = [] }: NewSessionMenuProps) {
   const { instances } = useBridgeInstances()
   const { machineMap } = useBridgeMachines()
   const { harnessMap } = useBridgeHarnesses()
@@ -108,6 +113,29 @@ export default function NewSessionMenu({ onPick, onClose }: NewSessionMenuProps)
             </div>
           )
         })
+      )}
+      {otherServers.length > 0 && (
+        <div className="bc-new-session-group bc-new-session-other-servers">
+          <div className="bc-new-session-group-label">
+            <span>on a connected server</span>
+          </div>
+          {otherServers.map((server) => (
+            <button
+              key={server.key}
+              type="button"
+              className="bc-new-session-item"
+              role="menuitem"
+              title={`Pick an instance on ${server.label}`}
+              onClick={() => {
+                server.onPick()
+                onClose()
+              }}
+            >
+              <span className="bc-new-session-item-name">🖥 {server.label}</span>
+              <span className="bc-new-session-item-meta">pick its instance…</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

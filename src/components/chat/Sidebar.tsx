@@ -27,14 +27,17 @@ import { isArchivedFolder } from './bridgeAdapters'
 import {
   loadCollapsedFolders,
   loadCollapsedProjectGroups,
+  loadCollapsedServerFolders,
   loadFiltersOpen,
   loadGroupByProject,
   loadHideArchived,
   saveCollapsedFolders,
   saveCollapsedProjectGroups,
+  saveCollapsedServerFolders,
   saveFiltersOpen,
   saveGroupByProject,
   saveHideArchived,
+  THIS_SERVER_FOLDER_KEY,
 } from './sidebarPersistence'
 import { useProjectStore } from '../../useProjectStore'
 import { groupSessionsByProject } from '../../projects'
@@ -45,6 +48,9 @@ import NewSessionMenu from './NewSessionMenu'
 import type { NewSessionTarget } from './useNewSessionTarget'
 import { useSelectSession } from './useSelectSession'
 import SignalsInbox from './SignalsInbox'
+import { useConnectedServers } from './ConnectedServers'
+import { ConnectedServerFolderList, ServerFolderHeader } from './ConnectedServerFolders'
+import { thisServerFolderLabel, type ConnectedServerSessionRef } from '../../serverFolders'
 import type { HarnessInfo } from '../../types'
 import styles from './Chat.module.css'
 
@@ -140,6 +146,12 @@ interface SidebarProps {
   onOpenConversation: (roomID: string) => void
   /** The conversation on screen, or null, so its row reads as selected. */
   openConversationRoomID: string | null
+  /** Show a connected server's session in place of the thread, or a new
+   *  session there for a null id (a row or "+" in that server's folder). */
+  onOpenConnectedServerSession: (ref: ConnectedServerSessionRef) => void
+  /** The connected server's session on screen, or null, so its row reads as
+   *  selected and none of this server's does. */
+  openConnectedServerSession: ConnectedServerSessionRef | null
 }
 
 export default function Sidebar({
@@ -153,6 +165,8 @@ export default function Sidebar({
   projectsOpen,
   onOpenConversation,
   openConversationRoomID,
+  onOpenConnectedServerSession,
+  openConnectedServerSession,
 }: SidebarProps) {
   const {
     groups: allGroups,
@@ -229,6 +243,28 @@ export default function Sidebar({
   // draw every folder open and then snap them shut a frame later, which reads as the
   // list jumping under the pointer. Same reasoning as chat-core's draft and filter
   // rehydrates — see sidebarPersistence.ts for why these are chat's own keys.
+  // The top-level server folders: this server's, drawn only once there is a
+  // connected server to tell it from, and one per connected server below it.
+  // One collapsed set for all of them, so one stored value answers for each.
+  const { folders: connectedServerFolders, thisServerName, thisServerNameError } = useConnectedServers()
+  const showServerFolders = connectedServerFolders.length > 0
+  const [collapsedServerFolders, setCollapsedServerFolders] = useState<Set<string>>(loadCollapsedServerFolders)
+  useEffect(() => {
+    saveCollapsedServerFolders(collapsedServerFolders)
+  }, [collapsedServerFolders])
+  const toggleServerFolder = useCallback((key: string) => {
+    setCollapsedServerFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+  const thisServerCollapsed = showServerFolders && collapsedServerFolders.has(THIS_SERVER_FOLDER_KEY)
+  const openConnectedServerNewSession = useCallback((connectionId: string) => {
+    onOpenConnectedServerSession({ connectionId, sessionId: null })
+  }, [onOpenConnectedServerSession])
+
   const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(loadCollapsedFolders)
 
@@ -548,7 +584,7 @@ export default function Sidebar({
           basePath={basePath}
           displayState={s.state}
           hasOpenOperatorQuestion={sessionsWithOpenOperatorQuestion.has(s.sessionId)}
-          active={!workGraphOpen && !projectsOpen && s.sessionId === activeId}
+          active={!workGraphOpen && !projectsOpen && !openConnectedServerSession && s.sessionId === activeId}
           subagentCount={subagentsOf(s.sessionId).length}
           subagentsExpanded={expandedSubagentParents.has(s.sessionId)}
           onToggleSubagents={toggleSubagents}
@@ -612,7 +648,7 @@ export default function Sidebar({
               // row the list stream keeps current, not the point-in-time fetch.
               displayState={child.state}
               hasOpenOperatorQuestion={sessionsWithOpenOperatorQuestion.has(child.sessionId)}
-              active={!workGraphOpen && !projectsOpen && child.sessionId === activeId}
+              active={!workGraphOpen && !projectsOpen && !openConnectedServerSession && child.sessionId === activeId}
               // A child's own children are not drawn — see the note above on depth.
               subagentCount={0}
               subagentsExpanded={false}
@@ -903,6 +939,13 @@ export default function Sidebar({
                 onAfterOpenSession()
               }}
               onClose={() => setNewMenuOpen(false)}
+              otherServers={connectedServerFolders
+                .filter((folder) => folder.blockedReason === null)
+                .map((folder) => ({
+                  key: folder.connectionId,
+                  label: folder.label,
+                  onPick: () => openConnectedServerNewSession(folder.connectionId),
+                }))}
             />
           )}
         </div>
@@ -928,7 +971,7 @@ export default function Sidebar({
           orchestratorBasePath={orchestratorBasePath}
           onOpenHomeSession={() => void homeSession.open()}
           homeSessionError={homeSession.error}
-          selected={!workGraphOpen && !projectsOpen && !openConversationRoomID && homeSession.sessionId !== null && homeSession.sessionId === activeId}
+          selected={!workGraphOpen && !projectsOpen && !openConversationRoomID && !openConnectedServerSession && homeSession.sessionId !== null && homeSession.sessionId === activeId}
         />
       )}
 
@@ -936,6 +979,23 @@ export default function Sidebar({
           multichat. A row opens the conversation where the thread is. */}
       <AwaitingReplySidebarSection openRoomID={openConversationRoomID} onOpenConversation={onOpenConversation} />
 
+      {showServerFolders && (
+        <ServerFolderHeader
+          label={thisServerFolderLabel(thisServerName)}
+          title={
+            thisServerNameError
+              ? `This server. Its name could not be read: ${thisServerNameError}`
+              : thisServerName
+                ? `${thisServerName}, this server`
+                : 'This server. It has no name yet: set one in its server settings'
+          }
+          count={visibleSessionCount}
+          collapsed={thisServerCollapsed}
+          onToggle={() => toggleServerFolder(THIS_SERVER_FOLDER_KEY)}
+        />
+      )}
+
+      {!thisServerCollapsed && (<>
       <div className="bc-session-search">
         <input
           type="search"
@@ -1175,6 +1235,18 @@ export default function Sidebar({
             </button>
           )}
         </>
+      )}
+
+      </>)}
+
+      {showServerFolders && (
+        <ConnectedServerFolderList
+          open={openConnectedServerSession}
+          onOpen={onOpenConnectedServerSession}
+          collapsed={collapsedServerFolders}
+          onToggle={toggleServerFolder}
+          fillsColumn={thisServerCollapsed}
+        />
       )}
 
       {/* A refused mutation reverts the row, and a revert on its own is

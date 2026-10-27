@@ -23,6 +23,14 @@ import { SplitDragHandle } from './SplitDragHandle'
 import Sidebar from './Sidebar'
 import { WorkGraphView } from './WorkGraphView'
 import { ProjectsView } from './ProjectsView'
+import { ConnectedServersProvider } from './ConnectedServers'
+import { ConnectedServerPane } from './ConnectedServerPane'
+import {
+  readConnectedServerSessionRef,
+  sameConnectedServerSessionRef,
+  writeConnectedServerSessionRef,
+  type ConnectedServerSessionRef,
+} from '../../serverFolders'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
 import TurnList from './TurnList'
 import Timeline from './Timeline'
@@ -60,12 +68,15 @@ import {
 
 /** `?view=` values, each a surface drawn in place of the thread: the work graph,
  *  each repo's commits coloured by the session that made them, the projects
- *  (`&project=` opens one project's page), and a multichat conversation
- *  (`&room=`), opened from the sidebar's Waiting on you section. The orchestrator
+ *  (`&project=` opens one project's page), a multichat conversation
+ *  (`&room=`), opened from the sidebar's Waiting on you section, and a session
+ *  on a connected server (`&server=` the connection, `&server_session=` that
+ *  server's own session id; none for a new one), opened from that server's
+ *  folder in the sidebar. The orchestrator
  *  is not one: it is an ordinary session, its home session, opened like any
  *  other. Nor is the signals page, which has its own route (`routes.signals`)
  *  because it shows no session; `?view=signals`, its old address, is sent there. */
-const WORKSPACE_VIEWS = ['work-graph', 'projects', 'conversation'] as const
+const WORKSPACE_VIEWS = ['work-graph', 'projects', 'conversation', 'connected-server'] as const
 type WorkspaceView = (typeof WORKSPACE_VIEWS)[number]
 
 function workspaceViewOf(param: string | null): WorkspaceView | null {
@@ -234,6 +245,13 @@ function BridgeChatPage() {
   const [openConversationRoomId, setOpenConversationRoomId] = useState<string | null>(
     () => searchParams.get('room') || null,
   )
+  // The connected server's session the pane shows, `?server=` and
+  // `?server_session=`. Written back by the same URL effect, for the same
+  // reason. Kept apart from `?session=`, which always names one of this
+  // server's sessions.
+  const [openConnectedServer, setOpenConnectedServer] = useState<ConnectedServerSessionRef | null>(
+    () => readConnectedServerSessionRef(searchParams),
+  )
   // The work graph's repo (repo-store id) and selected commit, `?repo=` and
   // `?commit=`, so a repo or commit chip can link straight to them. Written
   // back by the same URL effect, for the same reason.
@@ -322,11 +340,13 @@ function BridgeChatPage() {
       else next.delete('commit')
       changed = true
     }
+    const shownConnectedServer = workspaceView === 'connected-server' ? openConnectedServer : null
+    if (writeConnectedServerSessionRef(next, shownConnectedServer)) changed = true
     if (!changed) return
     // Replace, not push: browsing sessions must not fill the back stack with one entry
     // per session looked at.
     setSearchParams(next, { replace: true })
-  }, [activeId, workspaceView, openProjectId, openConversationRoomId, workGraphFocus, searchParams, setSearchParams])
+  }, [activeId, workspaceView, openProjectId, openConversationRoomId, openConnectedServer, workGraphFocus, searchParams, setSearchParams])
 
   const afterOpenSession = useCallback(() => {
     setWorkspaceView(null)
@@ -353,6 +373,13 @@ function BridgeChatPage() {
     window.addEventListener(OPEN_CONVERSATION_IN_CHAT_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_CONVERSATION_IN_CHAT_EVENT, onOpen)
   }, [openConversation])
+  /** Open a session on a connected server where the thread is, or a new
+   *  session there for a null id. */
+  const openConnectedServerSession = useCallback((ref: ConnectedServerSessionRef) => {
+    setOpenConnectedServer(current => (sameConnectedServerSessionRef(current, ref) ? current : ref))
+    setWorkspaceView('connected-server')
+    if (minimal) setDrawerOpen(false)
+  }, [minimal, setDrawerOpen])
   /** Open the projects view: one project's page, or the landing page for null. */
   const openProjects = useCallback((projectId: string | null) => {
     setOpenProjectId(projectId)
@@ -376,6 +403,8 @@ function BridgeChatPage() {
       projectsOpen={workspaceView === 'projects'}
       onOpenConversation={openConversation}
       openConversationRoomID={workspaceView === 'conversation' ? openConversationRoomId : null}
+      onOpenConnectedServerSession={openConnectedServerSession}
+      openConnectedServerSession={workspaceView === 'connected-server' ? openConnectedServer : null}
     />
   )
 
@@ -384,6 +413,7 @@ function BridgeChatPage() {
     // already in the stylesheet dash loads: it collapses `bc-main` to a column, hides the
     // session list and its strip, and gives the composer a safe-area gutter. This ships
     // no CSS.
+    <ConnectedServersProvider>
     <div className={`bc-container ${minimal ? 'bc-minimal' : ''}`}>
       {minimal && (
         <MinimalTopBar
@@ -391,6 +421,7 @@ function BridgeChatPage() {
             workspaceView === 'work-graph' ? 'Work graph'
               : workspaceView === 'projects' ? 'Projects'
                 : workspaceView === 'conversation' ? 'Conversation'
+                : workspaceView === 'connected-server' ? 'Connected server'
                 : activeSummary?.displayName || activeSummary?.sessionId || ''
           }
         />
@@ -423,6 +454,12 @@ function BridgeChatPage() {
             />
           ) : workspaceView === 'conversation' && openConversationRoomId ? (
             <ChatConversationPane roomID={openConversationRoomId} onClose={() => setWorkspaceView(null)} />
+          ) : workspaceView === 'connected-server' && openConnectedServer ? (
+            <ConnectedServerPane
+              sessionRef={openConnectedServer}
+              onSessionChange={setOpenConnectedServer}
+              onClose={() => setWorkspaceView(null)}
+            />
           ) : workspaceView === 'work-graph' ? (
             <WorkGraphView
               initialRepoId={workGraphFocus.repoId}
@@ -457,6 +494,7 @@ function BridgeChatPage() {
         >Use mobile layout</button>
       )}
     </div>
+    </ConnectedServersProvider>
   )
 }
 

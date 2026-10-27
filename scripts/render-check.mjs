@@ -20,6 +20,7 @@ import {
   OrchestratorPanel,
 } from '../src/index.ts'
 import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
+import { ServerFolderHeader } from '../src/components/chat/ConnectedServerFolders.tsx'
 import { OrchestratorTextWithReferenceLinks } from '../src/components/chat/orchestratorReferences.tsx'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
@@ -2031,6 +2032,23 @@ console.log('BridgePeers — people from a connected server this one gives acces
     html.includes('A person nobody mapped is refused') && html.includes('acts as the whole server'), html.slice(0, 300))
   check('before the list loads it says so, rather than that nobody is mapped',
     html.includes('Loading'))
+}
+
+console.log('ServerFolderHeader — a server folder in the chat sidebar')
+{
+  const readable = renderToStaticMarkup(h(ServerFolderHeader, {
+    label: 'laptop', title: 'laptop, a connected server', count: 3, collapsed: false,
+    onToggle: () => {}, onNewSession: () => {},
+  }))
+  check('a readable server shows its name, its count and a + for a new session',
+    readable.includes('laptop') && readable.includes('bc-folder-count">3<') && readable.includes('New session on laptop') && !readable.includes('bc-server-folder-blocked'), readable)
+  const offline = renderToStaticMarkup(h(ServerFolderHeader, {
+    label: 'laptop', title: 'laptop is not connected now', count: null, collapsed: true,
+    onToggle: () => {}, blockedWord: 'offline', onNewSession: () => {},
+  }))
+  check('a server that cannot be read is greyed, says why in a word, and offers no + and no count',
+    offline.includes('bc-server-folder-blocked') && offline.includes('offline') && !offline.includes('New session on') && !offline.includes('bc-folder-count'), offline)
+  check('a collapsed folder says so to assistive tech', offline.includes('aria-expanded="false"'))
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
