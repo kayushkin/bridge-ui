@@ -46,7 +46,7 @@ export interface BridgeProviderProps {
    * If omitted, the kanban card drawer hides its email preview and deep link. */
   mailBasePath?: string
   /** Base path for multichat's API as the host proxies it (dash:
-   * "/api/multichat"). If omitted, the Inbound rules tab is hidden. */
+   * "/api/multichat"). If omitted, the Messages group is hidden. */
   multichatBasePath?: string
   /** Base path for discord-signup-store's API as the host proxies it (dash:
    * "/api/discord-signup"). If omitted, the Auto-reactions page leaves out the bot's rules. */

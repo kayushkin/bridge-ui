@@ -41,9 +41,6 @@ export interface BridgeRoutes {
   /** Hooks: the shell commands the bridge wires into a harness's hook
    *  mechanism at spawn, by scope. llm-bridge-server's /hooks routes. */
   hooks: string
-  /** Inbound rules: what starts an agent session when a person messages in
-   *  through multichat. Needs `multichatBasePath`. */
-  inboundRules: string
   /** What a session is given, setting by setting, with the layer that decided
    *  each — for a stored session (`?session=`) or a dry run (`?harness=…`,
    *  `?board_id=…`). Backed by llm-bridge-server's effective-config routes. */
@@ -121,7 +118,6 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   serviceSettings: '/service-settings',
   models: '/models',
   hooks: '/hooks',
-  inboundRules: '/inbound-rules',
   orchestrator: '/orchestrator',
   card: '/card',
   emailTickets: '/email-tickets',
@@ -197,12 +193,11 @@ export interface BridgeConfig {
    * offering none. */
   mailBasePath: string
   /** Base path for multichat's API as the host proxies it (dash:
-   * "/api/multichat", which forwards only the routes it names). Inbound rules
-   * reads the inbound-rule routes and the contact list; the Messages pages call
-   * the routes `MULTICHAT_ROUTES_CALLED` in `src/multichatMessages.ts` lists,
-   * including a send that reaches a real person, and the Discord page those in
-   * `DISCORD_ROUTES_CALLED` in `src/discordLog.ts`. If empty, Inbound rules and
-   * the Messages group are hidden. */
+   * "/api/multichat", which forwards only the routes it names). The Messages
+   * pages call the routes `MULTICHAT_ROUTES_CALLED` in `src/multichatMessages.ts`
+   * lists, including a send that reaches a real person, and the Discord page
+   * those in `DISCORD_ROUTES_CALLED` in `src/discordLog.ts`. If empty, the
+   * Messages group is hidden. */
   multichatBasePath: string
   /** Base path for discord-signup-store's API as the host proxies it (dash:
    * "/api/discord-signup", which forwards only the routes

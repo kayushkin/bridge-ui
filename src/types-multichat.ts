@@ -1,9 +1,8 @@
-// multichat's unified contact list as the Inbound rules page reads it. The rule
-// records themselves come from `@kayushkin/multichat-types`, rendered from Go;
-// this one is hand-written because multichat assembles the contact answer from
+// multichat's unified contact list as the Messages pages read it. It is
+// hand-written because multichat assembles the contact answer from
 // unnamed types in its router, so there is nothing for tygo to render yet.
 
-/** One person on one app: the bridge puppet id a rule's `sender_user_id` names,
+/** One person on one app: the bridge puppet id `user_id`,
  *  under the name that app shows. `linked_by` and `link_reason` say who tied
  *  it to its person and why; absent when it is linked to no one. */
 export interface MultichatContactIdentity {
