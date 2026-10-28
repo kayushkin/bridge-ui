@@ -277,6 +277,10 @@ export async function peerRouteErrorText(res: Response, verb: string): Promise<s
  *    `/grant-store/` gateway, which forwards `<rest>` to grant-store's `/<rest>`
  *    — the same shape as this host's grant-store path, so every call the
  *    library makes lands on the same route there.
+ *  - `kanban-store-gateway`: kanban-store through the other server's
+ *    `/kanban-store/` gateway, which forwards `<rest>` to kanban-store's
+ *    `/<rest>` unchanged, as this host's kanban path does. (Its `/kanban/`
+ *    gateway adds `/api/` itself, which this library adds too.)
  *  - `not-there`: a path to one of THIS host's own stores or pages, or one whose
  *    shape the other server's gateways do not match. Left empty, which is the
  *    library's "not configured here": the feature behind it is hidden. Ids are
@@ -289,14 +293,18 @@ type BridgeConfigPathField = {
   [K in keyof BridgeConfig]: BridgeConfig[K] extends string ? K : never
 }[keyof BridgeConfig]
 
-export type ConnectedServerPathSource = 'bridge' | 'grant-store-gateway' | 'not-there'
+export type ConnectedServerPathSource = 'bridge' | 'grant-store-gateway' | 'kanban-store-gateway' | 'not-there'
+
+/** Where each gateway source sits under the connection's proxy. */
+const GATEWAY_PATH_UNDER_PROXY: Readonly<Record<'grant-store-gateway' | 'kanban-store-gateway', string>> = {
+  'grant-store-gateway': '/grant-store',
+  'kanban-store-gateway': '/kanban-store',
+}
 
 export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathField, ConnectedServerPathSource>> = {
   basePath: 'bridge',
   grantStoreBasePath: 'grant-store-gateway',
-  // The other server's `/kanban/` gateway forwards under kanban-store's `/api/`,
-  // and this library adds `/api/…` itself, so no prefix makes the two meet.
-  kanbanStoreBasePath: 'not-there',
+  kanbanStoreBasePath: 'kanban-store-gateway',
   // llm-bridge-server has no principal-store gateway.
   principalStoreBasePath: 'not-there',
   // The other server's mailstack gateway, if it has a mailstack, is not this
@@ -357,7 +365,7 @@ export function peerConnectionBridgeConfig(config: BridgeConfig, connectionID: s
   const proxy = peerConnectionProxyBasePath(config.basePath, connectionID)
   const paths = Object.fromEntries(
     (Object.entries(CONNECTED_SERVER_PATH_SOURCES) as [BridgeConfigPathField, ConnectedServerPathSource][]).map(
-      ([field, source]) => [field, source === 'bridge' ? proxy : source === 'grant-store-gateway' ? `${proxy}/grant-store` : ''],
+      ([field, source]) => [field, source === 'bridge' ? proxy : source === 'not-there' ? '' : `${proxy}${GATEWAY_PATH_UNDER_PROXY[source]}`],
     ),
   ) as Pick<BridgeConfig, BridgeConfigPathField>
   const routes = { ...config.routes }

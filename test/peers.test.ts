@@ -181,11 +181,15 @@ describe('peerConnectionBridgeConfig', () => {
   it("points llm-bridge-server's routes at the connection's proxy and empties this host's stores", () => {
     const peer = peerConnectionBridgeConfig(local, 'peer_connection_000001')
     expect(peer.basePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy')
-    expect(peer.kanbanStoreBasePath).toBe('')
     expect(peer.noteboardBasePath).toBe('')
     expect(peer.resolveEndpoint).toBe('')
     expect(peer.journalPagePath).toBe('')
     expect(peer.renderHarnessExtension).toBeNull()
+  })
+
+  it("reaches kanban-store through the other server's rooted /kanban-store/ gateway", () => {
+    const peer = peerConnectionBridgeConfig(local, 'peer_connection_000001')
+    expect(peer.kanbanStoreBasePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy/kanban-store')
   })
 
   it("reaches grant-store through the other server's gateway, whose shape matches this host's path", () => {
