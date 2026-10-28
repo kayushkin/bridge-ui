@@ -27,6 +27,8 @@ import {
   tripRouteUrl,
   visitChipLabel,
 } from '../../locationRefs';
+import type { Activity } from '@kayushkin/activity-store-types';
+import { activityChipLabel, activityGlyph, activityLink, activitySources, activityVerb } from '../../activityRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
@@ -851,6 +853,9 @@ function UnclassifiedRefChip({
     if (match.type === 'trip') {
       return <TripRefChip refId={refId} trip={match.data as Trip} className={className} />;
     }
+    if (match.type === 'activity') {
+      return <ActivityRefChip refId={refId} activity={match.data as Activity} className={className} />;
+    }
     if (match.type === 'message') {
       const message = messageOfAnswer(match.data);
       if (message) return <MessageRefChip refId={refId} message={message} className={className} />;
@@ -1239,6 +1244,44 @@ function TripRefChip({ refId, trip, className }: { refId: string; trip: Trip; cl
           {trip.tags.length > 0 && <RefRow label="Tags" value={trip.tags.join(', ')} />}
           {trip.description && <div className="ref-chip-panel-body">{trip.description}</div>}
           <MapLink href={tripRouteUrl(trip)} label="The route" />
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** An activity id (`activity_000123`), resolved by activity-store: what was
+ *  searched, visited or watched on the chip with its product's glyph, and in
+ *  the panel the product, the verb, when, the channel, which sources saw it,
+ *  any recordings, a link to the page and a map link to where the user was. */
+function ActivityRefChip({ refId, activity, className }: { refId: string; activity: Activity; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const label = activityChipLabel(activity);
+  const deleted = activity.deleted_at !== 0;
+  const verb = activityVerb(activity);
+  const link = activityLink(activity.url);
+  const recordings = (activity.attachments ?? []).filter((attachment) => attachment.purged_at === 0).length;
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="activity" data-ref-id={refId}>
+      <LocationChipButton glyph={activityGlyph(activity.product)} label={label} refId={refId} deleted={deleted} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Activity details" refId={refId} refKind="activity">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} badge={activity.purged_at !== 0 ? 'purged' : deleted ? 'deleted' : undefined} />
+          <RefRow label="Product" value={activity.product} />
+          {verb && <RefRow label="Did" value={verb} />}
+          <RefRow label="When" value={new Date(activity.occurred_at * 1000).toLocaleString()} />
+          {activity.details?.channel && <RefRow label="Channel" value={activity.details.channel.name} />}
+          <RefRow label="Seen in" value={activitySources(activity).join(', ')} />
+          {recordings > 0 && <RefRow label="Recordings" value={String(recordings)} />}
+          {link && (
+            <div className="ref-chip-panel-actions">
+              <a className="ref-chip-panel-btn" href={link} target="_blank" rel="noreferrer">
+                Open the page
+              </a>
+            </div>
+          )}
+          <MapLink href={pointMapUrl(activity.latitude, activity.longitude)} label="Where it happened" />
         </AnchoredPanel>
       )}
     </span>
