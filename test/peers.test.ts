@@ -10,6 +10,7 @@ import {
   peerAccessLevelProvisionPath,
   peerConnectRequestBody,
   peerConnectionBridgeConfig,
+  CONNECTED_SERVER_PATH_SOURCES,
   peerConnectionInviteRequestBody,
   peerConnectionInviteState,
   peerConnectionProxyBasePath,
@@ -177,7 +178,7 @@ describe('peerConnectionBridgeConfig', () => {
     routes: DEFAULT_BRIDGE_ROUTES,
   } as unknown as BridgeConfig
 
-  it("points at the connection's proxy and empties every path to this host's stores", () => {
+  it("points llm-bridge-server's routes at the connection's proxy and empties this host's stores", () => {
     const peer = peerConnectionBridgeConfig(local, 'peer_connection_000001')
     expect(peer.basePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy')
     expect(peer.kanbanStoreBasePath).toBe('')
@@ -187,10 +188,30 @@ describe('peerConnectionBridgeConfig', () => {
     expect(peer.renderHarnessExtension).toBeNull()
   })
 
-  it('keeps the host fetch and the routes', () => {
+  it("reaches grant-store through the other server's gateway, whose shape matches this host's path", () => {
+    const peer = peerConnectionBridgeConfig({ ...local, grantStoreBasePath: '/api/grants' } as BridgeConfig, 'peer_connection_000001')
+    expect(peer.grantStoreBasePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy/grant-store')
+  })
+
+  it('decides every string path of BridgeConfig, and no path of this host survives except through the proxy', () => {
+    const everyPath = Object.fromEntries(Object.keys(CONNECTED_SERVER_PATH_SOURCES).map(field => [field, `/api/host/${field}`]))
+    const peer = peerConnectionBridgeConfig({ ...local, ...everyPath } as unknown as BridgeConfig, 'peer_connection_000001')
+    for (const field of Object.keys(CONNECTED_SERVER_PATH_SOURCES)) {
+      const value = (peer as unknown as Record<string, string>)[field]
+      expect(value === '' || value.startsWith('/api/host/basePath/peer-connections/peer_connection_000001/proxy'), field).toBe(true)
+    }
+  })
+
+  it("keeps the host fetch and the pages, and empties only the routes that take this host's ids", () => {
     const peer = peerConnectionBridgeConfig(local, 'peer_connection_000001')
     expect(peer.fetch).toBe(fetchFn)
-    expect(peer.routes).toBe(DEFAULT_BRIDGE_ROUTES)
+    expect(peer.routes.chat).toBe(DEFAULT_BRIDGE_ROUTES.chat)
+    expect(peer.routes.peers).toBe(DEFAULT_BRIDGE_ROUTES.peers)
+    expect(peer.routes.effectiveConfig).toBe('')
+    expect(peer.routes.card).toBe('')
+    expect(peer.routes.previews).toBe('')
+    expect(local.routes).toBe(DEFAULT_BRIDGE_ROUTES)
+    expect(DEFAULT_BRIDGE_ROUTES.effectiveConfig).not.toBe('')
   })
 })
 

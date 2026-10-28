@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ChatProvider,
-  isRunningState,
   useActiveSession,
-  useComposer,
   usePendingSession,
   useSessionActions,
   useSessionList,
@@ -20,8 +18,7 @@ import {
 } from '../peers'
 import { connectedServerBlockedReason } from '../serverFolders'
 import { chatFetchOver } from '../chatFetch'
-import TurnList from './chat/TurnList'
-import { RefChipServerContext, type RefChipServer } from './chat/refChipServer'
+import { ConnectedServerThread } from './chat/ConnectedServerThread'
 
 // One connected server's sessions, read and driven through this server's
 // proxy for the connection (`{basePath}/peer-connections/{id}/proxy`), which
@@ -99,7 +96,7 @@ export function BridgePeerConnection() {
 
 function ConnectedServerSessions({ connectionId, serverName }: { connectionId: string; serverName: string }) {
   const { groups, loading, moreSessions, loadOlderSessions } = useSessionList()
-  const { id: activeID, select, summary } = useActiveSession()
+  const { id: activeID, select } = useActiveSession()
   const pending = usePendingSession()
   const sessions = useMemo(() => groups.flatMap(g => g.sessions), [groups])
   return (
@@ -129,13 +126,7 @@ function ConnectedServerSessions({ connectionId, serverName }: { connectionId: s
       </aside>
       <section className="pr-link-thread">
         {activeID || pending ? (
-          <ConnectedServerThread
-            sessionID={activeID}
-            streaming={!!summary && isRunningState(summary.state)}
-            connectionId={connectionId}
-            serverName={serverName}
-            openSession={select}
-          />
+          <ConnectedServerThread connectionId={connectionId} serverName={serverName} openSession={select} />
         ) : (
           <p className="bp-empty">Pick a session, or start one on an instance of the connected server.</p>
         )}
@@ -166,67 +157,5 @@ export function NewSessionControl() {
       <button type="submit" className="bp-submit" disabled={!instanceID}>New</button>
       {error && <div className="bridge-error bp-error">Could not read the connected server&apos;s instances: {error}</div>}
     </form>
-  )
-}
-
-export function ConnectedServerThread({
-  sessionID,
-  streaming,
-  connectionId,
-  serverName,
-  openSession,
-}: {
-  sessionID: string | null
-  streaming: boolean
-  /** The connection the thread reaches its server by, and that server's name:
-   *  every reference chip in the thread belongs to that server. */
-  connectionId: string
-  serverName: string
-  /** Opens another of that server's sessions, for a session chip's ↗. */
-  openSession: (sessionId: string) => void
-}) {
-  const chipServer = useMemo<RefChipServer>(
-    () => ({ connectionId, serverName, openSession }),
-    [connectionId, serverName, openSession],
-  )
-  const composer = useComposer(sessionID)
-  const composerStatus = useMemo(
-    () => ({ paused: composer.paused, resumable: composer.resumable, error: composer.error, failedAction: null }),
-    [composer.paused, composer.resumable, composer.error],
-  )
-  const send = (event: FormEvent) => {
-    event.preventDefault()
-    void composer.send(composer.draft)
-  }
-  return (
-    <div className="pr-thread">
-      <RefChipServerContext.Provider value={chipServer}>
-      <TurnList
-        sessionId={sessionID}
-        view="turns"
-        markdown
-        streaming={streaming}
-        compacting={false}
-        composerStatus={composerStatus}
-        style={{ flex: '1 1 0' }}
-      />
-      </RefChipServerContext.Provider>
-      <form className="pr-composer" onSubmit={send}>
-        <textarea
-          className="bp-input"
-          rows={3}
-          value={composer.draft}
-          onChange={e => composer.setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void composer.send(composer.draft) } }}
-          placeholder={sessionID ? 'Message the session on the connected server' : 'First message starts the session on the connected server'}
-          aria-label="Message"
-        />
-        <div className="pr-composer-actions">
-          <button type="submit" className="bp-submit" disabled={composer.sending || !composer.draft.trim()}>Send</button>
-          {streaming && <button type="button" className="bp-cancel" onClick={() => { void composer.stop().catch(() => undefined) }}>Stop</button>}
-          {composer.resumable && <button type="button" className="bp-cancel" onClick={() => { void composer.resume().catch(() => undefined) }}>Resume</button>}
-        </div>
-      </form>
-    </div>
   )
 }

@@ -510,7 +510,17 @@ function BridgeChatPage() {
  *  `GET /bridge-prefs` and then keep a copy that drifts from the one the Sidebar writes —
  *  and the controls bar's write-back MERGES over its snapshot, so a stale copy is how a
  *  saved spend ceiling gets resurrected after the user cleared it. One instance, passed. */
-function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
+export function ThreadPane({
+  newTarget,
+  terminalUnavailableBecause,
+}: {
+  newTarget: NewSessionTarget
+  /** Why this thread cannot draw a terminal, when it cannot: a connected
+   *  server's session is read through the connection's proxy, which the
+   *  terminal's WebSocket does not cross. The Terminal tab is then not drawn,
+   *  and a pty session says why instead. */
+  terminalUnavailableBecause?: string
+}) {
   const { id, summary, select } = useActiveSession()
 
   // `controlsSlot` is the sheet's portal target, non-null exactly while `ChromeSheet` is
@@ -659,8 +669,11 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
   // `pty` per session (6,069 and 23 of them respectively on this host), and only a pty
   // session has a hub to join. The harness's own `pty` boolean is a different question —
   // whether it CAN be switched — and gates the toggle rather than the pane.
-  const attach = useAttachToken(id, summary?.mode ?? '')
   const isPty = summary?.mode === 'pty'
+  // No token is asked for where no terminal can be drawn: the request would
+  // only fail.
+  const attach = useAttachToken(id, terminalUnavailableBecause ? '' : summary?.mode ?? '')
+  const terminalDrawable = isPty && !terminalUnavailableBecause
 
   // ⚠️ ONE `useSessionControls` for the whole pane, and that is the point of it being here
   // rather than in `SessionSettings`. Its `compacting` is hook-LOCAL `useState` (chat-core
@@ -707,12 +720,12 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
   // in as a fact about the session. The mobile branch answers the same question the same
   // way — a phone that had stored `attach` and then opened an events session would
   // otherwise draw an empty pane with no way back to Turns.
-  const paneDrawable = useMemo(() => ({ attach: isPty }), [isPty])
+  const paneDrawable = useMemo(() => ({ attach: terminalDrawable }), [terminalDrawable])
   usePaneNumberKeys(paneDrawable, minimal, showOnlyPane, togglePane, setMobilePane)
   const desktopPanes = visiblePanes(panesHidden, paneDrawable)
   const panes =
     minimal
-      ? mobilePane === 'attach' && !isPty
+      ? mobilePane === 'attach' && !terminalDrawable
         ? [DEFAULT_MOBILE_PANE]
         : [mobilePane]
       : desktopPanes
@@ -976,6 +989,9 @@ function ThreadPane({ newTarget }: { newTarget: NewSessionTarget }) {
         )}
       </div>
 
+      {isPty && terminalUnavailableBecause && (
+        <div className="bc-terminal-unavailable" role="note">Terminal: {terminalUnavailableBecause}</div>
+      )}
       <BudgetBanner sessionId={id} />
       {id && <AwaitingYouBanner key={id} sessionId={id} />}
       {/* Portaled into the sheet on a phone, and rendered NOWHERE else — on a desktop these

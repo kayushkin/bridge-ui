@@ -30,7 +30,7 @@ import {
   type ServiceSettings,
 } from '@kayushkin/llm-bridge-types'
 import type { Principal } from '@kayushkin/principal-store-types'
-import type { BridgeConfig } from './context'
+import type { BridgeConfig, BridgeRoutes } from './context'
 
 export const PEER_CONNECTION_INVITES_PATH = '/peer-connection-invites'
 export const PEER_CONNECTIONS_PATH = '/peer-connections'
@@ -267,21 +267,105 @@ export async function peerRouteErrorText(res: Response, verb: string): Promise<s
   return `${verb}: ${text}`
 }
 
-/** The config a connected server's page runs with: `basePath` is the
- *  connection's proxy, and every other path is emptied. Every other base path
- *  names one of THIS host's stores or pages, and the other server's ids mean
- *  nothing there — a session id looked up in this host's log-store, or a card
- *  chip resolved against this host's kanban, would answer about the wrong
- *  record. An empty path is the library's "not configured here", which every
- *  page and chip already says out loud. Fields are emptied by type rather than
- *  by name, so a path added to `BridgeConfig` later is emptied too. */
+/** Where a connected server's session reads each of `BridgeConfig`'s paths.
+ *
+ *  - `bridge`: llm-bridge-server's own routes, through the connection's proxy.
+ *    The other server runs llm-bridge-server, so the session header, the
+ *    composer, the panes and their controls ask it exactly what they ask this
+ *    one.
+ *  - `grant-store-gateway`: grant-store through the other server's
+ *    `/grant-store/` gateway, which forwards `<rest>` to grant-store's `/<rest>`
+ *    — the same shape as this host's grant-store path, so every call the
+ *    library makes lands on the same route there.
+ *  - `not-there`: a path to one of THIS host's own stores or pages, or one whose
+ *    shape the other server's gateways do not match. Left empty, which is the
+ *    library's "not configured here": the feature behind it is hidden. Ids are
+ *    numbered per server, so pointing a connected server's session at a store
+ *    here would answer about a different record as if it were the same one.
+ *
+ *  A `Record` over every string field, so a path added to `BridgeConfig` does
+ *  not compile until someone decides here where it goes. */
+type BridgeConfigPathField = {
+  [K in keyof BridgeConfig]: BridgeConfig[K] extends string ? K : never
+}[keyof BridgeConfig]
+
+export type ConnectedServerPathSource = 'bridge' | 'grant-store-gateway' | 'not-there'
+
+export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathField, ConnectedServerPathSource>> = {
+  basePath: 'bridge',
+  grantStoreBasePath: 'grant-store-gateway',
+  // The other server's `/kanban/` gateway forwards under kanban-store's `/api/`,
+  // and this library adds `/api/…` itself, so no prefix makes the two meet.
+  kanbanStoreBasePath: 'not-there',
+  // llm-bridge-server has no principal-store gateway.
+  principalStoreBasePath: 'not-there',
+  // The other server's mailstack gateway, if it has a mailstack, is not this
+  // host's mail page's shape; mail belongs to this host.
+  mailBasePath: 'not-there',
+  mailPagePath: 'not-there',
+  // Everything below is one of this host's own proxies or pages.
+  skillStoreBasePath: 'not-there',
+  toolStoreBasePath: 'not-there',
+  permissionStoreBasePath: 'not-there',
+  bundleStoreBasePath: 'not-there',
+  repoStoreBasePath: 'not-there',
+  noteboardBasePath: 'not-there',
+  resolveEndpoint: 'not-there',
+  bridgeAdapterBasePath: 'not-there',
+  orchestratorBasePath: 'not-there',
+  usageStoreBasePath: 'not-there',
+  multichatBasePath: 'not-there',
+  discordSignupBasePath: 'not-there',
+  shortNameStoreBasePath: 'not-there',
+  schedulerBasePath: 'not-there',
+  logStoreBasePath: 'not-there',
+  jobStoreBasePath: 'not-there',
+  quoteStoreBasePath: 'not-there',
+  predictionStoreBasePath: 'not-there',
+  eventStoreBasePath: 'not-there',
+  authStoreBasePath: 'not-there',
+  previewsBasePath: 'not-there',
+  workGraphStoreBasePath: 'not-there',
+  projectStoreBasePath: 'not-there',
+  modelStoreBasePath: 'not-there',
+  hostBasePath: 'not-there',
+  peopleStoreBasePath: 'not-there',
+  journalStoreBasePath: 'not-there',
+  photoStoreBasePath: 'not-there',
+  peoplePagePath: 'not-there',
+  journalPagePath: 'not-there',
+}
+
+/** This host's pages that take one of this host's ids (`?session=`, a card,
+ *  a port, a note). A link to one from a connected server's session would open
+ *  this host's record with the other server's id, so those routes are emptied,
+ *  and an empty route is not drawn as a link. Pages that take no id stay. */
+const ROUTES_THAT_TAKE_THIS_HOSTS_IDS: readonly (keyof BridgeRoutes)[] = [
+  'effectiveConfig',
+  'card',
+  'previews',
+  'orchestrator',
+  'notes',
+  'kanban',
+  'kanbanSettings',
+  'emailTickets',
+]
+
+/** The config a connected server's session runs with, path by path from
+ *  `CONNECTED_SERVER_PATH_SOURCES`. */
 export function peerConnectionBridgeConfig(config: BridgeConfig, connectionID: string): BridgeConfig {
-  const emptied = Object.fromEntries(
-    Object.entries(config).map(([key, value]) => [key, typeof value === 'string' ? '' : value]),
-  ) as unknown as BridgeConfig
+  const proxy = peerConnectionProxyBasePath(config.basePath, connectionID)
+  const paths = Object.fromEntries(
+    (Object.entries(CONNECTED_SERVER_PATH_SOURCES) as [BridgeConfigPathField, ConnectedServerPathSource][]).map(
+      ([field, source]) => [field, source === 'bridge' ? proxy : source === 'grant-store-gateway' ? `${proxy}/grant-store` : ''],
+    ),
+  ) as Pick<BridgeConfig, BridgeConfigPathField>
+  const routes = { ...config.routes }
+  for (const route of ROUTES_THAT_TAKE_THIS_HOSTS_IDS) routes[route] = ''
   return {
-    ...emptied,
-    basePath: peerConnectionProxyBasePath(config.basePath, connectionID),
+    ...config,
+    ...paths,
+    routes,
     renderHarnessExtension: null,
   }
 }

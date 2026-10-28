@@ -23,6 +23,8 @@ import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
 import { ServerFolderHeader } from '../src/components/chat/ConnectedServerFolders.tsx'
 import { RefChip } from '../src/components/chat/RefChip.tsx'
 import { RefChipServerContext } from '../src/components/chat/refChipServer.ts'
+import { ConnectedServerThread } from '../src/components/chat/ConnectedServerThread.tsx'
+import { peerConnectionBridgeConfig, CONNECTED_SERVER_PATH_SOURCES } from '../src/peers.ts'
 import { OrchestratorTextWithReferenceLinks } from '../src/components/chat/orchestratorReferences.tsx'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
@@ -55,7 +57,7 @@ import { SplitDragHandle } from '../src/components/chat/SplitDragHandle.tsx'
 import {
   EVEN_SPLIT_GROW_UNITS, MINIMUM_PANE_PIXELS, measureSplitDragGeometry, splitGrowUnitsAfterDrag,
 } from '../src/components/chat/splitDragGeometry.ts'
-import { groupSignalsByRequest, ChatContext } from '@kayushkin/chat-core'
+import { groupSignalsByRequest, ChatContext, ChatProvider } from '@kayushkin/chat-core'
 import { SessionActionEntry, SessionActionInText, SessionActionsContext } from '../src/components/chat/SessionActions.tsx'
 
 let failures = 0
@@ -2068,6 +2070,30 @@ console.log('Reference chips in a connected server’s thread')
   check('a cue-prefixed uuid from a connected server is never sent to this server’s noteboard', note.includes('ref-chip-remote'), note)
   const here = inThread(null, 'uuid', '8637db10-0000-4000-8000-000000000002')
   check('outside a connected server’s thread a uuid is this server’s, as before', !here.includes('ref-chip-remote'), here)
+}
+
+console.log('A connected server’s session gets the full thread view')
+{
+  const answerNothing = async () => new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
+  const here = { fetch: answerNothing, basePath: '/api/bridge', routes: DEFAULT_BRIDGE_ROUTES, renderHarnessExtension: null }
+  for (const field of Object.keys(CONNECTED_SERVER_PATH_SOURCES)) if (!(field in here)) here[field] = `/api/${field}`
+  here.basePath = '/api/bridge'
+  const remote = peerConnectionBridgeConfig(here, 'peer_connection_000001')
+  const html = renderToStaticMarkup(
+    h(MemoryRouter, null,
+      h(BridgeContext.Provider, { value: remote },
+        h(MinimalChromeProvider, null,
+          h(ChatProvider, { fetch: answerNothing, basePath: remote.basePath, cache: false, keepDraftsAndFiltersInBrowser: false },
+            h(ConnectedServerThread, { connectionId: 'peer_connection_000001', serverName: 'laptop', openSession: () => {} }))))))
+  check('the remote thread draws the chat’s own workspace, not a plain list and textarea',
+    html.includes('bc-workspace') && !html.includes('pr-composer'), html.slice(0, 400))
+  check('it draws the chat’s own composer', /bc-composer/.test(html), html.slice(0, 400))
+  check('the remote config sends llm-bridge-server’s routes through the proxy and nothing to this host’s stores',
+    remote.basePath === '/api/bridge/peer-connections/peer_connection_000001/proxy' &&
+    remote.grantStoreBasePath === '/api/bridge/peer-connections/peer_connection_000001/proxy/grant-store' &&
+    remote.noteboardBasePath === '' && remote.kanbanStoreBasePath === '' && remote.projectStoreBasePath === '' &&
+    remote.routes.effectiveConfig === '' && remote.routes.chat === DEFAULT_BRIDGE_ROUTES.chat,
+    JSON.stringify({ basePath: remote.basePath, grant: remote.grantStoreBasePath }))
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(

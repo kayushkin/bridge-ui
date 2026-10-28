@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { isRunningState, useActiveSession, usePendingSession } from '@kayushkin/chat-core'
+import { useActiveSession, usePendingSession } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
 import type { ConnectedServerSessionRef } from '../../serverFolders'
-import { ConnectedServerThread, NewSessionControl } from '../BridgePeerConnection'
+import { NewSessionControl } from '../BridgePeerConnection'
+import { ConnectedServerThread } from './ConnectedServerThread'
 import { OnConnectedServer, useConnectedServers } from './ConnectedServers'
 
 /** A connected server's session in the chat's thread pane, in place of this
- *  server's: its history, a composer that sends to that server, and Stop.
+ *  server's: the same thread view a session here gets (header, controls,
+ *  panes, composer), running against that server.
  *  For a null session id it is a new session: pick one of that server's
  *  instances, and the first message starts it there.
  *
@@ -40,7 +42,7 @@ export function ConnectedServerPane({
   }
 
   return (
-    <div className="bc-workspace bc-workspace-focused bc-connected-server-pane">
+    <div className="bc-workspace bc-connected-server-pane">
       <header className="bc-connected-server-head">
         <span className="bc-connected-server-name" title={folder ? `A session on ${folder.label}, a connected server` : undefined}>
           🖥 {folder ? folder.label : sessionRef.connectionId}
@@ -59,7 +61,10 @@ export function ConnectedServerPane({
   )
 }
 
-/** Runs against the connected server's store. */
+/** Runs against the connected server's store, and keeps it and the URL on
+ *  the same session both ways: the URL names the session the pane opens, and
+ *  a session the store moves to by itself — a fork, a new session's first
+ *  message, a chip's ↗ — goes back into the URL. */
 function ConnectedServerSessionView({
   sessionRef,
   serverName,
@@ -69,52 +74,48 @@ function ConnectedServerSessionView({
   serverName: string
   onSessionChange: (ref: ConnectedServerSessionRef) => void
 }) {
-  // A session chip in the thread opens that server's session through the URL,
-  // as the sidebar does, rather than selecting it in the store under the URL.
   const openSession = useCallback(
     (sessionId: string) => onSessionChange({ connectionId: sessionRef.connectionId, sessionId }),
     [onSessionChange, sessionRef.connectionId],
   )
-  const { id: activeId, select, summary } = useActiveSession()
+  const { id: activeId, select } = useActiveSession()
   const pending = usePendingSession()
   const wantedId = sessionRef.sessionId
 
-  // Open the session the URL names in that server's store.
-  useEffect(() => {
-    if (wantedId && wantedId !== activeId) select(wantedId)
-  }, [wantedId, activeId, select])
-
-  // A new session: the store's active id when the pane opened is not the new
-  // one, so only an id that appears after it counts as the session the first
-  // message created.
+  // Whether the store has reached the session the URL names. Until it has, a
+  // different active id is the store still on its previous session, not a move
+  // to report.
+  const reachedWanted = useRef(false)
+  // For a new session: the active id when the pane opened, which is not the
+  // session the first message creates.
   const activeIdAtOpen = useRef(activeId)
-  useEffect(() => {
-    if (wantedId) { activeIdAtOpen.current = activeId; return }
-    if (activeId && activeId !== activeIdAtOpen.current) {
-      onSessionChange({ connectionId: sessionRef.connectionId, sessionId: activeId })
-    }
-  }, [wantedId, activeId, onSessionChange, sessionRef.connectionId])
 
+  useEffect(() => {
+    reachedWanted.current = false
+    activeIdAtOpen.current = activeId
+    if (wantedId && wantedId !== activeId) select(wantedId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedId])
+
+  useEffect(() => {
+    if (!activeId) return
+    if (wantedId) {
+      if (activeId === wantedId) { reachedWanted.current = true; return }
+      if (reachedWanted.current) openSession(activeId)
+      return
+    }
+    if (activeId !== activeIdAtOpen.current) openSession(activeId)
+  }, [activeId, wantedId, openSession])
+
+  const thread = <ConnectedServerThread connectionId={sessionRef.connectionId} serverName={serverName} openSession={openSession} />
   if (!wantedId) {
     return (
       <div className="bc-connected-server-new">
         <NewSessionControl />
-        {pending ? (
-          <ConnectedServerThread sessionID={null} streaming={false} connectionId={sessionRef.connectionId} serverName={serverName} openSession={openSession} />
-        ) : (
-          <p className="bp-empty">Pick one of this server&apos;s instances; the first message starts the session there.</p>
-        )}
+        {pending ? thread : <p className="bp-empty">Pick one of this server&apos;s instances; the first message starts the session there.</p>}
       </div>
     )
   }
   if (activeId !== wantedId) return <div className="bc-connected-server-blocked">Opening the session…</div>
-  return (
-    <ConnectedServerThread
-      sessionID={wantedId}
-      streaming={!!summary && isRunningState(summary.state)}
-      connectionId={sessionRef.connectionId}
-      serverName={serverName}
-      openSession={openSession}
-    />
-  )
+  return thread
 }

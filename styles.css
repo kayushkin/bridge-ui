@@ -6734,3 +6734,5 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-connected-server-blocked { padding: 24px; color: var(--text-dim); }
 .bc-connected-server-new { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; padding: 8px; }
 .bc-connected-server-pane .pr-thread { flex: 1; min-height: 0; }
+/* A connected server's pty session: its terminal does not cross the proxy, so a line says so where the Terminal tab would be. */
+.bc-terminal-unavailable { padding: 4px 12px; font-size: 0.85em; color: var(--text-dim); border-top: 1px solid var(--border); }
