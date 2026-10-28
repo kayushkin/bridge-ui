@@ -1,12 +1,46 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useMinimalChrome } from './MinimalChromeContext'
 import { useShellNavigation } from '../shellNavigation'
+import { drawerSwipeAction, touchMayMoveDrawer, type TouchPoint } from '../../drawerSwipe'
 
 export function SessionDrawer({ children }: { children: ReactNode }) {
   const { drawerOpen, setDrawerOpen } = useMinimalChrome()
   const navigation = useShellNavigation()
+  const drawerRef = useRef<HTMLElement | null>(null)
+
+  // A swipe to the right anywhere on the page opens the drawer, and a swipe to
+  // the left closes it. The rule is in `drawerSwipe.ts`.
+  useEffect(() => {
+    let start: TouchPoint | null = null
+    const onTouchStart = (e: TouchEvent) => {
+      start = null
+      if (e.touches.length !== 1) return
+      if (!touchMayMoveDrawer(e.target instanceof Element ? e.target as HTMLElement : null, drawerRef.current)) return
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!start || e.changedTouches.length !== 1) return
+      const touch = e.changedTouches[0]
+      const action = drawerSwipeAction(start, { x: touch.clientX, y: touch.clientY }, drawerOpen)
+      start = null
+      // A drag that selected text was for the text, not the drawer.
+      if (!action) return
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed) return
+      setDrawerOpen(action === 'open')
+    }
+    const onTouchCancel = () => { start = null }
+    document.addEventListener('touchstart', onTouchStart, { passive: true })
+    document.addEventListener('touchend', onTouchEnd, { passive: true })
+    document.addEventListener('touchcancel', onTouchCancel, { passive: true })
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('touchcancel', onTouchCancel)
+    }
+  }, [drawerOpen, setDrawerOpen])
 
   useEffect(() => {
     if (!drawerOpen) return
@@ -25,6 +59,7 @@ export function SessionDrawer({ children }: { children: ReactNode }) {
         aria-hidden={!drawerOpen}
       />
       <aside
+        ref={drawerRef}
         className={`bc-mc-drawer ${drawerOpen ? 'bc-mc-drawer-open' : ''}`}
         aria-hidden={!drawerOpen}
         role="dialog"
