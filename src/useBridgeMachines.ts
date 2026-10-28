@@ -5,7 +5,7 @@ import type { FetchFn, Machine, CreateMachineRequest, UpdateMachineRequest } fro
 
 /** The one `/machines` poll for this (fetch, basePath) — same store the
  *  instances hook uses, keyed on a different URL. */
-function machinesPoll(fetchFn: FetchFn, basePath: string): SharedPoll<Machine[]> {
+export function machinesPoll(fetchFn: FetchFn, basePath: string): SharedPoll<Machine[]> {
   return sharedPoll(fetchFn, `machines ${basePath}`, () =>
     new SharedPoll<Machine[]>(() => loadJSONList<Machine>(fetchFn, `${basePath}/machines`), []))
 }

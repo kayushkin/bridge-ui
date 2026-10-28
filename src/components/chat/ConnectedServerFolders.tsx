@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useConnState, useSessionList } from '@kayushkin/chat-core'
 import { connectedServerSessionKey, type ConnectedServerFolder, type ConnectedServerSessionRef } from '../../serverFolders'
+import { NEW_SESSION_MENU_TOGGLE_ATTRIBUTE } from '../../newSessionMenu'
 import { OnConnectedServer, useConnectedServers } from './ConnectedServers'
 import { StatusDot } from './StatusDot'
 import styles from './Chat.module.css'
@@ -16,6 +17,7 @@ export function ServerFolderHeader({
   onToggle,
   blockedWord,
   onNewSession,
+  newSessionMenu,
 }: {
   label: string
   title: string
@@ -24,8 +26,10 @@ export function ServerFolderHeader({
   collapsed: boolean
   onToggle: () => void
   blockedWord?: string | null
-  /** Starts a new session on this server, when it can take one. */
+  /** Opens the New session menu for this server, when it can take one. */
   onNewSession?: () => void
+  /** That menu, drawn under the header while it is open. */
+  newSessionMenu?: ReactNode
 }) {
   return (
     <div
@@ -51,6 +55,7 @@ export function ServerFolderHeader({
       {onNewSession && !blockedWord && (
         <button
           type="button"
+          {...{ [NEW_SESSION_MENU_TOGGLE_ATTRIBUTE]: '' }}
           className={styles.projectGroupOpen}
           onClick={onNewSession}
           title={`New session on ${label}`}
@@ -59,6 +64,7 @@ export function ServerFolderHeader({
           +
         </button>
       )}
+      {newSessionMenu}
     </div>
   )
 }
@@ -72,6 +78,8 @@ export function ConnectedServerFolderList({
   collapsed,
   onToggle,
   fillsColumn,
+  onNewSessionOn,
+  newSessionMenuFor,
 }: {
   /** The remote session on screen, so its row reads as selected. */
   open: ConnectedServerSessionRef | null
@@ -84,6 +92,10 @@ export function ConnectedServerFolderList({
   /** True while this server's own folder is collapsed: the connected servers
    *  then take the column's height instead of a share of it. */
   fillsColumn: boolean
+  /** The + on a server's folder: opens the New session menu for that server. */
+  onNewSessionOn: (connectionId: string) => void
+  /** The New session menu to draw under that server's folder header, or null. */
+  newSessionMenuFor: (connectionId: string) => ReactNode
 }) {
   const { folders, connectionsError } = useConnectedServers()
 
@@ -101,6 +113,8 @@ export function ConnectedServerFolderList({
           onToggle={() => onToggle(folder.connectionId)}
           open={open?.connectionId === folder.connectionId ? open : null}
           onOpen={onOpen}
+          onNewSession={() => onNewSessionOn(folder.connectionId)}
+          newSessionMenu={newSessionMenuFor(folder.connectionId)}
         />
       ))}
     </div>
@@ -120,12 +134,16 @@ function ConnectedServerFolderSection({
   onToggle,
   open,
   onOpen,
+  onNewSession,
+  newSessionMenu,
 }: {
   folder: ConnectedServerFolder
   collapsed: boolean
   onToggle: () => void
   open: ConnectedServerSessionRef | null
   onOpen: (ref: ConnectedServerSessionRef) => void
+  onNewSession: () => void
+  newSessionMenu: ReactNode
 }) {
   const { storeOf } = useConnectedServers()
   const readable = folder.blockedReason === null && !!storeOf(folder.connectionId)
@@ -148,7 +166,7 @@ function ConnectedServerFolderSection({
   }
   return (
     <OnConnectedServer connectionId={folder.connectionId}>
-      <ReadableServerFolder folder={folder} collapsed={collapsed} onToggle={onToggle} open={open} onOpen={onOpen} />
+      <ReadableServerFolder folder={folder} collapsed={collapsed} onToggle={onToggle} open={open} onOpen={onOpen} onNewSession={onNewSession} newSessionMenu={newSessionMenu} />
     </OnConnectedServer>
   )
 }
@@ -161,12 +179,16 @@ function ReadableServerFolder({
   onToggle,
   open,
   onOpen,
+  onNewSession,
+  newSessionMenu,
 }: {
   folder: ConnectedServerFolder
   collapsed: boolean
   onToggle: () => void
   open: ConnectedServerSessionRef | null
   onOpen: (ref: ConnectedServerSessionRef) => void
+  onNewSession: () => void
+  newSessionMenu: ReactNode
 }) {
   const { groups, loading, moreSessions, loadingOlderSessions, loadOlderSessions } = useSessionList()
   const connState = useConnState()
@@ -179,7 +201,8 @@ function ReadableServerFolder({
         count={count}
         collapsed={collapsed}
         onToggle={onToggle}
-        onNewSession={() => onOpen({ connectionId: folder.connectionId, sessionId: null })}
+        onNewSession={onNewSession}
+        newSessionMenu={newSessionMenu}
       />
       {!collapsed && (
         <div className="bc-server-folder-body">

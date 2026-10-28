@@ -3,15 +3,14 @@ import { Link } from 'react-router-dom'
 import { useActiveSession, usePendingSession } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
 import type { ConnectedServerSessionRef } from '../../serverFolders'
-import { NewSessionControl } from '../BridgePeerConnection'
 import { ConnectedServerThread } from './ConnectedServerThread'
 import { OnConnectedServer, useConnectedServers } from './ConnectedServers'
 
 /** A connected server's session in the chat's thread pane, in place of this
  *  server's: the same thread view a session here gets (header, controls,
  *  panes, composer), running against that server.
- *  For a null session id it is a new session: pick one of that server's
- *  instances, and the first message starts it there.
+ *  For a null session id it is the new session the New session menu started
+ *  in that server's store; the first message starts it there.
  *
  *  Reads the same store the sidebar's folder for that server reads, so the
  *  row clicked and the thread shown cannot disagree. */
@@ -109,11 +108,12 @@ function ConnectedServerSessionView({
 
   const thread = <ConnectedServerThread connectionId={sessionRef.connectionId} serverName={serverName} openSession={openSession} />
   if (!wantedId) {
-    return (
-      <div className="bc-connected-server-new">
-        <NewSessionControl />
-        {pending ? thread : <p className="bp-empty">Pick one of this server&apos;s instances; the first message starts the session there.</p>}
-      </div>
+    // The New session menu picks the instance and starts the session in this
+    // server's store before opening the pane, so there is no second picker here.
+    return pending ? thread : (
+      <p className="bp-empty">
+        Start a session on {serverName} from New ▾ or the + on its folder in the sidebar; the first message starts it there.
+      </p>
     )
   }
   if (activeId !== wantedId) return <div className="bc-connected-server-blocked">Opening the session…</div>

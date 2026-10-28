@@ -7,7 +7,7 @@ import type { Instance } from '@kayushkin/llm-bridge-types'
 /** The one `/instances` poll for this (fetch, basePath). Every component that
  *  calls the hook reads this store, so the page runs one timer no matter how
  *  many of them there are. */
-function instancesPoll(fetchFn: FetchFn, basePath: string): SharedPoll<Instance[]> {
+export function instancesPoll(fetchFn: FetchFn, basePath: string): SharedPoll<Instance[]> {
   return sharedPoll(fetchFn, `instances ${basePath}`, () =>
     new SharedPoll<Instance[]>(() => loadJSONList<Instance>(fetchFn, `${basePath}/instances`), []))
 }

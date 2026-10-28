@@ -45,6 +45,7 @@ import { FolderQuestionRollupMarker, SessionQuestionMarker } from './QuestionMar
 import { isAwaitingHumanState, isOperatorSessionType, isSessionAwaitingOperator } from '@kayushkin/chat-core'
 import { useSessionsWithOpenOperatorQuestion } from './sessionsWithOpenQuestion'
 import NewSessionMenu from './NewSessionMenu'
+import { NEW_SESSION_MENU_TOGGLE_ATTRIBUTE, sameMenuScope, type NewSessionMenuScope } from '../../newSessionMenu'
 import type { NewSessionTarget } from './useNewSessionTarget'
 import { useSelectSession } from './useSelectSession'
 import SignalsInbox from './SignalsInbox'
@@ -264,6 +265,27 @@ export default function Sidebar({
   const openConnectedServerNewSession = useCallback((connectionId: string) => {
     onOpenConnectedServerSession({ connectionId, sessionId: null })
   }, [onOpenConnectedServerSession])
+  /** The New session menu for `scope`. A pick on this server goes through
+   *  `newTarget.optsFor`, so the picked harness's saved defaults are merged on
+   *  exactly as the bare "+ New" button's are; a pick on a connected server is
+   *  started by the menu in that server's own store, and its thread opened. */
+  const renderNewSessionMenu = (scope: NewSessionMenuScope) => (
+    <NewSessionMenu
+      scope={scope}
+      onPick={({ instanceId, harness }) => {
+        // A deliberate pick is what the bare button reads next time.
+        newTarget.remember(instanceId)
+        newSession(newTarget.optsFor(instanceId, harness))
+        onAfterOpenSession()
+      }}
+      onStartedOnConnectedServer={openConnectedServerNewSession}
+      onClose={closeNewMenu}
+    />
+  )
+  const newSessionMenuUnderFolder = (scope: NewSessionMenuScope) =>
+    newMenu?.at === 'server-folder' && sameMenuScope(newMenu.scope, scope) ? renderNewSessionMenu(scope) : null
+  const toggleFolderNewSessionMenu = (scope: NewSessionMenuScope) =>
+    setNewMenu((menu) => (menu?.at === 'server-folder' && sameMenuScope(menu.scope, scope) ? null : { scope, at: 'server-folder' }))
 
   const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(loadCollapsedFolders)
@@ -351,7 +373,12 @@ export default function Sidebar({
       return next
     })
   }, [])
-  const [newMenuOpen, setNewMenuOpen] = useState(false)
+  // The New session menu: which servers it lists, and where it is drawn —
+  // under the New button (every server) or under one server folder's header
+  // (that server only, from the folder's +).
+  const [newMenu, setNewMenu] = useState<{ scope: NewSessionMenuScope; at: 'new-button' | 'server-folder' } | null>(null)
+  const newMenuOpen = newMenu?.at === 'new-button'
+  const closeNewMenu = useCallback(() => setNewMenu(null), [])
   const listRef = useRef<VListHandle>(null)
 
   // Which row's question dropdown is open, by session id — null for none.
@@ -915,8 +942,9 @@ export default function Sidebar({
               )}
             </button>
             <button
+              {...{ [NEW_SESSION_MENU_TOGGLE_ATTRIBUTE]: '' }}
               className="bc-new-session-caret-btn"
-              onClick={() => setNewMenuOpen((v) => !v)}
+              onClick={() => setNewMenu((menu) => (menu?.at === 'new-button' ? null : { scope: { kind: 'all' }, at: 'new-button' }))}
               aria-haspopup="menu"
               aria-expanded={newMenuOpen}
               title="Pick a harness / instance"
@@ -925,29 +953,7 @@ export default function Sidebar({
               <span className="bc-new-session-caret" aria-hidden>▾</span>
             </button>
           </div>
-          {newMenuOpen && (
-            <NewSessionMenu
-              onPick={({ instanceId, harness }) => {
-                // A deliberate pick is what the bare button reads next time.
-                newTarget.remember(instanceId)
-                // Through `optsFor`, not raw: the picked instance still needs that
-                // harness's saved defaults merged on, exactly as the bare button's
-                // `newTarget.opts` gets them. Passing the menu's bare pick through was
-                // how a chat started from the picker ignored every default the user had
-                // set for that harness.
-                newSession(newTarget.optsFor(instanceId, harness))
-                onAfterOpenSession()
-              }}
-              onClose={() => setNewMenuOpen(false)}
-              otherServers={connectedServerFolders
-                .filter((folder) => folder.blockedReason === null)
-                .map((folder) => ({
-                  key: folder.connectionId,
-                  label: folder.label,
-                  onPick: () => openConnectedServerNewSession(folder.connectionId),
-                }))}
-            />
-          )}
+          {newMenuOpen && newMenu && renderNewSessionMenu(newMenu.scope)}
         </div>
         {/* Same slot bridge-ui gives it (`SessionList.tsx:463`): the last child of
             `bc-new-session`, which is a flex row whose `bc-new-session-wrap` takes the
@@ -992,6 +998,8 @@ export default function Sidebar({
           count={visibleSessionCount}
           collapsed={thisServerCollapsed}
           onToggle={() => toggleServerFolder(THIS_SERVER_FOLDER_KEY)}
+          onNewSession={() => toggleFolderNewSessionMenu({ kind: 'this-server' })}
+          newSessionMenu={newSessionMenuUnderFolder({ kind: 'this-server' })}
         />
       )}
 
@@ -1246,6 +1254,8 @@ export default function Sidebar({
           collapsed={collapsedServerFolders}
           onToggle={toggleServerFolder}
           fillsColumn={thisServerCollapsed}
+          onNewSessionOn={(connectionId) => toggleFolderNewSessionMenu({ kind: 'connected-server', connectionId })}
+          newSessionMenuFor={(connectionId) => newSessionMenuUnderFolder({ kind: 'connected-server', connectionId })}
         />
       )}
 

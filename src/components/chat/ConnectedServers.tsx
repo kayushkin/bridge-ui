@@ -25,7 +25,7 @@ import {
  *  changes without this page doing anything. */
 const CONNECTIONS_POLL_MS = 30_000
 
-interface ConnectedServersValue {
+export interface ConnectedServersValue {
   /** This server's own name, or null while unset or not yet read. */
   thisServerName: string | null
   /** Why this server's name could not be read, or null. */
@@ -41,7 +41,8 @@ interface ConnectedServersValue {
   configOf: (connectionId: string) => BridgeConfig
 }
 
-const ConnectedServersContext = createContext<ConnectedServersValue | null>(null)
+/** Exported for the render check, which supplies a value without mounting stores. */
+export const ConnectedServersContext = createContext<ConnectedServersValue | null>(null)
 
 export function useConnectedServers(): ConnectedServersValue {
   const value = useContext(ConnectedServersContext)

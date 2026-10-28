@@ -2517,6 +2517,23 @@
 .bc-new-session-avail { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .bc-new-session-avail-on { background: #22c55e; }
 .bc-new-session-avail-off { background: #ef4444; }
+.bc-new-session-server { display: flex; flex-direction: column; gap: 2px; }
+.bc-new-session-server + .bc-new-session-server { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px; }
+.bc-new-session-server-label {
+  padding: 4px 8px 2px;
+  color: var(--text);
+  font-size: 0.8em;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bc-new-session-server-blocked .bc-new-session-server-label { color: var(--text-dim); }
+.bc-new-session-server-blocked { opacity: 0.6; }
+.bc-new-session-server-why { padding: 2px 8px 6px; color: var(--text-dim); font-size: 0.8em; }
+.bc-new-session-server .bc-new-session-group + .bc-new-session-group { border-top: none; padding-top: 0; margin-top: 0; }
+.bc-new-session-menu:focus { outline: none; }
+.bc-server-folder-header { position: relative; }
 
 /* Instance filter chips */
 .bc-inst-filter {
@@ -6732,7 +6749,6 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-connected-server-name { flex: 1; font-weight: 600; color: var(--text); }
 .bc-connected-server-peers-link { color: var(--text-dim); font-size: 0.85em; }
 .bc-connected-server-blocked { padding: 24px; color: var(--text-dim); }
-.bc-connected-server-new { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; padding: 8px; }
 .bc-connected-server-pane .pr-thread { flex: 1; min-height: 0; }
 /* A connected server's pty session: its terminal does not cross the proxy, so a line says so where the Terminal tab would be. */
 .bc-terminal-unavailable { padding: 4px 12px; font-size: 0.85em; color: var(--text-dim); border-top: 1px solid var(--border); }

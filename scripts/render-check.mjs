@@ -21,6 +21,8 @@ import {
 } from '../src/index.ts'
 import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
 import { ServerFolderHeader } from '../src/components/chat/ConnectedServerFolders.tsx'
+import NewSessionMenu from '../src/components/chat/NewSessionMenu.tsx'
+import { ConnectedServersContext } from '../src/components/chat/ConnectedServers.tsx'
 import { RefChip } from '../src/components/chat/RefChip.tsx'
 import { RefChipServerContext } from '../src/components/chat/refChipServer.ts'
 import { ConnectedServerThread } from '../src/components/chat/ConnectedServerThread.tsx'
@@ -2094,6 +2096,45 @@ console.log('A connected server’s session gets the full thread view')
     remote.noteboardBasePath === '' && remote.kanbanStoreBasePath === remote.basePath + '/kanban-store' && remote.projectStoreBasePath === '' &&
     remote.routes.effectiveConfig === '' && remote.routes.chat === DEFAULT_BRIDGE_ROUTES.chat,
     JSON.stringify({ basePath: remote.basePath, grant: remote.grantStoreBasePath }))
+}
+
+// The New session menu: a heading per server, this one first, every connected
+// server below it, and one that cannot be read greyed with its reason and
+// nothing to pick. Nothing has loaded in a static render, so each readable
+// server says it is reading its instances.
+{
+  console.log('\nNew session menu, grouped by server')
+  const fetchNothing = async () => new Response('[]', { status: 200 })
+  const local = { fetch: fetchNothing, basePath: '/api/new-session-menu-check', routes: DEFAULT_BRIDGE_ROUTES }
+  const connected = {
+    thisServerName: 'main',
+    thisServerNameError: null,
+    folders: [
+      { connectionId: 'c-laptop', label: 'laptop', labelFromServer: true, blockedReason: null, blockedWord: null },
+      { connectionId: 'c-desk', label: 'desk', labelFromServer: true, blockedReason: 'desk is not connected now: the socket between the two servers is closed.', blockedWord: 'offline' },
+    ],
+    connectionsLoaded: true,
+    connectionsError: null,
+    storeOf: () => undefined,
+    configOf: id => peerConnectionBridgeConfig(local, id),
+  }
+  const menu = scope => renderToStaticMarkup(h(BridgeContext.Provider, { value: local },
+    h(ConnectedServersContext.Provider, { value: connected },
+      h(NewSessionMenu, { scope, onPick: () => {}, onClose: () => {} }))))
+  const all = menu({ kind: 'all' })
+  const order = ['>main<', '>🖥 laptop<', '>🖥 desk<'].map(label => all.indexOf(label))
+  check('it heads each server by name, this server first', order.every(i => i >= 0) && order[0] < order[1] && order[1] < order[2], all.slice(0, 600))
+  check('an offline server stays listed, greyed, with its reason and no item to pick',
+    /bc-new-session-server-blocked[^>]*data-server="c-desk"/.test(all) && all.includes('the socket between the two servers is closed'), all.slice(0, 900))
+  check('a server whose store has not mounted says it is connecting rather than listing anything',
+    all.includes('Connecting to laptop…'), all.slice(0, 900))
+  check('this server, with nothing loaded yet, says it is reading its instances', all.includes('Reading its instances…'), all.slice(0, 600))
+  check('headings are not menu items, so the arrow keys skip them',
+    !/role="menuitem"[^>]*>[^<]*main/.test(all) && !all.includes('bc-new-session-other-servers'), all.slice(0, 600))
+  const onlyDesk = menu({ kind: 'connected-server', connectionId: 'c-desk' })
+  check("a folder's + shows only that server", onlyDesk.includes('desk') && !onlyDesk.includes('>main<') && !onlyDesk.includes('laptop'), onlyDesk)
+  const onlyHere = menu({ kind: 'this-server' })
+  check("this server's folder + shows only this server", onlyHere.includes('>main<') && !onlyHere.includes('laptop'), onlyHere)
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
