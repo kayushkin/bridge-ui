@@ -33,6 +33,7 @@ import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
   isSessionAwaitingOperator,
+  loadSessionRefDetail,
   useNoteboardRefDetail,
   useResolvedRef,
   useSessionRefDetail,
@@ -45,6 +46,14 @@ import { useOpenSignalRequestsOfSession } from './sessionsWithOpenQuestion';
 import { SessionActionInText } from './SessionActions';
 import { FileRefChip, ImageRefChip } from './FileRefChip';
 import { sharedFileGalleryKey, useSessionImages } from './ImageGallery';
+import {
+  RefChipServerContext,
+  refChipRoute,
+  sessionLookupWasNotFound,
+  useOpenConnectedServerSession,
+  useRefChipServer,
+} from './refChipServer';
+import { OnConnectedServer, useOptionalConnectedServers } from './ConnectedServers';
 
 /** Props for the {@link RefChip} renderer. When used as a ReactMarkdown custom
  *  component the mdast hProperties (`kind` / `refId`) arrive as props; rehype may
@@ -96,10 +105,29 @@ export interface RefChipProps {
 export function RefChip(props: RefChipProps): JSX.Element {
   const kind = String(props.kind ?? 'session');
   const refId = String(props.refId ?? props.refid ?? '');
+  const server = useRefChipServer();
 
   // A malformed node with no id resolves to nothing; render the raw text rather
   // than an empty chip so the message loses no content.
   if (!refId) return <>{String(props.children ?? '')}</>;
+
+  // Inside a connected server's thread the id is that server's: never look it
+  // up here (refChipServer.ts says why).
+  const route = refChipRoute(kind, server);
+  if (server && route === 'remote-neutral') {
+    return <RemoteRefChip refId={refId} kind={kind} serverName={server.serverName} />;
+  }
+  if (server && route === 'remote-session') {
+    const openSession = server.openSession;
+    return (
+      <SessionRefChip
+        refId={refId}
+        className={props.className}
+        serverName={server.serverName}
+        onActivate={openSession ? (_kind, sessionId) => openSession(sessionId) : props.onActivate}
+      />
+    );
+  }
 
   if (kind === 'session') {
     return (
@@ -357,13 +385,138 @@ function SessionRefChip({
   refId,
   className,
   onActivate,
+  serverName,
 }: {
   refId: string;
   className?: string;
   onActivate?: (kind: string, refId: string) => void;
+  /** Set when the session lives on a connected server: the chip says so. */
+  serverName?: string;
+}): JSX.Element {
+  const { data, error, loading } = useSessionRefDetail(refId);
+  // A session id this server does not have may be one of a connected server's,
+  // written into this server's thread (an agent here reporting on the laptop,
+  // say). Session ids are minted from the clock, not counted, so looking the
+  // same id up on the connected servers cannot land on a different session.
+  if (!serverName && sessionLookupWasNotFound(error)) {
+    return <SessionOnConnectedServer refId={refId} className={className} />;
+  }
+  return (
+    <SessionRefChipBody
+      refId={refId}
+      className={className}
+      onActivate={onActivate}
+      serverName={serverName}
+      detail={{ data, error, loading }}
+    />
+  );
+}
+
+/** A session id this server answered 404 for: ask each connected server that
+ *  can be read now, in the order the sidebar lists them, and draw the chip
+ *  against the first that has it. With none, the chip stays as this server
+ *  drew it — a session it could not find. */
+function SessionOnConnectedServer({ refId, className }: { refId: string; className?: string }): JSX.Element {
+  const servers = useOptionalConnectedServers();
+  const openConnectedServerSession = useOpenConnectedServerSession();
+  const [found, setFound] = useState<{ connectionId: string; serverName: string } | null>(null);
+  const [searched, setSearched] = useState(false);
+  const candidates = servers
+    ? servers.folders.filter((folder) => folder.blockedReason === null && servers.storeOf(folder.connectionId))
+    : [];
+  const candidateKey = candidates.map((folder) => folder.connectionId).join(' ');
+
+  useEffect(() => {
+    if (!servers) { setSearched(true); return; }
+    let live = true;
+    setFound(null);
+    setSearched(false);
+    void (async () => {
+      for (const folder of candidates) {
+        const store = servers.storeOf(folder.connectionId);
+        if (!store) continue;
+        try {
+          await loadSessionRefDetail(store.api, refId);
+          if (live) setFound({ connectionId: folder.connectionId, serverName: folder.label });
+          return;
+        } catch {
+          // Not on that server, or it could not answer: try the next one.
+        }
+      }
+      if (live) setSearched(true);
+    })();
+    return () => { live = false; };
+    // The candidates are named by `candidateKey`; their store objects are read
+    // through `servers` when the search runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refId, candidateKey]);
+
+  if (found) {
+    const openSession = openConnectedServerSession
+      ? (sessionId: string) => openConnectedServerSession({ connectionId: found.connectionId, sessionId })
+      : undefined;
+    return (
+      <OnConnectedServer connectionId={found.connectionId}>
+        <RefChipServerContext.Provider value={{ connectionId: found.connectionId, serverName: found.serverName, openSession }}>
+          <SessionRefChip
+            refId={refId}
+            className={className}
+            serverName={found.serverName}
+            onActivate={openSession ? (_kind, sessionId) => openSession(sessionId) : undefined}
+          />
+        </RefChipServerContext.Provider>
+      </OnConnectedServer>
+    );
+  }
+  return (
+    <SessionRefChipBody
+      refId={refId}
+      className={className}
+      detail={{
+        data: null,
+        error: searched ? 'this server has no such session, and no connected server has it either' : null,
+        loading: !searched,
+      }}
+    />
+  );
+}
+
+/** An id from a connected server's transcript that this server has no way to
+ *  look up: it says what it is and where it is from, and opens nothing. Drawn
+ *  muted and dashed so it never passes for one of this server's records. */
+function RemoteRefChip({ refId, kind, serverName }: { refId: string; kind: string; serverName: string }): JSX.Element {
+  return (
+    <span
+      className="ref-chip ref-chip-remote"
+      data-ref-kind={kind}
+      data-ref-id={refId}
+      data-ref-server={serverName}
+      title={`${refId} — from ${serverName}; this server cannot look it up`}
+    >
+      <span className="ref-chip-glyph" aria-hidden>
+        🖥
+      </span>
+      <span className="ref-chip-label">{refId}</span>
+      <span className="ref-chip-server">{serverName}</span>
+    </span>
+  );
+}
+
+function SessionRefChipBody({
+  refId,
+  className,
+  onActivate,
+  serverName,
+  detail,
+}: {
+  refId: string;
+  className?: string;
+  onActivate?: (kind: string, refId: string) => void;
+  serverName?: string;
+  detail: { data: ManagedSessionDetail | null; error: string | null; loading: boolean };
 }): JSX.Element {
   const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
-  const { data, error, loading } = useSessionRefDetail(refId);
+  const { data, error, loading } = detail;
   // The one cross-session /signals read every chip and the sidebar share, not a
   // read per chip: see `useOpenSignalRequestsOfSession`.
   const openSignals = useOpenSignalRequestsOfSession(refId);
@@ -373,7 +526,7 @@ function SessionRefChip({
   const summary = data?.summary;
   const emoji = summary ? sessionEmoji(summary.type, summary.purpose, refId) : '💬';
   const label = summary?.displayName ? truncate(summary.displayName) : idTail(refId);
-  const name = summary?.displayName || refId;
+  const name = serverName ? `${summary?.displayName || refId} — on ${serverName}` : summary?.displayName || refId;
 
   // The chip BODY opens the detail panel; navigation lives on the ↗ button beside
   // it. It used to be the other way around — body navigated, a separate ▾ caret
@@ -394,10 +547,11 @@ function SessionRefChip({
       ref={wrapRef}
       data-ref-kind="session"
       data-ref-id={refId}
+      data-ref-server={serverName}
     >
       <button
         type="button"
-        className={`${className ?? 'ref-chip ref-chip-session'} ref-chip-item${open ? ' ref-chip-open' : ''}${hasOpenQuestion ? ' ref-chip-has-question' : ''}`}
+        className={`${className ?? 'ref-chip ref-chip-session'} ref-chip-item${serverName ? ' ref-chip-on-server' : ''}${open ? ' ref-chip-open' : ''}${hasOpenQuestion ? ' ref-chip-has-question' : ''}`}
         onClick={toggle}
         aria-expanded={open}
         title={hasOpenQuestion ? `${name} — waiting on your answer` : name}
@@ -406,6 +560,7 @@ function SessionRefChip({
           {emoji}
         </span>
         <span className="ref-chip-label">{label}</span>
+        {serverName && <span className="ref-chip-server">{serverName}</span>}
         {hasOpenQuestion && (
           <span className="ref-chip-question-marker" aria-label="has an open question">
             ?

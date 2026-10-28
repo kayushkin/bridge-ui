@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { isRunningState, useActiveSession, usePendingSession } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
@@ -52,7 +52,7 @@ export function ConnectedServerPane({
         <div className="bc-connected-server-blocked">{blocked}</div>
       ) : (
         <OnConnectedServer connectionId={sessionRef.connectionId}>
-          <ConnectedServerSessionView sessionRef={sessionRef} onSessionChange={onSessionChange} />
+          <ConnectedServerSessionView sessionRef={sessionRef} serverName={folder ? folder.label : sessionRef.connectionId} onSessionChange={onSessionChange} />
         </OnConnectedServer>
       )}
     </div>
@@ -62,11 +62,19 @@ export function ConnectedServerPane({
 /** Runs against the connected server's store. */
 function ConnectedServerSessionView({
   sessionRef,
+  serverName,
   onSessionChange,
 }: {
   sessionRef: ConnectedServerSessionRef
+  serverName: string
   onSessionChange: (ref: ConnectedServerSessionRef) => void
 }) {
+  // A session chip in the thread opens that server's session through the URL,
+  // as the sidebar does, rather than selecting it in the store under the URL.
+  const openSession = useCallback(
+    (sessionId: string) => onSessionChange({ connectionId: sessionRef.connectionId, sessionId }),
+    [onSessionChange, sessionRef.connectionId],
+  )
   const { id: activeId, select, summary } = useActiveSession()
   const pending = usePendingSession()
   const wantedId = sessionRef.sessionId
@@ -92,7 +100,7 @@ function ConnectedServerSessionView({
       <div className="bc-connected-server-new">
         <NewSessionControl />
         {pending ? (
-          <ConnectedServerThread sessionID={null} streaming={false} />
+          <ConnectedServerThread sessionID={null} streaming={false} connectionId={sessionRef.connectionId} serverName={serverName} openSession={openSession} />
         ) : (
           <p className="bp-empty">Pick one of this server&apos;s instances; the first message starts the session there.</p>
         )}
@@ -100,5 +108,13 @@ function ConnectedServerSessionView({
     )
   }
   if (activeId !== wantedId) return <div className="bc-connected-server-blocked">Opening the session…</div>
-  return <ConnectedServerThread sessionID={wantedId} streaming={!!summary && isRunningState(summary.state)} />
+  return (
+    <ConnectedServerThread
+      sessionID={wantedId}
+      streaming={!!summary && isRunningState(summary.state)}
+      connectionId={sessionRef.connectionId}
+      serverName={serverName}
+      openSession={openSession}
+    />
+  )
 }

@@ -49,6 +49,12 @@ export function useConnectedServers(): ConnectedServersValue {
   return value
 }
 
+/** The connected servers where the chat page provides them, or null: a
+ *  reference chip renders on pages that have no connected servers at all. */
+export function useOptionalConnectedServers(): ConnectedServersValue | null {
+  return useContext(ConnectedServersContext)
+}
+
 /** Runs `children` against one connected server: its chat-core store and its
  *  config, in place of this server's. Renders nothing while the store has not
  *  mounted. */

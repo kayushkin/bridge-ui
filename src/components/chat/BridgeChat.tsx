@@ -25,6 +25,7 @@ import { WorkGraphView } from './WorkGraphView'
 import { ProjectsView } from './ProjectsView'
 import { ConnectedServersProvider } from './ConnectedServers'
 import { ConnectedServerPane } from './ConnectedServerPane'
+import { OpenConnectedServerSessionContext } from './refChipServer'
 import {
   readConnectedServerSessionRef,
   sameConnectedServerSessionRef,
@@ -414,6 +415,7 @@ function BridgeChatPage() {
     // session list and its strip, and gives the composer a safe-area gutter. This ships
     // no CSS.
     <ConnectedServersProvider>
+    <OpenConnectedServerSessionContext.Provider value={openConnectedServerSession}>
     <div className={`bc-container ${minimal ? 'bc-minimal' : ''}`}>
       {minimal && (
         <MinimalTopBar
@@ -494,6 +496,7 @@ function BridgeChatPage() {
         >Use mobile layout</button>
       )}
     </div>
+    </OpenConnectedServerSessionContext.Provider>
     </ConnectedServersProvider>
   )
 }

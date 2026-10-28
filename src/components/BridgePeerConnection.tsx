@@ -21,6 +21,7 @@ import {
 import { connectedServerBlockedReason } from '../serverFolders'
 import { chatFetchOver } from '../chatFetch'
 import TurnList from './chat/TurnList'
+import { RefChipServerContext, type RefChipServer } from './chat/refChipServer'
 
 // One connected server's sessions, read and driven through this server's
 // proxy for the connection (`{basePath}/peer-connections/{id}/proxy`), which
@@ -85,7 +86,10 @@ export function BridgePeerConnection() {
             cache={false}
             keepDraftsAndFiltersInBrowser={false}
           >
-            <ConnectedServerSessions />
+            <ConnectedServerSessions
+              connectionId={view.connection.id}
+              serverName={view.other_server_name || view.connection.display_name}
+            />
           </ChatProvider>
         </BridgeContext.Provider>
       )}
@@ -93,7 +97,7 @@ export function BridgePeerConnection() {
   )
 }
 
-function ConnectedServerSessions() {
+function ConnectedServerSessions({ connectionId, serverName }: { connectionId: string; serverName: string }) {
   const { groups, loading, moreSessions, loadOlderSessions } = useSessionList()
   const { id: activeID, select, summary } = useActiveSession()
   const pending = usePendingSession()
@@ -125,7 +129,13 @@ function ConnectedServerSessions() {
       </aside>
       <section className="pr-link-thread">
         {activeID || pending ? (
-          <ConnectedServerThread sessionID={activeID} streaming={!!summary && isRunningState(summary.state)} />
+          <ConnectedServerThread
+            sessionID={activeID}
+            streaming={!!summary && isRunningState(summary.state)}
+            connectionId={connectionId}
+            serverName={serverName}
+            openSession={select}
+          />
         ) : (
           <p className="bp-empty">Pick a session, or start one on an instance of the connected server.</p>
         )}
@@ -159,7 +169,26 @@ export function NewSessionControl() {
   )
 }
 
-export function ConnectedServerThread({ sessionID, streaming }: { sessionID: string | null; streaming: boolean }) {
+export function ConnectedServerThread({
+  sessionID,
+  streaming,
+  connectionId,
+  serverName,
+  openSession,
+}: {
+  sessionID: string | null
+  streaming: boolean
+  /** The connection the thread reaches its server by, and that server's name:
+   *  every reference chip in the thread belongs to that server. */
+  connectionId: string
+  serverName: string
+  /** Opens another of that server's sessions, for a session chip's ↗. */
+  openSession: (sessionId: string) => void
+}) {
+  const chipServer = useMemo<RefChipServer>(
+    () => ({ connectionId, serverName, openSession }),
+    [connectionId, serverName, openSession],
+  )
   const composer = useComposer(sessionID)
   const composerStatus = useMemo(
     () => ({ paused: composer.paused, resumable: composer.resumable, error: composer.error, failedAction: null }),
@@ -171,6 +200,7 @@ export function ConnectedServerThread({ sessionID, streaming }: { sessionID: str
   }
   return (
     <div className="pr-thread">
+      <RefChipServerContext.Provider value={chipServer}>
       <TurnList
         sessionId={sessionID}
         view="turns"
@@ -180,6 +210,7 @@ export function ConnectedServerThread({ sessionID, streaming }: { sessionID: str
         composerStatus={composerStatus}
         style={{ flex: '1 1 0' }}
       />
+      </RefChipServerContext.Provider>
       <form className="pr-composer" onSubmit={send}>
         <textarea
           className="bp-input"

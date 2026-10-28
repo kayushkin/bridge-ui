@@ -5221,6 +5221,33 @@
   font-family: inherit;
 }
 
+/* An id from a connected server's transcript that this server cannot look
+   up (refChipServer.ts). Muted text on no fill, with a dashed edge, so it
+   never passes for one of this server's records, and no pointer: it opens
+   nothing. Built from the theme's own text and border colours, so it reads
+   in light, dark and the zine skin alike. */
+.ref-chip.ref-chip-remote {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.ref-chip.ref-chip-remote:hover {
+  background: transparent;
+}
+
+/* The connected server a chip's record lives on, after its label: on the
+   neutral chip and on a session chip that loads through that server. */
+.ref-chip-server {
+  padding-left: 4px;
+  border-left: 1px solid currentColor;
+  font-family: inherit;
+  font-size: 0.85em;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
 /* Every chip body opens its panel and carries an inline caret glyph; session
    chips additionally carry a ↗ button beside the body that opens the session
    itself (chat-core renders it only when a navigation handler is wired). */

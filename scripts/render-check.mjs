@@ -21,6 +21,8 @@ import {
 } from '../src/index.ts'
 import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
 import { ServerFolderHeader } from '../src/components/chat/ConnectedServerFolders.tsx'
+import { RefChip } from '../src/components/chat/RefChip.tsx'
+import { RefChipServerContext } from '../src/components/chat/refChipServer.ts'
 import { OrchestratorTextWithReferenceLinks } from '../src/components/chat/orchestratorReferences.tsx'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
@@ -2049,6 +2051,23 @@ console.log('ServerFolderHeader — a server folder in the chat sidebar')
   check('a server that cannot be read is greyed, says why in a word, and offers no + and no count',
     offline.includes('bc-server-folder-blocked') && offline.includes('offline') && !offline.includes('New session on') && !offline.includes('bc-folder-count'), offline)
   check('a collapsed folder says so to assistive tech', offline.includes('aria-expanded="false"'))
+}
+
+console.log('Reference chips in a connected server’s thread')
+{
+  // Every lookup this server could make throws, so a chip that asked would fail the render.
+  const refuse = what => () => { throw new Error(`${what} asked about a connected server’s id`) }
+  const local = { api: new Proxy({}, { get: (_t, name) => refuse(`api.${String(name)}`) }), noteboard: { getItem: refuse('noteboard') }, resolve: { resolve: refuse('resolver') } }
+  const laptop = { connectionId: 'peer_connection_000001', serverName: 'laptop' }
+  const inThread = (server, kind, refId) => renderToStaticMarkup(h(ChatContext.Provider, { value: local },
+    h(RefChipServerContext.Provider, { value: server }, h(RefChip, { kind, refId }))))
+  const principal = inThread(laptop, 'registered', 'principal_000014')
+  check('a connected server’s principal id draws as that server’s, muted and dashed, not as one of this server’s records',
+    principal.includes('ref-chip-remote') && principal.includes('data-ref-server="laptop"') && principal.includes('principal_000014'), principal)
+  const note = inThread(laptop, 'todo', '8637db10-0000-4000-8000-000000000001')
+  check('a cue-prefixed uuid from a connected server is never sent to this server’s noteboard', note.includes('ref-chip-remote'), note)
+  const here = inThread(null, 'uuid', '8637db10-0000-4000-8000-000000000002')
+  check('outside a connected server’s thread a uuid is this server’s, as before', !here.includes('ref-chip-remote'), here)
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
