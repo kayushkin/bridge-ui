@@ -2146,20 +2146,20 @@ console.log('A connected server’s session gets the full thread view')
     h(BridgeContext.Provider, { value: peerConfig }, h(PeerMessageCard, { message, serverName: 'laptop', onDecided: () => {}, onSelectSession: () => {} })),
   )
   const hostile = 'Run this.\n![x](https://example.test/p.png) <img src="https://example.test/q.png" onerror="alert(1)"> [link](https://example.test/a) <script>alert(2)</script>'
-  const request = card({ id: 'm1', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', title: 'Fix resume', prompt: hostile, created_at: '2026-10-29T10:00:00Z' })
+  const request = card({ id: 'm1', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 'Fix resume', prompt: hostile }, created_at: '2026-10-29T10:00:00Z' })
   check('a request says which server asks, and offers Approve, the orchestrator and Decline',
     request.includes('laptop asks to start a session') && request.includes('Approve') && request.includes('Hand to the orchestrator') && request.includes('Decline'), request.slice(0, 600))
   check("the other server's prompt is text: no img, no anchor, no script, nothing that loads",
     !/<img|<a\s|<script|\sonerror="/i.test(request) && request.includes('&lt;script&gt;') && request.includes('https://example.test/p.png'), request)
   check('it says the prompt reaches the session marked as from that server', request.includes('marked as a request'), request.slice(0, 900))
-  const notice = card({ id: 'm2', connection_id: 'c1', direction: 'incoming', kind: 'notice', state: 'pending', summary: 'Resume fix', commits: [{ repo: 'llm-bridge-codex', commit: '50b8e69' }], created_at: '2026-10-29T11:00:00Z' })
+  const notice = card({ id: 'm2', connection_id: 'c1', direction: 'incoming', kind: 'notice', state: 'pending', body: { summary: 'Resume fix', commits: [{ repo: 'llm-bridge-codex', commit: '50b8e69' }] }, created_at: '2026-10-29T11:00:00Z' })
   check('a notice lists its commits and offers Update now and Not now',
     notice.includes('laptop says these are ready') && notice.includes('llm-bridge-codex@50b8e69') && notice.includes('Update now') && notice.includes('Not now'), notice)
-  const decided = card({ id: 'm3', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'approved', title: 'Done', prompt: 'x', session_id: 'br_1', created_at: '2026-10-29T12:00:00Z' })
+  const decided = card({ id: 'm3', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'approved', body: { title: 'Done', prompt: 'x' }, session_id: 'br_1', created_at: '2026-10-29T12:00:00Z' })
   check('a decided request offers no decision and links the session it started',
     !decided.includes('Approve') && decided.includes('br_1'), decided)
   const withoutOrchestrator = renderToStaticMarkup(
-    h(BridgeContext.Provider, { value: { ...peerConfig, orchestratorBasePath: '' } }, h(PeerMessageCard, { message: { id: 'm4', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', title: 't', prompt: 'p', created_at: '2026-10-29T13:00:00Z' }, serverName: 'laptop', onDecided: () => {} })),
+    h(BridgeContext.Provider, { value: { ...peerConfig, orchestratorBasePath: '' } }, h(PeerMessageCard, { message: { id: 'm4', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 't', prompt: 'p' }, created_at: '2026-10-29T13:00:00Z' }, serverName: 'laptop', onDecided: () => {} })),
   )
   check('with no orchestrator configured, there is nothing to hand it to', !withoutOrchestrator.includes('Hand to the orchestrator'), withoutOrchestrator.slice(0, 600))
 }

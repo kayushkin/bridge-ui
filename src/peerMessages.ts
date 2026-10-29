@@ -17,73 +17,33 @@
 // that server, never as the operator's own words.
 //
 // The routes are llm-bridge-server's (`POST /peer-connections/{id}/messages`,
-// `GET /peer-messages`, `POST /peer-messages/{id}/approve` and `/decline`).
-// These types follow that contract until llm-bridge generates them as
-// `msg.PeerMessage*`; then they come from `@kayushkin/llm-bridge-types` and
-// this block goes.
+// `GET /peer-messages`, `POST /peer-messages/{id}/approve` and `/decline`),
+// and the types are its own, generated into `@kayushkin/llm-bridge-types`
+// (`msg.PeerMessage*`). A message's text is in its `body`, whose fields
+// depend on the kind: `title` and `prompt` for a request, `summary` and
+// `commits` for a notice, `result`, `detail` and `versions` for a status.
 
-export type PeerMessageKind = 'request' | 'notice' | 'status'
-export type PeerMessageDirection = 'incoming' | 'outgoing'
+import {
+  PeerMessageDirectionIncoming,
+  PeerMessageKindNotice,
+  PeerMessageKindRequest,
+  PeerMessageKindStatus,
+  PeerMessageStatePending,
+  SignalSourcePeerMessage,
+  type PeerMessage,
+  type PeerMessageApproveRequest,
+  type PeerMessageCreateRequest,
+  type PeerMessageDirection,
+  type PeerRepoCommit,
+} from '@kayushkin/llm-bridge-types'
 
-/** A repo and a commit a notice names. */
-export interface PeerMessageCommit {
-  repo: string
-  commit: string
-}
-
-export interface PeerMessage {
-  id: string
-  connection_id: string
-  direction: PeerMessageDirection
-  kind: PeerMessageKind
-  /** `pending` until a person here decides an incoming one; an outgoing one
-   *  is `queued` until the other server confirms it arrived. The server owns
-   *  the list; anything else it sends is drawn as it is. */
-  state: string
-  title?: string
-  prompt?: string
-  summary?: string
-  commits?: PeerMessageCommit[]
-  /** The message this one answers. */
-  in_reply_to?: string
-  /** The session an approved request started, on the server that approved it. */
-  session_id?: string
-  /** Why it was declined or failed. */
-  reason?: string
-  /** Who sent it, as the sending server names them. */
-  sent_by?: string
-  decided_by?: string
-  created_at: string
-  delivered_at?: string
-  decided_at?: string
-}
-
-export interface PeerMessageRequestBody {
-  kind: 'request'
-  title: string
-  prompt: string
-  in_reply_to?: string
-}
-
-export interface PeerMessageNoticeBody {
-  kind: 'notice'
-  summary: string
-  commits: PeerMessageCommit[]
-  in_reply_to?: string
-}
-
-export type PeerMessageSendBody = PeerMessageRequestBody | PeerMessageNoticeBody
-
-/** Approve a request into a session on one of this server's instances, or
- *  hand it to the orchestrator; a notice is approved with an empty body. */
-export type PeerMessageApproveBody = { instance_id: string } | { handoff: 'orchestrator' } | Record<string, never>
+export type { PeerMessage, PeerMessageApproveRequest, PeerMessageCreateRequest, PeerRepoCommit }
 
 export const PEER_MESSAGES_PATH = '/peer-messages'
 
-/** The signal source the server raises for an incoming message waiting on a
- *  person. Such a signal is drawn by the message's own card, not as a
- *  question. */
-export const PEER_MESSAGE_SIGNAL_SOURCE = 'peer_message'
+/** The signal source the server raises for an incoming message. Such a
+ *  signal is drawn by the message's own card, not as a question. */
+export const PEER_MESSAGE_SIGNAL_SOURCE = SignalSourcePeerMessage
 
 export function peerConnectionMessagesPath(connectionID: string): string {
   return `/peer-connections/${encodeURIComponent(connectionID)}/messages`
@@ -108,7 +68,7 @@ export function peerMessageDeclinePath(messageID: string): string {
 
 /** Whether an incoming message is waiting on a person here. */
 export function peerMessageNeedsDecision(message: PeerMessage): boolean {
-  return message.direction === 'incoming' && message.state === 'pending' && message.kind !== 'status'
+  return message.direction === PeerMessageDirectionIncoming && message.state === PeerMessageStatePending && message.kind !== PeerMessageKindStatus
 }
 
 /** Whether a signal is one the server raised for a waiting peer message, which
@@ -133,8 +93,8 @@ export function withoutPeerMessageSignals<
 
 /** A `repo@commit` per line, as typed; blank lines are skipped. A line that is
  *  not `repo@commit` is returned as an error naming it, never guessed at. */
-export function parsePeerMessageCommits(text: string): { commits: PeerMessageCommit[]; error: string | null } {
-  const commits: PeerMessageCommit[] = []
+export function parsePeerMessageCommits(text: string): { commits: PeerRepoCommit[]; error: string | null } {
+  const commits: PeerRepoCommit[] = []
   for (const raw of text.split('\n')) {
     const line = raw.trim()
     if (!line) continue
@@ -149,16 +109,16 @@ export function parsePeerMessageCommits(text: string): { commits: PeerMessageCom
   return { commits, error: null }
 }
 
-export function peerMessageRequestBody(title: string, prompt: string, inReplyTo?: string): PeerMessageRequestBody {
-  const body: PeerMessageRequestBody = { kind: 'request', title: title.trim(), prompt: prompt.trim() }
-  if (inReplyTo) body.in_reply_to = inReplyTo
-  return body
+export function peerMessageRequestBody(title: string, prompt: string, inReplyTo?: string): PeerMessageCreateRequest {
+  const request: PeerMessageCreateRequest = { kind: PeerMessageKindRequest, body: { title: title.trim(), prompt: prompt.trim() } }
+  if (inReplyTo) request.in_reply_to = inReplyTo
+  return request
 }
 
-export function peerMessageNoticeBody(summary: string, commits: PeerMessageCommit[], inReplyTo?: string): PeerMessageNoticeBody {
-  const body: PeerMessageNoticeBody = { kind: 'notice', summary: summary.trim(), commits }
-  if (inReplyTo) body.in_reply_to = inReplyTo
-  return body
+export function peerMessageNoticeBody(summary: string, commits: PeerRepoCommit[], inReplyTo?: string): PeerMessageCreateRequest {
+  const request: PeerMessageCreateRequest = { kind: PeerMessageKindNotice, body: { summary: summary.trim(), commits } }
+  if (inReplyTo) request.in_reply_to = inReplyTo
+  return request
 }
 
 /** One piece of a message's text: words as they are, or a web address shown
@@ -218,18 +178,20 @@ export function peerMessageThreads(messages: readonly PeerMessage[]): PeerMessag
 
 /** What a message is, in a few words, for a thread row. */
 export function peerMessageHeadline(message: PeerMessage, serverName: string): string {
-  const from = message.direction === 'incoming' ? serverName : 'This server'
+  const from = message.direction === PeerMessageDirectionIncoming ? serverName : 'This server'
   switch (message.kind) {
-    case 'request':
-      return `${from} asks to start a session: ${message.title || '(untitled)'}`
-    case 'notice':
-      return `${from} says this is ready: ${message.summary || peerMessageCommitList(message.commits)}`
-    case 'status':
-      return `${from}: ${message.summary || message.title || message.state}`
+    case PeerMessageKindRequest:
+      return `${from} asks to start a session: ${message.body.title || '(untitled)'}`
+    case PeerMessageKindNotice:
+      return `${from} says this is ready: ${message.body.summary || peerMessageCommitList(message.body.commits)}`
+    case PeerMessageKindStatus:
+      return `${from}: ${message.body.result || message.state}`
+    default:
+      return `${from}: ${message.kind}`
   }
 }
 
-export function peerMessageCommitList(commits: readonly PeerMessageCommit[] | undefined): string {
+export function peerMessageCommitList(commits: readonly PeerRepoCommit[] | undefined): string {
   return (commits ?? []).map(c => `${c.repo}@${c.commit.slice(0, 9)}`).join(', ')
 }
 
@@ -238,6 +200,7 @@ const PEER_MESSAGE_REFUSALS: Readonly<Record<string, string>> = {
     'The other server has not given this one leave to send it messages. Its administrator gives that on its own Peers page.',
   peer_message_not_pending: 'Someone has already decided this message.',
   peer_not_connected: 'The other server is not connected right now. The message waits here and goes when it reconnects.',
+  self_update_not_configured: 'This server has no update command set (self_update.command on its settings), so it cannot take an update.',
   peer_message_not_found: 'This server has no such message.',
   unknown_instance: 'That instance is not one of this server’s.',
   orchestrator_not_configured: 'This server has no orchestrator to hand the request to.',

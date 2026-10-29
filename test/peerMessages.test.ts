@@ -23,7 +23,9 @@ const message = (over: Partial<PeerMessage>): PeerMessage => ({
   direction: 'incoming',
   kind: 'request',
   state: 'pending',
+  body: {},
   created_at: '2026-10-29T10:00:00Z',
+  updated_at: '2026-10-29T10:00:00Z',
   ...over,
 })
 
@@ -84,11 +86,10 @@ describe('commit rows for a notice', () => {
 
 describe('request bodies', () => {
   it('trims what was typed and carries the message answered only when there is one', () => {
-    expect(peerMessageRequestBody('  Fix it ', ' do the thing\n')).toEqual({ kind: 'request', title: 'Fix it', prompt: 'do the thing' })
+    expect(peerMessageRequestBody('  Fix it ', ' do the thing\n')).toEqual({ kind: 'request', body: { title: 'Fix it', prompt: 'do the thing' } })
     expect(peerMessageNoticeBody('Ready', [{ repo: 'r', commit: 'abcdef1' }], 'peer_message_000002')).toEqual({
       kind: 'notice',
-      summary: 'Ready',
-      commits: [{ repo: 'r', commit: 'abcdef1' }],
+      body: { summary: 'Ready', commits: [{ repo: 'r', commit: 'abcdef1' }] },
       in_reply_to: 'peer_message_000002',
     })
   })
@@ -122,9 +123,9 @@ describe('threads', () => {
 
 describe('headlines and refusals', () => {
   it('says who wrote it and what it is', () => {
-    expect(peerMessageHeadline(message({ title: 'Fix resume' }), 'its-skayushkin')).toBe('its-skayushkin asks to start a session: Fix resume')
+    expect(peerMessageHeadline(message({ body: { title: 'Fix resume' } }), 'its-skayushkin')).toBe('its-skayushkin asks to start a session: Fix resume')
     expect(
-      peerMessageHeadline(message({ direction: 'outgoing', kind: 'notice', commits: [{ repo: 'r', commit: '0123456789abcdef' }] }), 'x'),
+      peerMessageHeadline(message({ direction: 'outgoing', kind: 'notice', body: { commits: [{ repo: 'r', commit: '0123456789abcdef' }] } }), 'x'),
     ).toBe('This server says this is ready: r@012345678')
   })
 

@@ -19,8 +19,8 @@ import {
   parsePeerMessageCommits,
   untrustedTextPieces,
   type PeerMessage,
-  type PeerMessageApproveBody,
-  type PeerMessageSendBody,
+  type PeerMessageApproveRequest,
+  type PeerMessageCreateRequest,
 } from '../peerMessages'
 
 // The cards for messages from connected bridge servers: a request to start a
@@ -196,20 +196,20 @@ export function PeerMessageCard({ message, serverName, onDecided, onSelectSessio
       </header>
       {message.kind === 'request' && (
         <>
-          <div className="pm-title">{message.title || '(untitled)'}</div>
+          <div className="pm-title">{message.body.title || '(untitled)'}</div>
           <p className="pm-hint">
             What the new session would be told, written by {serverName}. It reaches the session marked as a request
             from that server, not as your words.
           </p>
-          <UntrustedText text={message.prompt ?? ''} className="pm-prompt" />
+          <UntrustedText text={message.body.prompt ?? ''} className="pm-prompt" />
         </>
       )}
       {message.kind === 'notice' && (
         <>
-          {message.summary && <UntrustedText text={message.summary} className="pm-summary" />}
-          {(message.commits ?? []).length > 0 && (
+          {message.body.summary && <UntrustedText text={message.body.summary} className="pm-summary" />}
+          {(message.body.commits ?? []).length > 0 && (
             <ul className="pm-commits">
-              {(message.commits ?? []).map(commit => (
+              {(message.body.commits ?? []).map(commit => (
                 <li key={`${commit.repo}@${commit.commit}`}>
                   <code>{commit.repo}@{commit.commit}</code>
                 </li>
@@ -218,8 +218,14 @@ export function PeerMessageCard({ message, serverName, onDecided, onSelectSessio
           )}
         </>
       )}
-      {message.kind === 'status' && message.summary && <UntrustedText text={message.summary} className="pm-summary" />}
-      {message.reason && <p className="pm-reason">Reason: <UntrustedText text={message.reason} /></p>}
+      {message.kind === 'status' && message.body.detail && <UntrustedText text={message.body.detail} className="pm-summary" />}
+      {message.kind === 'status' && (message.body.versions ?? []).length > 0 && (
+        <p className="pm-versions">Now at {peerMessageCommitList(message.body.versions)}</p>
+      )}
+      {message.decision_reason && <p className="pm-reason">Reason: <UntrustedText text={message.decision_reason} /></p>}
+      {message.state === 'failed' && message.last_error && (
+        <p className="pm-reason">Not delivered: <UntrustedText text={message.last_error} /></p>
+      )}
       {message.session_id && (
         <p className="pm-session">
           Started{' '}
@@ -269,7 +275,7 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
     }
   }
 
-  const approve = async (body: PeerMessageApproveBody) => {
+  const approve = async (body: PeerMessageApproveRequest) => {
     const decided = await post(peerMessageApprovePath(message.id), body, 'approve the message')
     if (!decided) return
     onDecided()
@@ -390,7 +396,7 @@ function SendPeerMessageForm({ connectionID, serverName, onSent }: {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    let body: PeerMessageSendBody
+    let body: PeerMessageCreateRequest
     if (kind === 'request') {
       body = peerMessageRequestBody(title, prompt)
     } else {
