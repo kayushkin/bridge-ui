@@ -2162,6 +2162,28 @@ console.log('A connected server’s session gets the full thread view')
     h(BridgeContext.Provider, { value: { ...peerConfig, orchestratorBasePath: '' } }, h(PeerMessageCard, { message: { id: 'm4', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 't', prompt: 'p' }, created_at: '2026-10-29T13:00:00Z' }, serverName: 'laptop', onDecided: () => {} })),
   )
   check('with no orchestrator configured, there is nothing to hand it to', !withoutOrchestrator.includes('Hand to the orchestrator'), withoutOrchestrator.slice(0, 600))
+  const patch = card({
+    id: 'm5', connection_id: 'c1', direction: 'incoming', kind: 'patch', state: 'pending',
+    body: { repo: 'llm-bridge-server', base_commit: '3cd2cec24aa1b2c3', summary: hostile },
+    patch: { subjects: ['<img src=x onerror=alert(3)> Add history sync'], files: [{ path: 'internal/server/discovery_loop.go', insertions: 120, deletions: 4 }] },
+    attachments: [
+      { id: 'pa1', name: 'llm-bridge-server.patch', media_type: 'text/x-patch', size: 105570, sha256: 'ab'.repeat(32), state: 'fetched', created_at: '2026-10-29T14:00:00Z' },
+      { id: 'pa2', name: 'notes.txt', media_type: 'text/plain', size: 10, sha256: 'cd'.repeat(32), state: 'failed', last_error: 'sha256 did not match', created_at: '2026-10-29T14:00:00Z' },
+    ],
+    created_at: '2026-10-29T14:00:00Z',
+  })
+  check('a patch names its repo and base, lists what it changes, and offers Approve and land it and Decline',
+    patch.includes('laptop sends a patch for llm-bridge-server') && patch.includes('3cd2cec24aa1') && patch.includes('internal/server/discovery_loop.go') &&
+      patch.includes('+120') && patch.includes('Approve and land it') && patch.includes('Decline'), patch.slice(0, 1200))
+  check("a patch's summary and commit subjects are text: no img, no anchor, no script",
+    !/<img|<a\s|<script|<[^>]*\sonerror=/i.test(patch) && patch.includes('&lt;img src=x'), patch)
+  check('its files show name, size and checksum, a fetched one downloads and a failed one can be fetched again',
+    patch.includes('llm-bridge-server.patch') && patch.includes('103 KB') && patch.includes('abababababab') &&
+      patch.includes('Download') && patch.includes('Fetch again') && patch.includes('sha256 did not match'), patch.slice(0, 2000))
+  const arriving = card({ id: 'm6', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 't', prompt: 'p' },
+    attachments: [{ id: 'pa3', name: 'log.txt', media_type: 'text/plain', size: 10, sha256: 'ef'.repeat(32), state: 'pending', created_at: '2026-10-29T14:00:00Z' }],
+    created_at: '2026-10-29T14:10:00Z' })
+  check('a file still on its way offers no download', arriving.includes('log.txt') && !arriving.includes('>Download<'), arriving.slice(0, 1500))
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(

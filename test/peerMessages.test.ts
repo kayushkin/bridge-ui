@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatAttachmentSize,
   isPeerMessageSignal,
+  peerAttachmentCanRetry,
+  peerAttachmentDownloadable,
+  peerMessageAttachmentPath,
+  peerMessageAttachmentRetryPath,
+  peerMessageAttachmentUploadPath,
+  peerMessagePatchBody,
   parsePeerMessageCommits,
   peerConnectionMessagesPath,
   peerMessageApprovePath,
@@ -15,6 +22,7 @@ import {
   untrustedTextPieces,
   withoutPeerMessageSignals,
   type PeerMessage,
+  type PeerMessageAttachment,
 } from '../src/peerMessages'
 
 const message = (over: Partial<PeerMessage>): PeerMessage => ({
@@ -132,5 +140,65 @@ describe('headlines and refusals', () => {
   it('has plain words only for refusals a person can act on', () => {
     expect(peerMessageRefusalText('peer_messages_not_granted')).toContain('leave')
     expect(peerMessageRefusalText('something_else')).toBeNull()
+  })
+})
+
+const attachment = (over: Partial<PeerMessageAttachment>): PeerMessageAttachment => ({
+  id: 'peer_attachment_000001',
+  name: 'work.patch',
+  media_type: 'text/x-patch',
+  size: 2048,
+  sha256: 'ab'.repeat(32),
+  state: 'fetched',
+  created_at: '2026-10-29T10:00:00Z',
+  ...over,
+})
+
+describe('attachments', () => {
+  it('builds the upload, download and retry paths, escaping names and ids', () => {
+    expect(peerMessageAttachmentUploadPath('my work & notes.patch')).toBe('/peer-message-attachments?name=my+work+%26+notes.patch')
+    expect(peerMessageAttachmentUploadPath('fix.patch', 'text/x-patch')).toBe('/peer-message-attachments?name=fix.patch&media_type=text%2Fx-patch')
+    expect(peerMessageAttachmentUploadPath('fix.patch', '')).toBe('/peer-message-attachments?name=fix.patch')
+    expect(peerMessageAttachmentPath('peer_message_000001', 'a/b')).toBe('/peer-messages/peer_message_000001/attachments/a%2Fb')
+    expect(peerMessageAttachmentRetryPath('m', 'a')).toBe('/peer-messages/m/attachments/a/retry')
+  })
+
+  it('offers a download only once the bytes are here and checked, and a retry only for an incoming file that is not', () => {
+    expect(peerAttachmentDownloadable(attachment({ state: 'fetched' }))).toBe(true)
+    expect(peerAttachmentDownloadable(attachment({ state: 'stored' }))).toBe(true)
+    expect(peerAttachmentDownloadable(attachment({ state: 'pending' }))).toBe(false)
+    expect(peerAttachmentCanRetry(message({}), attachment({ state: 'failed' }))).toBe(true)
+    expect(peerAttachmentCanRetry(message({}), attachment({ state: 'fetched' }))).toBe(false)
+    expect(peerAttachmentCanRetry(message({ direction: 'outgoing' }), attachment({ state: 'failed' }))).toBe(false)
+  })
+
+  it('reads sizes the way a person does', () => {
+    expect(formatAttachmentSize(512)).toBe('512 B')
+    expect(formatAttachmentSize(2048)).toBe('2.0 KB')
+    expect(formatAttachmentSize(105570)).toBe('103 KB')
+    expect(formatAttachmentSize(52428800)).toBe('50 MB')
+  })
+})
+
+describe('patches', () => {
+  it('carries the repo, the base commit, the uploads and a summary only when one was typed', () => {
+    expect(peerMessagePatchBody(' llm-bridge-server ', ' 3cd2cec ', '  ', ['peer_attachment_000002'])).toEqual({
+      kind: 'patch',
+      body: { repo: 'llm-bridge-server', base_commit: '3cd2cec' },
+      attachment_ids: ['peer_attachment_000002'],
+    })
+    expect(peerMessagePatchBody('r', 'c', 'Add history import', ['a'], 'peer_message_000003').body.summary).toBe('Add history import')
+  })
+
+  it('names a patch by the repo it changes', () => {
+    expect(peerMessageHeadline(message({ kind: 'patch', body: { repo: 'llm-bridge-codex', base_commit: 'x' } }), 'its-skayushkin')).toBe(
+      'its-skayushkin sends a patch for llm-bridge-codex',
+    )
+  })
+
+  it('carries attachments on a request or notice only when there are some', () => {
+    expect(peerMessageRequestBody('t', 'p').attachment_ids).toBeUndefined()
+    expect(peerMessageRequestBody('t', 'p', undefined, ['a']).attachment_ids).toEqual(['a'])
+    expect(peerMessageNoticeBody('s', [], 'm', []).attachment_ids).toBeUndefined()
   })
 })

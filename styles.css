@@ -6856,6 +6856,52 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
   padding-left: 18px;
 }
 
+/* A patch: its target, and what its verified files change. */
+.pm-patch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pm-patch-target {
+  margin: 0;
+}
+
+.pm-patch-subjects,
+.pm-patch-files {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.9em;
+}
+
+.pm-patch-plus {
+  color: var(--success);
+}
+
+.pm-patch-minus {
+  color: var(--error);
+}
+
+/* The files a message carries. */
+.pm-attachments ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.9em;
+}
+
+.pm-attachment-meta {
+  color: var(--text-muted);
+}
+
+.pm-attachment[data-state='failed'] .pm-attachment-name,
+.pm-attachment-error {
+  color: var(--error);
+}
+
+.pm-send-files {
+  font-size: 0.9em;
+}
+
 .pm-decision,
 .pm-approve,
 .pm-decline {

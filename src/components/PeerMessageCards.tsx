@@ -5,13 +5,20 @@ import { useBridgeInstances } from '../useBridgeInstances'
 import { PEER_CONNECTIONS_PATH, peerRouteErrorText } from '../peers'
 import { connectedServerLabel } from '../serverFolders'
 import {
+  formatAttachmentSize,
+  peerAttachmentCanRetry,
+  peerAttachmentDownloadable,
   peerConnectionMessagesPath,
+  peerMessageAttachmentPath,
+  peerMessageAttachmentRetryPath,
+  peerMessageAttachmentUploadPath,
   peerMessageApprovePath,
   peerMessageCommitList,
   peerMessageDeclinePath,
   peerMessageHeadline,
   peerMessageNeedsDecision,
   peerMessageNoticeBody,
+  peerMessagePatchBody,
   peerMessageRefusalText,
   peerMessageRequestBody,
   peerMessageThreads,
@@ -19,12 +26,14 @@ import {
   parsePeerMessageCommits,
   untrustedTextPieces,
   type PeerMessage,
+  type PeerMessageAttachment,
   type PeerMessageApproveRequest,
   type PeerMessageCreateRequest,
 } from '../peerMessages'
 
 // The cards for messages from connected bridge servers: a request to start a
-// session, a notice that something is ready, and what came of either. Rules
+// session, a notice that something is ready, a patch to land, what came of
+// any of them, and the files a message carries. Rules
 // live in `src/peerMessages.ts`; this file fetches and draws.
 
 const jsonPost = (body: unknown): RequestInit => ({
@@ -186,9 +195,9 @@ export function PeerMessageCard({ message, serverName, onDecided, onSelectSessio
       <header className="pm-card-head">
         <span className="pm-kind">{message.kind}</span>
         <span className="pm-headline">
-          {message.kind === 'request'
+          {message.kind === 'request' && message.direction === 'incoming'
             ? `${serverName} asks to start a session`
-            : message.kind === 'notice'
+            : message.kind === 'notice' && message.direction === 'incoming'
               ? `${serverName} says these are ready`
               : peerMessageHeadline(message, serverName)}
         </span>
@@ -218,10 +227,12 @@ export function PeerMessageCard({ message, serverName, onDecided, onSelectSessio
           )}
         </>
       )}
+      {message.kind === 'patch' && <PeerPatchDetails message={message} serverName={serverName} />}
       {message.kind === 'status' && message.body.detail && <UntrustedText text={message.body.detail} className="pm-summary" />}
       {message.kind === 'status' && (message.body.versions ?? []).length > 0 && (
         <p className="pm-versions">Now at {peerMessageCommitList(message.body.versions)}</p>
       )}
+      {(message.attachments ?? []).length > 0 && <PeerMessageAttachments message={message} onChanged={onDecided} />}
       {message.decision_reason && <p className="pm-reason">Reason: <UntrustedText text={message.decision_reason} /></p>}
       {message.state === 'failed' && message.last_error && (
         <p className="pm-reason">Not delivered: <UntrustedText text={message.last_error} /></p>
@@ -240,6 +251,125 @@ export function PeerMessageCard({ message, serverName, onDecided, onSelectSessio
       )}
       {decidable && <PeerMessageDecision message={message} onDecided={onDecided} onSelectSession={onSelectSession} />}
     </article>
+  )
+}
+
+/** A patch's repo, base and what its verified files change, as this server
+ *  read them. The sender's summary is drawn as text from another machine. */
+function PeerPatchDetails({ message, serverName }: { message: PeerMessage; serverName: string }): JSX.Element {
+  const read = message.patch
+  return (
+    <div className="pm-patch">
+      <p className="pm-patch-target">
+        <code>{message.body.repo}</code> against <code>{(message.body.base_commit ?? '').slice(0, 12)}</code>
+      </p>
+      {message.body.summary && <UntrustedText text={message.body.summary} className="pm-summary" />}
+      {read ? (
+        <>
+          {read.subjects.length > 0 && (
+            <ul className="pm-patch-subjects">
+              {read.subjects.map((subject, index) => (
+                <li key={index}><UntrustedText text={subject} /></li>
+              ))}
+            </ul>
+          )}
+          {read.files.length > 0 && (
+            <ul className="pm-patch-files">
+              {read.files.map(file => (
+                <li key={file.path}>
+                  <code>{file.path}</code> <span className="pm-patch-plus">+{file.insertions}</span>{' '}
+                  <span className="pm-patch-minus">−{file.deletions}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : (
+        message.direction === 'incoming' && (
+          <p className="pm-hint">What it changes shows here once its files have arrived from {serverName} and been checked.</p>
+        )
+      )}
+      {message.direction === 'incoming' && (
+        <p className="pm-hint">
+          Approving starts a session here that reads the files, applies them in a worktree under this server&apos;s own git
+          identity, runs the tests, and lands them as this server&apos;s prompt says.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** The files a message carries: name, size, checksum and where each stands.
+ *  A file is only ever downloaded, never opened as a page here. */
+function PeerMessageAttachments({ message, onChanged }: { message: PeerMessage; onChanged: () => void }): JSX.Element {
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const download = async (attachment: PeerMessageAttachment) => {
+    setBusy(attachment.id)
+    setError(null)
+    try {
+      const res = await fetchFn(`${basePath}${peerMessageAttachmentPath(message.id, attachment.id)}`)
+      if (!res.ok) {
+        setError(await peerMessageErrorText(res, `download ${attachment.name}`))
+        return
+      }
+      const url = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: 'application/octet-stream' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = attachment.name
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const retry = async (attachment: PeerMessageAttachment) => {
+    setBusy(attachment.id)
+    setError(null)
+    try {
+      const res = await fetchFn(`${basePath}${peerMessageAttachmentRetryPath(message.id, attachment.id)}`, jsonPost({}))
+      if (!res.ok) {
+        setError(await peerMessageErrorText(res, `fetch ${attachment.name} again`))
+        return
+      }
+      onChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="pm-attachments">
+      <ul>
+        {(message.attachments ?? []).map(attachment => (
+          <li key={attachment.id} className="pm-attachment" data-state={attachment.state}>
+            <span className="pm-attachment-name">{attachment.name}</span>{' '}
+            <span className="pm-attachment-meta">
+              {formatAttachmentSize(attachment.size)} · sha256 <code title={attachment.sha256}>{attachment.sha256.slice(0, 12)}</code> · {attachment.state}
+            </span>
+            {attachment.last_error && <span className="pm-attachment-error"> — <UntrustedText text={attachment.last_error} /></span>}{' '}
+            {peerAttachmentDownloadable(attachment) && (
+              <button type="button" className="bc-ctrl-btn" disabled={busy !== null} onClick={() => void download(attachment)}>
+                Download
+              </button>
+            )}
+            {peerAttachmentCanRetry(message, attachment) && (
+              <button type="button" className="bc-ctrl-btn" disabled={busy !== null} onClick={() => void retry(attachment)}>
+                Fetch again
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error !== null && <p className="bridge-error pm-error">{error}</p>}
+    </div>
   )
 }
 
@@ -289,7 +419,7 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
 
   return (
     <div className="pm-decision">
-      {message.kind === 'request' ? (
+      {message.kind === 'request' || message.kind === 'patch' ? (
         <div className="pm-approve">
           <label>
             Start it on{' '}
@@ -308,7 +438,7 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
             disabled={busy || !instanceID}
             onClick={() => void approve({ instance_id: instanceID })}
           >
-            Approve
+            {message.kind === 'patch' ? 'Approve and land it' : 'Approve'}
           </button>
           {orchestratorBasePath && (
             <button type="button" className="bc-ctrl-btn" disabled={busy} onClick={() => void approve({ handoff: 'orchestrator' })}>
@@ -378,7 +508,7 @@ export function PeerConnectionMessages({ connectionID, serverName }: { connectio
   )
 }
 
-type SendKind = 'request' | 'notice'
+type SendKind = 'request' | 'notice' | 'patch'
 
 function SendPeerMessageForm({ connectionID, serverName, onSent }: {
   connectionID: string
@@ -391,25 +521,58 @@ function SendPeerMessageForm({ connectionID, serverName, onSent }: {
   const [prompt, setPrompt] = useState('')
   const [summary, setSummary] = useState('')
   const [commitText, setCommitText] = useState('')
+  const [repo, setRepo] = useState('')
+  const [baseCommit, setBaseCommit] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const [fileInputKey, setFileInputKey] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Each file is uploaded to this server first; the message then names the
+  // uploads, and the other server fetches their bytes over the connection.
+  const uploadFiles = async (): Promise<string[] | null> => {
+    const ids: string[] = []
+    for (const file of files) {
+      const res = await fetchFn(`${basePath}${peerMessageAttachmentUploadPath(file.name, file.type)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file,
+      })
+      if (!res.ok) {
+        setError(await peerMessageErrorText(res, `upload ${file.name}`))
+        return null
+      }
+      ids.push(((await res.json()) as PeerMessageAttachment).id)
+    }
+    return ids
+  }
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    let body: PeerMessageCreateRequest
-    if (kind === 'request') {
-      body = peerMessageRequestBody(title, prompt)
-    } else {
+    let commits: ReturnType<typeof parsePeerMessageCommits>['commits'] = []
+    if (kind === 'notice') {
       const parsed = parsePeerMessageCommits(commitText)
       if (parsed.error) {
         setError(parsed.error)
         return
       }
-      body = peerMessageNoticeBody(summary, parsed.commits)
+      commits = parsed.commits
+    }
+    if (kind === 'patch' && files.length === 0) {
+      setError('A patch needs at least one git format-patch file.')
+      return
     }
     setBusy(true)
     setError(null)
     try {
+      const attachmentIDs = await uploadFiles()
+      if (attachmentIDs === null) return
+      const body: PeerMessageCreateRequest =
+        kind === 'request'
+          ? peerMessageRequestBody(title, prompt, undefined, attachmentIDs)
+          : kind === 'notice'
+            ? peerMessageNoticeBody(summary, commits, undefined, attachmentIDs)
+            : peerMessagePatchBody(repo, baseCommit, summary, attachmentIDs)
       const res = await fetchFn(`${basePath}${peerConnectionMessagesPath(connectionID)}`, jsonPost(body))
       if (!res.ok) {
         setError(await peerMessageErrorText(res, `send the ${kind} to ${serverName}`))
@@ -419,6 +582,10 @@ function SendPeerMessageForm({ connectionID, serverName, onSent }: {
       setPrompt('')
       setSummary('')
       setCommitText('')
+      setRepo('')
+      setBaseCommit('')
+      setFiles([])
+      setFileInputKey(key => key + 1)
       onSent()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -437,8 +604,21 @@ function SendPeerMessageForm({ connectionID, serverName, onSent }: {
         <label>
           <input type="radio" checked={kind === 'notice'} onChange={() => setKind('notice')} /> Tell {serverName} something is ready
         </label>
+        <label>
+          <input type="radio" checked={kind === 'patch'} onChange={() => setKind('patch')} /> Send {serverName} a patch to land
+        </label>
       </div>
-      {kind === 'request' ? (
+      {kind === 'patch' ? (
+        <>
+          <input value={repo} onChange={event => setRepo(event.target.value)} placeholder="Repo it changes, e.g. llm-bridge-server" disabled={busy} />
+          <input value={baseCommit} onChange={event => setBaseCommit(event.target.value)} placeholder="Commit it was made against" disabled={busy} />
+          <input value={summary} onChange={event => setSummary(event.target.value)} placeholder="What it does (optional)" disabled={busy} />
+          <p className="bp-hint">
+            Attach its <code>git format-patch</code> file below (from an agent, <code>bridge-peer patch</code> makes and sends it in one step).
+            {` ${serverName}`} lands it only when a person there approves it.
+          </p>
+        </>
+      ) : kind === 'request' ? (
         <>
           <input value={title} onChange={event => setTitle(event.target.value)} placeholder="Title" disabled={busy} />
           <textarea
@@ -466,10 +646,30 @@ function SendPeerMessageForm({ connectionID, serverName, onSent }: {
           <p className="bp-hint">{serverName} updates only when a person there approves it.</p>
         </>
       )}
+      <label className="pm-send-files">
+        Files{kind === 'patch' ? '' : ' (optional)'}:{' '}
+        <input
+          key={fileInputKey}
+          type="file"
+          multiple
+          disabled={busy}
+          onChange={event => setFiles(Array.from(event.target.files ?? []))}
+        />
+      </label>
+      {files.length > 0 && (
+        <p className="bp-hint">{files.map(file => `${file.name} (${formatAttachmentSize(file.size)})`).join(', ')}</p>
+      )}
       <button
         type="submit"
         className="bc-ctrl-btn bc-ctrl-btn-active"
-        disabled={busy || (kind === 'request' ? !title.trim() || !prompt.trim() : !summary.trim() || !commitText.trim())}
+        disabled={
+          busy ||
+          (kind === 'request'
+            ? !title.trim() || !prompt.trim()
+            : kind === 'notice'
+              ? !summary.trim() || !commitText.trim()
+              : !repo.trim() || !baseCommit.trim() || files.length === 0)
+        }
       >
         Send
       </button>

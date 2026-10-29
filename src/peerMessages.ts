@@ -1,7 +1,7 @@
 // Messages between connected bridge servers: what one server asks of the
 // other, and what each tells the other when it is done.
 //
-// Three kinds, each carried over the connection and kept by both servers:
+// Four kinds, each carried over the connection and kept by both servers:
 //   - `request`: the other server asks this one to start a session. Its title
 //     and prompt are what that session would be told. Nothing runs until a
 //     person here approves it, choosing an instance (or handing it to the
@@ -10,6 +10,14 @@
 //   - `notice`: the other server says something is ready, naming repos and
 //     commits, usually "update to these". Updating waits for approval here.
 //   - `status`: what came of a request or a notice, threaded to it.
+//   - `patch`: a change to one repo as `git format-patch` files, made against a
+//     base commit. Approving it starts a session here that lands it.
+//
+// Any kind may carry files. They are never part of the message's text: the
+// sender uploads each one (`POST /peer-message-attachments`) and the message
+// names them; the receiving server fetches the bytes over the connection and
+// keeps them only when their size and SHA-256 match. A file is downloaded,
+// never drawn as a page.
 //
 // ⚠️ A message is text another machine wrote. It is drawn as plain text —
 // never as markdown, never with an image or link that loads by itself — and an
@@ -21,23 +29,30 @@
 // and the types are its own, generated into `@kayushkin/llm-bridge-types`
 // (`msg.PeerMessage*`). A message's text is in its `body`, whose fields
 // depend on the kind: `title` and `prompt` for a request, `summary` and
-// `commits` for a notice, `result`, `detail` and `versions` for a status.
+// `commits` for a notice, `result`, `detail` and `versions` for a status,
+// `repo`, `base_commit` and `summary` for a patch, whose verified files the
+// receiving server reads into `patch` (each commit's subject, each file's
+// insertions and deletions).
 
 import {
+  PeerMessageAttachmentFailed,
+  PeerMessageAttachmentPending,
   PeerMessageDirectionIncoming,
   PeerMessageKindNotice,
+  PeerMessageKindPatch,
   PeerMessageKindRequest,
   PeerMessageKindStatus,
   PeerMessageStatePending,
   SignalSourcePeerMessage,
   type PeerMessage,
+  type PeerMessageAttachment,
   type PeerMessageApproveRequest,
   type PeerMessageCreateRequest,
   type PeerMessageDirection,
   type PeerRepoCommit,
 } from '@kayushkin/llm-bridge-types'
 
-export type { PeerMessage, PeerMessageApproveRequest, PeerMessageCreateRequest, PeerRepoCommit }
+export type { PeerMessage, PeerMessageAttachment, PeerMessageApproveRequest, PeerMessageCreateRequest, PeerRepoCommit }
 
 export const PEER_MESSAGES_PATH = '/peer-messages'
 
@@ -64,6 +79,47 @@ export function peerMessageApprovePath(messageID: string): string {
 
 export function peerMessageDeclinePath(messageID: string): string {
   return `${PEER_MESSAGES_PATH}/${encodeURIComponent(messageID)}/decline`
+}
+
+/** Where a file is uploaded before the message that sends it names it. The
+ *  browser's own media type for it goes along when it knows one; the server
+ *  records application/octet-stream otherwise. */
+export function peerMessageAttachmentUploadPath(name: string, mediaType?: string): string {
+  const query: Record<string, string> = { name }
+  if (mediaType) query.media_type = mediaType
+  return `/peer-message-attachments?${new URLSearchParams(query).toString()}`
+}
+
+export function peerMessageAttachmentPath(messageID: string, attachmentID: string): string {
+  return `${PEER_MESSAGES_PATH}/${encodeURIComponent(messageID)}/attachments/${encodeURIComponent(attachmentID)}`
+}
+
+export function peerMessageAttachmentRetryPath(messageID: string, attachmentID: string): string {
+  return `${peerMessageAttachmentPath(messageID, attachmentID)}/retry`
+}
+
+/** Whether a person can ask this server to fetch an incoming file again now. */
+export function peerAttachmentCanRetry(message: PeerMessage, attachment: PeerMessageAttachment): boolean {
+  return message.direction === PeerMessageDirectionIncoming &&
+    (attachment.state === PeerMessageAttachmentFailed || attachment.state === PeerMessageAttachmentPending)
+}
+
+/** Whether a file's bytes are here and verified, so it can be downloaded. */
+export function peerAttachmentDownloadable(attachment: PeerMessageAttachment): boolean {
+  return attachment.state === 'stored' || attachment.state === 'fetched'
+}
+
+/** A size in bytes, as a person reads it. */
+export function formatAttachmentSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
 }
 
 /** Whether an incoming message is waiting on a person here. */
@@ -109,16 +165,26 @@ export function parsePeerMessageCommits(text: string): { commits: PeerRepoCommit
   return { commits, error: null }
 }
 
-export function peerMessageRequestBody(title: string, prompt: string, inReplyTo?: string): PeerMessageCreateRequest {
-  const request: PeerMessageCreateRequest = { kind: PeerMessageKindRequest, body: { title: title.trim(), prompt: prompt.trim() } }
+function withReplyAndFiles(request: PeerMessageCreateRequest, inReplyTo?: string, attachmentIDs?: readonly string[]): PeerMessageCreateRequest {
   if (inReplyTo) request.in_reply_to = inReplyTo
+  if (attachmentIDs && attachmentIDs.length > 0) request.attachment_ids = [...attachmentIDs]
   return request
 }
 
-export function peerMessageNoticeBody(summary: string, commits: PeerRepoCommit[], inReplyTo?: string): PeerMessageCreateRequest {
-  const request: PeerMessageCreateRequest = { kind: PeerMessageKindNotice, body: { summary: summary.trim(), commits } }
-  if (inReplyTo) request.in_reply_to = inReplyTo
-  return request
+export function peerMessageRequestBody(title: string, prompt: string, inReplyTo?: string, attachmentIDs?: readonly string[]): PeerMessageCreateRequest {
+  return withReplyAndFiles({ kind: PeerMessageKindRequest, body: { title: title.trim(), prompt: prompt.trim() } }, inReplyTo, attachmentIDs)
+}
+
+export function peerMessageNoticeBody(summary: string, commits: PeerRepoCommit[], inReplyTo?: string, attachmentIDs?: readonly string[]): PeerMessageCreateRequest {
+  return withReplyAndFiles({ kind: PeerMessageKindNotice, body: { summary: summary.trim(), commits } }, inReplyTo, attachmentIDs)
+}
+
+/** A patch: the repo it changes, the commit it was made against, and its
+ *  `git format-patch` files, which must already be uploaded. */
+export function peerMessagePatchBody(repo: string, baseCommit: string, summary: string, attachmentIDs: readonly string[], inReplyTo?: string): PeerMessageCreateRequest {
+  const body: PeerMessageCreateRequest['body'] = { repo: repo.trim(), base_commit: baseCommit.trim() }
+  if (summary.trim()) body.summary = summary.trim()
+  return withReplyAndFiles({ kind: PeerMessageKindPatch, body }, inReplyTo, attachmentIDs)
 }
 
 /** One piece of a message's text: words as they are, or a web address shown
@@ -186,6 +252,8 @@ export function peerMessageHeadline(message: PeerMessage, serverName: string): s
       return `${from} says this is ready: ${message.body.summary || peerMessageCommitList(message.body.commits)}`
     case PeerMessageKindStatus:
       return `${from}: ${message.body.result || message.state}`
+    case PeerMessageKindPatch:
+      return `${from} sends a patch for ${message.body.repo || '(no repo)'}`
     default:
       return `${from}: ${message.kind}`
   }
@@ -204,6 +272,11 @@ const PEER_MESSAGE_REFUSALS: Readonly<Record<string, string>> = {
   peer_message_not_found: 'This server has no such message.',
   unknown_instance: 'That instance is not one of this server’s.',
   orchestrator_not_configured: 'This server has no orchestrator to hand the request to.',
+  peer_attachments_not_fetched: 'Its files have not all arrived and been checked here yet. Approve it once they have; a file that failed can be fetched again.',
+  attachment_too_large: 'A file is larger than this server takes (peer_messages.attachment_maximum_bytes on its settings).',
+  empty_attachment: 'A file is empty.',
+  patch_needs_attachments: 'A patch needs at least one git format-patch file attached.',
+  peer_attachment_not_fetched: 'That file has not arrived and been checked here yet.',
 }
 
 /** Plain words for a refusal a person can act on, else nothing (the caller
