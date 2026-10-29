@@ -81,8 +81,8 @@ export default function NewSessionMenu({ scope = { kind: 'all' }, onPick, onStar
   }, [])
 
   const servers = useMemo(
-    () => newSessionMenuServers(connected?.thisServerName ?? null, connected?.folders ?? [], scope),
-    [connected?.thisServerName, connected?.folders, scope],
+    () => newSessionMenuServers(connected?.thisServerName ?? null, connected?.servers ?? [], scope),
+    [connected?.thisServerName, connected?.servers, scope],
   )
 
   return (

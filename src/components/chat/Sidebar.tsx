@@ -58,7 +58,7 @@ import {
   type ConnectedServerListReport,
   type ServerTab,
 } from './ConnectedServerSidebar'
-import { connectedServerSessionKey, readableConnectionIds, thisServerFolderLabel, type ConnectedServerSessionRef } from '../../serverFolders'
+import { connectedServerSessionKey, readableConnectionIds, thisServerLabel, type ConnectedServerSessionRef } from '../../serverListings'
 import { mergeSessionsNewestFirst, sessionDayHeading, shownServerTab, type MergedSessionEntry } from '../../sidebarServerTabs'
 import type { HarnessInfo } from '../../types'
 import styles from './Chat.module.css'
@@ -249,8 +249,8 @@ export default function Sidebar({
   // was. With one or more, "by server" in the filters picks between a tab per server
   // (this server's first) and one list of every server's sessions, newest first.
   // Both read back in the useState initialiser, so the first paint is already right.
-  const { folders: connectedServerFolders, thisServerName, thisServerNameError, storeOf } = useConnectedServers()
-  const showServerChoice = connectedServerFolders.length > 0
+  const { servers: connectedServerListings, thisServerName, thisServerNameError, storeOf } = useConnectedServers()
+  const showServerChoice = connectedServerListings.length > 0
   const [groupByServer, setGroupByServerState] = useState(loadGroupByServer)
   const toggleGroupByServer = useCallback(() => {
     const next = !groupByServer
@@ -265,12 +265,12 @@ export default function Sidebar({
   const shownTab = shownServerTab(
     storedServerTab,
     THIS_SERVER_TAB_KEY,
-    connectedServerFolders.map((folder) => folder.connectionId),
+    connectedServerListings.map((server) => server.connectionId),
   )
   const serverTabsOn = showServerChoice && groupByServer
   const mergedListOn = showServerChoice && !groupByServer
-  const shownConnectedFolder = serverTabsOn
-    ? connectedServerFolders.find((folder) => folder.connectionId === shownTab) ?? null
+  const shownConnectedServer = serverTabsOn
+    ? connectedServerListings.find((server) => server.connectionId === shownTab) ?? null
     : null
   // What each readable connected server's store shows, reported by its feed.
   const [connectedReports, setConnectedReports] = useState<ReadonlyMap<string, ConnectedServerListReport>>(new Map())
@@ -286,8 +286,8 @@ export default function Sidebar({
     })
   }, [])
   const readableConnections = useMemo(
-    () => readableConnectionIds(connectedServerFolders).filter((id) => !!storeOf(id)),
-    [connectedServerFolders, storeOf],
+    () => readableConnectionIds(connectedServerListings).filter((id) => !!storeOf(id)),
+    [connectedServerListings, storeOf],
   )
   const openConnectedServerNewSession = useCallback((connectionId: string) => {
     onOpenConnectedServerSession({ connectionId, sessionId: null })
@@ -602,7 +602,7 @@ export default function Sidebar({
   const serverTabs = useMemo<ServerTab[]>(() => [
     {
       key: THIS_SERVER_TAB_KEY,
-      label: thisServerFolderLabel(thisServerName),
+      label: thisServerLabel(thisServerName),
       title: thisServerNameError
         ? `This server. Its name could not be read: ${thisServerNameError}`
         : thisServerName
@@ -611,27 +611,27 @@ export default function Sidebar({
       count: visibleSessionCount,
       blockedWord: null,
     },
-    ...connectedServerFolders.map((folder) => {
-      const report = connectedReports.get(folder.connectionId)
-      return connectedServerTab(folder, report ? connectedSessionsShown(report).length : null, !!report)
+    ...connectedServerListings.map((server) => {
+      const report = connectedReports.get(server.connectionId)
+      return connectedServerTab(server, report ? connectedSessionsShown(report).length : null, !!report)
     }),
-  ], [thisServerName, thisServerNameError, visibleSessionCount, connectedServerFolders, connectedReports, connectedSessionsShown])
+  ], [thisServerName, thisServerNameError, visibleSessionCount, connectedServerListings, connectedReports, connectedSessionsShown])
   // The one list: this server's visible sessions and every connected server's,
   // newest first. Null while the tabs, or no connected server, are what is shown.
   const mergedEntries = useMemo<MergedSessionEntry[] | null>(() => {
     if (!mergedListOn) return null
     const entries: MergedSessionEntry[] = groups.flatMap((g) => g.sessions.map((session) => ({ server: 'this' as const, session })))
-    for (const folder of connectedServerFolders) {
-      for (const session of connectedSessionsShown(connectedReports.get(folder.connectionId))) {
-        entries.push({ server: 'connected', connectionId: folder.connectionId, serverLabel: folder.label, session })
+    for (const server of connectedServerListings) {
+      for (const session of connectedSessionsShown(connectedReports.get(server.connectionId))) {
+        entries.push({ server: 'connected', connectionId: server.connectionId, serverLabel: server.label, session })
       }
     }
     return mergeSessionsNewestFirst(entries)
-  }, [mergedListOn, groups, connectedServerFolders, connectedReports, connectedSessionsShown])
-  const shownConnectedReport = shownConnectedFolder ? connectedReports.get(shownConnectedFolder.connectionId) : undefined
+  }, [mergedListOn, groups, connectedServerListings, connectedReports, connectedSessionsShown])
+  const shownConnectedReport = shownConnectedServer ? connectedReports.get(shownConnectedServer.connectionId) : undefined
   // How many rows the view on screen lists: this server's, a connected server's tab,
   // or the one list of every server.
-  const listedSessionCount = shownConnectedFolder
+  const listedSessionCount = shownConnectedServer
     ? connectedSessionsShown(shownConnectedReport).length
     : mergedEntries
       ? mergedEntries.length
@@ -809,7 +809,7 @@ export default function Sidebar({
           <ConnectedServerSessionRow
             key={connectedServerSessionKey(entry.connectionId, entry.session.sessionId)}
             connectionId={entry.connectionId}
-            folderLabel={entry.serverLabel}
+            serverName={entry.serverLabel}
             session={entry.session}
             active={openConnectedServerSession?.connectionId === entry.connectionId && openConnectedServerSession.sessionId === entry.session.sessionId}
             onOpen={onOpenConnectedServerSession}
@@ -1273,11 +1273,11 @@ export default function Sidebar({
           sessions it has loaded, so hits for sessions outside the window render
           nothing. Measured on this box: for a 100-hit page, 55–92% of hits fall
           outside it. Without this line the shortfall is completely invisible. */}
-      {contentSearchReach && contentSearchReach.hiddenHitCount > 0 && !shownConnectedFolder && (
+      {contentSearchReach && contentSearchReach.hiddenHitCount > 0 && !shownConnectedServer && (
         <div className={styles.searchReach} role="status">
           {contentSearchReach.shownHitCount} of {contentSearchReach.truncated ? 'at least ' : ''}
           {contentSearchReach.hitCount} transcript {contentSearchReach.hitCount === 1 ? 'match' : 'matches'} shown
-          {showServerChoice ? ` on ${thisServerFolderLabel(thisServerName)}` : ''}
+          {showServerChoice ? ` on ${thisServerLabel(thisServerName)}` : ''}
           {/* "may", not "will". Paging is not guaranteed to reach a hidden hit: the
               search index also holds transcripts whose session row is gone. */}
           {moreSessions ? ' — loading older sessions may surface more.' : '.'}
@@ -1298,11 +1298,11 @@ export default function Sidebar({
 
       {serverTabsOn && <ServerTabStrip tabs={serverTabs} shown={shownTab} onShow={showServerTab} />}
 
-      {shownConnectedFolder ? (
+      {shownConnectedServer ? (
         <div className={`bc-server-tab-scroll ${styles.list}`}>
           <ConnectedServerTabBody
-            folder={shownConnectedFolder}
-            open={openConnectedServerSession?.connectionId === shownConnectedFolder.connectionId ? openConnectedServerSession : null}
+            server={shownConnectedServer}
+            open={openConnectedServerSession?.connectionId === shownConnectedServer.connectionId ? openConnectedServerSession : null}
             onOpen={onOpenConnectedServerSession}
             hideArchived={hideArchived}
           />

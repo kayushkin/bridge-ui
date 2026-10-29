@@ -2062,12 +2062,12 @@ console.log('ConnectedServerSessionRow — a connected server’s session in the
 {
   const session = { sessionId: 'br_1', displayName: 'Fix the build', harness: 'claude_code', state: 'idle' }
   const tagged = renderToStaticMarkup(h(ConnectedServerSessionRow, {
-    connectionId: 'c1', folderLabel: 'laptop', session, active: true, onOpen: () => {}, serverLabel: 'laptop',
+    connectionId: 'c1', serverName: 'laptop', session, active: true, onOpen: () => {}, serverLabel: 'laptop',
   }))
   check('in the one list a row carries its server’s name and reads as selected when open',
     tagged.includes('bc-session-server-tag') && tagged.includes('>laptop<') && tagged.includes('bc-session-item-selected'), tagged)
   const plain = renderToStaticMarkup(h(ConnectedServerSessionRow, {
-    connectionId: 'c1', folderLabel: 'laptop', session, active: false, onOpen: () => {},
+    connectionId: 'c1', serverName: 'laptop', session, active: false, onOpen: () => {},
   }))
   check('in its own tab a row carries no server tag', !plain.includes('bc-session-server-tag'), plain)
 }
@@ -2124,7 +2124,7 @@ console.log('A connected server’s session gets the full thread view')
   const connected = {
     thisServerName: 'main',
     thisServerNameError: null,
-    folders: [
+    servers: [
       { connectionId: 'c-laptop', label: 'laptop', labelFromServer: true, blockedReason: null, blockedWord: null },
       { connectionId: 'c-desk', label: 'desk', labelFromServer: true, blockedReason: 'desk is not connected now: the socket between the two servers is closed.', blockedWord: 'offline' },
     ],

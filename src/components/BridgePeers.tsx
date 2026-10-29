@@ -14,7 +14,7 @@ import {
 import { useBridgeConfig } from '../context'
 import { usePrincipals } from '../usePrincipals'
 import { fetchServiceSettings } from '../serviceSettings'
-import { connectedServerLabel } from '../serverFolders'
+import { connectedServerLabel } from '../serverListings'
 import { PeerConnectionMessages } from './PeerMessageCards'
 import {
   EMPTY_PEER_CONNECT_FORM,

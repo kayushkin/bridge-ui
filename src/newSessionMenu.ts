@@ -7,7 +7,7 @@
 // them with this server's. The pure rules the menu draws from.
 
 import type { HarnessInfo, Instance } from '@kayushkin/llm-bridge-types'
-import { thisServerFolderLabel, type ConnectedServerFolder } from './serverFolders'
+import { thisServerLabel, type ConnectedServerListing } from './serverListings'
 
 /** Which servers the menu shows: every one (the New button's caret), or one
  *  (the + on that server's folder in the sidebar). */
@@ -34,12 +34,12 @@ export const THIS_SERVER_MENU_KEY = 'this-server'
  *  while it is offline. */
 export function newSessionMenuServers(
   thisServerName: string | null,
-  connectedServers: readonly ConnectedServerFolder[],
+  connectedServers: readonly ConnectedServerListing[],
   scope: NewSessionMenuScope,
 ): NewSessionMenuServer[] {
   const thisServer: NewSessionMenuServer = {
     key: THIS_SERVER_MENU_KEY,
-    label: thisServerFolderLabel(thisServerName),
+    label: thisServerLabel(thisServerName),
     connectionId: null,
     blockedReason: null,
   }

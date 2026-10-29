@@ -422,7 +422,7 @@ function SessionOnConnectedServer({ refId, className }: { refId: string; classNa
   const [found, setFound] = useState<{ connectionId: string; serverName: string } | null>(null);
   const [searched, setSearched] = useState(false);
   const candidates = servers
-    ? servers.folders.filter((folder) => folder.blockedReason === null && servers.storeOf(folder.connectionId))
+    ? servers.servers.filter((folder) => folder.blockedReason === null && servers.storeOf(folder.connectionId))
     : [];
   const candidateKey = candidates.map((folder) => folder.connectionId).join(' ');
 

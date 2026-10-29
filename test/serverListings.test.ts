@@ -4,15 +4,15 @@ import {
   CONNECTED_SERVER_PARAM,
   CONNECTED_SERVER_SESSION_PARAM,
   connectedServerBlockedReason,
-  connectedServerFolders,
+  connectedServerListings,
   connectedServerLabel,
   connectedServerSessionKey,
   readConnectedServerSessionRef,
   readableConnectionIds,
   sameConnectedServerSessionRef,
-  thisServerFolderLabel,
+  thisServerLabel,
   writeConnectedServerSessionRef,
-} from '../src/serverFolders'
+} from '../src/serverListings'
 
 const connection = (overrides: Partial<PeerConnection> = {}): PeerConnection => ({
   id: 'peer_connection_000001',
@@ -42,9 +42,9 @@ const view = (overrides: Partial<PeerConnectionView> = {}): PeerConnectionView =
 
 describe('server folder labels', () => {
   it("labels this server's folder by its own name, and says This server without one", () => {
-    expect(thisServerFolderLabel('main')).toBe('main')
-    expect(thisServerFolderLabel('  ')).toBe('This server')
-    expect(thisServerFolderLabel(null)).toBe('This server')
+    expect(thisServerLabel('main')).toBe('main')
+    expect(thisServerLabel('  ')).toBe('This server')
+    expect(thisServerLabel(null)).toBe('This server')
   })
 
   it("prefers the name a connected server reports over the typed one, and says which it used", () => {
@@ -65,7 +65,7 @@ describe('which connected servers can be read', () => {
   })
 
   it('orders readable servers first, then unreadable, then removed, and keeps every one', () => {
-    const folders = connectedServerFolders([
+    const folders = connectedServerListings([
       view({ connection: connection({ id: 'c-removed', display_name: 'a', removed_at: '2026-10-27T11:00:00Z' }) }),
       view({ connection: connection({ id: 'c-offline', display_name: 'b' }), socket_connected: false }),
       view({ connection: connection({ id: 'c-zed', display_name: 'zed' }) }),

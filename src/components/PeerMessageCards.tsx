@@ -3,7 +3,7 @@ import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { PEER_CONNECTIONS_PATH, peerRouteErrorText } from '../peers'
-import { connectedServerLabel } from '../serverFolders'
+import { connectedServerLabel } from '../serverListings'
 import {
   formatAttachmentSize,
   peerAttachmentCanRetry,

@@ -6,10 +6,10 @@ import { chatFetchOver } from '../../chatFetch'
 import { PEER_CONNECTIONS_PATH, peerConnectionBridgeConfig, peerRouteErrorText } from '../../peers'
 import {
   THIS_SERVER_PATH,
-  connectedServerFolders,
+  connectedServerListings,
   readableConnectionIds,
-  type ConnectedServerFolder,
-} from '../../serverFolders'
+  type ConnectedServerListing,
+} from '../../serverListings'
 
 // The chat's view of the servers this one is connected to.
 //
@@ -30,7 +30,7 @@ export interface ConnectedServersValue {
   thisServerName: string | null
   /** Why this server's name could not be read, or null. */
   thisServerNameError: string | null
-  folders: ConnectedServerFolder[]
+  servers: ConnectedServerListing[]
   /** False until the connection list has answered once. */
   connectionsLoaded: boolean
   /** Why the connection list could not be read, or null. */
@@ -124,8 +124,8 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
     return () => { cancelled = true; clearInterval(timer) }
   }, [fetchFn, basePath])
 
-  const folders = useMemo(() => connectedServerFolders(views), [views])
-  const readable = useMemo(() => readableConnectionIds(folders), [folders])
+  const servers = useMemo(() => connectedServerListings(views), [views])
+  const readable = useMemo(() => readableConnectionIds(servers), [servers])
   const readableKey = readable.join('\n')
 
   // A store that is no longer mounted is dropped, so `storeOf` never hands out
@@ -154,19 +154,19 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
 
   const configs = useMemo(() => {
     const map = new Map<string, BridgeConfig>()
-    for (const folder of folders) map.set(folder.connectionId, peerConnectionBridgeConfig(config, folder.connectionId))
+    for (const server of servers) map.set(server.connectionId, peerConnectionBridgeConfig(config, server.connectionId))
     return map
-  }, [config, folders])
+  }, [config, servers])
 
   const value = useMemo<ConnectedServersValue>(() => ({
     thisServerName,
     thisServerNameError,
-    folders,
+    servers,
     connectionsLoaded,
     connectionsError,
     storeOf: (connectionId: string) => stores.get(connectionId),
     configOf: (connectionId: string) => configs.get(connectionId) ?? peerConnectionBridgeConfig(config, connectionId),
-  }), [thisServerName, thisServerNameError, folders, connectionsLoaded, connectionsError, stores, configs, config])
+  }), [thisServerName, thisServerNameError, servers, connectionsLoaded, connectionsError, stores, configs, config])
 
   const chatFetch = useMemo(() => chatFetchOver(fetchFn), [fetchFn])
 

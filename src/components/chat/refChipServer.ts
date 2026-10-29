@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { ConnectedServerSessionRef } from '../../serverFolders'
+import type { ConnectedServerSessionRef } from '../../serverListings'
 
 // Which server a reference chip's id belongs to.
 //

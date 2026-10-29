@@ -11,7 +11,7 @@ import {
   sameMenuScope,
 } from '../src/newSessionMenu'
 import { peerConnectionBridgeConfig } from '../src/peers'
-import type { ConnectedServerFolder } from '../src/serverFolders'
+import type { ConnectedServerListing } from '../src/serverListings'
 import { harnessesPoll, harnessMapOf } from '../src/useBridgeHarnesses'
 import { instancesPoll } from '../src/useBridgeInstances'
 import { machinesPoll } from '../src/useBridgeMachines'
@@ -31,7 +31,7 @@ const instance = (overrides: Partial<Instance>): Instance => ({
 const harness = (name: string, available: boolean): HarnessInfo =>
   ({ name, label: name, emoji: '', available, capabilities: [] } as HarnessInfo)
 
-const folder = (connectionId: string, label: string, blockedReason: string | null = null): ConnectedServerFolder => ({
+const folder = (connectionId: string, label: string, blockedReason: string | null = null): ConnectedServerListing => ({
   connectionId,
   label,
   labelFromServer: true,

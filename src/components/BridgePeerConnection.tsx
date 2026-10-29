@@ -16,7 +16,7 @@ import {
   peerRouteErrorText,
   peerTransportDescription,
 } from '../peers'
-import { connectedServerBlockedReason } from '../serverFolders'
+import { connectedServerBlockedReason } from '../serverListings'
 import { chatFetchOver } from '../chatFetch'
 import { ConnectedServerThread } from './chat/ConnectedServerThread'
 

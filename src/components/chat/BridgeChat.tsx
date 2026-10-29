@@ -31,7 +31,7 @@ import {
   sameConnectedServerSessionRef,
   writeConnectedServerSessionRef,
   type ConnectedServerSessionRef,
-} from '../../serverFolders'
+} from '../../serverListings'
 import MinimalPaneSwitch from './MinimalPaneSwitch'
 import TurnList from './TurnList'
 import Timeline from './Timeline'

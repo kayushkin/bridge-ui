@@ -1,5 +1,5 @@
-// The chat sidebar's top-level folders: one for this server and one for each
-// server it is connected to. A connected server's sessions stay on that
+// The chat sidebar's servers: this one and each server it is connected to.
+// A connected server's sessions stay on that
 // server and are read live through this server's proxy for the connection
 // (`peerConnectionProxyBasePath`); nothing of theirs is stored here. Every
 // remote session is addressed by the connection id AND its own session id,
@@ -16,7 +16,7 @@ export const THIS_SERVER_PATH = '/server'
 
 /** The label of this server's folder: its own name, or "This server" while
  *  it has none. */
-export function thisServerFolderLabel(name: string | null | undefined): string {
+export function thisServerLabel(name: string | null | undefined): string {
   const trimmed = name?.trim() ?? ''
   return trimmed || 'This server'
 }
@@ -59,7 +59,7 @@ export function connectedServerBlockedWord(view: PeerConnectionView): string | n
   return null
 }
 
-export interface ConnectedServerFolder {
+export interface ConnectedServerListing {
   connectionId: string
   label: string
   /** False while the label is the typed connection name, not the server's own. */
@@ -73,7 +73,7 @@ export interface ConnectedServerFolder {
  *  read first, then the ones that cannot, then removed connections, each
  *  part by label. Every connection is listed, so a server that went offline
  *  or took its access back stays visible, greyed, saying why. */
-export function connectedServerFolders(views: readonly PeerConnectionView[]): ConnectedServerFolder[] {
+export function connectedServerListings(views: readonly PeerConnectionView[]): ConnectedServerListing[] {
   const rank = (view: PeerConnectionView): number =>
     view.connection.removed_at ? 2 : connectedServerBlockedReason(view) ? 1 : 0
   return [...views]
@@ -92,7 +92,7 @@ export function connectedServerFolders(views: readonly PeerConnectionView[]): Co
 
 /** The connections whose servers can be read now, by id: the ones the chat
  *  keeps a live session store for. */
-export function readableConnectionIds(folders: readonly ConnectedServerFolder[]): string[] {
+export function readableConnectionIds(folders: readonly ConnectedServerListing[]): string[] {
   return folders.filter(folder => folder.blockedReason === null).map(folder => folder.connectionId)
 }
 

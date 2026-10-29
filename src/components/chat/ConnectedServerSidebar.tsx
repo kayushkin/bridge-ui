@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useConnState, useFilters, useSessionList, type FilterState, type SessionSummary } from '@kayushkin/chat-core'
-import { connectedServerSessionKey, type ConnectedServerFolder, type ConnectedServerSessionRef } from '../../serverFolders'
+import { connectedServerSessionKey, type ConnectedServerListing, type ConnectedServerSessionRef } from '../../serverListings'
 import { mirroredFilterPatch } from '../../sidebarServerTabs'
 import { OnConnectedServer, useConnectedServers } from './ConnectedServers'
 import { isArchivedFolder } from './bridgeAdapters'
@@ -56,25 +56,25 @@ export function ServerTabStrip({ tabs, shown, onShow }: {
 }
 
 /** A connected server's tab as the strip draws it. */
-export function connectedServerTab(folder: ConnectedServerFolder, count: number | null, readable: boolean): ServerTab {
-  const naming = folder.labelFromServer
-    ? `${folder.label}, a connected server`
-    : `${folder.label}, a connected server (the name typed when connecting: that server has not reported a name of its own)`
+export function connectedServerTab(server: ConnectedServerListing, count: number | null, readable: boolean): ServerTab {
+  const naming = server.labelFromServer
+    ? `${server.label}, a connected server`
+    : `${server.label}, a connected server (the name typed when connecting: that server has not reported a name of its own)`
   return {
-    key: folder.connectionId,
-    label: folder.label,
-    title: folder.blockedReason ? `${naming}. ${folder.blockedReason}` : naming,
+    key: server.connectionId,
+    label: server.label,
+    title: server.blockedReason ? `${naming}. ${server.blockedReason}` : naming,
     count: readable ? count : null,
-    blockedWord: folder.blockedWord ?? (folder.blockedReason === null && !readable ? 'connecting' : null),
+    blockedWord: server.blockedWord ?? (server.blockedReason === null && !readable ? 'connecting' : null),
   }
 }
 
 /** One session on a connected server. `serverLabel` puts the server's name on
  *  the row, for the one list where rows from every server sit together. */
-export function ConnectedServerSessionRow({ connectionId, folderLabel, session, active, onOpen, serverLabel }: {
+export function ConnectedServerSessionRow({ connectionId, serverName, session, active, onOpen, serverLabel }: {
   connectionId: string
   /** The server's name, for the row's title. */
-  folderLabel: string
+  serverName: string
   session: SessionSummary
   active: boolean
   onOpen: (ref: ConnectedServerSessionRef) => void
@@ -93,7 +93,7 @@ export function ConnectedServerSessionRow({ connectionId, folderLabel, session, 
         type="button"
         className="bc-session-item-main"
         onClick={() => onOpen({ connectionId, sessionId: session.sessionId })}
-        title={`${session.displayName || session.sessionId} — ${session.harness}, on ${folderLabel}`}
+        title={`${session.displayName || session.sessionId} — ${session.harness}, on ${serverName}`}
       >
         <span className="bc-session-label">{session.displayName || session.sessionId}</span>
       </button>
@@ -104,30 +104,30 @@ export function ConnectedServerSessionRow({ connectionId, folderLabel, session, 
 
 /** A connected server's tab: its sessions under its own folders, live from its
  *  own store; or, when it cannot be read, why. */
-export function ConnectedServerTabBody({ folder, open, onOpen, hideArchived }: {
-  folder: ConnectedServerFolder
+export function ConnectedServerTabBody({ server, open, onOpen, hideArchived }: {
+  server: ConnectedServerListing
   /** The remote session on screen, so its row reads as selected. */
   open: ConnectedServerSessionRef | null
   onOpen: (ref: ConnectedServerSessionRef) => void
   hideArchived: boolean
 }) {
   const { storeOf } = useConnectedServers()
-  if (folder.blockedReason !== null) {
-    return <div className="bc-server-folder-why">{folder.blockedReason}</div>
+  if (server.blockedReason !== null) {
+    return <div className="bc-server-folder-why">{server.blockedReason}</div>
   }
-  if (!storeOf(folder.connectionId)) {
-    return <div className="bc-session-list-empty">Connecting to {folder.label}…</div>
+  if (!storeOf(server.connectionId)) {
+    return <div className="bc-session-list-empty">Connecting to {server.label}…</div>
   }
   return (
-    <OnConnectedServer connectionId={folder.connectionId}>
-      <ReadableServerTabBody folder={folder} open={open} onOpen={onOpen} hideArchived={hideArchived} />
+    <OnConnectedServer connectionId={server.connectionId}>
+      <ReadableServerTabBody server={server} open={open} onOpen={onOpen} hideArchived={hideArchived} />
     </OnConnectedServer>
   )
 }
 
 /** Runs against the connected server's own store (mounted by `OnConnectedServer`). */
-function ReadableServerTabBody({ folder, open, onOpen, hideArchived }: {
-  folder: ConnectedServerFolder
+function ReadableServerTabBody({ server, open, onOpen, hideArchived }: {
+  server: ConnectedServerListing
   open: ConnectedServerSessionRef | null
   onOpen: (ref: ConnectedServerSessionRef) => void
   hideArchived: boolean
@@ -151,7 +151,7 @@ function ReadableServerTabBody({ folder, open, onOpen, hideArchived }: {
       {loading && count === 0 && <div className="bc-session-list-empty">Loading sessions…</div>}
       {!loading && count === 0 && (
         <div className="bc-session-list-empty">
-          {filtered ? `No sessions on ${folder.label} match` : `No sessions on ${folder.label} that this server may see`}
+          {filtered ? `No sessions on ${server.label} match` : `No sessions on ${server.label} that this server may see`}
         </div>
       )}
       {groups.map(group => group.sessions.length === 0 ? null : (
@@ -165,9 +165,9 @@ function ReadableServerTabBody({ folder, open, onOpen, hideArchived }: {
           )}
           {group.sessions.map(session => (
             <ConnectedServerSessionRow
-              key={connectedServerSessionKey(folder.connectionId, session.sessionId)}
-              connectionId={folder.connectionId}
-              folderLabel={folder.label}
+              key={connectedServerSessionKey(server.connectionId, session.sessionId)}
+              connectionId={server.connectionId}
+              serverName={server.label}
               session={session}
               active={open?.sessionId === session.sessionId}
               onOpen={onOpen}
@@ -192,7 +192,7 @@ function ReadableServerTabBody({ folder, open, onOpen, hideArchived }: {
 
 /** What a connected server's store holds for the sidebar right now. */
 export interface ConnectedServerListReport {
-  /** Its visible sessions, every folder flattened, archived ones left in. */
+  /** Its visible sessions, every server flattened, archived ones left in. */
   sessions: SessionSummary[]
   loading: boolean
   moreSessions: boolean

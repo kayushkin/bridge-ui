@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useActiveSession, usePendingSession } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
-import type { ConnectedServerSessionRef } from '../../serverFolders'
+import type { ConnectedServerSessionRef } from '../../serverListings'
 import { ConnectedServerThread } from './ConnectedServerThread'
 import { OnConnectedServer, useConnectedServers } from './ConnectedServers'
 
@@ -12,7 +12,7 @@ import { OnConnectedServer, useConnectedServers } from './ConnectedServers'
  *  For a null session id it is the new session the New session menu started
  *  in that server's store; the first message starts it there.
  *
- *  Reads the same store the sidebar's folder for that server reads, so the
+ *  Reads the same store the sidebar's tab for that server reads, so the
  *  row clicked and the thread shown cannot disagree. */
 export function ConnectedServerPane({
   sessionRef,
@@ -25,35 +25,35 @@ export function ConnectedServerPane({
   onSessionChange: (ref: ConnectedServerSessionRef) => void
   onClose: () => void
 }) {
-  const { folders, connectionsLoaded, storeOf } = useConnectedServers()
+  const { servers, connectionsLoaded, storeOf } = useConnectedServers()
   const { routes } = useBridgeConfig()
-  const folder = folders.find(f => f.connectionId === sessionRef.connectionId)
+  const server = servers.find(f => f.connectionId === sessionRef.connectionId)
 
   let blocked: string | null = null
-  if (!folder) {
+  if (!server) {
     blocked = connectionsLoaded
       ? `This server has no connection ${sessionRef.connectionId}. It may have been removed; the Peers page lists the ones there are.`
       : 'Reading the connected servers…'
-  } else if (folder.blockedReason) {
-    blocked = folder.blockedReason
-  } else if (!storeOf(folder.connectionId)) {
-    blocked = `Connecting to ${folder.label}…`
+  } else if (server.blockedReason) {
+    blocked = server.blockedReason
+  } else if (!storeOf(server.connectionId)) {
+    blocked = `Connecting to ${server.label}…`
   }
 
   return (
     <div className="bc-workspace bc-connected-server-pane">
       <header className="bc-connected-server-head">
-        <span className="bc-connected-server-name" title={folder ? `A session on ${folder.label}, a connected server` : undefined}>
-          🖥 {folder ? folder.label : sessionRef.connectionId}
+        <span className="bc-connected-server-name" title={server ? `A session on ${server.label}, a connected server` : undefined}>
+          🖥 {server ? server.label : sessionRef.connectionId}
         </span>
-        {folder && <Link to={`${routes.peers}/${encodeURIComponent(folder.connectionId)}`} className="bc-connected-server-peers-link">Connection</Link>}
+        {server && <Link to={`${routes.peers}/${encodeURIComponent(server.connectionId)}`} className="bc-connected-server-peers-link">Connection</Link>}
         <button type="button" className="bp-cancel" onClick={onClose} aria-label="Close the connected server's session">Close</button>
       </header>
       {blocked ? (
         <div className="bc-connected-server-blocked">{blocked}</div>
       ) : (
         <OnConnectedServer connectionId={sessionRef.connectionId}>
-          <ConnectedServerSessionView sessionRef={sessionRef} serverName={folder ? folder.label : sessionRef.connectionId} onSessionChange={onSessionChange} />
+          <ConnectedServerSessionView sessionRef={sessionRef} serverName={server ? server.label : sessionRef.connectionId} onSessionChange={onSessionChange} />
         </OnConnectedServer>
       )}
     </div>
@@ -112,7 +112,7 @@ function ConnectedServerSessionView({
     // server's store before opening the pane, so there is no second picker here.
     return pending ? thread : (
       <p className="bp-empty">
-        Start a session on {serverName} from New ▾ or the + on its folder in the sidebar; the first message starts it there.
+        Start a session on {serverName} from New ▾ or the + on its server in the sidebar; the first message starts it there.
       </p>
     )
   }
