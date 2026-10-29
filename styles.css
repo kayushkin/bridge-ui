@@ -136,10 +136,12 @@
 .bc-session-list-empty { padding: 16px; color: var(--text-dim); font-size: 0.85em; text-align: center; }
 .bc-session-show-more { display: block; width: calc(100% - 16px); margin: 4px 8px 8px; padding: 6px; background: none; border: 1px dashed var(--border, #333); border-radius: 6px; color: var(--text-dim); font-size: 0.8em; cursor: pointer; }
 .bc-session-show-more:hover { color: var(--text); border-color: var(--text-dim); }
-.bc-session-search { padding: 0 12px 8px; display: flex; align-items: center; gap: 6px; }
+.bc-session-search { position: relative; flex: none; padding: 0 12px 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* The search's status takes a line of its own under the row, so it never squeezes the box. */
+.bc-session-search .bc-session-search-status { order: 10; flex-basis: 100%; }
 .bc-session-search-input {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 6em;
+  min-width: 6em;
   padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -211,7 +213,36 @@
 .bc-orchestrator-dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
 .bc-orchestrator-dot.idle { background: var(--text-dim); }
 .bc-orchestrator-dot.off { background: #ef4444; }
-.bc-orchestrator-caret { opacity: 0.8; }
+.bc-orchestrator-caret { opacity: 0.8; border: none; background: none; color: inherit; cursor: pointer; }
+.bc-orchestrator-row .bc-session-item-main { min-width: 0; }
+.bc-orchestrator-label { flex: 0 1 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The words shrink before the name does. */
+.bc-orchestrator-status { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-size: 0.78em; font-weight: 400; }
+.bc-conductor[data-state="alert"] .bc-orchestrator-status { color: #f59e0b; font-weight: 600; }
+.bc-orchestrator-signals {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85em;
+}
+.bc-orchestrator-signals:hover { border-color: var(--accent); color: var(--accent); }
+.bc-orchestrator-needs-count {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #f59e0b;
+  color: #1a1a1a;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.bc-orchestrator-page-link { color: var(--accent); font-size: 0.92em; text-decoration: none; }
+.bc-orchestrator-page-link:hover { text-decoration: underline; }
 .bc-orchestrator-panel {
   display: flex; flex-direction: column; gap: 8px;
   padding: 10px 12px; border-top: 1px solid var(--border);
@@ -650,68 +681,11 @@
    removed when that animation ends. */
 .bc-composer-sent { display: none; }
 
-/* The conductor (`ConductorDock`): the orchestrator at the foot of the sidebar, with
-   `data-state` = conducting | busy | alert | trouble | resting | offline. Here it is the
-   🎬 and a dot in the state's colour; a host theme with a character hides the emoji and
-   draws `.bc-conductor-mascot` instead. */
-.bc-conductor {
-  position: relative;
-  flex: none;
-  padding: 8px 10px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-surface);
-}
-.bc-conductor-row { display: flex; align-items: center; gap: 8px; }
-.bc-conductor-crab {
-  flex: none;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px; padding: 0;
-  border: 1px solid var(--border); border-radius: 50%;
-  background: transparent; cursor: pointer; font-size: 20px;
-}
-.bc-conductor-crab:hover { border-color: var(--accent); }
+/* The orchestrator row's conductor hooks (`OrchestratorRow`): `data-state` = conducting |
+   busy | alert | trouble | resting | offline on `.bc-conductor`. Here the row shows the
+   🎬 and a dot; a host theme with a character hides the emoji and draws
+   `.bc-conductor-mascot` instead. */
 .bc-conductor-mascot { display: none; }
-.bc-conductor-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.bc-conductor-status { display: flex; align-items: center; gap: 6px; font-size: 0.78em; color: var(--text-muted); min-width: 0; }
-.bc-conductor-status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bc-conductor-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
-.bc-conductor[data-state="busy"] .bc-conductor-dot { background: #22c55e; animation: bc-pulse-anim 1s ease-in-out infinite; }
-.bc-conductor[data-state="alert"] .bc-conductor-dot { background: #f59e0b; }
-.bc-conductor[data-state="trouble"] .bc-conductor-dot,
-.bc-conductor[data-state="offline"] .bc-conductor-dot { background: #ef4444; }
-.bc-conductor[data-state="resting"] .bc-conductor-dot { background: #888; }
-.bc-conductor-needs {
-  padding: 0; border: none; background: none; cursor: pointer;
-  color: #f59e0b; font: inherit; font-weight: 600; text-decoration: underline;
-}
-.bc-conductor-waiting {
-  flex: none; padding: 0; border: none; background: none; cursor: pointer;
-  color: var(--text-muted); font: inherit; text-decoration: underline dotted;
-}
-.bc-conductor-ask { display: flex; }
-.bc-conductor-input {
-  flex: 1; min-width: 0; padding: 5px 8px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: var(--bg); color: var(--text); font: inherit; font-size: 0.85em;
-}
-.bc-conductor-input:focus { outline: none; border-color: var(--accent); }
-/* The reply rises above the dock, out of the column's flow, so the list does not jump. */
-.bc-conductor-reply {
-  position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); z-index: 20;
-  display: flex; align-items: flex-start; gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--border); border-radius: 10px;
-  background: var(--bg-elevated, var(--bg-surface)); box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
-  font-size: 0.85em;
-}
-.bc-conductor-reply[data-kind="error"] { border-color: #ef4444; }
-.bc-conductor-reply-text {
-  flex: 1; min-width: 0; padding: 0; border: none; background: none; cursor: pointer;
-  color: var(--text); font: inherit; text-align: left; white-space: pre-wrap;
-  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
-}
-.bc-conductor-reply-waiting { flex: 1; color: var(--text-muted); font-style: italic; }
-.bc-conductor-reply-close { flex: none; padding: 0 2px; border: none; background: none; color: var(--text-muted); cursor: pointer; }
 
 .bc-turns-body {
   flex: 1;
@@ -2533,49 +2507,40 @@
 .bc-new-session-server-why { padding: 2px 8px 6px; color: var(--text-dim); font-size: 0.8em; }
 .bc-new-session-server .bc-new-session-group + .bc-new-session-group { border-top: none; padding-top: 0; margin-top: 0; }
 .bc-new-session-menu:focus { outline: none; }
-.bc-server-folder-header { position: relative; }
 
-/* Instance filter chips */
-.bc-inst-filter {
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-}
+/* The filters: a pop-up under the search box, opened by its funnel. */
 .bc-inst-filter-body {
   padding: 4px 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-/* Collapsible "Filters" header — mirrors .bc-folder-header so the sidebar
- * reads consistently. A small badge shows the active-filter count while the
- * section is collapsed, so applied filters stay discoverable. */
-.bc-filter-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 12px;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.82em;
-  font-weight: 500;
-  text-align: left;
-  transition: background 0.15s;
-}
-.bc-filter-toggle:hover { background: rgba(99, 102, 241, 0.06); }
-.bc-filter-toggle-active { color: var(--text); }
-.bc-filter-chevron { width: 10px; color: var(--text-dim); font-size: 0.8em; }
-.bc-filter-label { flex: 1; }
-.bc-filter-badge {
-  padding: 1px 6px;
+.bc-filter-popover {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 8px;
+  right: 8px;
+  z-index: 20;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.18);
-  color: var(--accent);
-  font-size: 0.75em;
-  font-weight: 600;
+  background: var(--bg-surface);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.bc-filter-popover-note { color: var(--text-dim); font-size: 0.72em; }
+.bc-filter-funnel { position: relative; }
+.bc-filter-funnel-active { border-color: var(--accent); color: var(--accent); }
+.bc-filter-funnel .bc-filter-badge { position: absolute; top: -7px; right: -7px; }
+.bc-filter-badge {
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-size: 0.65em;
+  font-weight: 700;
+  line-height: 1.2;
 }
 .bc-inst-filter-chips {
   display: flex;
@@ -6719,29 +6684,71 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .pr-composer textarea { resize: vertical; }
 .pr-composer-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
-/* ---- Server folders in the chat sidebar ----
-   One top-level folder for this server and one for each connected server
-   (components/chat/ConnectedServerFolders.tsx). The connected servers sit
-   under this server's list and take a share of the column; with this server's
-   folder collapsed they take all of it. A server that cannot be read is
+/* ---- Server tabs in the chat sidebar ----
+   With a connected server, the list splits into a tab per server, this one first
+   (components/chat/ConnectedServerSidebar.tsx); "by server" off in the filters puts
+   every server's sessions in one list, newest first, with a heading per day and the
+   other servers' rows tagged with their name. A server that cannot be read is
    greyed and says why. */
-.bc-server-folder-header { font-weight: 600; color: var(--text); }
-.bc-server-folder-name { font-weight: 600; }
-.bc-server-folder-blocked { opacity: 0.6; }
-.bc-server-folder-state {
-  padding: 1px 6px;
+.bc-server-tabs { flex: none; display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); }
+.bc-server-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.bc-server-tab:hover { color: var(--text); }
+.bc-server-tab-shown { color: var(--text); background: var(--bg-surface); border-color: var(--border); }
+.bc-server-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-server-tab-count { flex: none; color: var(--text-dim); font-weight: 400; font-size: 0.9em; }
+.bc-server-tab-blocked { opacity: 0.6; }
+.bc-server-tab-state {
+  flex: none;
+  padding: 0 5px;
   border-radius: 8px;
   border: 1px dashed var(--text-dim);
   color: var(--text-dim);
-  font-size: 0.75em;
+  font-size: 0.85em;
   font-weight: 400;
 }
-.bc-server-folders { flex: 0 1 auto; max-height: 40%; min-height: 0; overflow-y: auto; border-top: 1px solid var(--border); }
-.bc-server-folders-fill { flex: 1 1 0; max-height: none; border-top: none; }
-.bc-server-folder-why { padding: 4px 16px 8px; color: var(--text-dim); font-size: 0.8em; }
+.bc-server-tab-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.bc-server-folder-why { padding: 8px 16px; color: var(--text-dim); font-size: 0.8em; }
 .bc-server-folder-subheader { cursor: default; padding-left: 22px; }
 .bc-server-session-item { display: flex; align-items: center; gap: 6px; }
 .bc-server-session-item .bc-session-item-main { flex: 1; min-width: 0; }
+.bc-session-server-tag {
+  flex: none;
+  margin-right: 8px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 0.7em;
+  max-width: 7em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bc-session-day-heading {
+  padding: 8px 12px 2px;
+  color: var(--text-dim);
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 
 /* A connected server's session in the thread pane. */
 .bc-connected-server-pane { display: flex; flex-direction: column; min-height: 0; }

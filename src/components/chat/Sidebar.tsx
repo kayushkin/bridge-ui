@@ -20,24 +20,23 @@ import { useBridgeMachines } from '../../useBridgeMachines'
 import { EditableName } from './EditableName'
 import { OrchestratorRow } from './OrchestratorRow'
 import { AwaitingReplySidebarSection } from './AwaitingReplySidebarSection'
-import { ConductorDock } from './ConductorDock'
 import { useHomeSession } from './useHomeSession'
 import { StatusDot } from './StatusDot'
 import { isArchivedFolder } from './bridgeAdapters'
 import {
   loadCollapsedFolders,
   loadCollapsedProjectGroups,
-  loadCollapsedServerFolders,
-  loadFiltersOpen,
   loadGroupByProject,
+  loadGroupByServer,
   loadHideArchived,
+  loadServerTab,
   saveCollapsedFolders,
   saveCollapsedProjectGroups,
-  saveCollapsedServerFolders,
-  saveFiltersOpen,
   saveGroupByProject,
+  saveGroupByServer,
   saveHideArchived,
-  THIS_SERVER_FOLDER_KEY,
+  saveServerTab,
+  THIS_SERVER_TAB_KEY,
 } from './sidebarPersistence'
 import { useProjectStore } from '../../useProjectStore'
 import { groupSessionsByProject } from '../../projects'
@@ -45,13 +44,22 @@ import { FolderQuestionRollupMarker, SessionQuestionMarker } from './QuestionMar
 import { isAwaitingHumanState, isOperatorSessionType, isSessionAwaitingOperator } from '@kayushkin/chat-core'
 import { useSessionsWithOpenOperatorQuestion } from './sessionsWithOpenQuestion'
 import NewSessionMenu from './NewSessionMenu'
-import { NEW_SESSION_MENU_TOGGLE_ATTRIBUTE, sameMenuScope, type NewSessionMenuScope } from '../../newSessionMenu'
+import { NEW_SESSION_MENU_TOGGLE_ATTRIBUTE, type NewSessionMenuScope } from '../../newSessionMenu'
 import type { NewSessionTarget } from './useNewSessionTarget'
 import { useSelectSession } from './useSelectSession'
 import SignalsInbox from './SignalsInbox'
 import { useConnectedServers } from './ConnectedServers'
-import { ConnectedServerFolderList, ServerFolderHeader } from './ConnectedServerFolders'
-import { thisServerFolderLabel, type ConnectedServerSessionRef } from '../../serverFolders'
+import {
+  ConnectedServerSessionRow,
+  ConnectedServerSidebarFeed,
+  ConnectedServerTabBody,
+  ServerTabStrip,
+  connectedServerTab,
+  type ConnectedServerListReport,
+  type ServerTab,
+} from './ConnectedServerSidebar'
+import { connectedServerSessionKey, readableConnectionIds, thisServerFolderLabel, type ConnectedServerSessionRef } from '../../serverFolders'
+import { mergeSessionsNewestFirst, sessionDayHeading, shownServerTab, type MergedSessionEntry } from '../../sidebarServerTabs'
 import type { HarnessInfo } from '../../types'
 import styles from './Chat.module.css'
 
@@ -228,40 +236,59 @@ export default function Sidebar({
   const { instanceMap } = useBridgeInstances()
   const { machineMap } = useBridgeMachines()
   const { harnessMap, basePath } = useBridgeHarnesses()
-  // The Orchestrator row's path and fetch, both from the provider rather than literals:
-  // `fetch` is the same credentialed fetch every other call on this page uses, and
-  // an empty `orchestratorBasePath` means this host proxies no orchestrator, in which case
-  // the row is not rendered at all rather than pointed at a guessed path.
-  const { fetch: bridgeApiFetch, orchestratorBasePath, workGraphStoreBasePath } = useBridgeConfig()
+  // An empty `orchestratorBasePath` means this host proxies no orchestrator, in which
+  // case its row is not rendered at all rather than pointed at a guessed path.
+  const { orchestratorBasePath, workGraphStoreBasePath } = useBridgeConfig()
   // Liveness of the session-list stream. `listLoading` only covers the FIRST fetch, so
   // without this an empty list after a dropped stream reads as "you have no sessions".
   // 'open' is the only state in which updates are flowing — see useConnState.
   const connState = useConnState()
   const connected = connState === 'open'
 
-  // Both read back in the useState INITIALISER, so the sidebar's first paint already
-  // has the folders the user collapsed folded away. Restoring them in an effect would
-  // draw every folder open and then snap them shut a frame later, which reads as the
-  // list jumping under the pointer. Same reasoning as chat-core's draft and filter
-  // rehydrates — see sidebarPersistence.ts for why these are chat's own keys.
-  // The top-level server folders: this server's, drawn only once there is a
-  // connected server to tell it from, and one per connected server below it.
-  // One collapsed set for all of them, so one stored value answers for each.
-  const { folders: connectedServerFolders, thisServerName, thisServerNameError } = useConnectedServers()
-  const showServerFolders = connectedServerFolders.length > 0
-  const [collapsedServerFolders, setCollapsedServerFolders] = useState<Set<string>>(loadCollapsedServerFolders)
-  useEffect(() => {
-    saveCollapsedServerFolders(collapsedServerFolders)
-  }, [collapsedServerFolders])
-  const toggleServerFolder = useCallback((key: string) => {
-    setCollapsedServerFolders((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
+  // The servers. With none connected the sidebar is this server's list, as it always
+  // was. With one or more, "by server" in the filters picks between a tab per server
+  // (this server's first) and one list of every server's sessions, newest first.
+  // Both read back in the useState initialiser, so the first paint is already right.
+  const { folders: connectedServerFolders, thisServerName, thisServerNameError, storeOf } = useConnectedServers()
+  const showServerChoice = connectedServerFolders.length > 0
+  const [groupByServer, setGroupByServerState] = useState(loadGroupByServer)
+  const toggleGroupByServer = useCallback(() => {
+    const next = !groupByServer
+    saveGroupByServer(next)
+    setGroupByServerState(next)
+  }, [groupByServer])
+  const [storedServerTab, setStoredServerTab] = useState(loadServerTab)
+  const showServerTab = useCallback((key: string) => {
+    saveServerTab(key)
+    setStoredServerTab(key)
+  }, [])
+  const shownTab = shownServerTab(
+    storedServerTab,
+    THIS_SERVER_TAB_KEY,
+    connectedServerFolders.map((folder) => folder.connectionId),
+  )
+  const serverTabsOn = showServerChoice && groupByServer
+  const mergedListOn = showServerChoice && !groupByServer
+  const shownConnectedFolder = serverTabsOn
+    ? connectedServerFolders.find((folder) => folder.connectionId === shownTab) ?? null
+    : null
+  // What each readable connected server's store shows, reported by its feed.
+  const [connectedReports, setConnectedReports] = useState<ReadonlyMap<string, ConnectedServerListReport>>(new Map())
+  const reportConnectedList = useCallback((connectionId: string, report: ConnectedServerListReport | null) => {
+    setConnectedReports((prev) => {
+      if (report === null) {
+        if (!prev.has(connectionId)) return prev
+        const next = new Map(prev)
+        next.delete(connectionId)
+        return next
+      }
+      return new Map(prev).set(connectionId, report)
     })
   }, [])
-  const thisServerCollapsed = showServerFolders && collapsedServerFolders.has(THIS_SERVER_FOLDER_KEY)
+  const readableConnections = useMemo(
+    () => readableConnectionIds(connectedServerFolders).filter((id) => !!storeOf(id)),
+    [connectedServerFolders, storeOf],
+  )
   const openConnectedServerNewSession = useCallback((connectionId: string) => {
     onOpenConnectedServerSession({ connectionId, sessionId: null })
   }, [onOpenConnectedServerSession])
@@ -282,12 +309,26 @@ export default function Sidebar({
       onClose={closeNewMenu}
     />
   )
-  const newSessionMenuUnderFolder = (scope: NewSessionMenuScope) =>
-    newMenu?.at === 'server-folder' && sameMenuScope(newMenu.scope, scope) ? renderNewSessionMenu(scope) : null
-  const toggleFolderNewSessionMenu = (scope: NewSessionMenuScope) =>
-    setNewMenu((menu) => (menu?.at === 'server-folder' && sameMenuScope(menu.scope, scope) ? null : { scope, at: 'server-folder' }))
 
-  const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen)
+  // The filters are a pop-up under the search box's funnel. Open is not kept: a
+  // pop-up that opened itself on every load would sit over the list.
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const filtersRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!filtersOpen) return
+    const closeOnOutside = (event: MouseEvent) => {
+      if (filtersRef.current && !filtersRef.current.contains(event.target as Node)) setFiltersOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFiltersOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [filtersOpen])
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(loadCollapsedFolders)
 
   // "Hide archived" drops the Archive folder before anything reads the list, so the
@@ -348,9 +389,6 @@ export default function Sidebar({
   useEffect(() => {
     saveCollapsedFolders(collapsedFolders)
   }, [collapsedFolders])
-  useEffect(() => {
-    saveFiltersOpen(filtersOpen)
-  }, [filtersOpen])
 
   const toggleFolderCollapsed = useCallback((folder: string) => {
     setCollapsedFolders((prev) => {
@@ -373,10 +411,8 @@ export default function Sidebar({
       return next
     })
   }, [])
-  // The New session menu: which servers it lists, and where it is drawn —
-  // under the New button (every server) or under one server folder's header
-  // (that server only, from the folder's +).
-  const [newMenu, setNewMenu] = useState<{ scope: NewSessionMenuScope; at: 'new-button' | 'server-folder' } | null>(null)
+  // The New session menu under the New button, listing every server.
+  const [newMenu, setNewMenu] = useState<{ scope: NewSessionMenuScope; at: 'new-button' } | null>(null)
   const newMenuOpen = newMenu?.at === 'new-button'
   const closeNewMenu = useCallback(() => setNewMenu(null), [])
   const listRef = useRef<VListHandle>(null)
@@ -554,6 +590,60 @@ export default function Sidebar({
     () => groups.reduce((n, g) => n + g.sessions.length, 0),
     [groups],
   )
+  // A connected server's sessions as the sidebar lists them: its store's visible set,
+  // with the archived ones left out when "hide archived" is on, as this server's are.
+  const connectedSessionsShown = useCallback(
+    (report: ConnectedServerListReport | undefined): SessionSummary[] => {
+      if (!report) return []
+      return hideArchived ? report.sessions.filter((s) => !isArchivedFolder(s.folderName)) : report.sessions
+    },
+    [hideArchived],
+  )
+  const serverTabs = useMemo<ServerTab[]>(() => [
+    {
+      key: THIS_SERVER_TAB_KEY,
+      label: thisServerFolderLabel(thisServerName),
+      title: thisServerNameError
+        ? `This server. Its name could not be read: ${thisServerNameError}`
+        : thisServerName
+          ? `${thisServerName}, this server`
+          : 'This server. It has no name yet: set one in its server settings',
+      count: visibleSessionCount,
+      blockedWord: null,
+    },
+    ...connectedServerFolders.map((folder) => {
+      const report = connectedReports.get(folder.connectionId)
+      return connectedServerTab(folder, report ? connectedSessionsShown(report).length : null, !!report)
+    }),
+  ], [thisServerName, thisServerNameError, visibleSessionCount, connectedServerFolders, connectedReports, connectedSessionsShown])
+  // The one list: this server's visible sessions and every connected server's,
+  // newest first. Null while the tabs, or no connected server, are what is shown.
+  const mergedEntries = useMemo<MergedSessionEntry[] | null>(() => {
+    if (!mergedListOn) return null
+    const entries: MergedSessionEntry[] = groups.flatMap((g) => g.sessions.map((session) => ({ server: 'this' as const, session })))
+    for (const folder of connectedServerFolders) {
+      for (const session of connectedSessionsShown(connectedReports.get(folder.connectionId))) {
+        entries.push({ server: 'connected', connectionId: folder.connectionId, serverLabel: folder.label, session })
+      }
+    }
+    return mergeSessionsNewestFirst(entries)
+  }, [mergedListOn, groups, connectedServerFolders, connectedReports, connectedSessionsShown])
+  const shownConnectedReport = shownConnectedFolder ? connectedReports.get(shownConnectedFolder.connectionId) : undefined
+  // How many rows the view on screen lists: this server's, a connected server's tab,
+  // or the one list of every server.
+  const listedSessionCount = shownConnectedFolder
+    ? connectedSessionsShown(shownConnectedReport).length
+    : mergedEntries
+      ? mergedEntries.length
+      : visibleSessionCount
+  // Paging. In the one list the button pages every server that has more.
+  const mergedReports = mergedListOn ? [...connectedReports.values()] : []
+  const listHasOlderSessions = moreSessions || mergedReports.some((r) => r.moreSessions)
+  const listLoadingOlderSessions = loadingOlderSessions || mergedReports.some((r) => r.loadingOlderSessions)
+  const loadOlderSessionsShown = () => {
+    if (moreSessions) loadOlderSessions()
+    for (const report of mergedReports) if (report.moreSessions) report.loadOlderSessions()
+  }
   // An empty list means two different things and only this tells them apart: with no
   // filter on, nothing has arrived; with one on, everything is filtered out. So the
   // "Connecting…" empty state is gated on it — saying "connecting" over a filter that
@@ -695,6 +785,40 @@ export default function Sidebar({
         }
       }
         }
+
+    // The one list of every server: a heading per local day, this server's rows as
+    // they always are, and a connected server's rows tagged with its name.
+    if (mergedEntries) {
+      const now = new Date()
+      let day: string | null = null
+      for (const entry of mergedEntries) {
+        const heading = sessionDayHeading(entry.session.updatedAt, now)
+        if (heading !== day) {
+          day = heading
+          out.push(
+            <div key={`d:${heading}`} className="bc-session-day-heading">
+              {heading}
+            </div>,
+          )
+        }
+        if (entry.server === 'this') {
+          pushSessionRows(entry.session, 'm:')
+          continue
+        }
+        out.push(
+          <ConnectedServerSessionRow
+            key={connectedServerSessionKey(entry.connectionId, entry.session.sessionId)}
+            connectionId={entry.connectionId}
+            folderLabel={entry.serverLabel}
+            session={entry.session}
+            active={openConnectedServerSession?.connectionId === entry.connectionId && openConnectedServerSession.sessionId === entry.session.sessionId}
+            onOpen={onOpenConnectedServerSession}
+            serverLabel={entry.serverLabel}
+          />,
+        )
+      }
+      return out
+    }
 
     if (projectGroups) {
       for (const pg of projectGroups) {
@@ -847,6 +971,9 @@ export default function Sidebar({
     expandedSubagentParents,
     toggleSubagents,
     projectGroups,
+    mergedEntries,
+    openConnectedServerSession,
+    onOpenConnectedServerSession,
     projectsOpen,
     collapsedProjectGroups,
     toggleProjectGroupCollapsed,
@@ -968,15 +1095,15 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* The pinned Orchestrator entry, between "+ New" and the search box. A click
-          opens the orchestrator's home session as a chat, through the same `select` a
-          session row uses; the gear panel fetches its settings from the orchestrator proxy. */}
+      {/* The orchestrator's one row, between "+ New" and the search box: a click opens
+          its home session as a chat, through the same `select` a session row uses; its
+          count and ▸ open the signals page, which is where Needs you lives now. */}
       {orchestratorBasePath && (
         <OrchestratorRow
-          apiFetch={bridgeApiFetch}
-          orchestratorBasePath={orchestratorBasePath}
-          onOpenHomeSession={() => void homeSession.open()}
+          homeSessionId={homeSession.sessionId}
           homeSessionError={homeSession.error}
+          onOpenHomeSession={() => void homeSession.open()}
+          onOpenSignalsPage={onOpenSignalsPage}
           selected={!workGraphOpen && !projectsOpen && !openConversationRoomID && !openConnectedServerSession && homeSession.sessionId !== null && homeSession.sessionId === activeId}
         />
       )}
@@ -985,26 +1112,16 @@ export default function Sidebar({
           multichat. A row opens the conversation where the thread is. */}
       <AwaitingReplySidebarSection openRoomID={openConversationRoomID} onOpenConversation={onOpenConversation} />
 
-      {showServerFolders && (
-        <ServerFolderHeader
-          label={thisServerFolderLabel(thisServerName)}
-          title={
-            thisServerNameError
-              ? `This server. Its name could not be read: ${thisServerNameError}`
-              : thisServerName
-                ? `${thisServerName}, this server`
-                : 'This server. It has no name yet: set one in its server settings'
-          }
-          count={visibleSessionCount}
-          collapsed={thisServerCollapsed}
-          onToggle={() => toggleServerFolder(THIS_SERVER_FOLDER_KEY)}
-          onNewSession={() => toggleFolderNewSessionMenu({ kind: 'this-server' })}
-          newSessionMenu={newSessionMenuUnderFolder({ kind: 'this-server' })}
-        />
-      )}
+      {/* With no orchestrator row to carry the count, Needs you stays in the column.
+          Given `select`, not `selectSession`, so opening a session from a card closes
+          the mobile drawer exactly as clicking a row does. */}
+      {!orchestratorBasePath && <SignalsInbox onSelectSession={select} onOpenSignalsPage={onOpenSignalsPage} />}
 
-      {!thisServerCollapsed && (<>
-      <div className="bc-session-search">
+      {/* One search box and one set of filters for every server: the filter this
+          server's store holds is copied into each connected server's store by its feed
+          below. The filters open as a pop-up from the funnel, so they never take the
+          list's height. */}
+      <div className="bc-session-search" ref={filtersRef}>
         <input
           type="search"
           className="bc-session-search-input"
@@ -1014,26 +1131,29 @@ export default function Sidebar({
           title="Search session names and transcripts"
           aria-label="Search session names and transcripts"
         />
-        {/* The list silently shortening was the ONLY feedback a search gave. Nothing
-            said a transcript search had been sent, nothing said it had come back, and
-            nothing said how many rows survived — the count below this only appeared in
-            the shortfall case, so a search that showed everything it found said nothing
-            at all. bridge-ui has carried this status since the beginning
-            (SessionList.tsx:476-480); `bc-session-search-status` is its class, already
-            in the shared stylesheet.
-
-            "results" is the number of rows on screen. That is deliberately NOT the
+        {/* "results" is the number of rows on screen. That is deliberately NOT the
             "transcript matches" the shortfall line below counts: this one includes name
             matches and is cut down by the filter chips, that one is what the server
-            found. Naming them differently is what keeps two different numbers sitting
-            next to each other from reading as a contradiction. */}
+            found. */}
         {searchActive && (
           <span className="bc-session-search-status" role="status">
             {searching
               ? 'searching…'
-              : `${visibleSessionCount} result${visibleSessionCount === 1 ? '' : 's'}`}
+              : `${listedSessionCount} result${listedSessionCount === 1 ? '' : 's'}`}
           </span>
         )}
+        <button
+          type="button"
+          className={`bc-sidebar-page-btn bc-filter-funnel ${filtersOpen ? 'bc-sidebar-page-btn-selected' : ''} ${filterBadgeCount > 0 ? 'bc-filter-funnel-active' : ''}`}
+          onClick={() => setFiltersOpen((v) => !v)}
+          aria-expanded={filtersOpen}
+          aria-haspopup="dialog"
+          title={filterBadgeCount > 0 ? `Filters and view: ${filterBadgeCount} on` : 'Filters and view'}
+          aria-label="Filters"
+        >
+          ⏷
+          {filterBadgeCount > 0 && <span className="bc-filter-badge">{filterBadgeCount}</span>}
+        </button>
         {/* The work graph and projects pages, as small buttons at the end of the search
             row rather than rows styled like sessions. Each is drawn only when the host
             proxies its store. */}
@@ -1059,68 +1179,36 @@ export default function Sidebar({
             ▦
           </button>
         )}
-      </div>
-
-      {/* A transcript search that failed is not a transcript search that found
-          nothing: the rows on screen are the local name matches only, and every
-          content-only match is missing. Saying so is the difference between a
-          gateway being down and the user's words genuinely appearing nowhere. */}
-      {searchActive && searchError && (
-        <div className={styles.searchReach} role="status">
-          Transcript search failed ({searchError}) — showing name matches only.
-        </div>
-      )}
-
-      {/* Content search matches transcripts server-side, but the list can only paint
-          sessions it has loaded, so hits for sessions outside the window render
-          nothing. Measured on this box: for a 100-hit page, 55–92% of hits fall
-          outside it. Without this line the shortfall is completely invisible — the
-          user reads a short list as "that is all there is". Say the real numbers and
-          point at the button that widens the window. */}
-      {contentSearchReach && contentSearchReach.hiddenHitCount > 0 && (
-        <div className={styles.searchReach} role="status">
-          {contentSearchReach.shownHitCount} of {contentSearchReach.truncated ? 'at least ' : ''}
-          {contentSearchReach.hitCount} transcript {contentSearchReach.hitCount === 1 ? 'match' : 'matches'} shown
-          {/* "may", not "will". Paging is not guaranteed to reach a hidden hit: the
-              search index also holds transcripts whose session row is gone, and those
-              can never be painted however far the window is opened. Promising the
-              button would fix it sends the user clicking forever. */}
-          {moreSessions ? ' — loading older sessions may surface more.' : '.'}
-        </div>
-      )}
-
-      {projectStore.enabled && groupByProject && projectStore.error && (
-        <div className={styles.projectStoreErrorRow}>
-          <span className={styles.groupByProjectError} title={projectStore.error}>
-            project-store did not answer, so the list shows folders: {projectStore.error}
-          </span>
-        </div>
-      )}
-
-      <div className="bc-inst-filter">
-        <button
-          className={`bc-filter-toggle ${filterBadgeCount > 0 ? 'bc-filter-toggle-active' : ''}`}
-          onClick={() => setFiltersOpen((v) => !v)}
-          aria-expanded={filtersOpen}
-        >
-          <span className="bc-filter-chevron">{filtersOpen ? '▾' : '▸'}</span>
-          <span className="bc-filter-label">Filters</span>
-          {filterBadgeCount > 0 && <span className="bc-filter-badge">{filterBadgeCount}</span>}
-        </button>
 
         {filtersOpen && (
-          <div className="bc-inst-filter-body">
+          <div className="bc-inst-filter-body bc-filter-popover" role="dialog" aria-label="Filters and view">
             {/* How the list is shown, as chips in the same row style as the filters
                 below. "hide archived" is counted in the badge, since it hides rows. */}
             <div className="bc-inst-filter-chips bc-class-filter-row">
               <span className="bc-class-filter-label">view</span>
+              {showServerChoice && (
+                <button
+                  type="button"
+                  className={`bc-inst-chip bc-class-chip ${groupByServer ? 'bc-inst-chip-active' : ''}`}
+                  onClick={toggleGroupByServer}
+                  aria-pressed={groupByServer}
+                  title="A tab per server. Off, every server's sessions share one list, newest first"
+                >
+                  <span className="bc-class-chip-name">by server</span>
+                </button>
+              )}
               {projectStore.enabled && (
                 <button
                   type="button"
                   className={`bc-inst-chip bc-class-chip ${groupByProject ? 'bc-inst-chip-active' : ''}`}
                   onClick={toggleGroupByProject}
                   aria-pressed={groupByProject}
-                  title="Group the list under projects instead of folders"
+                  disabled={mergedListOn}
+                  title={
+                    mergedListOn
+                      ? 'Projects are this server’s, so the one list of every server is not grouped by them. Turn on “by server” to group this server’s tab'
+                      : 'Group the list under projects instead of folders'
+                  }
                 >
                   <span className="bc-class-chip-name">by project</span>
                 </button>
@@ -1153,6 +1241,11 @@ export default function Sidebar({
                 />
               ) : null
             })}
+            {/* The chips are counted over this server's sessions. The machine chips name
+                this server's instances, so they filter this server's list only. */}
+            {showServerChoice && (
+              <div className="bc-filter-popover-note">Counts are this server’s. Machine applies to this server only.</div>
+            )}
             {activeFilterCount > 0 && (
               <button
                 className="bc-inst-filter-clear"
@@ -1167,49 +1260,83 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Between the chip filter and the list, which is the slot bridge-ui's own inbox
-          takes. Above the list because it is the thing you have not seen: the rows
-          below are, by definition, the sessions the sidebar could already show you.
+      {/* A transcript search that failed is not a transcript search that found
+          nothing: the rows on screen are the local name matches only, and every
+          content-only match is missing. */}
+      {searchActive && searchError && (
+        <div className={styles.searchReach} role="status">
+          Transcript search failed ({searchError}) — showing name matches only.
+        </div>
+      )}
 
-          Given `select`, not `selectSession`, so opening a session from a card closes
-          the mobile drawer exactly as clicking a row does. */}
-      <SignalsInbox onSelectSession={select} onOpenSignalsPage={onOpenSignalsPage} />
+      {/* Content search matches transcripts server-side, but the list can only paint
+          sessions it has loaded, so hits for sessions outside the window render
+          nothing. Measured on this box: for a 100-hit page, 55–92% of hits fall
+          outside it. Without this line the shortfall is completely invisible. */}
+      {contentSearchReach && contentSearchReach.hiddenHitCount > 0 && !shownConnectedFolder && (
+        <div className={styles.searchReach} role="status">
+          {contentSearchReach.shownHitCount} of {contentSearchReach.truncated ? 'at least ' : ''}
+          {contentSearchReach.hitCount} transcript {contentSearchReach.hitCount === 1 ? 'match' : 'matches'} shown
+          {showServerChoice ? ` on ${thisServerFolderLabel(thisServerName)}` : ''}
+          {/* "may", not "will". Paging is not guaranteed to reach a hidden hit: the
+              search index also holds transcripts whose session row is gone. */}
+          {moreSessions ? ' — loading older sessions may surface more.' : '.'}
+        </div>
+      )}
+
+      {/* One feed per readable connected server, mounted whichever view is on: it
+          keeps that server's filter in step with the search box and reports what it
+          shows, for its tab's count and the one list. */}
+      {readableConnections.map((connectionId) => (
+        <ConnectedServerSidebarFeed
+          key={connectionId}
+          connectionId={connectionId}
+          filter={filter}
+          onReport={reportConnectedList}
+        />
+      ))}
+
+      {serverTabsOn && <ServerTabStrip tabs={serverTabs} shown={shownTab} onShow={showServerTab} />}
+
+      {shownConnectedFolder ? (
+        <div className={`bc-server-tab-scroll ${styles.list}`}>
+          <ConnectedServerTabBody
+            folder={shownConnectedFolder}
+            open={openConnectedServerSession?.connectionId === shownConnectedFolder.connectionId ? openConnectedServerSession : null}
+            onOpen={onOpenConnectedServerSession}
+            hideArchived={hideArchived}
+          />
+        </div>
+      ) : (<>
+      {projectStore.enabled && groupByProject && !mergedListOn && projectStore.error && (
+        <div className={styles.projectStoreErrorRow}>
+          <span className={styles.groupByProjectError} title={projectStore.error}>
+            project-store did not answer, so the list shows folders: {projectStore.error}
+          </span>
+        </div>
+      )}
 
       {/* The list is stale the moment the stream drops, and a stale sidebar is silent by
           nature — the rows keep rendering, they just stop changing. This strip is the only
-          thing that says so. It shows only when there ARE rows; with none, the empty state
-          below already reads "Connecting…". SyncEngine reconnects with backoff on its own,
-          so this clears itself. */}
-      {/* Counted in SESSIONS, not in groups or rendered rows. `groups` now carries one
-          entry per server folder whether or not anything is in it, so "are there any
-          groups?" stopped being the same question as "is anything on screen?" — and
-          reading it as such would have hidden the empty state behind a row of empty
-          folder headers on a sidebar showing nothing at all. */}
+          thing that says so. SyncEngine reconnects with backoff on its own, so this
+          clears itself. */}
       {!connected && visibleSessionCount > 0 && (
         <div className={styles.sidebarDisconnected}>
           {connState === 'closed' ? 'Disconnected — list is frozen' : 'Reconnecting — list may be stale'}
         </div>
       )}
-      {(loading || (!connected && !anyFilterActive)) && visibleSessionCount === 0 ? (
+      {(loading || (!connected && !anyFilterActive)) && listedSessionCount === 0 ? (
         <div className="bc-session-list-empty">
           {connected ? 'Loading sessions…' : 'Connecting…'}
         </div>
       ) : (
         <>
-          {visibleSessionCount === 0 ? (
+          {listedSessionCount === 0 ? (
             // An empty list has three causes and the user can only act on two of them,
-            // so naming which one it is IS the message. "No sessions match." was one
-            // string for all three: on a box with no sessions at all it blamed a filter
-            // that was not on, and the user's move — clear the filter — did not exist.
-            //
-            // The order is bridge-ui's (SessionList.tsx:531-545): search first, because
-            // an active search is the narrowest claim and the one the user just made.
-            // No new state — `searchActive` (:334) and `activeFilterCount` (:333) were
-            // already computed for the chip row above.
-            //
-            // "Searching…" still leads, for the reason it always did: while the
-            // transcript half is still out, any verdict is a verdict on half the
-            // evidence — the local name filter alone.
+            // so naming which one it is IS the message. Search first, because an active
+            // search is the narrowest claim and the one the user just made; "Searching…"
+            // leads, because while the transcript half is still out any verdict is a
+            // verdict on half the evidence.
             <div className="bc-session-list-empty">
               {searching
                 ? 'Searching…'
@@ -1225,39 +1352,24 @@ export default function Sidebar({
             </VList>
           )}
           {/* The sidebar holds one page of the newest sessions; this box has thousands.
-              The button is the only thing that says so — the summary endpoint reports
-              no total, so "there are older ones" is the strongest honest claim — and it
-              lives OUTSIDE the virtualizer so it survives a filter that empties the
-              list, which is precisely when the loaded window is too narrow. Styled as
-              bridge-ui's own `bc-session-show-more`, the old chat's button for the same
-              job. */}
-          {moreSessions && (
+              The button is the only thing that says so, and it lives OUTSIDE the
+              virtualizer so it survives a filter that empties the list, which is
+              precisely when the loaded window is too narrow. In the one list it pages
+              every server that has more. */}
+          {listHasOlderSessions && (
             <button
               type="button"
               className={`bc-session-show-more ${styles.sessionPagerShim}`}
-              onClick={loadOlderSessions}
-              disabled={loadingOlderSessions}
-              aria-busy={loadingOlderSessions}
+              onClick={loadOlderSessionsShown}
+              disabled={listLoadingOlderSessions}
+              aria-busy={listLoadingOlderSessions}
             >
-              {loadingOlderSessions ? 'Loading older sessions…' : 'Load older sessions'}
+              {listLoadingOlderSessions ? 'Loading older sessions…' : 'Load older sessions'}
             </button>
           )}
         </>
       )}
-
       </>)}
-
-      {showServerFolders && (
-        <ConnectedServerFolderList
-          open={openConnectedServerSession}
-          onOpen={onOpenConnectedServerSession}
-          collapsed={collapsedServerFolders}
-          onToggle={toggleServerFolder}
-          fillsColumn={thisServerCollapsed}
-          onNewSessionOn={(connectionId) => toggleFolderNewSessionMenu({ kind: 'connected-server', connectionId })}
-          newSessionMenuFor={(connectionId) => newSessionMenuUnderFolder({ kind: 'connected-server', connectionId })}
-        />
-      )}
 
       {/* A refused mutation reverts the row, and a revert on its own is
           indistinguishable from a race — which is precisely how the archive button
@@ -1267,18 +1379,6 @@ export default function Sidebar({
         <div className={styles.sidebarError} role="alert">
           {folderError || actionError}
         </div>
-      )}
-
-      {/* The orchestrator as a conductor, pinned to the foot of the column: what its
-          home session is doing and what needs you. Last in the column, so the list
-          above takes the height and this never scrolls away. */}
-      {orchestratorBasePath && (
-        <ConductorDock
-          homeSessionId={homeSession.sessionId}
-          homeSessionError={homeSession.error}
-          onOpenHomeSession={() => void homeSession.open()}
-          onOpenSignalsPage={onOpenSignalsPage}
-        />
       )}
 
       {/* The context menu lives OUTSIDE the VList: it is positioned in viewport

@@ -20,7 +20,7 @@ import {
   OrchestratorPanel,
 } from '../src/index.ts'
 import { CeilingEditor } from '../src/components/chat/CostBreakdown.tsx'
-import { ServerFolderHeader } from '../src/components/chat/ConnectedServerFolders.tsx'
+import { ServerTabStrip, ConnectedServerSessionRow } from '../src/components/chat/ConnectedServerSidebar.tsx'
 import NewSessionMenu from '../src/components/chat/NewSessionMenu.tsx'
 import { ConnectedServersContext } from '../src/components/chat/ConnectedServers.tsx'
 import { RefChip } from '../src/components/chat/RefChip.tsx'
@@ -2041,21 +2041,35 @@ console.log('BridgePeers — people from a connected server this one gives acces
     html.includes('Loading'))
 }
 
-console.log('ServerFolderHeader — a server folder in the chat sidebar')
+console.log('ServerTabStrip — the chat sidebar’s server tabs')
 {
-  const readable = renderToStaticMarkup(h(ServerFolderHeader, {
-    label: 'laptop', title: 'laptop, a connected server', count: 3, collapsed: false,
-    onToggle: () => {}, onNewSession: () => {},
+  const html = renderToStaticMarkup(h(ServerTabStrip, {
+    tabs: [
+      { key: ':this-server', label: 'server', title: 'server, this server', count: 52, blockedWord: null },
+      { key: 'c1', label: 'laptop', title: 'laptop, a connected server', count: 3, blockedWord: null },
+      { key: 'c2', label: 'desk', title: 'desk is not connected now', count: null, blockedWord: 'offline' },
+    ],
+    shown: 'c1',
+    onShow: () => {},
   }))
-  check('a readable server shows its name, its count and a + for a new session',
-    readable.includes('laptop') && readable.includes('bc-folder-count">3<') && readable.includes('New session on laptop') && !readable.includes('bc-server-folder-blocked'), readable)
-  const offline = renderToStaticMarkup(h(ServerFolderHeader, {
-    label: 'laptop', title: 'laptop is not connected now', count: null, collapsed: true,
-    onToggle: () => {}, blockedWord: 'offline', onNewSession: () => {},
+  check('each server is a tab with its count, and the shown one is selected',
+    html.includes('bc-server-tab-count">52<') && html.includes('bc-server-tab-count">3<') && /aria-selected="true"[^>]*data-server-tab="laptop"/.test(html), html)
+  check('a server that cannot be read is greyed and says why in a word, with no count',
+    html.includes('bc-server-tab-blocked') && html.includes('bc-server-tab-state">offline<'), html)
+}
+
+console.log('ConnectedServerSessionRow — a connected server’s session in the one list')
+{
+  const session = { sessionId: 'br_1', displayName: 'Fix the build', harness: 'claude_code', state: 'idle' }
+  const tagged = renderToStaticMarkup(h(ConnectedServerSessionRow, {
+    connectionId: 'c1', folderLabel: 'laptop', session, active: true, onOpen: () => {}, serverLabel: 'laptop',
   }))
-  check('a server that cannot be read is greyed, says why in a word, and offers no + and no count',
-    offline.includes('bc-server-folder-blocked') && offline.includes('offline') && !offline.includes('New session on') && !offline.includes('bc-folder-count'), offline)
-  check('a collapsed folder says so to assistive tech', offline.includes('aria-expanded="false"'))
+  check('in the one list a row carries its server’s name and reads as selected when open',
+    tagged.includes('bc-session-server-tag') && tagged.includes('>laptop<') && tagged.includes('bc-session-item-selected'), tagged)
+  const plain = renderToStaticMarkup(h(ConnectedServerSessionRow, {
+    connectionId: 'c1', folderLabel: 'laptop', session, active: false, onOpen: () => {},
+  }))
+  check('in its own tab a row carries no server tag', !plain.includes('bc-session-server-tag'), plain)
 }
 
 console.log('Reference chips in a connected server’s thread')

@@ -341,30 +341,18 @@
   --zine-strip-loop: 1.2s;
 }
 
-/* The conductor: the orchestrator, docked at the foot of the chat sidebar (bridge-ui's
-   `.bc-conductor`). It is drawn by `data-state`, each a strip of frames
-   (zine-art's pieces.js, CONDUCTOR_FRAMES); with the pointer on it, it turns to you. Its reply
-   is a speech bubble whose tail points down at it — the crab is the one speaking. */
-[data-theme="zine"] .bc-conductor {
-  border-top: 2px dashed var(--zine-ink);
-  background: var(--zine-cream);
-  padding: 6px 8px 8px;
-}
-[data-theme="zine"] .bc-conductor-emoji,
-[data-theme="zine"] .bc-conductor-dot { display: none; }
-[data-theme="zine"] .bc-conductor-crab,
-[data-theme="zine"] .bc-conductor-crab:hover {
-  width: 60px;
-  height: 55px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-}
-[data-theme="zine"] .bc-conductor-crab:focus-visible { outline: 2px dashed var(--zine-pink); outline-offset: 2px; }
+/* The conductor: the orchestrator's figure at the head of its sidebar row (bridge-ui's
+   `.bc-conductor`, on `.bc-orchestrator`). It is drawn by `data-state`, each a strip of
+   frames (zine-art's pieces.js, CONDUCTOR_FRAMES); with the pointer on the row, it turns
+   to you. */
+[data-theme="zine"] .bc-conductor-crab .bc-orchestrator-badge,
+[data-theme="zine"] .bc-conductor-crab .bc-orchestrator-dot { display: none; }
 [data-theme="zine"] .bc-conductor-mascot {
   display: block;
-  width: 100%;
-  height: 100%;
+  flex: none;
+  width: 34px;
+  height: 31px;
+  margin: -4px 0 -4px -4px;
   background: 0 0 / auto 100% no-repeat;
   animation: zineStrip var(--zine-strip-loop) steps(var(--zine-strip-frames)) infinite;
 }
@@ -381,40 +369,12 @@
   --zine-strip-frames: 6;
   --zine-strip-loop: 1.2s;
 }
-[data-theme="zine"] .bc-conductor-status { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--zine-ink); }
-[data-theme="zine"] .bc-conductor-needs { color: var(--zine-pink-dark); text-decoration-thickness: 2px; }
-[data-theme="zine"] .bc-conductor-input {
-  border: 2px solid var(--zine-ink);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--zine-ink-dark);
-  box-shadow: 2px 2px 0 var(--zine-ink);
-}
-[data-theme="zine"] .bc-conductor-input:placeholder-shown { border-style: dashed; box-shadow: none; }
-[data-theme="zine"] .bc-conductor-input:focus { border-color: var(--zine-ink); box-shadow: 2px 2px 0 var(--zine-pink); }
-[data-theme="zine"] .bc-conductor-reply {
-  left: 6px;
-  bottom: calc(100% + 4px);
-  border: 2px solid var(--zine-ink);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 3px 3px 0 var(--zine-ink);
-  font-family: 'Nunito', sans-serif;
-}
-[data-theme="zine"] .bc-conductor-reply[data-kind="error"] { border-color: var(--zine-pink-dark); box-shadow: 3px 3px 0 var(--zine-pink-dark); }
-/* the tail, pointing down at the conductor */
-[data-theme="zine"] .bc-conductor-reply::after {
-  content: '';
-  position: absolute;
-  left: 24px;
-  bottom: -16px;
-  width: 20px;
-  height: 17px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 17'%3E%3Cpath d='M1 0 L6 16 L18 0 Z' fill='%23FFFFFF'/%3E%3Cpath d='M2 1.5 L6 15.5 L16.5 1.5' fill='none' stroke='%232E3B7A' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
-}
-@media (prefers-reduced-motion: no-preference) {
-  [data-theme="zine"] .bc-conductor-reply { animation: zineStampIn 0.35s cubic-bezier(0.34, 1.6, 0.64, 1); transform-origin: 30px 100%; }
-}
+[data-theme="zine"] .bc-orchestrator-status { font-family: 'Space Mono', monospace; font-size: 0.66rem; color: var(--zine-ink); letter-spacing: 0; }
+[data-theme="zine"] .bc-conductor[data-state="alert"] .bc-orchestrator-status { color: var(--zine-pink-dark); }
+[data-theme="zine"] .bc-orchestrator-signals { font-family: 'Archivo Black', sans-serif; color: var(--zine-ink-dark); }
+[data-theme="zine"] .bc-orchestrator-signals:hover { border-color: var(--zine-ink); color: var(--zine-ink-dark); }
+[data-theme="zine"] .bc-orchestrator-needs-count { background: var(--zine-pink-dark); color: var(--zine-cream); border: 1.5px solid var(--zine-ink); }
+[data-theme="zine"] .bc-orchestrator-page-link { color: var(--zine-pink-dark); font-weight: 700; }
 
 /* An empty chat: the crab waves hello with a speech bubble. */
 [data-theme="zine"] .bc-turns-empty {
@@ -542,12 +502,54 @@
   /* torn ends */
   clip-path: polygon(0 12%, 4% 0, 96% 6%, 100% 0, 98% 50%, 100% 100%, 3% 94%, 0 100%, 2% 50%);
 }
-/* A server's top-level folder: an ink tape rather than a folder's orange one,
-   so the two levels read apart. */
-[data-theme="zine"] .bc-server-folder-header {
-  background: color-mix(in srgb, var(--zine-ink) 22%, var(--zine-cream));
+/* The server tabs: index-card tabs in ink, the shown one cream and lifted onto
+   the list, so a server never reads like one of its folders. */
+[data-theme="zine"] .bc-server-tabs { border-bottom: 2px solid var(--zine-ink); padding: 0 8px; gap: 3px; }
+[data-theme="zine"] .bc-server-tab {
+  border: 2px solid var(--zine-ink);
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--zine-ink) 14%, var(--zine-cream));
+  color: var(--zine-ink-dark);
+  font-family: 'Archivo Black', sans-serif;
+  font-weight: 400;
+  font-size: 0.68rem;
+  margin-bottom: 0;
+  padding: 4px 5px;
 }
-[data-theme="zine"] .bc-server-folder-blocked { opacity: 0.55; }
+[data-theme="zine"] .bc-server-tab-shown { background: var(--zine-cream); position: relative; top: 2px; }
+[data-theme="zine"] .bc-server-tab-count {
+  font-family: 'Archivo Black', sans-serif;
+  padding: 0 5px;
+  border: 1.5px solid var(--zine-ink);
+  border-radius: 9px;
+  background: var(--zine-cream);
+  color: var(--zine-ink);
+}
+[data-theme="zine"] .bc-server-tab-blocked { opacity: 0.55; }
+[data-theme="zine"] .bc-session-day-heading { font-family: 'Archivo Black', sans-serif; color: var(--zine-ink); opacity: 0.7; }
+[data-theme="zine"] .bc-session-server-tag {
+  border: 1.5px solid var(--zine-ink);
+  border-radius: 2px;
+  background: var(--zine-cream);
+  color: var(--zine-ink);
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 0.58rem;
+}
+/* the filters: a card dropped from the search box */
+[data-theme="zine"] .bc-filter-popover {
+  border: 2px solid var(--zine-ink);
+  border-radius: 3px;
+  background: var(--zine-cream);
+  box-shadow: 4px 4px 0 var(--zine-ink);
+}
+[data-theme="zine"] .bc-filter-funnel-active { background: var(--zine-pink-light); color: var(--zine-ink-dark); border-color: var(--zine-ink); }
+[data-theme="zine"] .bc-filter-badge {
+  background: var(--zine-orange);
+  color: var(--zine-cream);
+  border: 1.5px solid var(--zine-ink);
+  font-family: 'Archivo Black', sans-serif;
+}
 [data-theme="zine"] .bc-session-row-grid {
   border-bottom: 1px dotted color-mix(in srgb, var(--zine-ink) 28%, transparent);
   transition: background 0.15s, transform 0.2s cubic-bezier(0.34, 1.8, 0.64, 1);
@@ -724,7 +726,7 @@
     var(--zine-pink-light);
   box-shadow: 2px 2px 0 var(--zine-ink);
 }
-[data-theme="zine"] .bc-orchestrator .bc-session-item-main { font-family: 'Archivo Black', sans-serif; color: var(--zine-ink-dark); letter-spacing: 0.02em; }
+[data-theme="zine"] .bc-orchestrator .bc-session-item-main { font-family: 'Archivo Black', sans-serif; color: var(--zine-ink-dark); letter-spacing: 0.02em; font-size: 0.85rem; }
 /* the ticket is the outer .bc-orchestrator, so the inner row must not paint over it:
    bridge-ui's selected and hover fills are opaque and dulled the selected ticket.
    Selection lifts the ticket the way it lifts a session sticker. */
@@ -743,24 +745,19 @@
   font-family: 'Nunito', sans-serif;
 }
 [data-theme="zine"] .bc-session-search-input:focus { border-color: var(--zine-ink); box-shadow: 3px 3px 0 var(--zine-pink); }
-[data-theme="zine"] .bc-filter-toggle,
 [data-theme="zine"] [aria-label="Signals needing you"] > :first-child button:first-child {
   width: calc(100% - 16px);
   margin: 0 8px;
   padding: 3px 12px 3px 8px;
-  background: color-mix(in srgb, var(--zine-ink) 12%, var(--zine-cream));
+  background: color-mix(in srgb, var(--zine-pink) 40%, var(--zine-cream));
   color: var(--zine-ink-dark);
   font-family: 'Archivo Black', sans-serif;
   font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   font-size: 0.72rem;
-  transform: rotate(0.4deg);
-  clip-path: polygon(0 10%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
-}
-[data-theme="zine"] [aria-label="Signals needing you"] > :first-child button:first-child {
-  background: color-mix(in srgb, var(--zine-pink) 40%, var(--zine-cream));
   transform: rotate(-0.4deg);
+  clip-path: polygon(0 10%, 5% 0, 95% 8%, 100% 0, 97% 50%, 100% 100%, 4% 92%, 0 100%, 3% 50%);
 }
 
 /* ---------- chat: the vibe classifier ----------

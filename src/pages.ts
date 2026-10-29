@@ -97,7 +97,8 @@ export interface BridgePage {
 export const BRIDGE_PAGES: readonly BridgePage[] = [
   // Work
   { route: 'chat', label: 'Chat', group: 'work', listed: true, end: true, component: BridgeChat },
-  { route: 'signals', label: 'Signals', group: 'work', listed: true, component: BridgeSignals },
+  // Routed, not listed: the chat sidebar's orchestrator row opens it.
+  { route: 'signals', label: 'Signals', group: 'work', listed: false, component: BridgeSignals },
   { route: 'sessions', label: 'Sessions', group: 'work', listed: true, component: BridgeSessions },
   { route: 'kanban', label: 'Kanban', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath, component: BridgeKanban },
   { route: 'kanbanSettings', label: 'Board settings', group: 'work', listed: false, component: BridgeKanbanSettings },
@@ -105,9 +106,8 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // Each email ticket beside the message it came from. Needs mail as well as
   // kanban, since the log is half emails.
   { route: 'emailTickets', label: 'Email tickets', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath && !!c.mailBasePath, component: BridgeEmailTickets },
-  // The page exists on every host; it is listed only where the orchestrator is
-  // proxied, since without it the page can say nothing but "not configured".
-  { route: 'orchestrator', label: 'Orchestrator', group: 'work', listed: true, available: c => !!c.orchestratorBasePath, component: BridgeOrchestrator },
+  // Routed, not listed: the gear on the chat sidebar's orchestrator row links to it.
+  { route: 'orchestrator', label: 'Orchestrator', group: 'work', listed: false, available: c => !!c.orchestratorBasePath, component: BridgeOrchestrator },
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },

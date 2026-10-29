@@ -25,18 +25,18 @@ import { chatKey, migrateLegacyKeys } from './storageKeys'
 // the `migrateLegacyKeys` call in `storage()` below. Add a key here AND to MIGRATED_KEYS.
 const SIDEBAR_COLLAPSED_KEY = chatKey('sidebar-collapsed')
 const FOLDER_COLLAPSED_KEY = chatKey('folder-collapsed')
-const FILTERS_OPEN_KEY = chatKey('filters-open')
 const INBOX_OPEN_KEY = chatKey('inbox-open')
 const BACKGROUND_INBOX_OPEN_KEY = chatKey('background-inbox-open')
 const GROUP_BY_PROJECT_KEY = chatKey('group-by-project')
 const PROJECT_GROUP_COLLAPSED_KEY = chatKey('project-group-collapsed')
 const HIDE_ARCHIVED_KEY = chatKey('hide-archived')
-// Top-level server folders: this server's and each connected server's,
-// keyed by `THIS_SERVER_FOLDER_KEY` or the connection id. New with the
-// connected servers, so nothing old to migrate.
-const SERVER_FOLDER_COLLAPSED_KEY = chatKey('server-folder-collapsed')
+// The sidebar's server tabs: whether the list is split into a tab per server,
+// and which tab is open, as `THIS_SERVER_TAB_KEY` or a connection id. New with
+// the tabs, so nothing old to migrate.
+const GROUP_BY_SERVER_KEY = chatKey('group-by-server')
+const SERVER_TAB_KEY = chatKey('server-tab')
 const MIGRATED_KEYS: readonly string[] = [
-  SIDEBAR_COLLAPSED_KEY, FOLDER_COLLAPSED_KEY, FILTERS_OPEN_KEY, INBOX_OPEN_KEY,
+  SIDEBAR_COLLAPSED_KEY, FOLDER_COLLAPSED_KEY, INBOX_OPEN_KEY,
   GROUP_BY_PROJECT_KEY, PROJECT_GROUP_COLLAPSED_KEY,
 ]
 
@@ -134,32 +134,6 @@ export function saveCollapsedFolders(collapsed: ReadonlySet<string>): void {
     )
   } catch {
     // A full or refused quota must not cost the user the click they just made.
-  }
-}
-
-/** Whether the filter chip rows are open. Defaults to OPEN, which is what chat has
- *  always done — a stored value only ever restores a choice the user made. */
-export function loadFiltersOpen(): boolean {
-  const store = storage()
-  if (!store) return true
-  try {
-    const raw = store.getItem(FILTERS_OPEN_KEY)
-    // Absent means "never chosen", not "closed". Only the two values this writes are
-    // honoured; anything else is treated as absent.
-    if (raw === 'false') return false
-    return true
-  } catch {
-    return true
-  }
-}
-
-export function saveFiltersOpen(open: boolean): void {
-  const store = storage()
-  if (!store) return
-  try {
-    store.setItem(FILTERS_OPEN_KEY, String(open))
-  } catch {
-    // As above — losing the preference is not worth losing the interaction.
   }
 }
 
@@ -300,40 +274,50 @@ export function saveCollapsedProjectGroups(collapsed: ReadonlySet<string>): void
   }
 }
 
-/** The key this server's own top-level folder is collapsed under. A
- *  connection id never takes this form, so the two cannot collide. */
-export const THIS_SERVER_FOLDER_KEY = ':this-server'
+/** The tab key of this server's own sessions. A connection id never takes
+ *  this form, so the two cannot collide. */
+export const THIS_SERVER_TAB_KEY = ':this-server'
 
-/** Which top-level server folders are collapsed, as connection ids and
- *  `THIS_SERVER_FOLDER_KEY`. */
-export function loadCollapsedServerFolders(): Set<string> {
+/** Whether the list is split into a tab per server. Defaults to ON, which keeps
+ *  each server's folders and projects apart as they always were; off, every
+ *  server's sessions share one list, newest first. */
+export function loadGroupByServer(): boolean {
   const store = storage()
-  if (!store) return new Set()
+  if (!store) return true
   try {
-    const raw = store.getItem(SERVER_FOLDER_COLLAPSED_KEY)
-    if (!raw) return new Set()
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return new Set()
-    return new Set(
-      parsed.filter((v): v is string => typeof v === 'string').slice(-MAX_PERSISTED_COLLAPSED_FOLDERS),
-    )
+    return store.getItem(GROUP_BY_SERVER_KEY) !== 'false'
   } catch {
-    return new Set()
+    return true
   }
 }
 
-export function saveCollapsedServerFolders(collapsed: ReadonlySet<string>): void {
+export function saveGroupByServer(on: boolean): void {
   const store = storage()
   if (!store) return
   try {
-    if (collapsed.size === 0) {
-      store.removeItem(SERVER_FOLDER_COLLAPSED_KEY)
-      return
-    }
-    store.setItem(
-      SERVER_FOLDER_COLLAPSED_KEY,
-      JSON.stringify([...collapsed].slice(-MAX_PERSISTED_COLLAPSED_FOLDERS)),
-    )
+    store.setItem(GROUP_BY_SERVER_KEY, String(on))
+  } catch {
+    // As above — losing the preference is not worth losing the interaction.
+  }
+}
+
+/** The server tab last opened, or this server's when none was. The caller
+ *  shows this server's tab while the stored connection is not in the list. */
+export function loadServerTab(): string {
+  const store = storage()
+  if (!store) return THIS_SERVER_TAB_KEY
+  try {
+    return store.getItem(SERVER_TAB_KEY) || THIS_SERVER_TAB_KEY
+  } catch {
+    return THIS_SERVER_TAB_KEY
+  }
+}
+
+export function saveServerTab(key: string): void {
+  const store = storage()
+  if (!store) return
+  try {
+    store.setItem(SERVER_TAB_KEY, key)
   } catch {
     // As above.
   }
