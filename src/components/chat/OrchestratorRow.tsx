@@ -12,6 +12,7 @@ import { signalSection } from '../../signalAttentionSections'
 import { withoutPeerMessageSignals } from '../../peerMessages'
 import { useWaitingPeerMessages } from '../PeerMessageCards'
 import { chatKey } from './storageKeys'
+import { NeedsYouDropdown } from './SignalsInbox'
 
 // OrchestratorConfig mirrors the configView the orchestrator service returns from
 // GET/PUT /config and POST /config/reset-week.
@@ -49,23 +50,29 @@ export interface OrchestratorRowProps {
   onOpenHomeSession: () => void
   /** Opens every open signal on the thread pane's full width. */
   onOpenSignalsPage: () => void
+  /** Opens the session a Needs you card belongs to, the way a session row does. */
+  onSelectSession: (sessionId: string) => void
   /** Whether the home session is the session on screen. */
   selected: boolean
 }
 
 // OrchestratorRow is the orchestrator's one place in the sidebar, pinned under "+ New":
 // its name (the home session's own), what it is doing, and how many signals need you.
-// A click on the row opens the home session; the count and ▸ open the signals page;
+// A click on the row opens the home session; the count and ▸ drop Needs you down
+// under it, with a way to the signals page;
 // the gear opens its settings, fetched from the orchestrator service (proxied at
 // `orchestratorBasePath`). The row carries the conductor's `data-state`, so a host
 // theme draws its figure in `.bc-conductor-mascot`. Unreachable, it still renders and
 // says so rather than breaking the sidebar. A host that proxies no orchestrator does
 // not render it.
-export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSession, onOpenSignalsPage, selected }: OrchestratorRowProps) {
+export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSession, onOpenSignalsPage, onSelectSession, selected }: OrchestratorRowProps) {
   const { fetch: apiFetch, orchestratorBasePath, routes } = useBridgeConfig()
   const [cfg, setCfg] = useState<OrchestratorConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // The Needs you dropdown under the row. Shut on every load: open, it pushes the list
+  // down, and the count beside ▸ already says whether there is anything in it.
+  const [signalsOpen, setSignalsOpen] = useState(false)
   const [limitDraft, setLimitDraft] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -150,17 +157,20 @@ export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSes
     }
   }, [apiFetch, orchestratorBasePath])
 
-  const openSignals = () => {
-    const newest = newestSignalTime(raisedAt)
-    if (newest) {
-      setSeenUpTo(newest)
-      try {
-        window.localStorage.setItem(SEEN_SIGNALS_KEY, newest)
-      } catch {
-        // Storage refused (private mode, quota): the alert comes back on the next load.
+  // Opening the dropdown is seeing what is in it, so it is what clears the alert.
+  const toggleSignals = () => {
+    if (!signalsOpen) {
+      const newest = newestSignalTime(raisedAt)
+      if (newest) {
+        setSeenUpTo(newest)
+        try {
+          window.localStorage.setItem(SEEN_SIGNALS_KEY, newest)
+        } catch {
+          // Storage refused (private mode, quota): the alert comes back on the next load.
+        }
       }
     }
-    onOpenSignalsPage()
+    setSignalsOpen((open) => !open)
   }
 
   const enabled = cfg?.enabled ?? false
@@ -204,21 +214,32 @@ export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSes
         <button
           type="button"
           className={`bc-orchestrator-signals ${needsYou > 0 ? 'bc-orchestrator-signals-waiting' : ''}`}
-          onClick={openSignals}
-          title={needsYou > 0 ? `${needsYou} need${needsYou === 1 ? 's' : ''} you — open the signals page` : 'Open the signals page'}
+          onClick={toggleSignals}
+          aria-expanded={signalsOpen}
+          title={needsYou > 0 ? `${needsYou} need${needsYou === 1 ? 's' : ''} you` : 'Nothing needs you'}
           aria-label={needsYou > 0 ? `Signals: ${needsYou} need you` : 'Signals'}
         >
           {needsYou > 0 && <span className="bc-orchestrator-needs-count">{needsYou}</span>}
-          <span aria-hidden>▸</span>
+          <span aria-hidden>{signalsOpen ? '▾' : '▸'}</span>
         </button>
         <button
           type="button"
-          className="bc-session-menu-btn bc-orchestrator-caret"
+          className="bc-orchestrator-caret"
           onClick={() => setExpanded(x => !x)}
           aria-expanded={expanded}
           title="Orchestrator settings"
         >{expanded ? '▾' : '⚙'}</button>
       </div>
+
+      {signalsOpen && (
+        <NeedsYouDropdown
+          onSelectSession={onSelectSession}
+          onOpenSignalsPage={() => {
+            setSignalsOpen(false)
+            onOpenSignalsPage()
+          }}
+        />
+      )}
 
       {homeSessionError && (
         <div className="bc-orchestrator-error" role="alert">

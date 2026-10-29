@@ -375,6 +375,7 @@
 [data-theme="zine"] .bc-orchestrator-signals:hover { border-color: var(--zine-ink); color: var(--zine-ink-dark); }
 [data-theme="zine"] .bc-orchestrator-needs-count { background: var(--zine-pink-dark); color: var(--zine-cream); border: 1.5px solid var(--zine-ink); }
 [data-theme="zine"] .bc-orchestrator-page-link { color: var(--zine-pink-dark); font-weight: 700; }
+[data-theme="zine"] .bc-needs-you-dropdown { border-top: 2px solid var(--zine-ink); background: var(--zine-cream); }
 
 /* An empty chat: the crab waves hello with a speech bubble. */
 [data-theme="zine"] .bc-turns-empty {

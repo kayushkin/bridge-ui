@@ -203,3 +203,69 @@ function backgroundCardLabel(
 ): string {
   return `${sessionName(request.sessionId)} · ${backgroundSessionTypeLabel(sessionTypeOfRequest(request, sessionTypeOf))}`
 }
+
+/**
+ * Needs you as a dropdown under the orchestrator row: the same cards as the inbox
+ * above — peer messages waiting on a person first, then the operator's questions and
+ * notifications — and a button to see them all on the signals page. It reads the same
+ * shared signals and peer-message polls as the row's count, so opening it asks for
+ * nothing new except the names of the sessions it draws.
+ */
+export function NeedsYouDropdown({
+  onSelectSession,
+  onOpenSignalsPage,
+}: {
+  /** Open the session a card belongs to. */
+  onSelectSession: (sessionId: string) => void
+  /** Show every signal on the thread pane's full width (`SignalsPage`). */
+  onOpenSignalsPage: () => void
+}) {
+  const { operator, error, reload } = useOpenSignalsByAttention()
+  const operatorQuestions = useMemo(() => withoutPeerMessageSignals(operator), [operator])
+  const needsYou = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
+  const peerMessages = useWaitingPeerMessages()
+  const sessionName = useSessionNames(useMemo(() => needsYou.requests.map(request => request.sessionId), [needsYou]))
+  const nothingWaiting = needsYou.signalCount === 0 && peerMessages.waiting.length === 0
+
+  return (
+    <div className={`${styles.inboxBody} bc-needs-you-dropdown`} role="region" aria-label="Signals needing you, from the orchestrator row">
+      <button
+        type="button"
+        className={styles.inboxOpenPage}
+        title="Show every signal in full, in place of the chat"
+        onClick={onOpenSignalsPage}
+      >
+        Open all on the signals page
+      </button>
+      {error !== null && <p className={styles.inboxError}>Couldn’t load: {error}</p>}
+      {nothingWaiting && error === null && <p className="bc-needs-you-empty">Nothing is waiting on you.</p>}
+      <PeerMessagesNeedingYou
+        waiting={peerMessages.waiting}
+        error={peerMessages.error}
+        reload={peerMessages.reload}
+        onSelectSession={onSelectSession}
+      />
+      {needsYou.requests.map(request => (
+        <SignalRequestCard
+          key={request.requestId || request.signals[0]?.id}
+          request={request}
+          compact
+          onResolved={reload}
+          // As in the inbox: a session you are not looking at, whose agent has usually
+          // stopped, so a card here can be put away without an answer.
+          allowDismissWithoutAnswer
+          header={
+            <button
+              type="button"
+              className={styles.inboxSessionButton}
+              title="Open this session"
+              onClick={() => onSelectSession(request.sessionId)}
+            >
+              {sessionName(request.sessionId)}
+            </button>
+          }
+        />
+      ))}
+    </div>
+  )
+}

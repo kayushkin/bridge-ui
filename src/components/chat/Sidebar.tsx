@@ -1097,13 +1097,14 @@ export default function Sidebar({
 
       {/* The orchestrator's one row, between "+ New" and the search box: a click opens
           its home session as a chat, through the same `select` a session row uses; its
-          count and ▸ open the signals page, which is where Needs you lives now. */}
+          count and ▸ drop Needs you down under it, with a way to the signals page. */}
       {orchestratorBasePath && (
         <OrchestratorRow
           homeSessionId={homeSession.sessionId}
           homeSessionError={homeSession.error}
           onOpenHomeSession={() => void homeSession.open()}
           onOpenSignalsPage={onOpenSignalsPage}
+          onSelectSession={select}
           selected={!workGraphOpen && !projectsOpen && !openConversationRoomID && !openConnectedServerSession && homeSession.sessionId !== null && homeSession.sessionId === activeId}
         />
       )}
