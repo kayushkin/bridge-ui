@@ -6752,3 +6752,167 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-connected-server-pane .pr-thread { flex: 1; min-height: 0; }
 /* A connected server's pty session: its terminal does not cross the proxy, so a line says so where the Terminal tab would be. */
 .bc-terminal-unavailable { padding: 4px 12px; font-size: 0.85em; color: var(--text-dim); border-top: 1px solid var(--border); }
+
+/* Messages from connected bridge servers (`components/PeerMessageCards.tsx`):
+   a request to start a session, a notice that something is ready, and what
+   came of either. What the other server wrote is set apart in a box of its own
+   so it never reads as this page's words. */
+.pm-needs-you {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pm-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-card[data-state='approved'],
+.pm-card[data-state='delivered'] {
+  border-left-color: var(--accent);
+}
+
+.pm-card[data-state='declined'],
+.pm-card[data-state='failed'] {
+  border-left-color: var(--error);
+}
+
+.pm-card-status {
+  border-left-color: var(--border);
+}
+
+.pm-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pm-kind {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.pm-headline {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pm-when,
+.pm-state {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.pm-title {
+  font-weight: 600;
+}
+
+.pm-hint {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.pm-untrusted {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9em;
+  max-height: 16em;
+  overflow-y: auto;
+}
+
+.pm-reason .pm-untrusted {
+  display: inline;
+  border: none;
+  padding: 0;
+  background: none;
+}
+
+.pm-address {
+  text-decoration: underline dotted;
+  color: var(--text-dim);
+  cursor: text;
+  user-select: all;
+}
+
+.pm-commits {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.pm-decision,
+.pm-approve,
+.pm-decline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pm-decline input {
+  flex: 1;
+  min-width: 12em;
+}
+
+.pm-error {
+  margin: 0;
+}
+
+.pm-connection-block {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.pm-connection-block > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.pm-connection,
+.pm-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pm-thread {
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+
+.pm-thread-row.pm-outgoing {
+  margin-left: 24px;
+}
+
+.pm-send {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.pm-send-kind {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}

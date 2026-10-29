@@ -4,6 +4,8 @@ import { SignalRequestCard } from './SignalCard'
 import { loadBackgroundInboxOpen, loadInboxOpen, saveBackgroundInboxOpen, saveInboxOpen } from './sidebarPersistence'
 import { backgroundSessionTypeLabel, sessionTypeOfRequest, signalSection } from '../../signalAttentionSections'
 import styles from './Chat.module.css'
+import { PeerMessagesNeedingYou, useWaitingPeerMessages } from '../PeerMessageCards'
+import { withoutPeerMessageSignals } from '../../peerMessages'
 
 /**
  * Everything waiting on the operator, across every session — the sidebar's "Needs you" —
@@ -55,7 +57,11 @@ export default function SignalsInbox({
   const [open, setOpen] = useState(loadInboxOpen)
   const [backgroundOpen, setBackgroundOpen] = useState(loadBackgroundInboxOpen)
 
-  const needsYou = useMemo(() => signalSection(operator), [operator])
+  // A message from a connected server is drawn by its own card below, not as
+  // the question the server raises for it.
+  const operatorQuestions = useMemo(() => withoutPeerMessageSignals(operator), [operator])
+  const needsYou = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
+  const peerMessages = useWaitingPeerMessages()
   const backgroundSection = useMemo(() => signalSection(background), [background])
   // Names only for cards that are drawn. Asking for them behind a shut panel is a
   // request for something nobody can see.
@@ -83,8 +89,9 @@ export default function SignalsInbox({
 
   // Absent rather than empty. A bridge-server with no signals route answers 404
   // (`available === false`), which is not "nothing is waiting".
-  if (!available) return null
-  const showNeedsYou = needsYou.signalCount > 0 || error !== null
+  const peerWaiting = peerMessages.waiting.length
+  if (!available && peerWaiting === 0) return null
+  const showNeedsYou = needsYou.signalCount > 0 || peerWaiting > 0 || error !== null || peerMessages.error !== null
   const showBackground = backgroundSection.signalCount > 0
   if (!showNeedsYou && !showBackground) return null
 
@@ -127,7 +134,7 @@ export default function SignalsInbox({
                 {open ? '▾' : '▸'}
               </span>
               <span className={styles.inboxTitle}>Needs you</span>
-              <span className={styles.inboxCount}>{needsYou.signalCount}</span>
+              <span className={styles.inboxCount}>{needsYou.signalCount + peerWaiting}</span>
             </button>
           </div>
 
@@ -145,6 +152,12 @@ export default function SignalsInbox({
               >
                 Open all on the signals page
               </button>
+              <PeerMessagesNeedingYou
+                waiting={peerMessages.waiting}
+                error={peerMessages.error}
+                reload={peerMessages.reload}
+                onSelectSession={onSelectSession}
+              />
               {renderRequests(needsYou.requests, request => sessionName(request.sessionId))}
             </div>
           )}

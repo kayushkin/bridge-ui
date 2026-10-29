@@ -14,6 +14,8 @@ import {
 import { useBridgeConfig } from '../context'
 import { usePrincipals } from '../usePrincipals'
 import { fetchServiceSettings } from '../serviceSettings'
+import { connectedServerLabel } from '../serverFolders'
+import { PeerConnectionMessages } from './PeerMessageCards'
 import {
   EMPTY_PEER_CONNECT_FORM,
   PEER_ACCESS_LEVELS_PATH,
@@ -182,6 +184,17 @@ export function BridgePeers() {
           as the whole server, with exactly the access this server gave it.
         </p>
         <PeopleFromConnectedServers connections={connections.rows} />
+      </section>
+
+      <section className="pr-section" aria-label="Messages with connected servers">
+        <h3 className="pr-section-title">Messages with connected servers</h3>
+        <p className="bp-hint">
+          A connected server may ask this one to start a session, or say that something is ready to update to, and
+          this server may ask it the same. Nothing runs and nothing updates until a person on the receiving server
+          approves it, and an approved request reaches its session marked as coming from the other server. What the
+          other server wrote is shown as plain text.
+        </p>
+        <MessagesWithConnectedServers connections={connections.rows} />
       </section>
     </div>
   )
@@ -614,6 +627,25 @@ function InvitesTable({ invites }: { invites: PeerConnectionInvite[] | null }) {
 /** For each connected server this one gives access to, which of its people
  *  act here as which principal. The mapping keys on the principal this server
  *  made for that server, so a server with no access given has nobody to map. */
+function MessagesWithConnectedServers({ connections }: { connections: PeerConnectionView[] | null }) {
+  if (connections === null) return <div className="bp-empty-inline">Loading…</div>
+  const live = connections.filter(view => !peerConnectionIsRemoved(view))
+  if (live.length === 0) return <div className="bp-empty-inline">No server is connected.</div>
+  return (
+    <>
+      {live.map(view => {
+        const serverName = connectedServerLabel(view).label
+        return (
+          <details key={view.connection.id} className="pm-connection-block">
+            <summary>{serverName}</summary>
+            <PeerConnectionMessages connectionID={view.connection.id} serverName={serverName} />
+          </details>
+        )
+      })}
+    </>
+  )
+}
+
 function PeopleFromConnectedServers({ connections }: { connections: PeerConnectionView[] | null }) {
   if (connections === null) return <div className="bp-empty-inline">Loading…</div>
   const mappable = connections.filter(view => !peerConnectionIsRemoved(view) && !!view.connection.peer_principal_id)

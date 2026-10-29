@@ -5,6 +5,8 @@ import { RefChip } from './RefChip'
 import { backgroundSessionTypeLabel, sessionTypeOfRequest, signalSection } from '../../signalAttentionSections'
 import { timeAgo } from '../../utils'
 import styles from './Chat.module.css'
+import { PeerMessagesNeedingYou, useWaitingPeerMessages } from '../PeerMessageCards'
+import { withoutPeerMessageSignals } from '../../peerMessages'
 
 /** How many background cards the open background section draws at a time. There
  *  were 319 on 2026-10-20, nearly all notifications with a markdown body, and
@@ -39,7 +41,11 @@ export default function SignalsPage({
   backControl: ReactNode
 }) {
   const { operator, background, sessionTypeOf, available, loading, error, reload } = useOpenSignalsByAttention()
-  const needsYou = useMemo(() => signalSection(operator), [operator])
+  // A message from a connected server is drawn by its own card, not as the
+  // question the server raises for it.
+  const operatorQuestions = useMemo(() => withoutPeerMessageSignals(operator), [operator])
+  const needsYou = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
+  const peerMessages = useWaitingPeerMessages()
   const backgroundSection = useMemo(() => signalSection(background), [background])
   const sessionIds = useMemo(
     () => [...needsYou.requests, ...backgroundSection.requests].map(request => request.sessionId),
@@ -75,7 +81,7 @@ export default function SignalsPage({
     <div className={styles.signalsPage} role="region" aria-label="Signals needing you">
       <div className={styles.signalsPageHeader}>
         <h2 className={styles.signalsPageTitle}>Needs you</h2>
-        <span className={styles.inboxCount}>{needsYou.signalCount}</span>
+        <span className={styles.inboxCount}>{needsYou.signalCount + peerMessages.waiting.length}</span>
         <span className={styles.signalsPageSpacer} />
         <button type="button" className="bc-ctrl-btn" onClick={reload} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
@@ -88,8 +94,20 @@ export default function SignalsPage({
         {!available && (
           <p className={styles.signalsPageEmpty}>This bridge server has no signals route.</p>
         )}
-        {available && error === null && !loading && needsYou.requests.length === 0 && (
+        {available && error === null && !loading && needsYou.requests.length === 0 && peerMessages.waiting.length === 0 && (
           <p className={styles.signalsPageEmpty}>Nothing is waiting on you.</p>
+        )}
+
+        {(peerMessages.waiting.length > 0 || peerMessages.error !== null) && (
+          <section className={styles.signalsPageSection}>
+            <h3 className={styles.signalsPageSectionTitle}>From connected servers · {peerMessages.waiting.length}</h3>
+            <PeerMessagesNeedingYou
+              waiting={peerMessages.waiting}
+              error={peerMessages.error}
+              reload={peerMessages.reload}
+              onSelectSession={onSelectSession}
+            />
+          </section>
         )}
 
         {needsYou.questionRequests.length > 0 && (
