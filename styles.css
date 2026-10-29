@@ -6664,6 +6664,7 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .pr-provision { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pr-reach { margin-top: 4px; display: inline-block; }
 .pr-reach-socket-closed { border-color: var(--error); }
+.pr-reach-not-answering { border-color: var(--warning, var(--error)); }
 .pr-table code, .pr-passphrase code { font-family: var(--mono, ui-monospace, monospace); font-size: 0.9em; }
 .pr-check { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; }
 .pr-check-result { white-space: normal; text-align: left; }

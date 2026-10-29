@@ -9,7 +9,7 @@
 // draw from.
 
 import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
-import { peerConnectionReach } from './peers'
+import { peerConnectionReach, peerConnectionReachText } from './peers'
 
 /** This server's own description of itself. */
 export const THIS_SERVER_PATH = '/server'
@@ -47,6 +47,9 @@ export function connectedServerBlockedReason(view: PeerConnectionView): string |
   if (peerConnectionReach(view) === 'socket closed') {
     return `${name} is not connected now: the socket between the two servers is closed. It reconnects by itself when the server that dials out is running and online.`
   }
+  if (peerConnectionReach(view) === 'not answering') {
+    return `${name} is ${peerConnectionReachText(view)}: the socket between the two servers is open, but its bridge has stopped answering requests${view.last_probe_failure ? ` (${view.last_probe_failure})` : ''}. Nothing can be opened there until it answers again; this server keeps checking.`
+  }
   return null
 }
 
@@ -56,6 +59,7 @@ export function connectedServerBlockedWord(view: PeerConnectionView): string | n
   if (view.connection.removed_at) return 'removed'
   if (!view.access_held) return 'no access'
   if (peerConnectionReach(view) === 'socket closed') return 'offline'
+  if (peerConnectionReach(view) === 'not answering') return 'not answering'
   return null
 }
 

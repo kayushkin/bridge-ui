@@ -181,14 +181,26 @@ export function peerTransportDescription(connection: PeerConnection): string {
   return connection.transport
 }
 
-export type PeerConnectionReach = 'removed' | 'direct' | 'socket open' | 'socket closed'
+export type PeerConnectionReach = 'removed' | 'direct' | 'socket open' | 'not answering' | 'socket closed'
 
 /** Whether requests can travel now. A direct connection has no socket; a
- *  dial-out one works only while its socket is open. */
+ *  dial-out one works only while its socket is open and the bridge behind it
+ *  answers: the server probes that, since a socket can stay open, its pings
+ *  answered, while every request sent over it hangs. */
 export function peerConnectionReach(view: PeerConnectionView): PeerConnectionReach {
   if (view.connection.removed_at) return 'removed'
   if (view.connection.transport === PeerTransportDirect) return 'direct'
-  return view.socket_connected ? 'socket open' : 'socket closed'
+  if (!view.socket_connected) return 'socket closed'
+  return view.answering === false ? 'not answering' : 'socket open'
+}
+
+/** The reach in plain words, with since when a server stopped answering. */
+export function peerConnectionReachText(view: PeerConnectionView): string {
+  const reach = peerConnectionReach(view)
+  if (reach !== 'not answering') return reach
+  return view.not_answering_since
+    ? `connected, not answering since ${new Date(view.not_answering_since).toLocaleString()}`
+    : 'connected, not answering'
 }
 
 export function peerConnectionIsRemoved(view: PeerConnectionView): boolean {
@@ -230,6 +242,8 @@ const PEER_REFUSAL_EXPLANATIONS: Readonly<Record<string, string>> = {
     'The other server has not given this one any access yet. Its administrator grants a level on its own Peers page.',
   peer_not_connected:
     'The other server is not connected now: its socket to this one is closed. It reconnects by itself when it is running and online.',
+  peer_not_answering:
+    'The other server is connected but not answering: its socket is open, yet its bridge has stopped answering requests. Nothing reaches it until it answers again; this server keeps checking.',
   mapping_incomplete:
     'A mapping needs all three ids: the connected server, its person, and the principal here they act as.',
   unknown_peer_principal:

@@ -34,6 +34,7 @@ import {
   peerConnectionInviteState,
   peerConnectionIsRemoved,
   peerConnectionReach,
+  peerConnectionReachText,
   peerConnectionRemovePath,
   peerConnectionRemovedBy,
   peerConnectionRevokeGrantPath,
@@ -244,7 +245,7 @@ function ConnectionsTable({ connections, levels, onChanged, onLevelsChanged }: {
               <td>
                 {peerTransportDescription(connection)}
                 {connection.remote_base_url && <div className="bp-hint">{connection.remote_base_url}</div>}
-                {!removed && <span className={`bp-badge pr-reach pr-reach-${reach.replace(' ', '-')}`}>{reach}</span>}
+                {!removed && <span className={`bp-badge pr-reach pr-reach-${reach.replace(' ', '-')}`} title={view.last_probe_failure || undefined}>{peerConnectionReachText(view)}</span>}
               </td>
               <td>
                 {!removed && (

@@ -4,6 +4,7 @@ import {
   CONNECTED_SERVER_PARAM,
   CONNECTED_SERVER_SESSION_PARAM,
   connectedServerBlockedReason,
+  connectedServerBlockedWord,
   connectedServerListings,
   connectedServerLabel,
   connectedServerSessionKey,
@@ -62,6 +63,14 @@ describe('which connected servers can be read', () => {
     expect(connectedServerBlockedReason(view({ socket_connected: false }))).toMatch(/not connected now/)
     expect(connectedServerBlockedReason(view({ access_held: undefined }))).toMatch(/not given this server any access/)
     expect(connectedServerBlockedReason(view({ connection: connection({ removed_at: '2026-10-27T11:00:00Z' }) }))).toMatch(/disconnected/)
+  })
+
+  it('refuses an open socket whose bridge stopped answering, like an offline one, saying since when', () => {
+    const stuck = view({ answering: false, not_answering_since: '2026-10-29T21:16:00Z', last_probe_failure: 'context deadline exceeded' })
+    expect(connectedServerBlockedReason(stuck)).toMatch(/connected, not answering since .*context deadline exceeded/)
+    expect(connectedServerBlockedWord(stuck)).toBe('not answering')
+    expect(readableConnectionIds(connectedServerListings([stuck]))).toEqual([])
+    expect(connectedServerBlockedReason(view({ answering: true }))).toBeNull()
   })
 
   it('orders readable servers first, then unreadable, then removed, and keeps every one', () => {

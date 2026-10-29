@@ -15,6 +15,7 @@ import {
   peerConnectionInviteState,
   peerConnectionProxyBasePath,
   peerConnectionReach,
+  peerConnectionReachText,
   peerConnectionRemovePath,
   peerConnectionRemovedBy,
   peerConnectionRevokeGrantPath,
@@ -104,6 +105,13 @@ describe('how two servers reach each other', () => {
     expect(peerConnectionReach(view({ socket_connected: true }))).toBe('socket open')
     expect(peerConnectionReach(view({ connection: connection({ transport: 'direct' }) }))).toBe('direct')
     expect(peerConnectionReach(view({ connection: connection({ removed_at: '2026-10-27T11:00:00Z' }), socket_connected: true }))).toBe('removed')
+  })
+  it('reads an open socket whose bridge stopped answering as not answering, with since when', () => {
+    expect(peerConnectionReach(view({ socket_connected: true, answering: true }))).toBe('socket open')
+    const stuck = view({ socket_connected: true, answering: false, not_answering_since: '2026-10-29T21:16:00Z', last_probe_failure: 'context deadline exceeded' })
+    expect(peerConnectionReach(stuck)).toBe('not answering')
+    expect(peerConnectionReachText(stuck)).toMatch(/^connected, not answering since /)
+    expect(peerConnectionReach(view({ socket_connected: false, answering: false }))).toBe('socket closed')
   })
 })
 
