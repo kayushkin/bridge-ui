@@ -138,6 +138,35 @@ a.name:hover { text-decoration: underline; }
 }
 .tab:hover { color: var(--text); }
 .tabActive { color: var(--accent); border-bottom-color: var(--accent); }
+/* Above the thread: the person (or the linked rooms), their tabs, and the
+   other chats they are in. */
+.rowHeader { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
+.rowHeaderName { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 2px; }
+.rowHeader .tabs { border-bottom: none; }
+.otherChats {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px 6px; font-size: 0.85em;
+  border-top: 1px solid var(--border-subtle);
+}
+.otherChat { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.otherChatOpen, .otherChatAdd {
+  display: inline-flex; align-items: center; gap: 4px; font: inherit; background: none; border: none; cursor: pointer;
+  padding: 1px 8px; color: var(--text);
+}
+.otherChatOpen:hover { background: var(--bg-hover, var(--border-subtle)); }
+.otherChatOpen .platform { border: none; padding: 0; }
+.otherChatAdd { color: var(--text-dim); border-left: 1px solid var(--border); font-size: 0.9em; }
+.otherChatAdd:hover:not(:disabled) { color: var(--accent); }
+.personMark { margin-right: 4px; font-weight: normal; }
+/* A room's settings, folded away under the header. */
+.roomSettings { border-bottom: 1px solid var(--border-subtle); }
+.roomSettings > summary { padding: 4px 10px; cursor: pointer; font-size: 0.85em; }
+.roomSettings > .threadTags:last-child { border-bottom: none; }
+/* In a merged thread: a message's app, which picks it as the chat to answer
+   in, and the row of chats the Send button sends to. */
+button.platformPick { font: inherit; font-size: 0.72em; background: none; cursor: pointer; }
+button.platformPick:hover:not(:disabled) { color: var(--text); border-color: var(--text-muted); }
+.platformPicked, button.platformPicked { color: var(--accent); border-color: var(--accent); }
+.sendTarget { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px 0; font-size: 0.9em; }
 .threadTags {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; font-size: 0.9em;
   border-bottom: 1px solid var(--border-subtle);

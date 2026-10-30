@@ -168,7 +168,7 @@ export function RoomThread({ roomID }: { roomID: string }) {
   if (missing) return <div className={styles.empty}>multichat lists no conversation {roomID}.</div>
   if (!conversation) return <div className={styles.empty}>Loading…</div>
   return (
-    <ConversationThread key={conversation.room_id} conversation={conversation} onSent={() => { void reload() }} shortName={null}
+    <ConversationThread key={conversation.room_id} conversations={[conversation]} onSent={() => { void reload() }} shortName={null}
       tagEditor={<Link className={styles.muted} to={`${routes.messageConversations}?room=${encodeURIComponent(roomID)}`}>Tags, links and visibility on Conversations ↗</Link>} />
   )
 }
