@@ -59,6 +59,9 @@ export interface MultichatConversation {
   /** The other person in a one-to-one DM; absent in a group, a server
    *  channel, or a DM whose bridge does not say it is one (Telegram). */
   direct_message_partner_user_id?: string
+  /** The Discord channel a Discord room carries, from the bridge database;
+   *  absent in any other room. message-store records Discord chats by it. */
+  discord_channel_id?: string
   /** The operator's choice for the room: hidden, shown whatever its size, or
    *  left to multichat's auto-hide rule. */
   visibility: ConversationVisibility

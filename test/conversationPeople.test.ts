@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationLink } from '@kayushkin/multichat-types'
+import type { Conversation as StoreConversation, Message as StoreMessage } from '@kayushkin/message-store-types'
 import {
   addToPersonChatsBody, chatLabel, conversationListRowOf, conversationListRows, defaultSendRoom, mergedHorizon, mergedMessages,
-  peopleInRoom, personOtherChats, roomOwners, roomsToPageBack, shownRowOf, personParamOf, type LoadedRoom, type MergedMessage,
+  peopleInRoom, personOtherChats, roomOwners, roomsToPageBack, shownRowOf, personParamOf,
+  historyChatLabel, historyMessageShown, historyMessagesPath, historyOnlyChats, type LoadedRoom, type MergedMessage,
 } from '../src/conversationPeople'
 import type { MultichatConversation, MultichatMessage, MultichatUnifiedContact } from '../src/types-multichat'
 
@@ -142,5 +144,52 @@ describe('the merged thread', () => {
     const merged = (roomID: string, is_me: boolean, timestamp: number) => ({ ...message('m', timestamp, { is_me }), edited: false, roomID }) as MergedMessage
     expect(defaultSendRoom([samDiscord, samSMS], [merged('!dm-sms', false, 1), merged('!dm-discord', true, 2)])).toBe('!dm-sms')
     expect(defaultSendRoom([samSMS, samDiscord], [])).toBe('!dm-discord')
+  })
+})
+
+describe('history tabs', () => {
+  const stored = (id: string, source: string, source_ref: string, last: number, extra: Partial<StoreConversation> = {}) =>
+    ({ id, platform: source === 'matrix' ? 'sms' : source, source, source_ref, title: id, is_group: false, participants: [],
+      message_count: 3, first_message_at: 1, last_message_at: last, created_at: 0, updated_at: 0, ...extra }) as StoreConversation
+  const discordRoom = room('!dc', 10, { platform: 'discord', discord_channel_id: '555' })
+  const smsRoom = room('!sms', 10, { platform: 'gmessages' })
+
+  it('keeps the one-to-one chats no live room carries, newest first', () => {
+    const kept = historyOnlyChats([
+      stored('conversation_000001', 'discord', '555', 5), // carried by the Discord room
+      stored('conversation_000002', 'matrix', '!sms', 6), // carried by the SMS room
+      stored('conversation_000003', 'discord', '777', 7), // a DM with no room
+      stored('conversation_000004', 'android_sms', '42', 9), // an old phone's texts
+      stored('conversation_000005', 'discord', '888', 8, { is_group: true }),
+      stored('conversation_000006', 'discord', '999', 10, { message_count: 0 }),
+    ], [discordRoom, smsRoom])
+    expect(kept.map(conversation => conversation.id)).toEqual(['conversation_000004', 'conversation_000003'])
+  })
+
+  it('labels a history tab by app, with its title when two share an app', () => {
+    const a = stored('conversation_000003', 'discord', '777', 7, { title: 'midnachew' })
+    const b = stored('conversation_000007', 'discord', '778', 7, { title: 'old' })
+    expect(historyChatLabel([a], a)).toBe('discord history')
+    expect(historyChatLabel([a, b], a)).toBe('discord history · midnachew')
+  })
+
+  it('pages a stored conversation newest first', () => {
+    expect(historyMessagesPath('conversation_000454')).toBe('/messages?conversation=conversation_000454&order=newest&limit=50')
+    expect(historyMessagesPath('conversation_000454', '1790304717000:58352'))
+      .toBe('/messages?conversation=conversation_000454&order=newest&limit=50&cursor=1790304717000%3A58352')
+  })
+
+  it('draws a stored message as a room message', () => {
+    const stub = {
+      id: 'chat_message_000002', conversation_id: 'conversation_000003', sent_at: 2000, sender_handle: '110', sender_name: 'Kuxir',
+      sender_person_id: '', from_self: true, kind: 'text', body: '', attachments: [], source: 'discord', source_ref: 'm2', imported_by: 'message_import_000001',
+    } as StoreMessage
+    const shown = historyMessageShown({
+      id: 'chat_message_000001', conversation_id: 'conversation_000003', sent_at: 1000, sender_handle: '110', sender_name: 'Kuxir',
+      sender_person_id: '', from_self: true, kind: 'text', body: '**hi**', attachments: [{ name: 'cat.png' }],
+      source: 'discord', source_ref: 'm1', imported_by: 'message_import_000001',
+    } as StoreMessage)
+    expect(shown).toMatchObject({ event_id: 'chat_message_000001', timestamp: 1000, is_me: true, format: 'discord-markdown', body: '**hi**\n📎 cat.png' })
+    expect(historyMessageShown({ ...stub, body: '', attachments: [] }).body).toBe('(no text kept)')
   })
 })

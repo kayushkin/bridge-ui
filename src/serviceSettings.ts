@@ -45,6 +45,7 @@ const SOURCE_FIELDS: ReadonlyArray<{ configKey: keyof BridgeConfig; serviceName:
   { configKey: 'peopleStoreBasePath', serviceName: 'people-store' },
   { configKey: 'journalStoreBasePath', serviceName: 'journal-store' },
   { configKey: 'photoStoreBasePath', serviceName: 'photo-store' },
+  { configKey: 'messageStoreBasePath', serviceName: 'message-store' },
   { configKey: 'modelStoreBasePath', serviceName: 'model-store' },
   { configKey: 'hostBasePath', serviceName: 'the host' },
 ]

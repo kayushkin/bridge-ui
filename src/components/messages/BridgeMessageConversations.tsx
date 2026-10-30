@@ -24,7 +24,8 @@ import type {
   MultichatSendAnswer, MultichatSendFileAnswer, MultichatTag, MultichatUnifiedContact,
 } from '../../types-multichat'
 import {
-  addToPersonChatsBody, chatLabel, conversationListRowName, conversationListRows, personParamOf, shownRowOf, defaultSendRoom, mergedMessages,
+  addToPersonChatsBody, chatLabel, conversationListRowName, conversationListRows, personParamOf, shownRowOf,
+  historyChatLabel, historyMessageShown, historyMessagesPath, historyOnlyChats, personHistoryConversationsPath, defaultSendRoom, mergedMessages,
   peopleInRoom, personKey, personOtherChats, roomsToPageBack, type ConversationListRow, type LoadedRoom, type MergedMessage,
 } from '../../conversationPeople'
 import { errorText, useMultichat } from './useMultichat'
@@ -42,6 +43,10 @@ import {
 import type { ShortName } from '../../types-short-name-store'
 import { useShortNameStore } from './useShortNameStore'
 import { ConversationPerson, useUnifiedContacts } from './PersonLinks'
+import type { Conversation as StoreConversation, MessagePage as StoreMessagePage } from '@kayushkin/message-store-types'
+
+/** A thread with no stored chats beside its rooms. */
+const NO_HISTORIES: readonly StoreConversation[] = []
 
 const CONVERSATIONS_POLL_MS = 30_000
 const MESSAGES_POLL_MS = 5_000
@@ -269,8 +274,17 @@ export function BridgeMessageConversations() {
    *  stays in the URL as rows change, so merged is how every person opens
    *  until it is switched off. */
   const mergedWanted = searchParams.get('merged') === '1'
-  const merged = mergedWanted && !!pickedRow && pickedRow.chats.length > 1
-    && pickedRow.chats.some(chat => chat.room_id === roomID)
+  const storedChats = usePersonStoredChats(pickedRow?.kind === 'person' ? pickedRow.person.person_id ?? '' : '')
+  /** The person's one-to-one chats message-store keeps that no room carries. */
+  const histories = useMemo(
+    () => (storedChats.conversations ? historyOnlyChats(storedChats.conversations, conversations ?? []) : []),
+    [storedChats.conversations, conversations],
+  )
+  /** `?history=`: the stored chat open in place of a room. */
+  const historyParam = searchParams.get('history')
+  const pickedHistory = histories.find(history => history.id === historyParam) ?? null
+  const merged = mergedWanted && !!pickedRow && pickedRow.chats.length + histories.length > 1
+    && pickedRow.chats.some(chat => chat.room_id === roomID) && !pickedHistory
 
   /** Opens a room. `person` is whose page to stay on: a person's key, null
    *  for none, or left out to keep the one open. */
@@ -281,7 +295,17 @@ export function BridgeMessageConversations() {
     const nextPerson = person === undefined ? personParam : person
     if (nextPerson) keep.set('person', nextPerson)
     else keep.delete('person')
+    keep.delete('history')
     navigate(conversationAddress(routes.messageConversations, nextRoomID, roomNames, keep), { replace: true })
+  }
+
+  /** Opens a stored chat on the open person's page; the room stays the
+   *  page's address. */
+  const pickHistory = (conversationID: string) => {
+    const keep = new URLSearchParams(searchParams)
+    keep.delete('merged')
+    keep.set('history', conversationID)
+    navigate(conversationAddress(routes.messageConversations, roomID, roomNames, keep), { replace: true })
   }
 
   /** Opens a row: a person's page at their newest chat, or a room. */
@@ -411,17 +435,22 @@ export function BridgeMessageConversations() {
             <button type="button" className={styles.backToList} onClick={closeRoom}>← Conversations</button>
             {picked && pickedRow && (
               <ConversationRowHeader row={pickedRow} roomID={roomID} merged={merged}
+                histories={histories} historyID={pickedHistory?.id ?? null} onPickHistory={pickHistory}
                 onPick={(nextRoomID, mergedNext) => pick(nextRoomID, mergedNext, personParamOf(pickedRow))}
                 allRows={allRows} conversations={conversations} contacts={contactList} links={links}
                 onOpenPerson={openPerson} writeLinks={writeLinks} />
             )}
+            {storedChats.error && <pre className={styles.error}>Stored chats are not shown: {storedChats.error}</pre>}
             {picked ? (
-              <ConversationThread key={merged && pickedRow ? pickedRow.chats.map(chat => chat.room_id).join(' ') : picked.room_id}
-                conversations={merged && pickedRow ? pickedRow.chats : [picked]} onSent={() => { void reload() }}
+              <ConversationThread
+                key={pickedHistory ? pickedHistory.id
+                  : merged && pickedRow ? [...pickedRow.chats.map(chat => chat.room_id), ...histories.map(history => history.id)].join(' ') : picked.room_id}
+                conversations={pickedHistory ? [] : merged && pickedRow ? pickedRow.chats : [picked]}
+                histories={pickedHistory ? [pickedHistory] : merged ? histories : undefined} onSent={() => { void reload() }}
                 shortName={shortNameStore.configured
                   ? <ConversationShortName key={picked.room_id} roomID={picked.room_id} shown={roomNames.get(picked.room_id) ?? null} onRenamed={() => renamed(picked.room_id)} />
                   : null}
-                tagEditor={merged ? null : (
+                tagEditor={merged || pickedHistory ? null : (
                   <details className={styles.roomSettings}>
                     <summary className={styles.muted}>⚙ Chat settings: tags, visibility, linking, who this is</summary>
                     <ConversationVisibilityEditor conversation={picked} settings={visibilitySettings} write={writeVisibility} />
@@ -443,6 +472,26 @@ export function BridgeMessageConversations() {
       )}
     </div>
   )
+}
+
+/** One person's chats in message-store, read when their page opens. Empty
+ *  when the host carries no message-store or the row has no person id. */
+function usePersonStoredChats(personID: string): { conversations: StoreConversation[] | null; error: string | null } {
+  const { fetch: hostFetch, messageStoreBasePath } = useBridgeConfig()
+  const [answer, setAnswer] = useState<{ personID: string; conversations: StoreConversation[] | null; error: string | null }>({ personID: '', conversations: null, error: null })
+  useEffect(() => {
+    if (!personID || !messageStoreBasePath) return
+    let cancelled = false
+    hostFetch(`${messageStoreBasePath}${personHistoryConversationsPath(personID)}`)
+      .then(async res => {
+        if (!res.ok) throw new Error(`message-store: ${res.status} ${(await res.text()).trim()}`)
+        return await res.json() as StoreConversation[] | null
+      })
+      .then(conversations => { if (!cancelled) setAnswer({ personID, conversations: conversations ?? [], error: null }) })
+      .catch(err => { if (!cancelled) setAnswer({ personID, conversations: null, error: errorText(err) }) })
+    return () => { cancelled = true }
+  }, [personID, messageStoreBasePath, hostFetch])
+  return answer.personID === personID ? answer : { conversations: null, error: null }
 }
 
 /** What the store said about the path in the URL. */
@@ -523,9 +572,12 @@ interface RoomPages {
  *  thread each message carries its app, and the Send button names the chat it
  *  sends to, which the reader picks beside it. Keyed by its rooms, so a change
  *  of rooms starts it afresh. */
-export function ConversationThread({ conversations, onSent, shortName, tagEditor }: {
-  /** One room, or the rooms to merge, newest first. */
+export function ConversationThread({ conversations, histories = NO_HISTORIES, onSent, shortName, tagEditor }: {
+  /** The live rooms: one, or the rooms to merge, newest first. */
   conversations: readonly MultichatConversation[]
+  /** Stored chats no room carries, read from message-store: shown, merged
+   *  with the rooms and paged back the same way, but read only. */
+  histories?: readonly StoreConversation[]
   onSent: () => void
   /** Drawn at the end of the thread's header: the room's short name and rename control. */
   shortName: ReactNode
@@ -533,8 +585,26 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
   tagEditor: ReactNode
 }) {
   const { read, write, writeForm } = useMultichat()
-  const merged = conversations.length > 1
-  const roomIDs = useMemo(() => conversations.map(conversation => conversation.room_id), [conversations])
+  const { fetch: hostFetch, messageStoreBasePath } = useBridgeConfig()
+  const merged = conversations.length + histories.length > 1
+  /** Every source's key: a room's id, or a stored conversation's id. */
+  const roomIDs = useMemo(
+    () => [...conversations.map(conversation => conversation.room_id), ...histories.map(history => history.id)],
+    [conversations, histories],
+  )
+  const historyByID = useMemo(() => new Map(histories.map(history => [history.id, history])), [histories])
+  /** One page of a source: a room's from multichat, a stored chat's from
+   *  message-store, oldest first either way. */
+  const sourcePage = useCallback(async (sourceID: string, from: string | null): Promise<RoomPages> => {
+    if (!historyByID.has(sourceID)) {
+      const page = await read<MultichatMessagePage>(conversationMessagesPath(sourceID, from))
+      return { messages: pageMessages(page), olderFrom: page.end ?? null, hasOlder: page.has_more && !!page.end }
+    }
+    const res = await hostFetch(`${messageStoreBasePath}${historyMessagesPath(sourceID, from)}`)
+    if (!res.ok) throw new Error(`message-store ${sourceID}: ${res.status} ${(await res.text()).trim()}`)
+    const page = await res.json() as StoreMessagePage
+    return { messages: (page.messages ?? []).map(historyMessageShown).reverse(), olderFrom: page.next || null, hasOlder: !!page.next }
+  }, [read, hostFetch, messageStoreBasePath, historyByID])
   const roomKey = roomIDs.join(' ')
   /** Files waiting in the composer, sent with the next Send. */
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
@@ -566,16 +636,24 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
     : [], [pages, roomIDs])
   const shownMessages = useMemo(() => mergedMessages(loadedRooms), [loadedRooms])
   const canLoadOlder = roomsToPageBack(loadedRooms).length > 0
-  const sendRoomID = pickedSendRoomID ?? defaultSendRoom(conversations, shownMessages)
-  const sendConversation = conversations.find(conversation => conversation.room_id === sendRoomID) ?? conversations[0]
-  const conversationOfRoom = (roomID: string) => conversations.find(conversation => conversation.room_id === roomID) ?? conversations[0]
+  const liveMessages = useMemo(() => shownMessages.filter(message => !historyByID.has(message.roomID)), [shownMessages, historyByID])
+  const sendRoomID = pickedSendRoomID ?? defaultSendRoom(conversations, liveMessages)
+  /** The room a message goes to; none in a thread of history alone. */
+  const sendConversation: MultichatConversation | null = conversations.find(conversation => conversation.room_id === sendRoomID) ?? conversations[0] ?? null
+  /** What a message's badge says it came from. */
+  const sourceLabel = (sourceID: string): { label: string; title: string } => {
+    const history = historyByID.get(sourceID)
+    if (history) return { label: historyChatLabel(histories, history), title: `${history.title}, kept in message-store; read only` }
+    const room = conversations.find(conversation => conversation.room_id === sourceID)
+    return room ? { label: chatLabel(conversations, room), title: `Sent in ${conversationShownName(room)}. Click to answer there.` } : { label: '', title: '' }
+  }
 
   const discordConversation = conversations.find(conversation => conversation.platform === DISCORD_PLATFORM) ?? null
   const discordStatus = useDiscordStatus(discordConversation !== null)
   const discordNames = useDiscordNames(discordConversation, discordConversation ? pages?.[discordConversation.room_id]?.messages ?? null : null, discordStatus)
   // The room sent to decides which emoji the pickers offer: a Discord server's
   // channel, a Discord DM (no server), or none.
-  const discordRoom: DiscordRoom | null = useMemo(() => (sendConversation.platform === DISCORD_PLATFORM
+  const discordRoom: DiscordRoom | null = useMemo(() => (sendConversation?.platform === DISCORD_PLATFORM
     ? { serverID: roomDiscordServerID(discordStatus, sendConversation.room_id) } : null), [sendConversation, discordStatus])
   const emoji = useEmojiChoices('reaction', discordRoom)
   const { catalog } = useEmojiCatalog()
@@ -600,30 +678,31 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
 
   useEffect(() => {
     let cancelled = false
-    Promise.all(roomIDs.map(roomID => newestPage(roomID))).then(answers => {
+    Promise.all(roomIDs.map(sourceID => sourcePage(sourceID, null))).then(answers => {
       if (cancelled) return
       pendingScroll.current = { kind: 'bottom' }
-      setPages(Object.fromEntries(answers.map((page, index) =>
-        [roomIDs[index], { messages: pageMessages(page), olderFrom: page.end ?? null, hasOlder: page.has_more && !!page.end }])))
+      setPages(Object.fromEntries(answers.map((page, index) => [roomIDs[index], page])))
       setError(null)
     }).catch(err => { if (!cancelled) setError(errorText(err)) })
     return () => { cancelled = true }
     // roomKey stands for roomIDs, which is a new array on every list poll.
-  }, [roomKey, newestPage])
+  }, [roomKey, sourcePage])
 
   const refreshNewest = useCallback(async (scrollToNewest: boolean) => {
-    const answers = await Promise.all(roomIDs.map(roomID => newestPage(roomID)))
+    // A stored chat does not change while it is read, so only rooms are polled.
+    const liveRoomIDs = roomIDs.filter(roomID => !historyByID.has(roomID))
+    const answers = await Promise.all(liveRoomIDs.map(roomID => newestPage(roomID)))
     const stickToBottom = scrollToNewest || atBottom()
     setPages(current => {
       if (!current) return current
       let changed = false
       const next = { ...current }
       answers.forEach((page, index) => {
-        const shown = current[roomIDs[index]]
+        const shown = current[liveRoomIDs[index]]
         if (!shown) return
         const mergedNewest = mergeNewestMessages(shown.messages, pageMessages(page))
         if (sameMessages(shown.messages, mergedNewest)) return
-        next[roomIDs[index]] = { ...shown, messages: mergedNewest }
+        next[liveRoomIDs[index]] = { ...shown, messages: mergedNewest }
         changed = true
       })
       if (!changed) return current
@@ -655,7 +734,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
     if (toPage.length === 0) return
     setLoadingOlder(true)
     try {
-      const answers = await Promise.all(toPage.map(roomID => read<MultichatMessagePage>(conversationMessagesPath(roomID, pages[roomID].olderFrom))))
+      const answers = await Promise.all(toPage.map(roomID => sourcePage(roomID, pages[roomID].olderFrom)))
       const el = scroller.current
       if (el) pendingScroll.current = { kind: 'keep', fromBottom: el.scrollHeight - el.clientHeight - el.scrollTop }
       setPages(current => {
@@ -663,11 +742,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
         const next = { ...current }
         answers.forEach((page, index) => {
           const shown = current[toPage[index]]
-          next[toPage[index]] = {
-            messages: prependOlderMessages(shown.messages, pageMessages(page)),
-            olderFrom: page.end ?? null,
-            hasOlder: page.has_more && !!page.end,
-          }
+          next[toPage[index]] = { ...page, messages: prependOlderMessages(shown.messages, page.messages) }
         })
         return next
       })
@@ -718,7 +793,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
 
   /** The newest message of the chat being sent to, which a react command reacts to. */
   const newestMessage = (): MergedMessage | null => {
-    const inSendRoom = shownMessages.filter(message => message.roomID === sendRoomID)
+    const inSendRoom = liveMessages.filter(message => message.roomID === sendRoomID)
     return inSendRoom.length > 0 ? inSendRoom[inSendRoom.length - 1] : null
   }
 
@@ -859,8 +934,9 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
     if (action.kind === 'take-back') void takeBackReaction(message, action.reactionEventID)
   }
 
-  const sendLabel = chatLabel(conversations, sendConversation)
-  const single = conversations[0]
+  const sendLabel = sendConversation ? chatLabel(conversations, sendConversation) : ''
+  const single: MultichatConversation | undefined = conversations[0]
+  const onlyHistory = conversations.length === 0 ? histories[0] : undefined
 
   return (
     <div className={`${styles.thread} ${dragging ? styles.threadDragging : ''}`} data-merged={merged ? '' : undefined}
@@ -877,7 +953,17 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
         addFiles(Array.from(event.dataTransfer.files), false)
       }}>
       {dragging && <div className={styles.dropHint}>Drop to attach — nothing is sent until you press Send</div>}
-      {!merged && (
+      {!merged && onlyHistory && (
+        <div className={styles.threadBar} data-history-conversation={onlyHistory.id}>
+          <span className={styles.name} title={onlyHistory.id}>{onlyHistory.title}</span>
+          <span className={styles.platform}>{onlyHistory.platform}</span>
+          <span className={styles.muted}>
+            {onlyHistory.message_count} messages kept in message-store, read only: no live chat carries this one yet.
+            {onlyHistory.platform === DISCORD_PLATFORM ? ' The next message either of you writes in it on Discord brings it here live.' : ''}
+          </span>
+        </div>
+      )}
+      {!merged && single && (
         <div className={styles.threadBar}>
           <span className={styles.name} title={`${single.name}\nMatrix room id: ${single.room_id}`}>{conversationShownName(single)}</span>
           {single.platform && <span className={styles.platform}>{single.platform}</span>}
@@ -899,13 +985,17 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
               className={`${styles.message} ${message.is_me ? styles.messageMine : ''}`}>
               <div className={styles.messageHead}>
                 <span className={styles.sender} title={message.sender}>{message.is_me ? 'You' : message.sender_name || message.sender}</span>
-                {merged && (
+                {merged && (historyByID.has(message.roomID) ? (
+                  <span className={`${styles.platform} ${styles.platformHistory}`} title={sourceLabel(message.roomID).title}>
+                    {sourceLabel(message.roomID).label}
+                  </span>
+                ) : (
                   <button type="button" className={`${styles.platform} ${styles.platformPick} ${message.roomID === sendRoomID ? styles.platformPicked : ''}`}
-                    title={`Sent in ${conversationShownName(conversationOfRoom(message.roomID))}. Click to answer there.`}
+                    title={sourceLabel(message.roomID).title}
                     onClick={() => setPickedSendRoomID(message.roomID)}>
-                    {chatLabel(conversations, conversationOfRoom(message.roomID))}
+                    {sourceLabel(message.roomID).label}
                   </button>
-                )}
+                ))}
                 <span className={styles.time}>{messageTimeLabel(message.timestamp)}</span>
                 {message.edited && <span className={styles.time}>edited</span>}
               </div>
@@ -913,6 +1003,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
                 <MessageContent message={message} messageType={message.msg_type}
                   discordNames={message.roomID === discordConversation?.room_id ? discordNames : NO_DISCORD_NAMES} />
               </div>
+              {!historyByID.has(message.roomID) && <>
               <ReactionChips reactions={message.reactions} busy={reacting}
                 onChipClick={reaction => onChipClick(message, reaction)} />
               <div className={styles.messageTools}>
@@ -937,6 +1028,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
                   {'\u{1F642}'}
                 </button>
               </div>
+              </>}
             </div>
           ))
         )}
@@ -954,6 +1046,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
           ))}
         </ul>
       )}
+      {sendConversation && <>
       {merged && (
         <div className={styles.sendTarget} data-send-room-id={sendRoomID}>
           <span className={styles.muted}>Send to</span>
@@ -1017,6 +1110,7 @@ export function ConversationThread({ conversations, onSent, shortName, tagEditor
       </div>
       {sendError && <pre className={styles.error}>{sendError}</pre>}
       {reactionError && <pre className={styles.error}>{reactionError}</pre>}
+      </>}
     </div>
   )
 }
@@ -1188,10 +1282,15 @@ const OTHER_CHATS_SHOWN = 8
  *  group chats, each one click to open and one to make it a tab. A room that
  *  belongs to no one shows the people in it instead, to open their chats or
  *  make this room one of them. */
-function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversations, contacts, links, onOpenPerson, writeLinks }: {
+function ConversationRowHeader({ row, roomID, merged, histories, historyID, onPickHistory, onPick, allRows, conversations, contacts, links, onOpenPerson, writeLinks }: {
   row: ConversationListRow
   roomID: string
   merged: boolean
+  /** The person's stored chats no room carries, each a read-only tab. */
+  histories: readonly StoreConversation[]
+  /** The stored chat open, if one is. */
+  historyID: string | null
+  onPickHistory: (conversationID: string) => void
   onPick: (roomID: string, merged?: boolean) => void
   allRows: readonly ConversationListRow[]
   conversations: readonly MultichatConversation[]
@@ -1236,9 +1335,9 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
           )}
         </div>
       )}
-      {(row.chats.length > 1 || others.length > 0) && (
+      {(row.chats.length + histories.length > 1 || others.length > 0) && (
         <nav className={styles.tabs} aria-label="Chats">
-          {row.chats.length > 1 && (
+          {row.chats.length + histories.length > 1 && (
             <button type="button" className={`${styles.tab} ${merged ? styles.tabActive : ''}`} aria-pressed={merged}
               title="Every chat with this person in one timeline; you pick which chat a message goes to"
               onClick={() => onPick(ownChat ? roomID : row.chats[0].room_id, true)}>
@@ -1247,17 +1346,25 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
           )}
           {row.chats.map(conversation => (
             <button key={conversation.room_id} type="button" title={conversationShownName(conversation)}
-              aria-pressed={!merged && conversation.room_id === roomID}
-              className={`${styles.tab} ${!merged && conversation.room_id === roomID ? styles.tabActive : ''}`}
+              aria-pressed={!merged && !historyID && conversation.room_id === roomID}
+              className={`${styles.tab} ${!merged && !historyID && conversation.room_id === roomID ? styles.tabActive : ''}`}
               onClick={() => onPick(conversation.room_id, false)}>
               {chatLabel(row.chats, conversation)}
+            </button>
+          ))}
+          {histories.map(history => (
+            <button key={history.id} type="button" data-history-conversation={history.id} aria-pressed={history.id === historyID}
+              title={`${history.title}: ${history.message_count} messages kept in message-store, read only`}
+              className={`${styles.tab} ${styles.tabHistory} ${history.id === historyID ? styles.tabActive : ''}`}
+              onClick={() => onPickHistory(history.id)}>
+              {historyChatLabel(histories, history)}
             </button>
           ))}
           {others.length > 0 && <span className={styles.tabDivider} aria-hidden="true" />}
           {shownOthers.map(conversation => (
             <button key={conversation.room_id} type="button" aria-pressed={conversation.room_id === roomID}
               title={`${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''}${conversation.member_count > 2 ? `, ${conversation.member_count} members` : ''}`}
-              className={`${styles.tab} ${styles.tabOther} ${conversation.room_id === roomID ? styles.tabActive : ''}`}
+              className={`${styles.tab} ${styles.tabOther} ${!historyID && conversation.room_id === roomID ? styles.tabActive : ''}`}
               onClick={() => onPick(conversation.room_id, false)}>
               {conversationShownName(conversation)}
               {conversation.platform && <span className={styles.tabApp}>{conversation.platform}</span>}
@@ -1270,7 +1377,7 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
           )}
         </nav>
       )}
-      {row.kind === 'person' && openOther && (
+      {row.kind === 'person' && openOther && !historyID && (
         <div className={styles.otherChats}>
           <span className={styles.muted}>
             {openOther.member_count > 2 ? `A group chat ${row.person.display_name} is in.` : `Not counted as a chat with ${row.person.display_name} yet.`}

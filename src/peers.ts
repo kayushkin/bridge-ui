@@ -355,6 +355,7 @@ export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathFiel
   peopleStoreBasePath: 'not-there',
   journalStoreBasePath: 'not-there',
   photoStoreBasePath: 'not-there',
+  messageStoreBasePath: 'not-there',
   peoplePagePath: 'not-there',
   journalPagePath: 'not-there',
   dayPagePath: 'not-there',

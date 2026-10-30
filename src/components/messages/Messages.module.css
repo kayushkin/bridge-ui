@@ -146,6 +146,9 @@ a.name:hover { text-decoration: underline; }
 /* Between a person's own chats and the other chats they are in. */
 .tabDivider { width: 1px; align-self: stretch; margin: 6px 6px; background: var(--border); }
 .tabOther { text-transform: none; font-size: 0.85em; padding: 6px 8px; }
+/* A stored chat no room carries: read only, so drawn quieter. */
+.tabHistory { font-style: italic; }
+.platformHistory { font-style: italic; opacity: 0.8; }
 .tabApp { margin-left: 5px; font-size: 0.8em; color: var(--text-dim); text-transform: capitalize; }
 .otherChats {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px 6px; font-size: 0.85em;

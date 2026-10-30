@@ -277,6 +277,12 @@ export interface BridgeConfig {
    * thumbnail from `{base}/photos/{id}/thumbnail`. Empty means the host does
    * not carry it, and a photo chip shows no picture. */
   photoStoreBasePath: string
+  /** Base path for message-store as the host proxies it (dash:
+   * "/api/message-store"): every chat message the operator sent or received,
+   * kept apart from the chat apps. A person's page on Conversations shows
+   * their one-to-one chats it holds that no live room carries, read only.
+   * Empty means the host does not carry it, and those tabs are not drawn. */
+  messageStoreBasePath: string
   /** Path to the HOST's own people page (dash: "/people"), which a person chip
    * opens as `{path}?id=person_000001`. A plain path for the same reason as
    * `mailPagePath`. Empty hides the chip's "Open person" link. */

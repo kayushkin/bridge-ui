@@ -11,6 +11,7 @@
 
 import type { ConversationLink } from '@kayushkin/multichat-types'
 import { conversationEntries, conversationShownName, foldEdits, type ConversationEntry, type ShownMessage } from './multichatMessages'
+import type { Conversation as StoreConversation, Message as StoreMessage } from '@kayushkin/message-store-types'
 import type { MultichatConversation, MultichatMessage, MultichatUnifiedContact } from './types-multichat'
 
 /** One row of the list: a person and their chats, or a room (or the rooms of
@@ -248,4 +249,66 @@ export function defaultSendRoom(chats: readonly MultichatConversation[], message
     if (!messages[index].is_me) return messages[index].roomID
   }
   return [...chats].sort(newestFirst)[0]?.room_id ?? ''
+}
+
+/** How many stored messages a history tab loads at a time. */
+export const HISTORY_PAGE_SIZE = 50
+
+/** message-store's conversations of one person: `GET /conversations?person=`. */
+export function personHistoryConversationsPath(personID: string): string {
+  return `/conversations?person=${encodeURIComponent(personID)}&limit=200`
+}
+
+/** A page of a stored conversation, newest first: `cursor` is the `next` of
+ *  the page before, to go further back. */
+export function historyMessagesPath(conversationID: string, cursor?: string | null): string {
+  const query = new URLSearchParams({ conversation: conversationID, order: 'newest', limit: String(HISTORY_PAGE_SIZE) })
+  if (cursor) query.set('cursor', cursor)
+  return `/messages?${query.toString()}`
+}
+
+/** Whether a live room carries a stored conversation: one message-store
+ *  imported from a Matrix room carries that room's id, and one from Discord
+ *  carries the Discord channel id that multichat reports on the room. */
+function carriedByRoom(conversation: StoreConversation, rooms: readonly MultichatConversation[]): boolean {
+  if (conversation.source === 'matrix') return rooms.some(room => room.room_id === conversation.source_ref)
+  if (conversation.source === 'discord') return rooms.some(room => room.discord_channel_id === conversation.source_ref)
+  return false
+}
+
+/** The person's one-to-one chats that message-store keeps and no live room
+ *  carries — a Discord DM the bridge never made a room for, an old phone's
+ *  texts — newest first. Each is a read-only tab on their page. */
+export function historyOnlyChats(
+  stored: readonly StoreConversation[], rooms: readonly MultichatConversation[],
+): StoreConversation[] {
+  return stored.filter(conversation => !conversation.is_group && conversation.message_count > 0 && !carriedByRoom(conversation, rooms))
+    .sort((a, b) => b.last_message_at - a.last_message_at)
+}
+
+/** A history tab's label: the app and "history", with the chat's title too
+ *  when two history chats are on one app. */
+export function historyChatLabel(histories: readonly StoreConversation[], conversation: StoreConversation): string {
+  const sharesApp = histories.filter(other => other.platform === conversation.platform).length > 1
+  return sharesApp ? `${conversation.platform} history · ${conversation.title}` : `${conversation.platform} history`
+}
+
+/** A stored message drawn as a thread draws a room's: its id, sender, text
+ *  and time. A Discord message's text is Discord markdown. Attachments are
+ *  named in the text, since message-store keeps no file to show. */
+export function historyMessageShown(message: StoreMessage): MultichatMessage {
+  const attachmentNames = (message.attachments ?? []).map(attachment => attachment.name || attachment.mime_type || 'a file')
+  const attachmentText = attachmentNames.length > 0 ? `📎 ${attachmentNames.join(', ')}` : ''
+  return {
+    event_id: message.id,
+    sender: message.sender_handle,
+    sender_name: message.sender_name,
+    // A message kept with no text and no file (a sticker, an embed) says so
+    // rather than drawing an empty bubble.
+    body: [message.body, attachmentText].filter(Boolean).join('\n') || '(no text kept)',
+    msg_type: 'm.text',
+    timestamp: message.sent_at,
+    is_me: message.from_self,
+    format: message.source === 'discord' ? 'discord-markdown' : '',
+  }
 }
