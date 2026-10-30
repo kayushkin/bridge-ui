@@ -199,6 +199,12 @@ export interface BridgeConfig {
    * those in `DISCORD_ROUTES_CALLED` in `src/discordLog.ts`. If empty, the
    * Messages group is hidden. */
   multichatBasePath: string
+  /** The host's route that invites a people-store person to its library and
+   *  answers a one-time sign-in link (dash: "/api/kayushkin-viewer/invitations",
+   *  kayushkin.com's `POST /api/viewer/invitations {person_id}` → `{url,
+   *  expires_at, display_name}`). A one-to-one conversation then posts the link
+   *  to the person. If empty, no Invite button is drawn. */
+  libraryInvitationsPath: string
   /** Base path for discord-signup-store's API as the host proxies it (dash:
    * "/api/discord-signup", which forwards only the routes
    * `AUTO_REACTION_ROUTES_CALLED` in `src/autoReactions.ts` lists). If empty,

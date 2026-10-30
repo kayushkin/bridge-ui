@@ -369,7 +369,7 @@ export function BridgeMessageConversations() {
                   <ConversationVisibilityEditor conversation={picked} settings={visibilitySettings} write={writeVisibility} />
                   <ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />
                   {pickedEntry && <ConversationLinkEditor key={picked.room_id} conversation={picked} entry={pickedEntry} conversations={conversations} write={writeLinks} />}
-                  {picked.direct_message_partner_user_id && <ConversationPerson key={picked.direct_message_partner_user_id} partnerUserID={picked.direct_message_partner_user_id} />}
+                  {picked.direct_message_partner_user_id && <ConversationPerson key={picked.direct_message_partner_user_id} partnerUserID={picked.direct_message_partner_user_id} roomID={picked.room_id} onSent={() => { void reload() }} />}
                 </>} />
             ) : (
               <div className={styles.empty}>

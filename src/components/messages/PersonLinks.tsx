@@ -4,6 +4,9 @@ import {
 } from '../../multichatMessages'
 import type { MultichatContactIdentity, MultichatUnifiedContact } from '../../types-multichat'
 import { errorText, useMultichat } from './useMultichat'
+import { useBridgeConfig } from '../../context'
+import { conversationSendPath } from '../../multichatMessages'
+import { libraryInvitationMessage, type LibraryInvitation } from '../../libraryInvitation'
 import styles from './Messages.module.css'
 
 /** Everyone, one row per person, and a reload after a link changes. */
@@ -99,9 +102,53 @@ export function IdentityLink({ identity, onChanged }: {
   )
 }
 
-/** In a one-to-one conversation: who the other person is across apps, and a
- *  picker to link this account to someone else. */
-export function ConversationPerson({ partnerUserID }: { partnerUserID: string }) {
+/** Invites a person to the host's library and posts the sign-in link into
+ *  this conversation, which reaches them on that app. Drawn only when the host
+ *  names its invitation route. */
+function InviteToLibrary({ personID, displayName, roomID, onSent }: {
+  personID: string
+  displayName: string
+  roomID: string
+  onSent: () => void
+}) {
+  const { fetch: apiFetch, libraryInvitationsPath } = useBridgeConfig()
+  const { write } = useMultichat()
+  const [state, setState] = useState<'idle' | 'busy' | 'sent'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  if (!libraryInvitationsPath) return null
+  const invite = async () => {
+    setState('busy')
+    setError(null)
+    try {
+      const res = await apiFetch(libraryInvitationsPath, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_id: personID }),
+      })
+      if (!res.ok) throw new Error(`invite ${displayName}: ${res.status} ${(await res.text()).trim()}`)
+      const invitation = await res.json() as LibraryInvitation
+      const sent = await write('POST', conversationSendPath(roomID), { body: libraryInvitationMessage(invitation.url) })
+      if (!sent.ok) throw new Error(`made the link, but could not send it here: ${sent.error}`)
+      setState('sent')
+      onSent()
+    } catch (err) {
+      setError(errorText(err))
+      setState('idle')
+    }
+  }
+  return (
+    <span className={styles.identityLink}>
+      <button type="button" className={styles.tagAdd} disabled={state === 'busy'}
+        title={`Give ${displayName} a login with access to the whole library, and send them a one-time sign-in link here`}
+        onClick={() => { void invite() }}>
+        {state === 'busy' ? 'Inviting…' : state === 'sent' ? 'Link sent · send another' : 'Invite to library'}
+      </button>
+      {error && <pre className={styles.error}>{error}</pre>}
+    </span>
+  )
+}
+
+/** In a one-to-one conversation: who the other person is across apps, a
+ *  picker to link this account to someone else, and the library invite. */
+export function ConversationPerson({ partnerUserID, roomID, onSent }: { partnerUserID: string; roomID: string; onSent: () => void }) {
   const { contacts, error, reload } = useUnifiedContacts()
   if (error) return <pre className={styles.error}>{error}</pre>
   if (!contacts) return null
@@ -124,6 +171,7 @@ export function ConversationPerson({ partnerUserID }: { partnerUserID: string })
           {other.platform}{other.display_name ? ` · ${other.display_name}` : ''}
         </span>
       ))}
+      {person?.person_id && <InviteToLibrary personID={person.person_id} displayName={person.display_name} roomID={roomID} onSent={onSent} />}
       <PersonLinkPicker userID={partnerUserID} contacts={contacts} onLinked={reload} />
     </div>
   )
