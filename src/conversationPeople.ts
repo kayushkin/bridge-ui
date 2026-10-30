@@ -111,13 +111,48 @@ export function conversationListRowOf(rows: readonly ConversationListRow[], room
   return rows.find(row => row.chats.some(chat => chat.room_id === roomID)) ?? null
 }
 
+/** The `?person=` value that keeps a person's page open while one of their
+ *  chats, or a group chat they are in, is shown: the key after `person:`. */
+export function personParamOf(row: ConversationListRow): string | null {
+  return row.kind === 'person' ? personKey(row.person) : null
+}
+
+/** The row the page shows for an open room. With `?person=` naming someone
+ *  the room is one of — their own chats, or any other room one of their
+ *  accounts is in — it is that person's row, so moving between their chats
+ *  stays on their page. A room that belongs to no one but holds exactly one
+ *  person with a row opens on that person's page too: the Google Messages
+ *  for web bridge marks no room one-to-one, so a chat with one person there
+ *  would otherwise open with none of their other chats in reach. Otherwise
+ *  it is the row the room is listed in. */
+export function shownRowOf(
+  rows: readonly ConversationListRow[], roomID: string, personParam: string | null,
+  all: readonly MultichatConversation[], contacts: readonly MultichatUnifiedContact[],
+): ConversationListRow | null {
+  if (personParam) {
+    const personRow = rows.find(row => row.key === `person:${personParam}`)
+    if (personRow && personRow.kind === 'person'
+      && (personRow.chats.some(chat => chat.room_id === roomID)
+        || personOtherChats(personRow.person, personRow.chats, all).some(chat => chat.room_id === roomID))) {
+      return personRow
+    }
+  }
+  const listed = conversationListRowOf(rows, roomID)
+  if (listed?.kind !== 'room') return listed
+  const room = all.find(conversation => conversation.room_id === roomID)
+  const personRows = room ? peopleInRoom(room, contacts).flatMap(person => rows.filter(row => row.key === `person:${personKey(person)}`)) : []
+  return personRows.length === 1 ? personRows[0] : listed
+}
+
 /** The name a row shows: the person's, or the room's. */
 export function conversationListRowName(row: ConversationListRow): string {
   return row.kind === 'person' ? row.person.display_name : conversationShownName(row.chats[0])
 }
 
-/** Every other room any of the person's accounts is in, newest first: their
- *  group chats and server channels, and one-to-one rooms not yet theirs. */
+/** Every other room any of the person's accounts is in: their group chats
+ *  and server channels, and one-to-one rooms not yet theirs. Shown rooms come
+ *  first and hidden ones (big server channels) after, each newest first, so a
+ *  busy channel does not push a small group chat out of sight. */
 export function personOtherChats(
   person: MultichatUnifiedContact, chats: readonly MultichatConversation[], all: readonly MultichatConversation[],
 ): MultichatConversation[] {
@@ -125,7 +160,7 @@ export function personOtherChats(
   const own = new Set(chats.map(chat => chat.room_id))
   return all.filter(conversation => !own.has(conversation.room_id)
     && (conversation.members ?? []).some(member => accounts.has(member.user_id)))
-    .sort(newestFirst)
+    .sort((a, b) => Number(a.hidden) - Number(b.hidden) || newestFirst(a, b))
 }
 
 /** The people in a room who have a row of their own in the list, so the room

@@ -24,7 +24,7 @@ import type {
   MultichatSendAnswer, MultichatSendFileAnswer, MultichatTag, MultichatUnifiedContact,
 } from '../../types-multichat'
 import {
-  addToPersonChatsBody, chatLabel, conversationListRowName, conversationListRowOf, conversationListRows, defaultSendRoom, mergedMessages,
+  addToPersonChatsBody, chatLabel, conversationListRowName, conversationListRows, personParamOf, shownRowOf, defaultSendRoom, mergedMessages,
   peopleInRoom, personKey, personOtherChats, roomsToPageBack, type ConversationListRow, type LoadedRoom, type MergedMessage,
 } from '../../conversationPeople'
 import { errorText, useMultichat } from './useMultichat'
@@ -257,25 +257,40 @@ export function BridgeMessageConversations() {
     () => conversationListRows(conversations ?? [], conversations ?? [], links, contactList),
     [conversations, links, contactList],
   )
-  const pickedRow = useMemo(() => conversationListRowOf(allRows, roomID), [allRows, roomID])
+  /** `?person=`: whose page is open, kept while moving between their chats
+   *  and the group chats they are in. */
+  const personParam = searchParams.get('person')
+  const pickedRow = useMemo(
+    () => shownRowOf(allRows, roomID, personParam, conversations ?? [], contactList),
+    [allRows, roomID, personParam, conversations, contactList],
+  )
   const picked = conversations?.find(conversation => conversation.room_id === roomID) ?? null
   /** Every chat of the open row merged into one thread, by `?merged=1`. It
    *  stays in the URL as rows change, so merged is how every person opens
    *  until it is switched off. */
   const mergedWanted = searchParams.get('merged') === '1'
   const merged = mergedWanted && !!pickedRow && pickedRow.chats.length > 1
+    && pickedRow.chats.some(chat => chat.room_id === roomID)
 
-  const pick = (nextRoomID: string, mergedNext: boolean = mergedWanted) => {
+  /** Opens a room. `person` is whose page to stay on: a person's key, null
+   *  for none, or left out to keep the one open. */
+  const pick = (nextRoomID: string, mergedNext: boolean = mergedWanted, person: string | null | undefined = undefined) => {
     const keep = new URLSearchParams(searchParams)
     if (mergedNext) keep.set('merged', '1')
     else keep.delete('merged')
+    const nextPerson = person === undefined ? personParam : person
+    if (nextPerson) keep.set('person', nextPerson)
+    else keep.delete('person')
     navigate(conversationAddress(routes.messageConversations, nextRoomID, roomNames, keep), { replace: true })
   }
 
-  /** Opens the row of a person by their key, at their newest chat. */
+  /** Opens a row: a person's page at their newest chat, or a room. */
+  const openRow = (row: ConversationListRow) => pick(row.chats[0].room_id, mergedWanted, personParamOf(row))
+
+  /** Opens the row of a person by their row key. */
   const openPerson = (key: string) => {
     const row = allRows.find(candidate => candidate.key === key)
-    if (row) pick(row.chats[0].room_id)
+    if (row) openRow(row)
   }
 
   /** Back to the list, which a narrow screen shows in place of the open room. */
@@ -356,7 +371,7 @@ export function BridgeMessageConversations() {
             <ul className={styles.list}>
               {rows.map(row => {
                 const newest = row.chats[0]
-                const selected = row.chats.some(conversation => conversation.room_id === roomID)
+                const selected = row.key === pickedRow?.key
                 const rowTags = [...new Map(row.chats.flatMap(conversation => conversationTags(conversation, tagMaps)).map(tag => [tag.id, tag])).values()]
                 const rowName = roomNames.get(newest.room_id)
                 return (
@@ -364,7 +379,7 @@ export function BridgeMessageConversations() {
                     <button type="button" data-room-id={newest.room_id} data-row-key={row.key} data-chat-count={row.chats.length}
                       data-link-id={row.kind === 'room' ? row.entry.linkID ?? undefined : undefined}
                       className={`${styles.row} ${styles.rowPick} ${selected ? styles.rowSelected : ''} ${row.chats.every(conversation => conversation.hidden) ? styles.rowHidden : ''}`}
-                      onClick={() => pick(selected ? roomID : newest.room_id)}>
+                      onClick={() => { if (selected) pick(roomID); else openRow(row) }}>
                       <span className={styles.rowHead}>
                         <span className={styles.name} title={row.kind === 'person' ? row.person.display_name : newest.name}>
                           {row.kind === 'person' && <span className={styles.personMark} aria-label="Person">👤</span>}
@@ -395,7 +410,8 @@ export function BridgeMessageConversations() {
           <div className={styles.viewer}>
             <button type="button" className={styles.backToList} onClick={closeRoom}>← Conversations</button>
             {picked && pickedRow && (
-              <ConversationRowHeader row={pickedRow} roomID={roomID} merged={merged} onPick={pick}
+              <ConversationRowHeader row={pickedRow} roomID={roomID} merged={merged}
+                onPick={(nextRoomID, mergedNext) => pick(nextRoomID, mergedNext, personParamOf(pickedRow))}
                 allRows={allRows} conversations={conversations} contacts={contactList} links={links}
                 onOpenPerson={openPerson} writeLinks={writeLinks} />
             )}
@@ -410,7 +426,8 @@ export function BridgeMessageConversations() {
                     <summary className={styles.muted}>⚙ Chat settings: tags, visibility, linking, who this is</summary>
                     <ConversationVisibilityEditor conversation={picked} settings={visibilitySettings} write={writeVisibility} />
                     <ConversationTagEditor conversation={picked} tags={tags} tagMaps={tagMaps} write={writeTags} />
-                    {pickedRow && <ConversationLinkEditor key={picked.room_id} conversation={picked} chats={pickedRow.chats} conversations={conversations} write={writeLinks} />}
+                    {pickedRow && <ConversationLinkEditor key={picked.room_id} conversation={picked}
+                      chats={pickedRow.chats.some(chat => chat.room_id === picked.room_id) ? pickedRow.chats : [picked]} conversations={conversations} write={writeLinks} />}
                     {picked.direct_message_partner_user_id && <ConversationPerson key={picked.direct_message_partner_user_id} partnerUserID={picked.direct_message_partner_user_id} roomID={picked.room_id} onSent={() => { void reload() }} />}
                   </details>
                 )} />
@@ -1194,7 +1211,8 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
     setBusy(false)
   }
   const others = row.kind === 'person' ? personOtherChats(row.person, row.chats, conversations) : []
-  const shownOthers = showAll ? others : others.slice(0, OTHER_CHATS_SHOWN)
+  const shownOthers = showAll ? others
+    : [...others.slice(0, OTHER_CHATS_SHOWN), ...others.slice(OTHER_CHATS_SHOWN).filter(chat => chat.room_id === roomID)]
   const open = conversations.find(conversation => conversation.room_id === roomID)
   const peopleHere = row.kind === 'room' && open
     ? peopleInRoom(open, contacts).flatMap(person => {
@@ -1202,21 +1220,31 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
       return personRow ? [{ person, personRow }] : []
     })
     : []
+  const ownChat = row.chats.some(chat => chat.room_id === roomID)
+  const openOther = others.find(chat => chat.room_id === roomID)
   return (
     <div className={styles.rowHeader} data-row-key={row.key}>
       {(row.kind === 'person' || row.chats.length > 1) && (
         <div className={styles.rowHeaderName}>
           <span className={styles.name}>{conversationListRowName(row)}</span>
           {row.kind === 'person' && row.person.person_id && <span className={styles.muted}>{row.person.person_id}</span>}
+          {row.kind === 'person' && (
+            <span className={styles.muted}>
+              {row.chats.length} chat{row.chats.length === 1 ? '' : 's'} with {row.person.display_name}
+              {others.length > 0 ? `, in ${others.length} other${others.length === 1 ? '' : 's'}` : ''}
+            </span>
+          )}
         </div>
       )}
-      {row.chats.length > 1 && (
+      {(row.chats.length > 1 || others.length > 0) && (
         <nav className={styles.tabs} aria-label="Chats">
-          <button type="button" className={`${styles.tab} ${merged ? styles.tabActive : ''}`} aria-pressed={merged}
-            title="Every chat in one timeline; you pick which chat a message goes to"
-            onClick={() => onPick(roomID, true)}>
-            Merged
-          </button>
+          {row.chats.length > 1 && (
+            <button type="button" className={`${styles.tab} ${merged ? styles.tabActive : ''}`} aria-pressed={merged}
+              title="Every chat with this person in one timeline; you pick which chat a message goes to"
+              onClick={() => onPick(ownChat ? roomID : row.chats[0].room_id, true)}>
+              Merged
+            </button>
+          )}
           {row.chats.map(conversation => (
             <button key={conversation.room_id} type="button" title={conversationShownName(conversation)}
               aria-pressed={!merged && conversation.room_id === roomID}
@@ -1225,28 +1253,33 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
               {chatLabel(row.chats, conversation)}
             </button>
           ))}
-        </nav>
-      )}
-      {others.length > 0 && row.kind === 'person' && (
-        <div className={styles.otherChats} data-other-chats={others.length}>
-          <span className={styles.muted}>Also in</span>
+          {others.length > 0 && <span className={styles.tabDivider} aria-hidden="true" />}
           {shownOthers.map(conversation => (
-            <span key={conversation.room_id} className={styles.otherChat}>
-              <button type="button" className={styles.otherChatOpen} title={`${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''}`}
-                onClick={() => onPick(conversation.room_id, false)}>
-                {conversationShownName(conversation)}
-                {conversation.platform && <span className={styles.platform}>{conversation.platform}</span>}
-              </button>
-              <button type="button" className={styles.otherChatAdd} disabled={busy}
-                title={`Make this one of ${row.person.display_name}'s chats: a tab beside the others, and part of Merged`}
-                onClick={() => { void addToChats(row.chats, conversation.room_id) }}>+ tab</button>
-            </span>
+            <button key={conversation.room_id} type="button" aria-pressed={conversation.room_id === roomID}
+              title={`${conversation.name}${conversation.platform ? ` on ${conversation.platform}` : ''}${conversation.member_count > 2 ? `, ${conversation.member_count} members` : ''}`}
+              className={`${styles.tab} ${styles.tabOther} ${conversation.room_id === roomID ? styles.tabActive : ''}`}
+              onClick={() => onPick(conversation.room_id, false)}>
+              {conversationShownName(conversation)}
+              {conversation.platform && <span className={styles.tabApp}>{conversation.platform}</span>}
+            </button>
           ))}
           {others.length > OTHER_CHATS_SHOWN && (
-            <button type="button" className={styles.tagSelect} onClick={() => setShowAll(current => !current)}>
-              {showAll ? 'Fewer' : `${others.length - OTHER_CHATS_SHOWN} more`}
+            <button type="button" className={`${styles.tab} ${styles.tabOther}`} onClick={() => setShowAll(current => !current)}>
+              {showAll ? 'Fewer' : `${others.length - OTHER_CHATS_SHOWN} more…`}
             </button>
           )}
+        </nav>
+      )}
+      {row.kind === 'person' && openOther && (
+        <div className={styles.otherChats}>
+          <span className={styles.muted}>
+            {openOther.member_count > 2 ? `A group chat ${row.person.display_name} is in.` : `Not counted as a chat with ${row.person.display_name} yet.`}
+          </span>
+          <button type="button" className={styles.tagSelect} disabled={busy}
+            title={`Make this one of ${row.person.display_name}'s chats: a tab beside the others, and part of Merged`}
+            onClick={() => { void addToChats(row.chats, openOther.room_id) }}>
+            + Make it a chat with {row.person.display_name}
+          </button>
         </div>
       )}
       {peopleHere.length > 0 && (
@@ -1254,7 +1287,7 @@ function ConversationRowHeader({ row, roomID, merged, onPick, allRows, conversat
           <span className={styles.muted}>People here</span>
           {peopleHere.map(({ person, personRow }) => (
             <span key={personRow.key} className={styles.otherChat}>
-              <button type="button" className={styles.otherChatOpen} onClick={() => onOpenPerson(personRow.key.slice('person:'.length))}>
+              <button type="button" className={styles.otherChatOpen} onClick={() => onOpenPerson(personRow.key)}>
                 👤 {person.display_name}
               </button>
               <button type="button" className={styles.otherChatAdd} disabled={busy}

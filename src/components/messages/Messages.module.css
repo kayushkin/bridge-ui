@@ -142,7 +142,11 @@ a.name:hover { text-decoration: underline; }
    other chats they are in. */
 .rowHeader { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
 .rowHeaderName { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 2px; }
-.rowHeader .tabs { border-bottom: none; }
+.rowHeader .tabs { border-bottom: none; flex-wrap: wrap; row-gap: 0; }
+/* Between a person's own chats and the other chats they are in. */
+.tabDivider { width: 1px; align-self: stretch; margin: 6px 6px; background: var(--border); }
+.tabOther { text-transform: none; font-size: 0.85em; padding: 6px 8px; }
+.tabApp { margin-left: 5px; font-size: 0.8em; color: var(--text-dim); text-transform: capitalize; }
 .otherChats {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px 6px; font-size: 0.85em;
   border-top: 1px solid var(--border-subtle);

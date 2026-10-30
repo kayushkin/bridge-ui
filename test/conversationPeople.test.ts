@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConversationLink } from '@kayushkin/multichat-types'
 import {
   addToPersonChatsBody, chatLabel, conversationListRowOf, conversationListRows, defaultSendRoom, mergedHorizon, mergedMessages,
-  peopleInRoom, personOtherChats, roomOwners, roomsToPageBack, type LoadedRoom, type MergedMessage,
+  peopleInRoom, personOtherChats, roomOwners, roomsToPageBack, shownRowOf, personParamOf, type LoadedRoom, type MergedMessage,
 } from '../src/conversationPeople'
 import type { MultichatConversation, MultichatMessage, MultichatUnifiedContact } from '../src/types-multichat'
 
@@ -58,6 +58,26 @@ describe('the list', () => {
     expect(conversationListRows(all, [], links, contacts, { text: 'sam', matchingAllButText: [group] })).toEqual([])
   })
 
+  it('keeps a person\'s page open on a group chat they are in', () => {
+    const rows = conversationListRows(all, all, links, contacts)
+    expect(shownRowOf(rows, '!group', 'person_000001', all, contacts)?.key).toBe('person:person_000001')
+    expect(shownRowOf(rows, '!group', '@whatsapp_2:x', all, contacts)?.key).toBe('person:@whatsapp_2:x')
+    expect(shownRowOf(rows, '!group', null, all, contacts)?.key).toBe('room:!group')
+    // A room the named person is not in opens its own row.
+    expect(shownRowOf(rows, '!stranger', 'person_000001', all, contacts)?.key).toBe('room:!stranger')
+    expect(personParamOf(rows[1])).toBe('person_000001')
+  })
+
+  it('opens a room holding one known person on that person\'s page', () => {
+    // An unmarked chat with Sam alone, as the web bridge makes them.
+    const webOnly = room('!web-only', 500, { platform: 'gmessagesweb', members: [member('@web_1:x')] })
+    const rooms = [...all, webOnly]
+    const rows = conversationListRows(rooms, rooms, links, contacts)
+    expect(shownRowOf(rows, '!web-only', null, rooms, contacts)?.key).toBe('person:person_000001')
+    // Two known people: the room keeps its own row.
+    expect(shownRowOf(rows, '!group', null, rooms, contacts)?.key).toBe('room:!group')
+  })
+
   it('finds the row a room is in', () => {
     const rows = conversationListRows(all, all, links, contacts)
     expect(conversationListRowOf(rows, '!web')?.key).toBe('person:person_000001')
@@ -68,6 +88,11 @@ describe('the list', () => {
 describe('a person\'s other chats', () => {
   it('lists every other room any of their accounts is in', () => {
     expect(personOtherChats(sam, [samDiscord, samWeb, samSMS], all).map(chat => chat.room_id)).toEqual(['!group'])
+  })
+
+  it('lists hidden rooms after shown ones', () => {
+    const channel = room('!channel', 900, { platform: 'discord', member_count: 100, hidden: true, members: [member('@discord_1:x')] })
+    expect(personOtherChats(sam, [samDiscord], [channel, group]).map(chat => chat.room_id)).toEqual(['!group', '!channel'])
   })
 
   it('names the people in a room', () => {
