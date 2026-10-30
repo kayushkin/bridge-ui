@@ -357,6 +357,7 @@ export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathFiel
   photoStoreBasePath: 'not-there',
   peoplePagePath: 'not-there',
   journalPagePath: 'not-there',
+  dayPagePath: 'not-there',
 }
 
 /** This host's pages that take one of this host's ids (`?session=`, a card,

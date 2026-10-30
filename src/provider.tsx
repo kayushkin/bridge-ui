@@ -67,6 +67,7 @@ export interface BridgeProviderProps {
   photoStoreBasePath?: string
   peoplePagePath?: string
   journalPagePath?: string
+  dayPagePath?: string
   /** Base path for usage-store API. If omitted, spend/limits sections of the
    * Usage tab are hidden and only per-session aggregates are shown. */
   usageStoreBasePath?: string
@@ -127,6 +128,7 @@ export function BridgeProvider({
   photoStoreBasePath = '',
   peoplePagePath = '',
   journalPagePath = '',
+  dayPagePath = '',
   noteboardBasePath = '',
   resolveEndpoint = '',
   bridgeAdapterBasePath = '',
@@ -170,6 +172,7 @@ export function BridgeProvider({
     photoStoreBasePath,
     peoplePagePath,
     journalPagePath,
+    dayPagePath,
     noteboardBasePath,
     resolveEndpoint,
     bridgeAdapterBasePath,
@@ -189,7 +192,7 @@ export function BridgeProvider({
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, peoplePagePath, journalPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

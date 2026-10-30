@@ -56,7 +56,7 @@ export function Bridge({ notesPath = '', showConformance, showServiceInventory, 
                 : <Route key={p.route} path={path} element={createElement(p.component)} />
             })}
             {hostPages.map(p => (
-              <Route key={p.path} path={p.path.replace(/^\//, '')} element={p.element} />
+              <Route key={p.path + (p.routeSuffix ?? '')} path={p.path.replace(/^\//, '') + (p.routeSuffix ?? '')} element={p.element} />
             ))}
           </Route>
         </Routes>

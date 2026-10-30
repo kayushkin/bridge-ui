@@ -29,6 +29,17 @@ import {
 } from '../../locationRefs';
 import type { Activity } from '@kayushkin/activity-store-types';
 import { activityChipLabel, activityGlyph, activityLink, activitySources, activityVerb } from '../../activityRefs';
+import type { Conversation, ConversationDayWithMessages, Message as ChatMessage } from '@kayushkin/message-store-types';
+import {
+  chatMessageChipLabel,
+  chatPlatformGlyph,
+  conversationChipLabel,
+  conversationDayChipLabel,
+  conversationDayCountLabel,
+  conversationLastDay,
+  dayPageHref,
+  otherParticipantNames,
+} from '../../messageStoreRefs';
 import { useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
@@ -1011,6 +1022,15 @@ function UnclassifiedRefChip({
     if (match.type === 'activity') {
       return <ActivityRefChip refId={refId} activity={match.data as Activity} className={className} />;
     }
+    if (match.type === 'conversation') {
+      return <ConversationRefChip refId={refId} conversation={match.data as Conversation} className={className} />;
+    }
+    if (match.type === 'chat_message') {
+      return <ChatMessageRefChip refId={refId} message={match.data as ChatMessage} className={className} />;
+    }
+    if (match.type === 'conversation_day') {
+      return <ConversationDayRefChip refId={refId} day={match.data as ConversationDayWithMessages} className={className} />;
+    }
     if (match.type === 'message') {
       const message = messageOfAnswer(match.data);
       if (message) return <MessageRefChip refId={refId} message={message} className={className} />;
@@ -1437,6 +1457,100 @@ function ActivityRefChip({ refId, activity, className }: { refId: string; activi
             </div>
           )}
           <MapLink href={pointMapUrl(activity.latitude, activity.longitude)} label="Where it happened" />
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** The link a message-store chip's panel ends with: the host's day page,
+ *  or nothing when the host has none. */
+function DayPageLink({ href, label }: { href: string; label: string }): JSX.Element | null {
+  if (!href) return null;
+  return (
+    <div className="ref-chip-panel-actions">
+      <a className="ref-chip-panel-btn" href={href}>
+        {label}
+      </a>
+    </div>
+  );
+}
+
+/** A conversation id (`conversation_000123`), resolved by message-store: its
+ *  title, else who it is with, on the chip, and in the panel the app, the
+ *  people, how many messages and over what span, with a link to its newest
+ *  day on the host's day page. */
+function ConversationRefChip({ refId, conversation, className }: { refId: string; conversation: Conversation; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { dayPagePath } = useBridgeConfig();
+  const label = conversationChipLabel(conversation);
+  const href = dayPageHref(dayPagePath, conversationLastDay(conversation), refId, '');
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="conversation" data-ref-id={refId}>
+      <LocationChipButton glyph={chatPlatformGlyph(conversation.platform)} label={label} refId={refId} deleted={false} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Conversation details" refId={refId} refKind="conversation">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} />
+          <RefRow label="App" value={conversation.platform} />
+          <RefRow label={conversation.is_group ? 'Group with' : 'With'} value={otherParticipantNames(conversation).join(', ')} />
+          <RefRow label="Messages" value={String(conversation.message_count)} />
+          {conversation.first_message_at > 0 && (
+            <RefRow label="Span" value={`${calendarDayOf(Math.floor(conversation.first_message_at / 1000))} – ${conversationLastDay(conversation)}`} />
+          )}
+          <DayPageLink href={href} label="Open its last day" />
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A chat message id (`chat_message_000123`), resolved by message-store: who
+ *  sent it and the day on the chip, and in the panel the app, the time and the
+ *  text, with a link to that day of its conversation on the host's day page. */
+function ChatMessageRefChip({ refId, message, className }: { refId: string; message: ChatMessage; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { dayPagePath } = useBridgeConfig();
+  const label = chatMessageChipLabel(message);
+  const href = dayPageHref(dayPagePath, calendarDayOf(Math.floor(message.sent_at / 1000)), message.conversation_id, refId);
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="chat_message" data-ref-id={refId}>
+      <LocationChipButton glyph="💬" label={label} refId={refId} deleted={message.deleted_on_platform === true} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Message details" refId={refId} refKind="chat_message">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} />
+          <RefRow label="Conversation" value={message.conversation_id} />
+          <RefRow label="Sent" value={new Date(message.sent_at).toLocaleString()} />
+          <RefRow label="Kind" value={message.kind} />
+          {message.body && <div className="ref-chip-panel-body">{message.body}</div>}
+          <DayPageLink href={href} label="Open the day" />
+        </AnchoredPanel>
+      )}
+    </span>
+  );
+}
+
+/** A conversation day id (`conversation_day_000123`), resolved by
+ *  message-store: the chat and the day on the chip, and in the panel how many
+ *  messages and the journal entry that held its transcript, with a link to the
+ *  day on the host's day page. */
+function ConversationDayRefChip({ refId, day, className }: { refId: string; day: ConversationDayWithMessages; className?: string }): JSX.Element {
+  const { open, toggle, wrapRef, panelRef, panelStyle } = useAnchoredPanel();
+  const { dayPagePath } = useBridgeConfig();
+  const label = conversationDayChipLabel(day);
+  const href = dayPageHref(dayPagePath, day.day, day.conversation_id, refId);
+  return (
+    <span className="ref-chip-wrap" ref={wrapRef} data-ref-kind="conversation_day" data-ref-id={refId}>
+      <LocationChipButton glyph={chatPlatformGlyph(day.conversation.platform)} label={label} refId={refId} deleted={false} open={open} toggle={toggle} className={className} />
+      {open && (
+        <AnchoredPanel panelRef={panelRef} panelStyle={panelStyle} label="Conversation day details" refId={refId} refKind="conversation_day">
+          <div className="ref-chip-panel-title">{label}</div>
+          <RefRow label="Id" value={refId} />
+          <RefRow label="Day" value={`${day.day} (${day.time_zone})`} />
+          <RefRow label="Messages" value={conversationDayCountLabel(day)} />
+          {day.journal_entry_id && <RefRow label="Transcript" value={day.journal_entry_id} />}
+          <DayPageLink href={href} label="Read the day" />
         </AnchoredPanel>
       )}
     </span>

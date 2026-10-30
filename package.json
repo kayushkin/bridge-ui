@@ -57,7 +57,8 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0",
     "unist-util-visit": "^5.0.0",
-    "virtua": "^0.44.3"
+    "virtua": "^0.44.3",
+    "@kayushkin/message-store-types": "file:../message-store/ts"
   },
   "peerDependencies": {
     "react": ">=18",

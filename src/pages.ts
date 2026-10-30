@@ -175,6 +175,12 @@ export interface HostPage {
   group: PageGroupKey
   element: ReactNode
   end?: boolean
+  /** Drawn in the navigation; absent means listed. A host's sub-page — one
+   *  day, one person's life — is routed but not listed, and lights up its
+   *  group through `groupForPath` all the same. */
+  listed?: boolean
+  /** Appended to `path` for the <Route> pattern, e.g. '/*' or '/:date'. */
+  routeSuffix?: string
 }
 
 /** One entry of the navigation, whichever side it came from. */
@@ -192,7 +198,7 @@ export function navEntriesFor(config: BridgeConfig, flags: ShellFlags, hostPages
   const own: NavEntry[] = BRIDGE_PAGES
     .filter(p => p.listed && (p.available ? p.available(config, flags) : true))
     .map(p => ({ to: config.routes[p.route], label: p.label, group: p.group, end: p.end ?? false, ...(p.badge ? { badge: p.badge } : {}) }))
-  const host: NavEntry[] = hostPages.map(p => ({ to: p.path, label: p.label, group: p.group, end: p.end ?? false }))
+  const host: NavEntry[] = hostPages.filter(p => p.listed !== false).map(p => ({ to: p.path, label: p.label, group: p.group, end: p.end ?? false }))
   return [...own, ...host]
 }
 

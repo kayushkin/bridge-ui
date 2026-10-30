@@ -86,3 +86,18 @@ describe('groupForPath', () => {
     expect(groupForPath('/instances', DEFAULT_BRIDGE_ROUTES)).toBe('agents')
   })
 })
+
+describe('host sub-pages', () => {
+  const hostPages: HostPage[] = [
+    { path: '/life', label: 'Life', group: 'personal', element: null, routeSuffix: '/*' },
+    { path: '/day', label: 'Day', group: 'personal', element: null, listed: false, routeSuffix: '/*' },
+  ]
+  it('lists a host page unless it says it is not listed', () => {
+    const labels = navEntriesFor(config(), flags, hostPages).map(e => e.label)
+    expect(labels).toContain('Life')
+    expect(labels).not.toContain('Day')
+  })
+  it('lights up the group of an unlisted host page', () => {
+    expect(groupForPath('/day/2024-05-03', DEFAULT_BRIDGE_ROUTES, hostPages)).toBe('personal')
+  })
+})

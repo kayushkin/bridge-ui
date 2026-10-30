@@ -285,6 +285,10 @@ export interface BridgeConfig {
    * chip opens as `{path}?id=entry_000001`. Empty hides the chip's "Open
    * entry" link. */
   journalPagePath: string
+  /** Path to the HOST's own day page (dash: "/day"), which a message-store
+   * chip (`conversation_…`, `chat_message_…`, `conversation_day_…`) opens as
+   * `{path}/YYYY-MM-DD?conversation=<id>#<focused id>`. Empty hides the link. */
+  dayPagePath: string
   /** Optional render hook called per harness in the Settings tab. Hosts can
    * use this to inject harness-specific configuration UI keyed on harness
    * name. Return null for harnesses without an extension. */
