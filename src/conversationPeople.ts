@@ -267,13 +267,38 @@ export function historyMessagesPath(conversationID: string, cursor?: string | nu
   return `/messages?${query.toString()}`
 }
 
-/** Whether a live room carries a stored conversation: one message-store
- *  imported from a Matrix room carries that room's id, and one from Discord
- *  carries the Discord channel id that multichat reports on the room. */
-function carriedByRoom(conversation: StoreConversation, rooms: readonly MultichatConversation[]): boolean {
-  if (conversation.source === 'matrix') return rooms.some(room => room.room_id === conversation.source_ref)
-  if (conversation.source === 'discord') return rooms.some(room => room.discord_channel_id === conversation.source_ref)
-  return false
+/** The live room that carries a stored conversation, or null: one
+ *  message-store imported from a Matrix room carries that room's id, and one
+ *  from Discord carries the Discord channel id multichat reports on the room. */
+export function storedChatRoom(conversation: StoreConversation, rooms: readonly MultichatConversation[]): MultichatConversation | null {
+  if (conversation.source === 'matrix') return rooms.find(room => room.room_id === conversation.source_ref) ?? null
+  if (conversation.source === 'discord') return rooms.find(room => room.discord_channel_id === conversation.source_ref) ?? null
+  return null
+}
+
+/** The stored conversations behind the open rooms, each with its room: the
+ *  room's past from before it was bridged, shown under its own messages. */
+export function storedChatsBehindRooms(
+  stored: readonly StoreConversation[], rooms: readonly MultichatConversation[],
+): { roomID: string; conversation: StoreConversation }[] {
+  return stored.flatMap(conversation => {
+    const room = storedChatRoom(conversation, rooms)
+    return room && conversation.message_count > 0 ? [{ roomID: room.room_id, conversation }] : []
+  })
+}
+
+/** The person's account a stored one-to-one Discord chat with no room would
+ *  be answered from: their Discord puppet whose Discord id is the other
+ *  participant's handle. Null for any other app, where no route opens a room
+ *  for a stored chat. */
+export function storedChatSendAccount(conversation: StoreConversation, person: MultichatUnifiedContact): string | null {
+  if (conversation.source !== 'discord' || conversation.is_group) return null
+  const handles = new Set((conversation.participants ?? []).filter(participant => !participant.is_self).map(participant => participant.handle))
+  const account = person.identities.find(identity => {
+    const localpart = identity.user_id.split(':')[0]
+    return localpart.startsWith('@discord_') && handles.has(localpart.slice('@discord_'.length))
+  })
+  return account?.user_id ?? null
 }
 
 /** The person's one-to-one chats that message-store keeps and no live room
@@ -282,15 +307,18 @@ function carriedByRoom(conversation: StoreConversation, rooms: readonly Multicha
 export function historyOnlyChats(
   stored: readonly StoreConversation[], rooms: readonly MultichatConversation[],
 ): StoreConversation[] {
-  return stored.filter(conversation => !conversation.is_group && conversation.message_count > 0 && !carriedByRoom(conversation, rooms))
+  return stored.filter(conversation => !conversation.is_group && conversation.message_count > 0 && !storedChatRoom(conversation, rooms))
     .sort((a, b) => b.last_message_at - a.last_message_at)
 }
 
-/** A history tab's label: the app and "history", with the chat's title too
- *  when two history chats are on one app. */
-export function historyChatLabel(histories: readonly StoreConversation[], conversation: StoreConversation): string {
-  const sharesApp = histories.filter(other => other.platform === conversation.platform).length > 1
-  return sharesApp ? `${conversation.platform} history · ${conversation.title}` : `${conversation.platform} history`
+/** A stored chat's tab label, as a room's is: the app, with the chat's title
+ *  too when another of the person's chats is on the same app. */
+export function storedChatLabel(
+  chats: readonly MultichatConversation[], stored: readonly StoreConversation[], conversation: StoreConversation,
+): string {
+  const sharesApp = chats.some(chat => chat.platform === conversation.platform)
+    || stored.filter(other => other.platform === conversation.platform).length > 1
+  return sharesApp ? `${conversation.platform} · ${conversation.title}` : conversation.platform
 }
 
 /** A stored message drawn as a thread draws a room's: its id, sender, text

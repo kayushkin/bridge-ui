@@ -4,7 +4,7 @@ import type { Conversation as StoreConversation, Message as StoreMessage } from 
 import {
   addToPersonChatsBody, chatLabel, conversationListRowOf, conversationListRows, defaultSendRoom, mergedHorizon, mergedMessages,
   peopleInRoom, personOtherChats, roomOwners, roomsToPageBack, shownRowOf, personParamOf,
-  historyChatLabel, historyMessageShown, historyMessagesPath, historyOnlyChats, type LoadedRoom, type MergedMessage,
+  storedChatLabel, storedChatSendAccount, storedChatsBehindRooms, historyMessageShown, historyMessagesPath, historyOnlyChats, type LoadedRoom, type MergedMessage,
 } from '../src/conversationPeople'
 import type { MultichatConversation, MultichatMessage, MultichatUnifiedContact } from '../src/types-multichat'
 
@@ -166,11 +166,28 @@ describe('history tabs', () => {
     expect(kept.map(conversation => conversation.id)).toEqual(['conversation_000004', 'conversation_000003'])
   })
 
-  it('labels a history tab by app, with its title when two share an app', () => {
+  it('labels a stored chat by app, as a room is', () => {
     const a = stored('conversation_000003', 'discord', '777', 7, { title: 'midnachew' })
     const b = stored('conversation_000007', 'discord', '778', 7, { title: 'old' })
-    expect(historyChatLabel([a], a)).toBe('discord history')
-    expect(historyChatLabel([a, b], a)).toBe('discord history · midnachew')
+    expect(storedChatLabel([smsRoom], [a], a)).toBe('discord')
+    expect(storedChatLabel([smsRoom], [a, b], a)).toBe('discord · midnachew')
+    expect(storedChatLabel([discordRoom], [a], a)).toBe('discord · midnachew')
+  })
+
+  it('puts a stored chat behind the room that carries it', () => {
+    expect(storedChatsBehindRooms([
+      stored('conversation_000001', 'discord', '555', 5),
+      stored('conversation_000003', 'discord', '777', 7),
+    ], [discordRoom, smsRoom]).map(behind => [behind.roomID, behind.conversation.id])).toEqual([['!dc', 'conversation_000001']])
+  })
+
+  it('answers a stored Discord DM from the person\'s account with that Discord id', () => {
+    const dm = stored('conversation_000003', 'discord', '777', 7, {
+      participants: [{ handle: '110', display_name: 'me', person_id: '', is_self: true }, { handle: '1', display_name: 'Sam', person_id: 'person_000001', is_self: false }],
+    })
+    expect(storedChatSendAccount(dm, sam)).toBe('@discord_1:x')
+    expect(storedChatSendAccount({ ...dm, is_group: true }, sam)).toBeNull()
+    expect(storedChatSendAccount(stored('conversation_000004', 'android_sms', '42', 9), sam)).toBeNull()
   })
 
   it('pages a stored conversation newest first', () => {

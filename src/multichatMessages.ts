@@ -56,6 +56,7 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   // Channel names for a Discord room's `<#id>` tokens, and which server's
   // custom emoji the room is offered.
   'GET /discord/status',
+  'POST /discord/direct-messages/open',
   // The emoji pickers, the quick-react bar and the Emoji page.
   ...EMOJI_ROUTES_CALLED,
   // Who is waiting on a reply, its settings, and opening or dismissing a room.

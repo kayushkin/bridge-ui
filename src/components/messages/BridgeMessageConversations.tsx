@@ -25,7 +25,7 @@ import type {
 } from '../../types-multichat'
 import {
   addToPersonChatsBody, chatLabel, conversationListRowName, conversationListRows, personParamOf, shownRowOf,
-  historyChatLabel, historyMessageShown, historyMessagesPath, historyOnlyChats, personHistoryConversationsPath, defaultSendRoom, mergedMessages,
+  storedChatLabel, storedChatSendAccount, storedChatsBehindRooms, historyMessageShown, historyMessagesPath, historyOnlyChats, personHistoryConversationsPath, defaultSendRoom, mergedMessages,
   peopleInRoom, personKey, personOtherChats, roomsToPageBack, type ConversationListRow, type LoadedRoom, type MergedMessage,
 } from '../../conversationPeople'
 import { errorText, useMultichat } from './useMultichat'
@@ -47,6 +47,10 @@ import type { Conversation as StoreConversation, MessagePage as StoreMessagePage
 
 /** A thread with no stored chats beside its rooms. */
 const NO_HISTORIES: readonly StoreConversation[] = []
+/** A stored chat and the live room that carries it. */
+type StoredChatBehindRoom = { roomID: string; conversation: StoreConversation }
+/** A thread with no stored chats behind its rooms. */
+const NO_STORED_BEHIND: readonly StoredChatBehindRoom[] = []
 
 const CONVERSATIONS_POLL_MS = 30_000
 const MESSAGES_POLL_MS = 5_000
@@ -299,6 +303,40 @@ export function BridgeMessageConversations() {
     navigate(conversationAddress(routes.messageConversations, nextRoomID, roomNames, keep), { replace: true })
   }
 
+  /** The rooms the thread shows: none for a stored chat alone, every chat of
+   *  the row when merged, else the open room. */
+  const threadRooms = useMemo(
+    () => (pickedHistory || !picked ? [] : merged && pickedRow ? pickedRow.chats : [picked]),
+    [pickedHistory, picked, merged, pickedRow],
+  )
+  /** The stored past of those rooms, from before each was bridged. */
+  const storedBehind = useMemo(
+    () => storedChatsBehindRooms(storedChats.conversations ?? [], threadRooms),
+    [storedChats.conversations, threadRooms],
+  )
+  /** A stored chat alone, answered from the person's account on its app:
+   *  the first send opens its room. Undefined when no route opens one. */
+  const openPickedHistory = useMemo(() => {
+    if (!pickedHistory || pickedRow?.kind !== 'person') return undefined
+    const account = storedChatSendAccount(pickedHistory, pickedRow.person)
+    if (!account) return undefined
+    return {
+      label: `${pickedRow.person.display_name} on ${pickedHistory.platform}`,
+      open: async () => {
+        const opened = await write<{ room_id: string; opened: boolean }>('POST', '/discord/direct-messages/open', { user_id: account })
+        if (!opened.ok) throw new Error(opened.error)
+        return opened.value.room_id
+      },
+    }
+  }, [pickedHistory, pickedRow, write])
+
+  /** After a send: the list read again, and a chat opened by the send shown
+   *  as its room, which now carries the stored chat. */
+  const afterSend = async (sentRoomID: string) => {
+    await reload()
+    if (pickedHistory) pick(sentRoomID, false)
+  }
+
   /** Opens a stored chat on the open person's page; the room stays the
    *  page's address. */
   const pickHistory = (conversationID: string) => {
@@ -444,9 +482,12 @@ export function BridgeMessageConversations() {
             {picked ? (
               <ConversationThread
                 key={pickedHistory ? pickedHistory.id
-                  : merged && pickedRow ? [...pickedRow.chats.map(chat => chat.room_id), ...histories.map(history => history.id)].join(' ') : picked.room_id}
-                conversations={pickedHistory ? [] : merged && pickedRow ? pickedRow.chats : [picked]}
-                histories={pickedHistory ? [pickedHistory] : merged ? histories : undefined} onSent={() => { void reload() }}
+                  : [...threadRooms.map(chat => chat.room_id), ...(merged ? histories.map(history => history.id) : []), ...storedBehind.map(behind => behind.conversation.id)].join(' ')}
+                conversations={threadRooms}
+                histories={pickedHistory ? [pickedHistory] : merged ? histories : undefined}
+                storedBehind={storedBehind}
+                openSendRoom={openPickedHistory}
+                onSent={sentRoomID => { void afterSend(sentRoomID) }}
                 shortName={shortNameStore.configured
                   ? <ConversationShortName key={picked.room_id} roomID={picked.room_id} shown={roomNames.get(picked.room_id) ?? null} onRenamed={() => renamed(picked.room_id)} />
                   : null}
@@ -572,13 +613,21 @@ interface RoomPages {
  *  thread each message carries its app, and the Send button names the chat it
  *  sends to, which the reader picks beside it. Keyed by its rooms, so a change
  *  of rooms starts it afresh. */
-export function ConversationThread({ conversations, histories = NO_HISTORIES, onSent, shortName, tagEditor }: {
+export function ConversationThread({ conversations, histories = NO_HISTORIES, storedBehind = NO_STORED_BEHIND, openSendRoom, onSent, shortName, tagEditor }: {
   /** The live rooms: one, or the rooms to merge, newest first. */
   conversations: readonly MultichatConversation[]
   /** Stored chats no room carries, read from message-store: shown, merged
    *  with the rooms and paged back the same way, but read only. */
   histories?: readonly StoreConversation[]
-  onSent: () => void
+  /** Stored chats behind the live rooms: each room's past from before it was
+   *  bridged, shown under the room's own messages once those run out, as
+   *  the room's. */
+  storedBehind?: readonly StoredChatBehindRoom[]
+  /** For a thread of a stored chat alone: opens the live room it is answered
+   *  in, before the first send, and names it with what the box says. */
+  openSendRoom?: { label: string; open: () => Promise<string> }
+  /** After a send: the room it went to. */
+  onSent: (roomID: string) => void
   /** Drawn at the end of the thread's header: the room's short name and rename control. */
   shortName: ReactNode
   /** Drawn under the header. */
@@ -589,10 +638,20 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
   const merged = conversations.length + histories.length > 1
   /** Every source's key: a room's id, or a stored conversation's id. */
   const roomIDs = useMemo(
-    () => [...conversations.map(conversation => conversation.room_id), ...histories.map(history => history.id)],
-    [conversations, histories],
+    () => [
+      ...conversations.map(conversation => conversation.room_id),
+      ...histories.map(history => history.id),
+      ...storedBehind.map(behind => behind.conversation.id),
+    ],
+    [conversations, histories, storedBehind],
   )
-  const historyByID = useMemo(() => new Map(histories.map(history => [history.id, history])), [histories])
+  /** Every stored chat in the thread, by its id: read from message-store. */
+  const historyByID = useMemo(
+    () => new Map([...histories, ...storedBehind.map(behind => behind.conversation)].map(history => [history.id, history])),
+    [histories, storedBehind],
+  )
+  /** A stored chat behind a room → that room. */
+  const roomInFrontOf = useMemo(() => new Map(storedBehind.map(behind => [behind.conversation.id, behind.roomID])), [storedBehind])
   /** One page of a source: a room's from multichat, a stored chat's from
    *  message-store, oldest first either way. */
   const sourcePage = useCallback(async (sourceID: string, from: string | null): Promise<RoomPages> => {
@@ -634,7 +693,15 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
   const loadedRooms: LoadedRoom[] = useMemo(() => pages
     ? roomIDs.flatMap(roomID => pages[roomID] ? [{ roomID, messages: pages[roomID].messages, hasOlder: pages[roomID].hasOlder }] : [])
     : [], [pages, roomIDs])
-  const shownMessages = useMemo(() => mergedMessages(loadedRooms), [loadedRooms])
+  // A room's stored past shows only once the room's own pages are all loaded,
+  // and only from before its oldest message, so nothing shows twice.
+  const shownMessages = useMemo(() => mergedMessages(loadedRooms).filter(message => {
+    const roomID = roomInFrontOf.get(message.roomID)
+    if (!roomID) return true
+    const room = pages?.[roomID]
+    if (!room || room.hasOlder) return false
+    return room.messages.length === 0 || message.timestamp < room.messages[0].timestamp
+  }), [loadedRooms, roomInFrontOf, pages])
   const canLoadOlder = roomsToPageBack(loadedRooms).length > 0
   const liveMessages = useMemo(() => shownMessages.filter(message => !historyByID.has(message.roomID)), [shownMessages, historyByID])
   const sendRoomID = pickedSendRoomID ?? defaultSendRoom(conversations, liveMessages)
@@ -642,8 +709,10 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
   const sendConversation: MultichatConversation | null = conversations.find(conversation => conversation.room_id === sendRoomID) ?? conversations[0] ?? null
   /** What a message's badge says it came from. */
   const sourceLabel = (sourceID: string): { label: string; title: string } => {
+    const front = roomInFrontOf.get(sourceID)
+    if (front) return sourceLabel(front)
     const history = historyByID.get(sourceID)
-    if (history) return { label: historyChatLabel(histories, history), title: `${history.title}, kept in message-store; read only` }
+    if (history) return { label: storedChatLabel(conversations, histories, history), title: `${history.title}, from before this chat came here` }
     const room = conversations.find(conversation => conversation.room_id === sourceID)
     return room ? { label: chatLabel(conversations, room), title: `Sent in ${conversationShownName(room)}. Click to answer there.` } : { label: '', title: '' }
   }
@@ -850,11 +919,12 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
     setFileProgress(null)
     setSending(false)
     setPickedSendRoomID(sendRoomID)
-    onSent()
+    onSent(sendRoomID)
     try { await refreshNewest(true) } catch (err) { setError(errorText(err)) }
   }
 
   const send = async () => {
+    if (!sendConversation && openSendRoom) { await openAndSend(openSendRoom.open); return }
     if (attachments.length > 0) { await sendFiles(); return }
     const command = reactionCommandOf(draft)
     if (command) {
@@ -876,8 +946,34 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
     // Our own message is now the newest in that room; keep sending there
     // rather than let the default move.
     setPickedSendRoomID(sendRoomID)
-    onSent()
+    onSent(sendRoomID)
     try { await refreshNewest(true) } catch (err) { setError(errorText(err)) }
+  }
+
+  /** The first message of a chat with no room yet: opens the room, then sends
+   *  the text there. Files and reactions wait until the room is open. */
+  const openAndSend = async (open: () => Promise<string>) => {
+    if (attachments.length > 0 || reactionCommandOf(draft)) {
+      setSendError('Send a text first: that opens this chat here, and files and reactions work after.')
+      return
+    }
+    const result = sendMessageBodyOf(draft)
+    if (!result.ok) { setSendError(result.error); return }
+    setSending(true)
+    let roomID: string
+    try {
+      roomID = await open()
+    } catch (err) {
+      setSending(false)
+      setSendError(errorText(err))
+      return
+    }
+    const sent = await write<MultichatSendAnswer>('POST', conversationSendPath(roomID), result.body)
+    setSending(false)
+    if (!sent.ok) { setSendError(`The chat is open, but the message was not sent: ${sent.error}`); return }
+    setSendError(null)
+    setDraft('')
+    onSent(roomID)
   }
 
   /** Puts a change to one message's reactions on the shown list at once; the
@@ -958,8 +1054,8 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
           <span className={styles.name} title={onlyHistory.id}>{onlyHistory.title}</span>
           <span className={styles.platform}>{onlyHistory.platform}</span>
           <span className={styles.muted}>
-            {onlyHistory.message_count} messages kept in message-store, read only: no live chat carries this one yet.
-            {onlyHistory.platform === DISCORD_PLATFORM ? ' The next message either of you writes in it on Discord brings it here live.' : ''}
+            {openSendRoom ? 'Your first message here opens this chat in Messages; until then you see what was kept of it.'
+              : 'What was kept of this chat; it is not connected to Messages, so it cannot be answered here.'}
           </span>
         </div>
       )}
@@ -1046,8 +1142,8 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
           ))}
         </ul>
       )}
-      {sendConversation && <>
-      {merged && (
+      {(sendConversation || openSendRoom) && <>
+      {merged && sendConversation && (
         <div className={styles.sendTarget} data-send-room-id={sendRoomID}>
           <span className={styles.muted}>Send to</span>
           {conversations.map(conversation => (
@@ -1077,7 +1173,9 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
           aria-label="Attach files" onClick={() => filePicker.current?.click()}>📎</button>
         <EmojiPickerButton onPick={insertEmoji} disabled={sending} discordRoom={discordRoom} />
         <textarea ref={composer} className={styles.input} rows={2} value={draft} disabled={sending}
-          placeholder={`Message ${sendConversation.name}${sendConversation.platform ? ` on ${sendConversation.platform}` : ''} — Enter sends, : finds an emoji, +:name: reacts to the newest message`}
+          placeholder={sendConversation
+            ? `Message ${sendConversation.name}${sendConversation.platform ? ` on ${sendConversation.platform}` : ''} — Enter sends, : finds an emoji, +:name: reacts to the newest message`
+            : `Message ${openSendRoom?.label ?? ''} — Enter sends`}
           onChange={e => { setDraft(e.target.value); setCursor(e.target.selectionStart); setSuggestionIndex(0) }}
           onSelect={e => setCursor(e.currentTarget.selectionStart)}
           onPaste={e => {
@@ -1104,7 +1202,7 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, on
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() }
           }} />
         <button type="button" className="bi-save-btn" disabled={sending || (!draft.trim() && attachments.length === 0)} onClick={() => { void send() }}
-          title={merged ? `Sends in ${conversationShownName(sendConversation)} on ${sendConversation.platform || 'unknown app'}` : undefined}>
+          title={merged && sendConversation ? `Sends in ${conversationShownName(sendConversation)} on ${sendConversation.platform || 'unknown app'}` : undefined}>
           {fileProgress ? `Sending ${fileProgress.done} of ${fileProgress.total}…` : sending ? 'Sending…' : merged ? `Send on ${sendLabel}` : 'Send'}
         </button>
       </div>
@@ -1357,7 +1455,7 @@ function ConversationRowHeader({ row, roomID, merged, histories, historyID, onPi
               title={`${history.title}: ${history.message_count} messages kept in message-store, read only`}
               className={`${styles.tab} ${styles.tabHistory} ${history.id === historyID ? styles.tabActive : ''}`}
               onClick={() => onPickHistory(history.id)}>
-              {historyChatLabel(histories, history)}
+              {storedChatLabel(row.chats, histories, history)}
             </button>
           ))}
           {others.length > 0 && <span className={styles.tabDivider} aria-hidden="true" />}
