@@ -52,6 +52,12 @@ describe('the list', () => {
     expect(rows[0].chats).toHaveLength(3)
   })
 
+  it('finds a person by name when no chat of theirs is named for them', () => {
+    const rows = conversationListRows(all, [], links, contacts, { text: 'sam', matchingAllButText: all })
+    expect(rows.map(row => row.key)).toEqual(['person:person_000001'])
+    expect(conversationListRows(all, [], links, contacts, { text: 'sam', matchingAllButText: [group] })).toEqual([])
+  })
+
   it('finds the row a room is in', () => {
     const rows = conversationListRows(all, all, links, contacts)
     expect(conversationListRowOf(rows, '!web')?.key).toBe('person:person_000001')

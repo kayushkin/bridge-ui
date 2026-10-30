@@ -245,7 +245,14 @@ export function BridgeMessageConversations() {
   )
   const hiddenCount = useMemo(() => (conversations ?? []).filter(conversation => conversation.hidden).length, [conversations])
   const contactList = contacts ?? []
-  const rows = useMemo(() => conversationListRows(conversations ?? [], shown, links, contactList), [conversations, shown, links, contactList])
+  const shownAllButText = useMemo(
+    () => filterConversations(conversations ?? [], tagMaps, { platform, text: '', tagID, showHidden }),
+    [conversations, tagMaps, platform, tagID, showHidden],
+  )
+  const rows = useMemo(
+    () => conversationListRows(conversations ?? [], shown, links, contactList, { text, matchingAllButText: shownAllButText }),
+    [conversations, shown, links, contactList, text, shownAllButText],
+  )
   const allRows = useMemo(
     () => conversationListRows(conversations ?? [], conversations ?? [], links, contactList),
     [conversations, links, contactList],
@@ -343,7 +350,7 @@ export function BridgeMessageConversations() {
               </label>
               {visibilitySettings && <AutoHideRuleEditor settings={visibilitySettings} write={writeVisibility} />}
             </div>
-            {shown.length === 0 && (
+            {rows.length === 0 && (
               <div className={styles.empty}>{conversations.length === 0 ? 'No conversations.' : 'No conversation matches.'}</div>
             )}
             <ul className={styles.list}>
@@ -354,7 +361,7 @@ export function BridgeMessageConversations() {
                 const rowName = roomNames.get(newest.room_id)
                 return (
                   <li key={row.key}>
-                    <button type="button" data-room-id={newest.room_id} data-row-key={row.key}
+                    <button type="button" data-room-id={newest.room_id} data-row-key={row.key} data-chat-count={row.chats.length}
                       data-link-id={row.kind === 'room' ? row.entry.linkID ?? undefined : undefined}
                       className={`${styles.row} ${styles.rowPick} ${selected ? styles.rowSelected : ''} ${row.chats.every(conversation => conversation.hidden) ? styles.rowHidden : ''}`}
                       onClick={() => pick(selected ? roomID : newest.room_id)}>

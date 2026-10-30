@@ -55,12 +55,24 @@ export function roomOwners(
   return owners
 }
 
+/** Whether the person's name or any account's name contains the typed text. */
+export function personMatchesText(person: MultichatUnifiedContact, text: string): boolean {
+  const lower = text.trim().toLowerCase()
+  if (!lower) return false
+  return person.display_name.toLowerCase().includes(lower)
+    || person.identities.some(identity => (identity.display_name ?? '').toLowerCase().includes(lower))
+}
+
 /** The list's rows for the rooms that passed the filter, newest first: one per
  *  person with a matching chat, holding all their chats, and one per other
- *  room or link, as `conversationEntries` groups them. */
+ *  room or link, as `conversationEntries` groups them. A person whose name
+ *  matches `byName.text` is listed too when one of their chats is in
+ *  `byName.matchingAllButText` — the rooms that pass every filter but the
+ *  text — since their chats can be named anything ("D" on Discord). */
 export function conversationListRows(
   all: readonly MultichatConversation[], matching: readonly MultichatConversation[],
   links: readonly ConversationLink[], contacts: readonly MultichatUnifiedContact[],
+  byName?: { text: string; matchingAllButText: readonly MultichatConversation[] },
 ): ConversationListRow[] {
   const owners = roomOwners(all, links, contacts)
   const chatsOf = new Map<string, MultichatConversation[]>()
@@ -73,7 +85,14 @@ export function conversationListRows(
   const rows: ConversationListRow[] = []
   const peopleTaken = new Set<string>()
   const unowned: MultichatConversation[] = []
-  for (const conversation of matching) {
+  const matchingIDs = new Set(matching.map(conversation => conversation.room_id))
+  const named = byName && byName.text.trim()
+    ? byName.matchingAllButText.filter(conversation => {
+      const owner = owners.get(conversation.room_id)
+      return !matchingIDs.has(conversation.room_id) && !!owner && personMatchesText(owner, byName.text)
+    })
+    : []
+  for (const conversation of [...matching, ...named]) {
     const owner = owners.get(conversation.room_id)
     if (!owner) { unowned.push(conversation); continue }
     const key = personKey(owner)
