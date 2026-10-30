@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useActiveSession } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../context'
 import SignalsPage from './chat/SignalsPage'
+import { writeConnectedServerSessionRef } from '../serverListings'
 import styles from './chat/Chat.module.css'
 
 /**
@@ -27,6 +28,16 @@ export function BridgeSignals(): JSX.Element {
     [routes.chat],
   )
   const openSession = useCallback((sessionId: string) => navigate(chatHrefFor(sessionId)), [navigate, chatHrefFor])
+  const openConnectedServerSession = useCallback(
+    (connectionId: string, sessionId: string) => {
+      // The chat shows a connected server's session only in its connected-server
+      // view, and drops ?server= without it.
+      const params = new URLSearchParams({ view: 'connected-server' })
+      writeConnectedServerSessionRef(params, { connectionId, sessionId })
+      navigate(`${routes.chat}?${params}`)
+    },
+    [navigate, routes.chat],
+  )
 
   const backControl = lastSessionId ? (
     <Link className="bc-ctrl-btn" to={chatHrefFor(lastSessionId)}>
@@ -40,7 +51,11 @@ export function BridgeSignals(): JSX.Element {
 
   return (
     <div className={styles.signalsRoute}>
-      <SignalsPage onSelectSession={openSession} backControl={backControl} />
+      <SignalsPage
+        onSelectSession={openSession}
+        onSelectConnectedServerSession={openConnectedServerSession}
+        backControl={backControl}
+      />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
   connectedServerListings,
   connectedServerLabel,
   connectedServerSessionKey,
+  connectionsThisServerAdministers,
   readConnectedServerSessionRef,
   readableConnectionIds,
   sameConnectedServerSessionRef,
@@ -108,5 +109,18 @@ describe('the connected server session in the URL', () => {
     expect(connectedServerSessionKey('c1', 'br_1')).not.toBe(connectedServerSessionKey('c2', 'br_1'))
     expect(sameConnectedServerSessionRef({ connectionId: 'c1', sessionId: 'br_1' }, { connectionId: 'c2', sessionId: 'br_1' })).toBe(false)
     expect(sameConnectedServerSessionRef(null, null)).toBe(true)
+  })
+})
+
+describe('connected servers whose waiting messages this server decides', () => {
+  it('lists a readable connection holding administrator there, and no other', () => {
+    const administered = view()
+    const messagesOnly = view({ connection: connection({ id: 'peer_connection_000002' }), access_held: { ...held, level: 'messages' } })
+    const noAccess = view({ connection: connection({ id: 'peer_connection_000003' }), access_held: undefined })
+    const socketClosed = view({ connection: connection({ id: 'peer_connection_000004' }), socket_connected: false })
+    const removed = view({ connection: connection({ id: 'peer_connection_000005', removed_at: '2026-10-28T10:00:00Z' }) })
+    expect(
+      connectionsThisServerAdministers([administered, messagesOnly, noAccess, socketClosed, removed]).map(v => v.connection.id),
+    ).toEqual(['peer_connection_000001'])
   })
 })

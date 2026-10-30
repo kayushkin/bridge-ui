@@ -8,7 +8,7 @@
 // The pure rules the sidebar, the chat page and the connected-server page
 // draw from.
 
-import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
+import { PeerAccessLevelAdministrator, type PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import { peerConnectionReach, peerConnectionReachText } from './peers'
 
 /** This server's own description of itself. */
@@ -152,4 +152,14 @@ export function sameConnectedServerSessionRef(
  *  session id together, so two servers' rows for the same id never share one. */
 export function connectedServerSessionKey(connectionId: string, sessionId: string): string {
   return `${connectionId}/${sessionId}`
+}
+
+/** The connections whose servers this one can decide for: readable now, and
+ *  holding the administrator level there, which their approve and decline
+ *  routes ask for. Their waiting requests and notices are listed on this
+ *  server's Signals page beside its own. */
+export function connectionsThisServerAdministers(views: readonly PeerConnectionView[]): PeerConnectionView[] {
+  return views.filter(
+    view => connectedServerBlockedReason(view) === null && view.access_held?.level === PeerAccessLevelAdministrator,
+  )
 }
