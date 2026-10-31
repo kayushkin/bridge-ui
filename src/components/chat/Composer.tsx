@@ -13,6 +13,13 @@ import { composerAutoGrowHeightPx } from './composerAutoGrow'
 import { filesFromPaste, messageWithAttachedFiles, nameForPastedFile } from '../../sessionFileAttachments'
 import { formatBytes } from '../../toolPayloadPreview'
 import { sentBubblePlacement, sentBubbleText } from '../../composerSentBubble'
+import { useMinimalChrome } from '../minimal/MinimalChromeContext'
+
+/** True when the main pointer is a finger, so focusing a text box raises an
+ *  on-screen keyboard. */
+function touchIsMainPointer(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+}
 
 /** A file waiting in the composer to go out with the next send. `previewUrl` is an
  *  object URL for an image, revoked when the file leaves the tray. */
@@ -172,16 +179,23 @@ export default function Composer({ sessionId, turnRunning, composer, onFailedAct
   // message renders in the turns pane's status slot, not here — this component only
   // reports which of its buttons the hook's `error` belongs to.
 
-  // Focus the composer once per session, when the active session changes — mirrors
-  // bridge-ui's Composer so opening a chat lands the cursor in the input. Keyed on the
-  // session id (not every render) so it doesn't steal focus back mid-typing.
+  // Focus the composer once per session, when the active session changes, so opening
+  // a chat on a desktop lands the cursor in the input. Keyed on the session id (not
+  // every render) so it doesn't steal focus back mid-typing.
+  //
+  // Not on a phone: focus there raises the on-screen keyboard, which covers half the
+  // screen — over the session drawer while it is open, and over the thread the person
+  // just opened to read. A phone is the minimal layout, or a touch screen as the main
+  // pointer when the person forced the full layout; there the box waits for a tap.
+  const { minimal } = useMinimalChrome()
   const focusedForSession = useRef<string | null>(null)
   useEffect(() => {
     if (sessionId && focusedForSession.current !== sessionId) {
-      ref.current?.focus()
       focusedForSession.current = sessionId
+      if (minimal || touchIsMainPointer()) return
+      ref.current?.focus()
     }
-  }, [sessionId])
+  }, [sessionId, minimal])
 
   // Auto-grow, so a long message is not composed through a one-line slit. Two details
   // are load-bearing:
