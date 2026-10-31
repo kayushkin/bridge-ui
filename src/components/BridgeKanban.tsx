@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useBridgeConfig } from '../context'
-import { KANBAN_LAST_BOARD_STORAGE_KEY } from '../constants'
+import { BridgeContext, useBridgeConfig } from '../context'
+import {
+  KANBAN_SERVER_PARAM, kanbanLastBoardStorageKey, kanbanServerNamed, kanbanServerParamValue, kanbanSessionHref,
+  serverBoardsHeading, type KanbanServer, type ServerBoards,
+} from '../kanbanServers'
+import { serverBoardsKey, useBoardsOnServers, useKanbanServers } from '../useKanbanServers'
+import { peerConnectionBridgeConfig } from '../peers'
 import type { FetchFn } from '../types'
 import { cleanEmailBodyForPreview } from '../emailText'
 import { useKanban, type AssignmentOutcome } from '../useKanban'
@@ -74,7 +79,12 @@ function latestSessionLink(card: CardView): SessionLinkRef | null {
 }
 
 const LAYOUT_KEY = 'bk:layout'
-const LAST_BOARD_KEY = KANBAN_LAST_BOARD_STORAGE_KEY
+
+/** A board on another server, as the board picker's option value. It cannot
+ *  collide with a board id on the shown server, which never holds a newline. */
+function otherServerBoardValue(server: KanbanServer, boardID: string): string {
+  return `${serverBoardsKey(server)}\n${boardID}`
+}
 const COLLAPSED_COLUMNS_KEY = 'bk:collapsedColumns'
 const DEFAULT_BOARD_NAME = 'Agent runs'
 
@@ -101,11 +111,82 @@ function loadCollapsedColumns(): Set<string> {
 }
 
 /**
- * Kanban page. The header carries a board selector and a layout toggle so the
- * column flow can run side-by-side (landscape) or stacked (portrait). Card
- * click opens a drawer with body, status, links, and entity-link/tag editors.
+ * Kanban page. Boards stay on the server that holds them: `?server=` names a
+ * connected server by its own id, and the board below then runs under that
+ * server's config (`peerConnectionBridgeConfig`), reading its kanban-store
+ * through the connection's proxy. No `?server=` is this server. The board
+ * picker lists every server's boards, each server's under its own heading.
  */
 export function BridgeKanban() {
+  const config = useBridgeConfig()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { servers, loaded, error } = useKanbanServers(config)
+  const serverParam = searchParams.get(KANBAN_SERVER_PARAM)
+  const server = kanbanServerNamed(servers, serverParam)
+  const connectionId = server?.connectionId ?? null
+  const serverConfig = useMemo(
+    () => (connectionId ? peerConnectionBridgeConfig(config, connectionId) : config),
+    [config, connectionId],
+  )
+  const boardsByServer = useBoardsOnServers(servers, config)
+  const pickBoardOnServer = useCallback((target: KanbanServer, boardID: string) => {
+    localStorage.setItem(kanbanLastBoardStorageKey(target), boardID)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      const value = kanbanServerParamValue(target)
+      if (value) next.set(KANBAN_SERVER_PARAM, value)
+      else next.delete(KANBAN_SERVER_PARAM)
+      // A card id belongs to the server it is on.
+      next.delete('card')
+      return next
+    })
+  }, [setSearchParams])
+
+  if (!server) {
+    if (!loaded) return <div className="bi-loading">Loading servers…</div>
+    return (
+      <div className="bridge-error">
+        No server this one is connected to has the id {serverParam}.{error ? ` ${error}` : ''}{' '}
+        <Link to="?">Show this server's boards</Link>
+      </div>
+    )
+  }
+  if (server.blockedReason) {
+    return (
+      <div className="bridge-error">
+        {server.label}'s boards cannot be read now: {server.blockedReason}.{' '}
+        <Link to="?">Show this server's boards</Link>
+      </div>
+    )
+  }
+  return (
+    <BridgeContext.Provider value={serverConfig}>
+      <KanbanBoardOnServer
+        // Board, drawer and filters belong to one server; a new server starts fresh.
+        key={serverBoardsKey(server)}
+        server={server}
+        servers={servers}
+        boardsByServer={boardsByServer}
+        onPickBoardOnServer={pickBoardOnServer}
+      />
+    </BridgeContext.Provider>
+  )
+}
+
+interface KanbanBoardOnServerProps {
+  /** The server whose board is shown; the config above is that server's. */
+  server: KanbanServer
+  /** Every listed server, this one first, for the board picker. */
+  servers: readonly KanbanServer[]
+  /** Each server's boards by `serverBoardsKey`, for the other servers' groups. */
+  boardsByServer: ReadonlyMap<string, ServerBoards>
+  onPickBoardOnServer: (server: KanbanServer, boardID: string) => void
+}
+
+/** One server's board: the header, columns and card drawer, all read through
+ *  the config its parent provides. */
+function KanbanBoardOnServer({ server, servers, boardsByServer, onPickBoardOnServer }: KanbanBoardOnServerProps) {
+  const lastBoardKey = kanbanLastBoardStorageKey(server)
   const [selectedBoardID, setSelectedBoardID] = useState<string | null>(null)
   // ⚠️ The open card lives in the URL and NOWHERE else — there is deliberately no
   // `useState` mirroring it.
@@ -166,7 +247,7 @@ export function BridgeKanban() {
   const { prefs: bridgePrefs } = useBridgePrefs({ fetch: fetchFn, endpoint: `${bridgeBasePath}/bridge-prefs` })
   const navigate = useNavigate()
   const openSessionLink = (link: SessionLinkRef) => {
-    navigate(`${routes.chat}?session=${encodeURIComponent(link.ref)}`)
+    navigate(kanbanSessionHref(routes.chat, server, link.ref))
   }
 
   // A screenful a column. The largest board here holds 6,466 cards and answered
@@ -204,14 +285,14 @@ export function BridgeKanban() {
   }
 
   useEffect(() => {
-    if (selectedBoardID) localStorage.setItem(LAST_BOARD_KEY, selectedBoardID)
-  }, [selectedBoardID])
+    if (selectedBoardID) localStorage.setItem(lastBoardKey, selectedBoardID)
+  }, [selectedBoardID, lastBoardKey])
 
   // Pick the initial board: last-opened (if it still exists) → Agent Runs → first.
   useEffect(() => {
     if (selectedBoardID) return
     if (k.boards.length === 0) return
-    const last = localStorage.getItem(LAST_BOARD_KEY)
+    const last = localStorage.getItem(lastBoardKey)
     if (last && k.boards.some(b => b.id === last)) {
       setSelectedBoardID(last)
       return
@@ -222,7 +303,7 @@ export function BridgeKanban() {
       return
     }
     setSelectedBoardID(k.boards[0].id)
-  }, [k.boards, selectedBoardID])
+  }, [k.boards, selectedBoardID, lastBoardKey])
 
   // Deep link into the host's mail page. The account is carried alongside the
   // message id because mailstack requires it on every read — a message id alone
@@ -326,6 +407,21 @@ export function BridgeKanban() {
     ? allCardsOf(k.view.columns).length - allCardsOf(visibleColumns).length
     : 0
 
+  // This server's boards come from useKanban, so a board made or deleted here
+  // shows at once; another server's come from the page's one read of each.
+  const thisServersOptions = k.boards.map(b => (
+    <option key={b.id} value={b.id}>
+      {b.name}{b.archived ? ' (archived)' : ''}
+    </option>
+  ))
+  const otherServerBoardChoices = new Map<string, { server: KanbanServer; boardID: string }>()
+  for (const listed of servers) {
+    if (serverBoardsKey(listed) === serverBoardsKey(server)) continue
+    const boards = boardsByServer.get(serverBoardsKey(listed))
+    if (boards?.state !== 'loaded') continue
+    for (const b of boards.boards) otherServerBoardChoices.set(otherServerBoardValue(listed, b.id), { server: listed, boardID: b.id })
+  }
+
   return (
     <div className="bk-container">
       <main className="bk-main">
@@ -336,17 +432,33 @@ export function BridgeKanban() {
             <select
               className="bk-board-select"
               value={selectedBoardID ?? ''}
-              onChange={e => setSelectedBoardID(e.target.value || null)}
+              onChange={e => {
+                const other = otherServerBoardChoices.get(e.target.value)
+                if (other) onPickBoardOnServer(other.server, other.boardID)
+                else setSelectedBoardID(e.target.value || null)
+              }}
             >
               {!selectedBoardID && <option value="">— select board —</option>}
-              {k.boards.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.name}{b.archived ? ' (archived)' : ''}
-                </option>
-              ))}
+              {servers.length === 1 ? thisServersOptions : servers.map(listed => {
+                if (serverBoardsKey(listed) === serverBoardsKey(server)) {
+                  return <optgroup key={serverBoardsKey(listed)} label={listed.label}>{thisServersOptions}</optgroup>
+                }
+                const boards = boardsByServer.get(serverBoardsKey(listed)) ?? { state: 'loading' as const }
+                return (
+                  <optgroup key={serverBoardsKey(listed)} label={serverBoardsHeading(listed, boards)}>
+                    {boards.state === 'loaded'
+                      ? boards.boards.map(b => (
+                        <option key={b.id} value={otherServerBoardValue(listed, b.id)}>
+                          {b.name}{b.archived ? ' (archived)' : ''}
+                        </option>
+                      ))
+                      : <option disabled value="">{boards.state === 'failed' ? boards.error : boards.state === 'blocked' ? boards.reason : 'Reading…'}</option>}
+                  </optgroup>
+                )
+              })}
             </select>
             <button className="bi-add-btn" onClick={() => setShowNewBoard(s => !s)}>+ New Board</button>
-            {selectedBoardID && (
+            {selectedBoardID && routes.kanbanSettings && (
               <Link
                 className="bi-add-btn bk-board-settings-link"
                 to={`${routes.kanbanSettings}?board=${encodeURIComponent(selectedBoardID)}`}
@@ -540,7 +652,7 @@ export function BridgeKanban() {
                         principalId: bridgePrefs.default_principal_id,
                         bundleID,
                       })
-                      navigate(`${routes.chat}?session=${encodeURIComponent(sessionID)}`)
+                      navigate(kanbanSessionHref(routes.chat, server, sessionID))
                       return true
                     } catch (e) {
                       // No toast surface on this page, and a dispatch that
