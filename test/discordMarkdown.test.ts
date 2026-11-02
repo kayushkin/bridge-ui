@@ -3,7 +3,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import type { Root } from 'mdast'
-import { remarkDiscordInline } from '../src/discordMarkdown'
+import { remarkDiscordInline, remarkDiscordSubtext } from '../src/discordMarkdown'
 import type { DiscordNames } from '../src/messageBody'
 
 const names: DiscordNames = { channelNames: new Map([['77', 'events']]), userNames: new Map([['88', 'Jess']]) }
@@ -46,5 +46,28 @@ describe('Discord markdown', () => {
     const paragraph = tree('`<:x:1>`').children[0]
     if (paragraph.type !== 'paragraph') throw new Error(paragraph.type)
     expect(paragraph.children).toMatchObject([{ type: 'inlineCode', value: '<:x:1>' }])
+  })
+})
+
+describe('Discord small text', () => {
+  function subtextTree(markdown: string): Root {
+    const processor = unified().use(remarkParse).use(remarkGfm).use(remarkDiscordInline, options).use(remarkDiscordSubtext, { subtextClassName: 'subtext' })
+    return processor.runSync(processor.parse(markdown)) as Root
+  }
+
+  it('draws a -# line small without its marker, and leaves the line before it alone', () => {
+    const paragraph = subtextTree('Saturday at noon\n-# Replies here are passed to <@88>.').children[0]
+    if (paragraph.type !== 'paragraph') throw new Error(paragraph.type)
+    const small = paragraph.children.find(child => child.type === 'emphasis' && (child.data as { hProperties?: { className?: string[] } })?.hProperties?.className?.[0] === 'subtext')
+    if (!small || small.type !== 'emphasis') throw new Error('no small text')
+    expect(small.children[0]).toEqual({ type: 'text', value: 'Replies here are passed to ' })
+    expect(small.children.some(child => child.type === 'emphasis')).toBe(true)
+    expect(paragraph.children[0]).toEqual({ type: 'text', value: 'Saturday at noon' })
+  })
+
+  it('leaves -# in the middle of a line as typed', () => {
+    const paragraph = subtextTree('a **b** -# c').children[0]
+    if (paragraph.type !== 'paragraph') throw new Error(paragraph.type)
+    expect(JSON.stringify(paragraph)).toContain('-# c')
   })
 })

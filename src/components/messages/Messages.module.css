@@ -461,3 +461,10 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
 a.buttonChip { color: var(--accent); cursor: pointer; }
 a.buttonChip:hover { text-decoration: underline; }
 .buttonChipDisabled { opacity: 0.55; }
+
+/* Discord's `-# ` small text (remarkDiscordSubtext). */
+.discordSubtext {
+  font-style: normal;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}

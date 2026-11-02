@@ -2,7 +2,7 @@ import { createElement, useMemo, useState, type ComponentProps, type ReactNode }
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useBridgeConfig } from '../../context'
-import { remarkDiscordInline } from '../../discordMarkdown'
+import { remarkDiscordInline, remarkDiscordSubtext } from '../../discordMarkdown'
 import {
   MESSAGE_IMAGE_THUMBNAIL, isImageMedia, mediaPathOfMxc, messageBodyKind, sanitizeMatrixHtml,
   type DiscordNames, type SafeNode,
@@ -143,6 +143,7 @@ function DiscordMarkdown({ text, discordNames }: { text: string; discordNames: D
   const plugins = useMemo(() => [
     remarkGfm,
     [remarkDiscordInline, { names: discordNames, emojiClassName: styles.inlineEmoji, mentionClassName: styles.mention }],
+    [remarkDiscordSubtext, { subtextClassName: styles.discordSubtext }],
   ] as unknown as MarkdownPlugins, [discordNames])
   return (
     <div className={styles.richText}>
