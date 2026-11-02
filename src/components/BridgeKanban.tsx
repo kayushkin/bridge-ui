@@ -27,7 +27,6 @@ import { useBridgeMachines } from '../useBridgeMachines'
 import { fetchSessionRunsOn, useSessionRunsOn } from '../sessionRunsOn'
 import { dispatchInstanceChoices, machineLabel } from '../grantResources'
 import { useInstancesListedForPrincipals } from '../useResourceCatalogs'
-import { useBridgePrefs } from '../useBridgePrefs'
 import { useBundles } from '../useBundles'
 import {
   CARD_BUNDLE_HELP_TEXT, bundleLabelForID, defaultInstanceLabel, defaultSourceLabel, describeInstanceLocation,
@@ -244,7 +243,6 @@ function KanbanBoardOnServer({ server, servers, boardsByServer, onPickBoardOnSer
     kanbanStoreBasePath,
   } = useBridgeConfig()
   // Who a dispatched session is started as: the Settings page's default.
-  const { prefs: bridgePrefs } = useBridgePrefs({ fetch: fetchFn, endpoint: `${bridgeBasePath}/bridge-prefs` })
   const navigate = useNavigate()
   const openSessionLink = (link: SessionLinkRef) => {
     navigate(kanbanSessionHref(routes.chat, server, link.ref))
@@ -649,7 +647,6 @@ function KanbanBoardOnServer({ server, servers, boardsByServer, onPickBoardOnSer
                         prompt,
                         addLink: (et, er, label) => k.addCardLink(card.placement.card_id, et, er, label),
                         instance: { id: instance.id, harness_type: instance.harness_type },
-                        principalId: bridgePrefs.default_principal_id,
                         bundleID,
                       })
                       navigate(kanbanSessionHref(routes.chat, server, sessionID))
@@ -1572,7 +1569,6 @@ function AgentPromptPanel({
   fetchFn: FetchFn
 }) {
   const { basePath } = useBridgeConfig()
-  const { prefs: bridgePrefs } = useBridgePrefs({ fetch: fetchFn, endpoint: `${basePath}/bridge-prefs` })
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -1650,7 +1646,6 @@ function AgentPromptPanel({
       const sessionID = await dispatchAgentOnCard({
         basePath, fetchFn, title, prompt: effective, addLink: onAddLink,
         instance: { id: selectedInstance.id, harness_type: selectedInstance.harness_type },
-        principalId: bridgePrefs.default_principal_id,
         bundleID: defaults?.default_bundle_id?.value,
       })
       onOpenChat({ ref: sessionID, dispatchedAt: new Date().toISOString() })

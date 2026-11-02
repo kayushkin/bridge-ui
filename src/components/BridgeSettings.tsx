@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgePrefs } from '../useBridgePrefs'
-import { pickablePrincipals, principalIsDisabled, usePrincipals } from '../usePrincipals'
 import { useBridgeHarnesses, harnessNameKey, harnessNamesFromKey } from '../useBridgeHarnesses'
 import {
   PermissionModeAsk,
@@ -79,12 +78,6 @@ export function BridgeSettings() {
         prefs={bridgePrefs.prefs}
         loaded={bridgePrefs.loaded}
         refreshPrefs={bridgePrefs.refreshPrefs}
-      />
-
-      <DefaultPrincipalSection
-        value={bridgePrefs.prefs.default_principal_id ?? ''}
-        loaded={bridgePrefs.loaded}
-        onChange={bridgePrefs.setDefaultPrincipalId}
       />
 
       {harnesses.map(h => (
@@ -293,71 +286,3 @@ function PermissionsModeSection({ apiFetch, basePath, prefs, loaded, refreshPref
   )
 }
 
-/**
- * Who new sessions are started as. The chat's pending pane and the kanban
- * dispatcher both send this principal on the create; the server then offers
- * the session only what the principal's grants (grant-store) name. None means
- * sessions are created with no principal, which is how every session behaved
- * before the setting existed.
- *
- * Offered from principal-store's directory, so a host that proxies none gets
- * the explanation rather than a text box to paste an id into.
- */
-function DefaultPrincipalSection({ value, loaded, onChange }: {
-  value: string
-  loaded: boolean
-  onChange: (principalId: string) => Promise<void>
-}) {
-  const principals = usePrincipals()
-  const save = useSectionSave()
-  if (!loaded) return null
-  const options = pickablePrincipals(principals.list, { query: '', kind: 'all', excludeIDs: new Set() })
-  const current = principals.byId.get(value)
-  const offered = options.some(principal => principal.id === value)
-  return (
-    <SettingsSection
-      id="default-principal"
-      title="Session identity"
-      scope="global"
-      storedBy="llm-bridge-server · bridge-prefs.default_principal_id"
-      precedence="A kanban board's default principal, and its tag rules, outrank this for a session dispatched from a card. A principal holding no tool grants at all gets the instance's own tool opt-ins, unchanged."
-      status={{ busy: save.saving, error: save.error ?? (principals.error ? `Could not read principal-store: ${principals.error}` : null), saved: save.saved }}
-    >
-      {!principals.enabled ? (
-        <p className="bss-help">This host proxies no principal-store, so sessions are created with no principal.</p>
-      ) : (
-        <>
-          <div className="bset-bypass-row" data-testid="default-principal">
-            <label className="bset-mode-row">
-              <strong>New sessions start as:</strong>
-              <select
-                className="bset-principal-select"
-                value={value}
-                disabled={save.saving}
-                onChange={e => { const next = e.target.value; void save.run(() => saveResultOf(onChange(next))) }}
-                aria-label="Default principal"
-              >
-                <option value="">Nobody — no principal, no grant filtering</option>
-                {options.map(principal => (
-                  <option key={principal.id} value={principal.id}>
-                    {principal.display_name}{principal.kind === 'group' ? ' (group)' : ''}
-                  </option>
-                ))}
-                {value && !offered && (
-                  <option value={value}>
-                    {current ? `${current.display_name}${principalIsDisabled(current) ? ' (disabled)' : ''}` : `${value} (not in the directory)`}
-                  </option>
-                )}
-              </select>
-            </label>
-          </div>
-          <p className="bss-help">
-            The chat and the kanban dispatcher send this principal when they create a session. The server checks it with
-            principal-store and, at spawn, offers the session only the tools the principal's grants name — the Grants page
-            holds those.
-          </p>
-        </>
-      )}
-    </SettingsSection>
-  )
-}
