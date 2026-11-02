@@ -26,7 +26,7 @@ const model = (over: Partial<ModelStoreModel>): ModelStoreModel => ({
 })
 
 const setting = (over: Partial<ServiceSetting>): ServiceSetting => ({
-  key: 'turn_end_classifier.model_role', environment_variable: 'LLMBRIDGE_TURN_END_CLASSIFIER_MODEL_ROLE', kind: 'behaviour',
+  key: 'turn_end_classifier.model_role', environment_variable: 'LLMBRIDGE_TURN_END_CLASSIFIER_MODEL_ROLE', kind: 'behavior',
   value_type: 'model_role', description: 'Which role classifies a turn end', value: 'balanced', is_set: true, source: 'stored',
   default_value: 'efficient', required: false, editable: true, notes: [], ...over,
 })

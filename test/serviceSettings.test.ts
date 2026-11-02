@@ -7,14 +7,14 @@ import {
 import { BRIDGE_PAGES } from '../src/pages'
 
 const setting = (over: Partial<ServiceSetting>): ServiceSetting => ({
-  key: 'signal_classifier.model', environment_variable: 'LLMBRIDGE_SIGNAL_CLASSIFIER_MODEL', kind: 'behaviour', value_type: 'string',
+  key: 'signal_classifier.model', environment_variable: 'LLMBRIDGE_SIGNAL_CLASSIFIER_MODEL', kind: 'behavior', value_type: 'string',
   description: 'the model', value: 'claude-haiku-4-5', is_set: true, source: 'stored', default_value: 'claude-haiku-4-5',
   required: false, editable: true, notes: [], ...over,
 })
 const described = (settings: ServiceSetting[]): ServiceSettings => ({
   service: 'llm-bridge-server', settings,
   kinds: [
-    { kind: 'behaviour', description: 'Changes what the service does.' },
+    { kind: 'behavior', description: 'Changes what the service does.' },
     { kind: 'wiring', description: 'The address of something else.' },
     { kind: 'secret', description: 'A credential.' },
   ],
@@ -64,7 +64,7 @@ describe('serviceSettingsByKind', () => {
     const groups = serviceSettingsByKind(described([
       setting({ key: 'service_token', kind: 'secret' }), setting({ key: 'a' }), setting({ key: 'b' }),
     ]))
-    expect(groups.map(g => [g.kind, g.settings.map(s => s.key)])).toEqual([['behaviour', ['a', 'b']], ['secret', ['service_token']]])
+    expect(groups.map(g => [g.kind, g.settings.map(s => s.key)])).toEqual([['behavior', ['a', 'b']], ['secret', ['service_token']]])
   })
   it('keeps a setting whose kind the service did not list', () => {
     const groups = serviceSettingsByKind(described([setting({ key: 'database.path', kind: 'path' })]))
