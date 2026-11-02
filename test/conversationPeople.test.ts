@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationLink } from '@kayushkin/multichat-types'
-import type { Conversation as StoreConversation, Message as StoreMessage } from '@kayushkin/message-store-types'
+import type { Account as StoreAccount, Conversation as StoreConversation, Message as StoreMessage } from '@kayushkin/message-store-types'
 import {
   addToPersonChatsBody, chatLabel, conversationListRowOf, conversationListRows, defaultSendRoom, mergedHorizon, mergedMessages,
   peopleInRoom, personOtherChats, roomOwners, roomsToPageBack, shownRowOf, personParamOf,
-  storedChatLabel, storedChatSendAccount, storedChatsBehindRooms, historyMessageShown, historyMessagesPath, historyOnlyChats, type LoadedRoom, type MergedMessage,
+  storedChatLabel, storedChatSendAccount, storedChatsBehindRooms, historyMessageShown, historyMessagesPath, historyOnlyChats, storedChatHasBot, type LoadedRoom, type MergedMessage,
 } from '../src/conversationPeople'
 import type { MultichatConversation, MultichatMessage, MultichatUnifiedContact } from '../src/types-multichat'
 
@@ -162,8 +162,21 @@ describe('history tabs', () => {
       stored('conversation_000004', 'android_sms', '42', 9), // an old phone's texts
       stored('conversation_000005', 'discord', '888', 8, { is_group: true }),
       stored('conversation_000006', 'discord', '999', 10, { message_count: 0 }),
-    ], [discordRoom, smsRoom])
+    ], [discordRoom, smsRoom], [])
     expect(kept.map(conversation => conversation.id)).toEqual(['conversation_000004', 'conversation_000003'])
+  })
+
+  it('leaves out a chat between the person and one of the operator\'s bots', () => {
+    const bot: StoreAccount = { id: 'message_account_000002', platform: 'discord', handle: '200', display_name: 'Helper', kind: 'bot', created_at: 0, updated_at: 0 }
+    const person = { handle: '300', display_name: 'Pat', person_id: 'person_000001', is_self: false }
+    const withBot = stored('conversation_000008', 'discord', '901', 9, { participants: [person, { handle: '200', display_name: 'Helper', person_id: '', is_self: false }] })
+    const withOperator = stored('conversation_000009', 'discord', '902', 8, { participants: [person, { handle: '100', display_name: 'Me', person_id: '', is_self: true }] })
+    // The same handle on another app is someone else.
+    const sameHandleElsewhere = stored('conversation_000010', 'telegram', '903', 7, { participants: [person, { handle: '200', display_name: 'X', person_id: '', is_self: true }] })
+    expect(historyOnlyChats([withBot, withOperator, sameHandleElsewhere], [], [bot]).map(conversation => conversation.id))
+      .toEqual(['conversation_000009', 'conversation_000010'])
+    expect(storedChatHasBot(withBot, [bot])).toBe(true)
+    expect(storedChatHasBot(withOperator, [bot])).toBe(false)
   })
 
   it('labels a stored chat by app, as a room is', () => {

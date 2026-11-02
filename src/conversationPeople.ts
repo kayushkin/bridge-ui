@@ -11,7 +11,7 @@
 
 import type { ConversationLink } from '@kayushkin/multichat-types'
 import { conversationEntries, conversationShownName, foldEdits, type ConversationEntry, type ShownMessage } from './multichatMessages'
-import type { Conversation as StoreConversation, Message as StoreMessage } from '@kayushkin/message-store-types'
+import type { Account as StoreAccount, Conversation as StoreConversation, Message as StoreMessage } from '@kayushkin/message-store-types'
 import type { MultichatConversation, MultichatMessage, MultichatUnifiedContact } from './types-multichat'
 
 /** One row of the list: a person and their chats, or a room (or the rooms of
@@ -301,13 +301,24 @@ export function storedChatSendAccount(conversation: StoreConversation, person: M
   return account?.user_id ?? null
 }
 
+/** Whether one of the operator's bots takes part in a stored conversation:
+ *  a participant has a bot account's handle on the conversation's platform. */
+export function storedChatHasBot(conversation: StoreConversation, botAccounts: readonly StoreAccount[]): boolean {
+  return (conversation.participants ?? []).some(participant =>
+    botAccounts.some(bot => bot.platform === conversation.platform && bot.handle === participant.handle))
+}
+
 /** The person's one-to-one chats that message-store keeps and no live room
  *  carries — a Discord DM the bridge never made a room for, an old phone's
- *  texts — newest first. Each is a read-only tab on their page. */
+ *  texts — newest first. Each is a read-only tab on their page. A chat
+ *  between the person and one of the operator's bots (`botAccounts`, the
+ *  store's accounts of kind bot) is the bot's, not the operator's, so it is
+ *  left out. */
 export function historyOnlyChats(
-  stored: readonly StoreConversation[], rooms: readonly MultichatConversation[],
+  stored: readonly StoreConversation[], rooms: readonly MultichatConversation[], botAccounts: readonly StoreAccount[],
 ): StoreConversation[] {
-  return stored.filter(conversation => !conversation.is_group && conversation.message_count > 0 && !storedChatRoom(conversation, rooms))
+  return stored.filter(conversation => !conversation.is_group && conversation.message_count > 0
+    && !storedChatRoom(conversation, rooms) && !storedChatHasBot(conversation, botAccounts))
     .sort((a, b) => b.last_message_at - a.last_message_at)
 }
 

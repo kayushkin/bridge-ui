@@ -43,7 +43,11 @@ import {
 import type { ShortName } from '../../types-short-name-store'
 import { useShortNameStore } from './useShortNameStore'
 import { ConversationPerson, useUnifiedContacts } from './PersonLinks'
-import type { Conversation as StoreConversation, MessagePage as StoreMessagePage } from '@kayushkin/message-store-types'
+import type { Account, Conversation as StoreConversation, MessagePage as StoreMessagePage } from '@kayushkin/message-store-types'
+import { BridgeMessageAccountView, MessageAccountPicker, useMessageStoreAccounts } from './BridgeMessageAccountView'
+import {
+  ACCOUNT_CONVERSATION_PARAMETER, ACCOUNT_PARAMETER, accountConversationParameters, accountPickParameters, pickableBotAccounts, pickedBotAccount,
+} from '../../messageAccounts'
 
 /** A thread with no stored chats beside its rooms. */
 const NO_HISTORIES: readonly StoreConversation[] = []
@@ -63,6 +67,48 @@ const CUSTOM_EMOJI_IN_MESSAGE_REASON =
   'The Discord bridge cannot send a custom emoji inside a message. Start the message with +: to react with it instead.'
 
 /**
+ * The Conversations page, for the account the picker at its top names in
+ * `?account=`: none is "Me", the operator's own chats from multichat; a bot
+ * account's id shows what that bot sent and received, read-only from
+ * message-store (`BridgeMessageAccountView`), its open conversation in
+ * `&conversation=`. A host with no message-store draws no picker.
+ */
+export function BridgeMessageConversations() {
+  const { configured: messageStoreConfigured, accounts, error: accountsError } = useMessageStoreAccounts()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { routes } = useBridgeConfig()
+  const accountID = messageStoreConfigured ? searchParams.get(ACCOUNT_PARAMETER) ?? '' : ''
+  const goTo = (parameters: URLSearchParams) => {
+    const query = parameters.toString()
+    navigate(query ? `${routes.messageConversations}?${query}` : routes.messageConversations)
+  }
+  const accountPicker = messageStoreConfigured
+    ? <MessageAccountPicker accounts={accounts} error={accountsError} pickedAccountID={accountID}
+        onPick={picked => goTo(accountPickParameters(picked))} />
+    : null
+  if (!accountID) return <OwnConversations accountPicker={accountPicker} messageStoreAccounts={accounts} messageStoreAccountsError={accountsError} />
+  const account = accounts ? pickedBotAccount(accounts, accountID) : null
+  if (!account) {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <h2 className={styles.title}>Conversations</h2>
+          {accountPicker}
+        </header>
+        {accountsError ? null : !accounts ? <div className={styles.empty}>Loading…</div>
+          : <pre className={styles.error}>message-store lists no bot account {accountID}.</pre>}
+      </div>
+    )
+  }
+  return (
+    <BridgeMessageAccountView account={account} accountPicker={accountPicker}
+      conversationID={searchParams.get(ACCOUNT_CONVERSATION_PARAMETER) ?? ''}
+      onOpenConversation={conversationID => goTo(accountConversationParameters(account.id, conversationID))} />
+  )
+}
+
+/**
  * Every conversation multichat's bridges carry — WhatsApp, Telegram, Signal,
  * Messenger, Discord, Slack — and one of them open to read and answer.
  * `/messages/<short name>` opens the room short-name-store gives that name;
@@ -71,7 +117,13 @@ const CUSTOM_EMOJI_IN_MESSAGE_REASON =
  *
  * A message sent here reaches a real person on that app.
  */
-export function BridgeMessageConversations() {
+function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAccountsError }: {
+  accountPicker: ReactNode
+  /** message-store's accounts: its bots' chats are left out of a person's
+   *  stored chats. Null while loading or when the read failed. */
+  messageStoreAccounts: Account[] | null
+  messageStoreAccountsError: string | null
+}) {
   useDailyNitroCheck()
   const { read, write, configured } = useMultichat()
   const [conversations, setConversations] = useState<MultichatConversation[] | null>(null)
@@ -281,8 +333,11 @@ export function BridgeMessageConversations() {
   const storedChats = usePersonStoredChats(pickedRow?.kind === 'person' ? pickedRow.person.person_id ?? '' : '')
   /** The person's one-to-one chats message-store keeps that no room carries. */
   const histories = useMemo(
-    () => (storedChats.conversations ? historyOnlyChats(storedChats.conversations, conversations ?? []) : []),
-    [storedChats.conversations, conversations],
+    // Without the bot accounts no stored chat can be told apart from a bot's,
+    // so none is shown until they are read; a failed read is reported below.
+    () => (storedChats.conversations && messageStoreAccounts
+      ? historyOnlyChats(storedChats.conversations, conversations ?? [], pickableBotAccounts(messageStoreAccounts)) : []),
+    [storedChats.conversations, conversations, messageStoreAccounts],
   )
   /** `?history=`: the stored chat open in place of a room. */
   const historyParam = searchParams.get('history')
@@ -394,6 +449,7 @@ export function BridgeMessageConversations() {
     <div className={`${styles.page} ${roomID ? styles.pageRoomOpen : ''}`}>
       <header className={styles.header}>
         <h2 className={styles.title}>Conversations</h2>
+        {accountPicker}
         <p className={styles.subtitle}>
           Everyone you talk with, newest first: a person&apos;s chats on every app are one row, and group chats have rows of their own. A message you send here reaches the person on that app.
         </p>
@@ -479,6 +535,9 @@ export function BridgeMessageConversations() {
                 onOpenPerson={openPerson} writeLinks={writeLinks} />
             )}
             {storedChats.error && <pre className={styles.error}>Stored chats are not shown: {storedChats.error}</pre>}
+            {storedChats.conversations && messageStoreAccountsError && (
+              <pre className={styles.error}>Stored chats are not shown, because the bot accounts that would tell a bot&apos;s chats from yours could not be read: {messageStoreAccountsError}</pre>
+            )}
             {picked ? (
               <ConversationThread
                 key={pickedHistory ? pickedHistory.id

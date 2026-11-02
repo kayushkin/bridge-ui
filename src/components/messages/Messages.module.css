@@ -425,3 +425,39 @@ button.imageLink { padding: 0; border: none; background: none; cursor: zoom-in; 
 .chatConversationPane { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; padding: 8px 12px 12px; box-sizing: border-box; }
 .chatConversationBar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .chatConversationViewer { flex: 1; min-height: 0; max-height: none; }
+
+/* The account picker at the top of Conversations: "Me" or one of the bots. */
+.accountPicker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.accountPick {
+  font: inherit; font-size: 0.85em; padding: 2px 10px; cursor: pointer;
+  color: var(--text-muted); background: var(--bg-surface); border: 1px solid var(--border); border-radius: 999px;
+}
+.accountPick:hover { color: var(--text); }
+.accountPickPicked { color: var(--text); border-color: var(--accent); font-weight: 600; }
+.accountPickerError { font-size: 0.8em; color: var(--error); white-space: pre-wrap; }
+
+/* A bot's card (a Discord embed) and the buttons under its message. */
+.embedCard {
+  display: flex; gap: 10px; margin-top: 6px; padding: 6px 10px; max-width: 520px;
+  border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--bg-surface);
+}
+.embedMain { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.embedAuthor { font-size: 0.8em; font-weight: 600; color: var(--text-muted); }
+.embedTitle { font-weight: 600; color: var(--text); }
+.embedTitle a { color: var(--accent); }
+.embedFields { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.embedField { flex: 1 1 100%; min-width: 0; }
+.embedFieldInline { flex: 1 1 140px; }
+.embedFieldName { font-size: 0.8em; font-weight: 600; color: var(--text-muted); }
+.embedImage { max-width: 100%; max-height: 300px; border-radius: 4px; object-fit: contain; align-self: flex-start; }
+.embedThumbnail { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+.embedFooter { font-size: 0.75em; color: var(--text-dim); }
+.buttonChips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.buttonChip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 0.8em; padding: 1px 10px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg-surface); color: var(--text-muted);
+  text-decoration: none; cursor: default;
+}
+a.buttonChip { color: var(--accent); cursor: pointer; }
+a.buttonChip:hover { text-decoration: underline; }
+.buttonChipDisabled { opacity: 0.55; }
