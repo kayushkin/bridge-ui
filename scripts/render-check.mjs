@@ -452,8 +452,10 @@ async function sharedPollChecks() {
     check('a thrown fetch keeps its own wording', threw.ok === false && threw.error === 'TypeError: offline', JSON.stringify(threw))
     check('and counts as unreachable', threw.failure === 'unreachable')
     check('a 500 counts as refused', refused.failure === 'refused')
-    const gateway = await loadJSONList(async () => ({ ok: false, status: 502, json: async () => null }), '/u')
-    check('a 502 from the gateway counts as unreachable', gateway.ok === false && gateway.failure === 'unreachable')
+    const gateway = await loadJSONList(async () => ({ ok: false, status: 502, headers: new Headers({ 'Content-Type': 'text/html' }), json: async () => null }), '/u')
+    check("the web server's own 502 page counts as unreachable", gateway.ok === false && gateway.failure === 'unreachable')
+    const peerDown = await loadJSONList(async () => ({ ok: false, status: 503, headers: new Headers({ 'Content-Type': 'application/json' }), json: async () => null }), '/u')
+    check("the bridge's JSON 503 is its report of state, not retried", peerDown.ok === false && peerDown.failure === 'refused')
     const badBody = await loadJSONList(async () => ({ ok: true, json: async () => { throw new SyntaxError('bad json') } }), '/u')
     check('an unreadable body counts as refused', badBody.ok === false && badBody.failure === 'refused')
   }

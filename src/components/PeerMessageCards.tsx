@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type JSX } from 'react'
 import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
-import { SharedPoll, failureOfStatus, sharedPoll, useSharedPoll, type LoadResult } from '../sharedPoll'
+import { SharedPoll, failureOfResponse, sharedPoll, useSharedPoll, type LoadResult } from '../sharedPoll'
 import type { FetchFn } from '../types'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { PEER_CONNECTIONS_PATH, peerRouteErrorText } from '../peers'
@@ -77,7 +77,7 @@ async function loadPeerMessages(fetchFn: FetchFn, url: string): Promise<LoadResu
       return {
         ok: false,
         error: await peerMessageErrorText(res, 'read messages from connected servers'),
-        failure: failureOfStatus(res.status),
+        failure: failureOfResponse(res),
       }
     }
     return { ok: true, value: { available: true, messages: (await res.json()) as PeerMessage[] } }

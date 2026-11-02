@@ -47,12 +47,16 @@ export interface PollSnapshot<T> {
 }
 
 /** How a load failed, which decides when a subscriber hears of it.
- *  - `unreachable`: no answer from the service. The browser lost the request
- *    (fetch threw), or the gateway answered 502, 503 or 504 because the service
- *    behind it was down or restarting. The store retries at once and reports it
- *    only once every retry has failed too.
- *  - `refused`: the service answered and said no, or answered with something
- *    that cannot be read. Retrying will not change it, so it is reported at once. */
+ *  - `unreachable`: this host's server never answered. The browser lost the
+ *    request (fetch threw), or the web server in front of the bridge answered
+ *    502, 503 or 504 with its own error page because the service behind it was
+ *    down or restarting. The store retries at once and reports it only once
+ *    every retry has failed too. Retrying costs only this host's own work.
+ *  - `refused`: this host's server answered. That covers a refusal, an
+ *    unreadable body, and a JSON 503 such as `peer_not_connected`: that is the
+ *    server reporting the state of something it watches, a connected server
+ *    for one, and the browser shows it rather than asking again. Calls to other
+ *    machines are the server's to pace, never the browser's. */
 export type LoadFailure = 'unreachable' | 'refused'
 
 /** What one attempt to load the resource produced. A load reports failure as a
@@ -60,12 +64,16 @@ export type LoadFailure = 'unreachable' | 'refused'
  *  exception, and so each caller keeps its own error wording. */
 export type LoadResult<T> = { ok: true; value: T } | { ok: false; error: string; failure: LoadFailure }
 
-/** Gateway statuses that mean the service behind the gateway did not answer. */
-const UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504])
+/** Gateway statuses that can mean the service behind the gateway did not answer. */
+const GATEWAY_STATUSES: ReadonlySet<number> = new Set([502, 503, 504])
 
-/** The failure kind for a response that was not ok. */
-export function failureOfStatus(status: number): LoadFailure {
-  return UNREACHABLE_STATUSES.has(status) ? 'unreachable' : 'refused'
+/** The failure kind for a response that was not ok. A gateway status counts
+ *  as unreachable only when the body is not JSON: every service here answers
+ *  its errors in JSON, and the web server's own error page is HTML or empty. */
+export function failureOfResponse(res: Pick<Response, 'status' | 'headers'>): LoadFailure {
+  if (!GATEWAY_STATUSES.has(res.status)) return 'refused'
+  const contentType = res.headers?.get('Content-Type') ?? ''
+  return contentType.includes('json') ? 'refused' : 'unreachable'
 }
 
 /** The text a subscriber sees once an unreachable service has stayed
@@ -273,7 +281,7 @@ export async function loadJSONList<T>(fetchFn: FetchFn, url: string): Promise<Lo
   } catch (err) {
     return { ok: false, error: `${err}`, failure: 'unreachable' }
   }
-  if (!res.ok) return { ok: false, error: `HTTP ${res.status}`, failure: failureOfStatus(res.status) }
+  if (!res.ok) return { ok: false, error: `HTTP ${res.status}`, failure: failureOfResponse(res) }
   try {
     return { ok: true, value: ((await res.json()) as T[] | null) ?? [] }
   } catch (err) {
