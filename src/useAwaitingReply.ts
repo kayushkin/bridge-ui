@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import type { AwaitingReplySettings, Overview, WaitingConversation } from '@kayushkin/multichat-types'
 import { useBridgeConfig } from './context'
-import { SharedPoll, sharedPoll, useSharedPoll, type LoadResult } from './sharedPoll'
+import { SharedPoll, failureOfStatus, sharedPoll, useSharedPoll, type LoadResult } from './sharedPoll'
 import type { FetchFn } from './types'
 import {
   AWAITING_REPLY_CLEARS_PATH, AWAITING_REPLY_PATH, AWAITING_REPLY_POLL_MS, AWAITING_REPLY_SETTINGS_PATH,
@@ -10,12 +10,17 @@ import {
 import type { SaveResult } from './components/settings/SettingsSection'
 
 async function loadOverview(fetchFn: FetchFn, url: string): Promise<LoadResult<Overview | null>> {
+  let res: Response
   try {
-    const res = await fetchFn(url)
-    if (!res.ok) return { ok: false, error: `GET ${AWAITING_REPLY_PATH} → ${res.status}: ${(await res.text()).trim()}` }
+    res = await fetchFn(url)
+  } catch (err) {
+    return { ok: false, error: `GET ${AWAITING_REPLY_PATH}: ${err instanceof Error ? err.message : String(err)}`, failure: 'unreachable' }
+  }
+  try {
+    if (!res.ok) return { ok: false, error: `GET ${AWAITING_REPLY_PATH} → ${res.status}: ${(await res.text()).trim()}`, failure: failureOfStatus(res.status) }
     return { ok: true, value: await res.json() as Overview }
   } catch (err) {
-    return { ok: false, error: `GET ${AWAITING_REPLY_PATH}: ${err instanceof Error ? err.message : String(err)}` }
+    return { ok: false, error: `GET ${AWAITING_REPLY_PATH}: ${err instanceof Error ? err.message : String(err)}`, failure: 'refused' }
   }
 }
 

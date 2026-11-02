@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type JSX } from 'react'
 import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import { useBridgeConfig } from '../context'
+import { SharedPoll, failureOfStatus, sharedPoll, useSharedPoll, type LoadResult } from '../sharedPoll'
+import type { FetchFn } from '../types'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { PEER_CONNECTIONS_PATH, peerRouteErrorText } from '../peers'
 import { connectedServerLabel } from '../serverListings'
@@ -55,9 +57,42 @@ async function peerMessageErrorText(res: Response, verb: string): Promise<string
   }
 }
 
-/** Every message the filter names, re-read every 30 seconds and when asked.
- *  `available` is false when this server answers 404: it has no message
- *  routes, which is not "no messages". */
+interface PeerMessageList {
+  /** False when this server answers 404: it has no message routes, which is
+   *  not "no messages". */
+  available: boolean
+  messages: PeerMessage[]
+}
+
+async function loadPeerMessages(fetchFn: FetchFn, url: string): Promise<LoadResult<PeerMessageList>> {
+  let res: Response
+  try {
+    res = await fetchFn(url)
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err), failure: 'unreachable' }
+  }
+  try {
+    if (res.status === 404) return { ok: true, value: { available: false, messages: [] } }
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: await peerMessageErrorText(res, 'read messages from connected servers'),
+        failure: failureOfStatus(res.status),
+      }
+    }
+    return { ok: true, value: { available: true, messages: (await res.json()) as PeerMessage[] } }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err), failure: 'refused' }
+  }
+}
+
+const NO_PEER_MESSAGES_YET: PeerMessageList = { available: true, messages: [] }
+
+/** Every message the filter names, re-read every 30 seconds, when asked, and
+ *  when the page comes back online or into view. One read per filter however
+ *  many components show it: the orchestrator row, the signals inbox and the
+ *  signals page all ask for the waiting ones. A dropped request is retried
+ *  within seconds and reported only if the retries fail too. */
 export function usePeerMessages(filter: Parameters<typeof peerMessagesListPath>[0]): {
   messages: PeerMessage[]
   available: boolean
@@ -65,42 +100,15 @@ export function usePeerMessages(filter: Parameters<typeof peerMessagesListPath>[
   reload: () => void
 } {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
-  const path = peerMessagesListPath(filter)
-  const [messages, setMessages] = useState<PeerMessage[]>([])
-  const [available, setAvailable] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
-  const reload = useCallback(() => setTick(t => t + 1), [])
-  useEffect(() => {
-    let cancelled = false
-    const read = async () => {
-      try {
-        const res = await fetchFn(`${basePath}${path}`)
-        if (cancelled) return
-        if (res.status === 404) {
-          setAvailable(false)
-          setMessages([])
-          return
-        }
-        if (!res.ok) {
-          setError(await peerMessageErrorText(res, 'read messages from connected servers'))
-          return
-        }
-        setAvailable(true)
-        setError(null)
-        setMessages((await res.json()) as PeerMessage[])
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
-      }
-    }
-    void read()
-    const timer = setInterval(read, 30_000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [fetchFn, basePath, path, tick])
-  return { messages, available, error, reload }
+  const url = `${basePath}${peerMessagesListPath(filter)}`
+  const poll = useMemo(
+    () => sharedPoll(fetchFn, `peer-messages ${url}`, () =>
+      new SharedPoll<PeerMessageList>(() => loadPeerMessages(fetchFn, url), NO_PEER_MESSAGES_YET)),
+    [fetchFn, url],
+  )
+  const { data, error } = useSharedPoll(poll)
+  const reload = useCallback(() => { void poll.refresh() }, [poll])
+  return { messages: data.messages, available: data.available, error, reload }
 }
 
 /** Each connection's server name, by connection id, for card headings. */

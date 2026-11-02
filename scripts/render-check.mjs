@@ -293,7 +293,7 @@ async function sharedPollChecks() {
   {
     let payload = [{ id: 'a' }]
     let fail = null
-    const poll = new SharedPoll(async () => (fail ? { ok: false, error: fail } : { ok: true, value: payload }), [], 100000)
+    const poll = new SharedPoll(async () => (fail ? { ok: false, error: fail, failure: 'refused' } : { ok: true, value: payload }), [], 100000)
     let notifications = 0
     const off = poll.subscribe(() => { notifications++ })
     await settle()
@@ -364,6 +364,66 @@ async function sharedPollChecks() {
     check('and is reported, not swallowed', poll.getSnapshot().error === 'Error: boom', String(poll.getSnapshot().error))
   }
 
+  console.log('SharedPoll — a request that never got an answer')
+  {
+    // A phone on mobile data drops one request; the retry a moment later works.
+    let answers = ['unreachable', 'ok']
+    let loads = 0
+    const poll = new SharedPoll(async () => {
+      loads++
+      const next = answers.shift() ?? 'ok'
+      return next === 'ok' ? { ok: true, value: [{ id: 'a' }] } : { ok: false, error: 'TypeError: Failed to fetch', failure: 'unreachable' }
+    }, [], 100000, [10, 10, 10])
+    const seen = []
+    const off = poll.subscribe(() => { seen.push(poll.getSnapshot().error) })
+    await settle()
+    check('one dropped request shows no error', poll.getSnapshot().error === null, String(poll.getSnapshot().error))
+    check('and settles loading', poll.getSnapshot().loading === false)
+    await after(30)
+    check('the store asks again within the retry delay', loads === 2, `loads=${loads}`)
+    check('and has the answer', poll.getSnapshot().data.length === 1)
+    check('no subscriber ever saw an error', seen.every(e => e === null), JSON.stringify(seen))
+    off()
+  }
+  {
+    // The service is down for good: every retry fails, and then it is reported.
+    let down = true
+    let loads = 0
+    const poll = new SharedPoll(async () => {
+      loads++
+      return down ? { ok: false, error: 'TypeError: Failed to fetch', failure: 'unreachable' } : { ok: true, value: [{ id: 'a' }] }
+    }, [], 100000, [5, 5])
+    const off = poll.subscribe(() => {})
+    await after(60)
+    check('it retries once per delay, then stops', loads === 3, `loads=${loads}`)
+    const error = poll.getSnapshot().error ?? ''
+    check('and reports the failure once the retries fail', error.startsWith('no answer since ') && error.includes('still trying') && error.includes('Failed to fetch'), error)
+    down = false
+    await poll.refresh()
+    check('an answer clears it', poll.getSnapshot().error === null)
+    off()
+  }
+  {
+    // A refusal is the service's answer; retrying will not change it.
+    let loads = 0
+    const poll = new SharedPoll(async () => { loads++; return { ok: false, error: 'HTTP 403', failure: 'refused' } }, [], 100000, [5])
+    const off = poll.subscribe(() => {})
+    await after(30)
+    check('a refusal is reported at once', poll.getSnapshot().error === 'HTTP 403')
+    check('and not retried', loads === 1, `loads=${loads}`)
+    off()
+  }
+  {
+    // Nobody watching: no retry fires after the last subscriber leaves.
+    let loads = 0
+    const poll = new SharedPoll(async () => { loads++; return { ok: false, error: 'x', failure: 'unreachable' } }, [], 100000, [10])
+    const off = poll.subscribe(() => {})
+    await settle()
+    off()
+    await after(30)
+    check('a pending retry dies with the last subscriber', loads === 1, `loads=${loads}`)
+  }
+
   console.log('SharedPoll — the registry')
   {
     const ownerA = () => {}
@@ -390,6 +450,12 @@ async function sharedPollChecks() {
 
     const threw = await loadJSONList(async () => { throw new TypeError('offline') }, '/u')
     check('a thrown fetch keeps its own wording', threw.ok === false && threw.error === 'TypeError: offline', JSON.stringify(threw))
+    check('and counts as unreachable', threw.failure === 'unreachable')
+    check('a 500 counts as refused', refused.failure === 'refused')
+    const gateway = await loadJSONList(async () => ({ ok: false, status: 502, json: async () => null }), '/u')
+    check('a 502 from the gateway counts as unreachable', gateway.ok === false && gateway.failure === 'unreachable')
+    const badBody = await loadJSONList(async () => ({ ok: true, json: async () => { throw new SyntaxError('bad json') } }), '/u')
+    check('an unreadable body counts as refused', badBody.ok === false && badBody.failure === 'refused')
   }
 
   console.log('useBridgeHarnesses — the harness list, shared')
