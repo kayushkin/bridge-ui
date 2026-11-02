@@ -1,5 +1,7 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react'
-import { useOpenSignalsByAttention, useSessionNames, type Signal, type SignalRequest } from '@kayushkin/chat-core'
+import { openLooseEnds, useOpenSignalsByAttention, useSessionBriefs, useSessionNames, type Signal, type SignalRequest } from '@kayushkin/chat-core'
+import { chatBriefSections } from '../../chatBriefSections'
+import { ChatBriefCardView, useOrchestratorRemarks } from './ChatBriefCards'
 import { SignalRequestCard } from './SignalCard'
 import { RefChip } from './RefChip'
 import { backgroundSessionTypeLabel, sessionTypeOfRequest, signalSection } from '../../signalAttentionSections'
@@ -48,14 +50,35 @@ export default function SignalsPage({
   // A message from a connected server is drawn by its own card, not as the
   // question the server raises for it.
   const operatorQuestions = useMemo(() => withoutPeerMessageSignals(operator), [operator])
-  const needsYou = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
+  // Each chat's brief, the orchestrator's remarks on it and its open signals
+  // are drawn as one card; the lists below hold only what no card drew.
+  const sessionBriefs = useSessionBriefs()
+  const orchestratorRemarks = useOrchestratorRemarks()
+  const chats = useMemo(
+    () => chatBriefSections(sessionBriefs.briefs, operatorQuestions.requests, orchestratorRemarks.remarks),
+    [sessionBriefs.briefs, operatorQuestions.requests, orchestratorRemarks.remarks],
+  )
+  const [quietChatsOpen, setQuietChatsOpen] = useState(false)
+  const needsYou = useMemo(() => {
+    const outside = new Set(chats.requestsOutsideCards)
+    const signalsOutside = new Set(chats.requestsOutsideCards.flatMap(request => request.signals))
+    return signalSection({
+      requests: operatorQuestions.requests.filter(request => outside.has(request)),
+      signals: operatorQuestions.signals.filter(signal => signalsOutside.has(signal)),
+    })
+  }, [operatorQuestions, chats.requestsOutsideCards])
+  const chatsWaitingCount = chats.waiting.reduce((sum, card) => sum + card.waitingCount, 0)
   const peerMessages = useWaitingPeerMessages()
   // What waits on each connected server this one administers, by connection id.
   const { total: connectedServerWaitingCount, report: reportConnectedServerWaiting } = useConnectedServerWaitingCounts()
   const backgroundSection = useMemo(() => signalSection(background), [background])
   const sessionIds = useMemo(
-    () => [...needsYou.requests, ...backgroundSection.requests].map(request => request.sessionId),
-    [needsYou, backgroundSection],
+    () => [
+      ...needsYou.requests.map(request => request.sessionId),
+      ...backgroundSection.requests.map(request => request.sessionId),
+      ...sessionBriefs.briefs.map(brief => brief.sessionId),
+    ],
+    [needsYou, backgroundSection, sessionBriefs.briefs],
   )
   const sessionName = useSessionNames(sessionIds)
 
@@ -87,9 +110,18 @@ export default function SignalsPage({
     <div className={styles.signalsPage} role="region" aria-label="Signals needing you">
       <div className={styles.signalsPageHeader}>
         <h2 className={styles.signalsPageTitle}>Needs you</h2>
-        <span className={styles.inboxCount}>{needsYou.signalCount + peerMessages.waiting.length + connectedServerWaitingCount}</span>
+        <span className={styles.inboxCount}>{chatsWaitingCount + needsYou.signalCount + peerMessages.waiting.length + connectedServerWaitingCount}</span>
         <span className={styles.signalsPageSpacer} />
-        <button type="button" className="bc-ctrl-btn" onClick={reload} disabled={loading}>
+        <button
+          type="button"
+          className="bc-ctrl-btn"
+          onClick={() => {
+            reload()
+            sessionBriefs.reload()
+            orchestratorRemarks.reload()
+          }}
+          disabled={loading}
+        >
           {loading ? 'Loading…' : 'Refresh'}
         </button>
         {backControl}
@@ -100,7 +132,7 @@ export default function SignalsPage({
         {!available && (
           <p className={styles.signalsPageEmpty}>This bridge server has no signals route.</p>
         )}
-        {available && error === null && !loading && needsYou.requests.length === 0 && peerMessages.waiting.length === 0 && connectedServerWaitingCount === 0 && (
+        {available && error === null && !loading && chats.waiting.length === 0 && needsYou.requests.length === 0 && peerMessages.waiting.length === 0 && connectedServerWaitingCount === 0 && (
           <p className={styles.signalsPageEmpty}>Nothing is waiting on you.</p>
         )}
 
@@ -122,6 +154,33 @@ export default function SignalsPage({
           onSelectSession={onSelectConnectedServerSession}
         />
 
+        {sessionBriefs.error !== null && <p className={styles.inboxError}>Couldn’t load the chat briefs: {sessionBriefs.error}</p>}
+        {orchestratorRemarks.error !== null && (
+          <p className={styles.inboxError}>Couldn’t load the orchestrator’s remarks: {orchestratorRemarks.error}</p>
+        )}
+        {chats.waiting.length > 0 && (
+          <section className={styles.signalsPageSection}>
+            <h3 className={styles.signalsPageSectionTitle}>
+              Chats · {chats.waiting.length}
+              <span className={styles.signalsPageBackgroundNote}>
+                {' '}— {chats.waiting.reduce((sum, card) => sum + openLooseEnds(card.brief).length, 0)} loose ends
+              </span>
+            </h3>
+            {chats.waiting.map(card => (
+              <ChatBriefCardView
+                key={card.brief.sessionId}
+                card={card}
+                sessionName={sessionName(card.brief.sessionId)}
+                onSelectSession={onSelectSession}
+                renderRequest={renderRequest}
+                answerLooseEnd={sessionBriefs.answerLooseEnd}
+                dismissLooseEnd={sessionBriefs.dismissLooseEnd}
+                closeRemark={orchestratorRemarks.close}
+              />
+            ))}
+          </section>
+        )}
+
         {needsYou.questionRequests.length > 0 && (
           <section className={styles.signalsPageSection}>
             <h3 className={styles.signalsPageSectionTitle}>Questions · {needsYou.questionRequests.length}</h3>
@@ -135,6 +194,35 @@ export default function SignalsPage({
             </h3>
             {needsYou.notificationRequests.map(renderRequest)}
           </section>
+        )}
+
+        {chats.quiet.length > 0 && (
+          <details
+            className={styles.signalsPageBackground}
+            open={quietChatsOpen}
+            onToggle={event => setQuietChatsOpen(event.currentTarget.open)}
+          >
+            <summary className={styles.signalsPageBackgroundSummary}>
+              Other chats · {chats.quiet.length}
+              <span className={styles.signalsPageBackgroundNote}> — nothing waiting on you; their goals and what they changed</span>
+            </summary>
+            {quietChatsOpen && (
+              <section className={styles.signalsPageSection}>
+                {chats.quiet.map(card => (
+                  <ChatBriefCardView
+                    key={card.brief.sessionId}
+                    card={card}
+                    sessionName={sessionName(card.brief.sessionId)}
+                    onSelectSession={onSelectSession}
+                    renderRequest={renderRequest}
+                    answerLooseEnd={sessionBriefs.answerLooseEnd}
+                    dismissLooseEnd={sessionBriefs.dismissLooseEnd}
+                    closeRemark={orchestratorRemarks.close}
+                  />
+                ))}
+              </section>
+            )}
+          </details>
         )}
 
         {/* Background agents' signals: listed, never counted as needing you. A
