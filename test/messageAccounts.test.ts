@@ -3,18 +3,19 @@ import type { Account, Conversation, Message } from '@kayushkin/message-store-ty
 import {
   accountConversationMessagesPath, accountConversationName, accountConversationParameters, accountConversationsPath, accountPickParameters,
   attachmentNamesOf, buttonChipOf, embedHasContent, messageSentByAccount, pickableBotAccounts, pickedBotAccount, safeWebAddress,
-  storedMessageFormat, storedMessageIsEmpty,
+  storedMessageFormat, storedMessageIsEmpty, accountConversationKind, accountDiscordNames, accountDraftProblem, accountSendPath, countLabel,
+  DISCORD_MESSAGE_LIMIT,
 } from '../src/messageAccounts'
 
 const account = (id: string, handle: string, kind: string, display_name = handle): Account =>
-  ({ id, platform: 'discord', handle, display_name, kind, created_at: 1, updated_at: 1 })
+  ({ id, platform: 'discord', handle, display_name, kind, credential_id: '', created_at: 1, updated_at: 1 })
 const bot = account('message_account_000002', '200', 'bot', 'Helper')
 const otherBot = account('message_account_000003', '300', 'bot', 'Planner')
 const user = account('message_account_000001', '100', 'user', 'Me')
 
 const participant = (handle: string, display_name: string, is_self = false) => ({ handle, display_name, person_id: '', is_self })
 const conversation = (extra: Partial<Conversation>): Conversation => ({
-  id: 'conversation_000001', platform: 'discord', source: 'discord', source_ref: 'channel', title: '', is_group: false,
+  id: 'conversation_000001', platform: 'discord', source: 'discord', source_ref: 'channel', title: '', is_group: false, parent_source_ref: '',
   participants: [], message_count: 3, first_message_at: 1, last_message_at: 2, created_at: 1, updated_at: 1, ...extra,
 })
 const message = (extra: Partial<Message>): Message => ({
@@ -98,5 +99,39 @@ describe('buttons and links', () => {
     expect(buttonChipOf({ label: 'Open', emoji: '🔗', url: 'https://example.com' })).toEqual({ text: '🔗 Open', link: 'https://example.com/', disabled: false })
     expect(buttonChipOf({ label: 'Join' })).toEqual({ text: 'Join', link: null, disabled: false })
     expect(buttonChipOf({ label: 'Closed', url: 'https://example.com', disabled: true })).toEqual({ text: 'Closed', link: null, disabled: true })
+  })
+})
+
+describe('threads, mentions, counts and sending', () => {
+  const channel = conversation({ id: 'conversation_000010', source_ref: '700', title: 'events', is_group: true })
+  const thread = conversation({ id: 'conversation_000011', source_ref: '701', title: 'picnic', is_group: true, parent_source_ref: '700' })
+  const orphanThread = conversation({ id: 'conversation_000012', source_ref: '702', title: 'hike', is_group: true, parent_source_ref: '799' })
+  const direct = conversation({ participants: [participant('200', 'Helper'), participant('42', 'Carol')] })
+
+  it('badges threads, channels and direct messages, and names a thread by its channel when the list holds it', () => {
+    expect([thread, channel, direct].map(accountConversationKind)).toEqual(['thread', 'channel', 'direct message'])
+    expect(accountConversationName(thread, bot, [channel, thread])).toBe('#events › picnic')
+    expect(accountConversationName(orphanThread, bot, [channel])).toBe('hike')
+    expect(accountConversationName(direct, bot)).toBe('Carol')
+  })
+
+  it('names mentions by the conversation\'s people and channels by the account\'s list', () => {
+    const names = accountDiscordNames(direct, [channel, thread, direct])
+    expect(names.userNames.get('42')).toBe('Carol')
+    expect(names.channelNames.get('700')).toBe('events')
+    expect(names.channelNames.has('channel')).toBe(false)
+  })
+
+  it('says one message and one person, and plurals otherwise', () => {
+    expect(countLabel(1, 'message', 'messages')).toBe('1 message')
+    expect(countLabel(0, 'message', 'messages')).toBe('0 messages')
+    expect(countLabel(2, 'person', 'people')).toBe('2 people')
+  })
+
+  it('sends to the route under the account and conversation, and refuses an empty or too long draft', () => {
+    expect(accountSendPath('message_account_000002', 'conversation_000010')).toBe('/message_account_000002/conversations/conversation_000010/messages')
+    expect(accountDraftProblem('   ')).not.toBeNull()
+    expect(accountDraftProblem('a'.repeat(DISCORD_MESSAGE_LIMIT))).toBeNull()
+    expect(accountDraftProblem('a'.repeat(DISCORD_MESSAGE_LIMIT + 1))).toContain(String(DISCORD_MESSAGE_LIMIT + 1))
   })
 })
