@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Account, Button, Conversation, Embed, Message, MessagePage } from '@kayushkin/message-store-types'
 import { useBridgeConfig } from '../../context'
-import { NO_DISCORD_NAMES } from '../../messageBody'
+import { type DiscordNames } from '../../messageBody'
 import { messageTimeLabel } from '../../multichatMessages'
 import {
-  ACCOUNTS_PATH, accountConversationMessagesPath, accountConversationName, accountConversationsPath, attachmentNamesOf,
-  buttonChipOf, embedHasContent, messageSentByAccount, pickableBotAccounts, safeWebAddress, storedMessageFormat, storedMessageIsEmpty,
+  ACCOUNTS_PATH, DISCORD_MESSAGE_LIMIT, MESSAGE_LIMIT_WARNING_AT, accountConversationKind, accountConversationMessagesPath, accountConversationName,
+  accountConversationsPath, accountDiscordNames, accountDraftProblem, accountSendPath, attachmentNamesOf, buttonChipOf, countLabel, embedHasContent,
+  messageSentByAccount, pickableBotAccounts, safeWebAddress, storedMessageFormat, storedMessageIsEmpty,
 } from '../../messageAccounts'
 import { errorText } from './useMultichat'
 import { MessageContent } from './MessageContent'
@@ -91,7 +92,7 @@ export function BridgeMessageAccountView({ account, accountPicker, conversationI
   }, [account.id, readMessageStore])
 
   const needle = text.trim().toLowerCase()
-  const shown = (conversations ?? []).filter(conversation => !needle || accountConversationName(conversation, account).toLowerCase().includes(needle))
+  const shown = (conversations ?? []).filter(conversation => !needle || accountConversationName(conversation, account, conversations ?? []).toLowerCase().includes(needle))
   const picked = conversations?.find(conversation => conversation.id === conversationID) ?? null
 
   return (
@@ -100,7 +101,7 @@ export function BridgeMessageAccountView({ account, accountPicker, conversationI
         <h2 className={styles.title}>Conversations</h2>
         {accountPicker}
         <p className={styles.subtitle}>
-          What {account.display_name} sent and received on {account.platform}, as message-store keeps it: newest first, read only.
+          What {account.display_name} sent and received on {account.platform}, as message-store keeps it, newest first. A reply sends as {account.display_name}.
         </p>
       </header>
       {loadError && <pre className={styles.error}>{loadError}</pre>}
@@ -116,21 +117,21 @@ export function BridgeMessageAccountView({ account, accountPicker, conversationI
             )}
             <ul className={styles.list}>
               {shown.map(conversation => {
-                const name = accountConversationName(conversation, account)
+                const name = accountConversationName(conversation, account, conversations)
                 const selected = conversation.id === conversationID
                 return (
                   <li key={conversation.id}>
                     <button type="button" data-conversation-id={conversation.id} data-is-group={conversation.is_group ? 'true' : 'false'}
                       className={`${styles.row} ${styles.rowPick} ${selected ? styles.rowSelected : ''}`}
                       onClick={() => onOpenConversation(conversation.id)}>
-                      <span className={styles.rowHead}>
+                      <span className={`${styles.rowHead} ${styles.rowHeadOneLine}`}>
                         <span className={styles.name} title={name}>{name}</span>
                         {conversation.last_message_at > 0 && <span className={styles.time}>{messageTimeLabel(conversation.last_message_at)}</span>}
                       </span>
                       <span className={styles.rowMeta}>
-                        <span className={styles.platform}>{conversation.is_group ? 'channel' : 'direct message'}</span>
-                        <span className={styles.muted}>{conversation.message_count} messages</span>
-                        {conversation.is_group && <span className={styles.muted}>{(conversation.participants ?? []).length} people</span>}
+                        <span className={styles.platform}>{accountConversationKind(conversation)}</span>
+                        <span className={styles.muted}>{countLabel(conversation.message_count, 'message', 'messages')}</span>
+                        {conversation.is_group && <span className={styles.muted}>{countLabel((conversation.participants ?? []).length, 'person', 'people')}</span>}
                       </span>
                     </button>
                   </li>
@@ -140,7 +141,7 @@ export function BridgeMessageAccountView({ account, accountPicker, conversationI
           </div>
           <div className={styles.viewer}>
             <button type="button" className={styles.backToList} onClick={() => onOpenConversation('')}>← Conversations</button>
-            {picked ? <AccountConversationThread key={picked.id} account={account} conversation={picked} />
+            {picked ? <AccountConversationThread key={picked.id} account={account} conversation={picked} conversations={conversations} />
               : <div className={styles.empty}>{conversationID ? `${account.display_name} takes no part in conversation ${conversationID}.` : 'Pick a conversation to read it here.'}</div>}
           </div>
         </div>
@@ -151,8 +152,15 @@ export function BridgeMessageAccountView({ account, accountPicker, conversationI
 
 /** One conversation of a bot account, oldest at the top, paged back by
  *  message-store's cursor. Keyed by conversation, so a switch starts afresh. */
-function AccountConversationThread({ account, conversation }: { account: Account; conversation: Conversation }) {
+function AccountConversationThread({ account, conversation, conversations }: {
+  account: Account
+  conversation: Conversation
+  /** The account's whole list, which names channels and a thread's parent. */
+  conversations: readonly Conversation[]
+}) {
   const readMessageStore = useMessageStoreRead()
+  const { messageAccountsBasePath } = useBridgeConfig()
+  const discordNames = useMemo(() => accountDiscordNames(conversation, conversations), [conversation, conversations])
   /** Loaded messages, oldest first. */
   const [messages, setMessages] = useState<Message[] | null>(null)
   const [olderCursor, setOlderCursor] = useState<string>('')
@@ -202,13 +210,17 @@ function AccountConversationThread({ account, conversation }: { account: Account
     }
   }
 
-  const name = accountConversationName(conversation, account)
+  const name = accountConversationName(conversation, account, conversations)
+  const appendSent = (message: Message) => {
+    pendingScroll.current = { kind: 'bottom' }
+    setMessages(current => [...(current ?? []), message])
+  }
   return (
     <div className={styles.thread} data-conversation-id={conversation.id}>
       <div className={styles.threadBar}>
         <span className={styles.name} title={`${name}\n${conversation.id}`}>{name}</span>
-        <span className={styles.platform}>{conversation.platform}</span>
-        <span className={styles.muted}>{conversation.message_count} messages · read only</span>
+        <span className={styles.platform}>{accountConversationKind(conversation)}</span>
+        <span className={styles.muted}>{countLabel(conversation.message_count, 'message', 'messages')}{messageAccountsBasePath ? '' : ' · read only'}</span>
       </div>
       {error && <pre className={styles.error}>{error}</pre>}
       <div className={styles.messages} ref={scroller}>
@@ -219,16 +231,71 @@ function AccountConversationThread({ account, conversation }: { account: Account
         )}
         {!messages ? (error ? null : <div className={styles.empty}>Loading…</div>) : (
           messages.length === 0 ? <div className={styles.empty}>No messages.</div> : messages.map(message => (
-            <AccountMessage key={message.id} message={message} sentByAccount={messageSentByAccount(message, account)} account={account} />
+            <AccountMessage key={message.id} message={message} sentByAccount={messageSentByAccount(message, account)} account={account} discordNames={discordNames} />
           ))
         )}
       </div>
+      {messageAccountsBasePath && <AccountComposer account={account} conversation={conversation} onSent={appendSent} />}
+    </div>
+  )
+}
+
+/** Sends as the account into the open conversation through the host's route.
+ *  A refusal shows in the route's words and the draft stays; a send adds the
+ *  stored row to the thread. */
+function AccountComposer({ account, conversation, onSent }: { account: Account; conversation: Conversation; onSent: (message: Message) => void }) {
+  const { fetch: hostFetch, messageAccountsBasePath } = useBridgeConfig()
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const length = [...draft].length
+  const send = async () => {
+    const problem = accountDraftProblem(draft)
+    if (problem) { setError(problem); return }
+    setSending(true)
+    setError(null)
+    try {
+      const res = await hostFetch(`${messageAccountsBasePath}${accountSendPath(account.id, conversation.id)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: draft }),
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        let reason = text.trim()
+        try { reason = (JSON.parse(text) as { error?: string }).error || reason } catch { /* not JSON: show it as it came */ }
+        throw new Error(`Not sent (${res.status}): ${reason}`)
+      }
+      onSent(JSON.parse(text) as Message)
+      setDraft('')
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setSending(false)
+    }
+  }
+  return (
+    <div className={styles.accountComposer} data-account-composer={account.id}>
+      <div className={styles.accountComposerHead}>
+        <span>Sending as <strong>{account.display_name || account.handle}</strong></span>
+        {length >= MESSAGE_LIMIT_WARNING_AT && (
+          <span className={length > DISCORD_MESSAGE_LIMIT ? styles.accountPickerError : styles.muted}>{length} / {DISCORD_MESSAGE_LIMIT}</span>
+        )}
+      </div>
+      <div className={styles.accountComposerRow}>
+        <textarea className={styles.input} rows={2} value={draft} disabled={sending}
+          placeholder={`Message as ${account.display_name || account.handle}`}
+          onChange={event => setDraft(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() }
+          }} />
+        <button type="button" disabled={sending || !draft.trim()} onClick={() => { void send() }}>{sending ? 'Sending…' : 'Send'}</button>
+      </div>
+      {error && <pre className={styles.error}>{error}</pre>}
     </div>
   )
 }
 
 /** One stored message: its text through the shared renderer, its files' names, its cards and its buttons. */
-function AccountMessage({ message, sentByAccount, account }: { message: Message; sentByAccount: boolean; account: Account }) {
+function AccountMessage({ message, sentByAccount, account, discordNames }: { message: Message; sentByAccount: boolean; account: Account; discordNames: DiscordNames }) {
   const attachmentNames = attachmentNamesOf(message)
   const embeds = (message.embeds ?? []).filter(embedHasContent)
   const buttons = message.buttons ?? []
@@ -244,10 +311,10 @@ function AccountMessage({ message, sentByAccount, account }: { message: Message;
       </div>
       <div className={styles.messageBody}>
         {message.body && (
-          <MessageContent message={{ body: message.body, format: storedMessageFormat(message) }} messageType={message.kind} discordNames={NO_DISCORD_NAMES} />
+          <MessageContent message={{ body: message.body, format: storedMessageFormat(message) }} messageType={message.kind} discordNames={discordNames} />
         )}
         {attachmentNames.length > 0 && <div className={styles.muted}>📎 {attachmentNames.join(', ')}</div>}
-        {embeds.map((embed, index) => <EmbedCard key={index} embed={embed} format={storedMessageFormat(message)} />)}
+        {embeds.map((embed, index) => <EmbedCard key={index} embed={embed} format={storedMessageFormat(message)} discordNames={discordNames} />)}
         {buttons.length > 0 && (
           <div className={styles.buttonChips}>
             {buttons.map((button, index) => <ButtonChip key={index} button={button} />)}
@@ -261,7 +328,7 @@ function AccountMessage({ message, sentByAccount, account }: { message: Message;
 
 /** A bot's card: author, title (a link when it has one), description,
  *  fields side by side when inline, picture, footer. */
-function EmbedCard({ embed, format }: { embed: Embed; format: string }) {
+function EmbedCard({ embed, format, discordNames }: { embed: Embed; format: string; discordNames: DiscordNames }) {
   const titleLink = safeWebAddress(embed.url)
   const image = safeWebAddress(embed.image_url)
   const thumbnail = safeWebAddress(embed.thumbnail_url)
@@ -274,13 +341,13 @@ function EmbedCard({ embed, format }: { embed: Embed; format: string }) {
             {titleLink ? <a href={titleLink} target="_blank" rel="noopener noreferrer">{embed.title}</a> : embed.title}
           </div>
         )}
-        {embed.description && <MessageContent message={{ body: embed.description, format }} messageType="m.text" discordNames={NO_DISCORD_NAMES} />}
+        {embed.description && <MessageContent message={{ body: embed.description, format }} messageType="m.text" discordNames={discordNames} />}
         {(embed.fields ?? []).length > 0 && (
           <div className={styles.embedFields}>
             {(embed.fields ?? []).map((field, index) => (
               <div key={index} data-embed-field={field.name} className={`${styles.embedField} ${field.inline ? styles.embedFieldInline : ''}`}>
                 <div className={styles.embedFieldName}>{field.name}</div>
-                <MessageContent message={{ body: field.value, format }} messageType="m.text" discordNames={NO_DISCORD_NAMES} />
+                <MessageContent message={{ body: field.value, format }} messageType="m.text" discordNames={discordNames} />
               </div>
             ))}
           </div>

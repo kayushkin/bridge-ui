@@ -468,3 +468,13 @@ a.buttonChip:hover { text-decoration: underline; }
   font-size: 0.8em;
   color: var(--text-muted);
 }
+
+/* A bot view's list row: the name gives way, cut short, so the time keeps its place. */
+.rowHeadOneLine { flex-wrap: nowrap; }
+.rowHeadOneLine > .name { flex: 1 1 auto; }
+
+/* Sending as a bot account, under its conversation. */
+.accountComposer { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--border); }
+.accountComposerHead { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8em; color: var(--text-muted); }
+.accountComposerRow { display: flex; align-items: flex-end; gap: 8px; }
+.accountComposerRow > textarea.input { flex: 1; resize: vertical; }
