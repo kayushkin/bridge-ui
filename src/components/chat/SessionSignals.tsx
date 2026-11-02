@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { SignalRequestCard } from './SignalCard';
+import { SignalRequestCard, type ComposerTextForAnswer } from './SignalCard';
 import { useOpenSignals } from '@kayushkin/chat-core';
 import { groupSignalsByRequest, type SignalRequest } from '@kayushkin/chat-core';
 
@@ -54,6 +54,8 @@ export interface SignalRequestListProps {
   allowDismissWithoutAnswer?: boolean;
   /** Passed through to every card — see `SignalCardProps.startCollapsedToAnswers`. */
   startCollapsedToAnswers?: boolean;
+  /** Passed through to every card — see `SignalRequestCardProps.composerText`. */
+  composerText?: ComposerTextForAnswer;
 }
 
 /**
@@ -72,6 +74,7 @@ export function SignalRequestList({
   onResolved,
   allowDismissWithoutAnswer,
   startCollapsedToAnswers,
+  composerText,
 }: SignalRequestListProps): JSX.Element | null {
   if (requests.length === 0) return null;
   return (
@@ -88,6 +91,7 @@ export function SignalRequestList({
           onResolved={onResolved}
           allowDismissWithoutAnswer={allowDismissWithoutAnswer}
           startCollapsedToAnswers={startCollapsedToAnswers}
+          composerText={composerText}
         />
       ))}
     </div>

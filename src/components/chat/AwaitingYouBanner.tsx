@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { groupSignalsByRequest, useOpenSignals, usePendingPermissions, HOOK_SOURCE_USER_INPUT, type HookResolveInput, type PendingHook } from '@kayushkin/chat-core'
+import { groupSignalsByRequest, useComposer, useOpenSignals, usePendingPermissions, HOOK_SOURCE_USER_INPUT, type HookResolveInput, type PendingHook } from '@kayushkin/chat-core'
 import { SignalRequestList } from './SessionSignals'
 
 type ResolveFn = (input: HookResolveInput) => Promise<void>
@@ -54,6 +54,10 @@ type ResolveFn = (input: HookResolveInput) => Promise<void>
 export default function AwaitingYouBanner({ sessionId }: { sessionId: string }) {
   const { signals, error, reload } = useOpenSignals(sessionId)
   const { pending, resolve } = usePendingPermissions(sessionId)
+  // The composer under this banner is where a human adds words to the options
+  // they picked, so the cards' Answer sends that text too and then empties it.
+  const { draft, setDraft } = useComposer(sessionId)
+  const composerText = useMemo(() => ({ text: draft, clear: () => setDraft('') }), [draft, setDraft])
 
   const requests = useMemo(() => groupSignalsByRequest(signals), [signals])
 
@@ -124,9 +128,15 @@ export default function AwaitingYouBanner({ sessionId }: { sessionId: string }) 
 
               It also drops every card's own freeform box: the composer right below answers
               a derived question, and a tool question's options are editable. The reasoning,
-              and why the composer does NOT answer a tool question, is on
-              `startCollapsedToAnswers`. */}
-          <SignalRequestList requests={requests} onResolved={reload} startCollapsedToAnswers />
+              and why the composer's Send does NOT answer a tool question, is on
+              `startCollapsedToAnswers`. A card's Answer does take the composer's text
+              with it, though: picks and the words typed under them go out together. */}
+          <SignalRequestList
+            requests={requests}
+            onResolved={reload}
+            startCollapsedToAnswers
+            composerText={composerText}
+          />
         </>
       )}
     </div>

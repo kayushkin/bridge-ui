@@ -15,6 +15,7 @@ import {
   questionsIn,
 } from '@kayushkin/chat-core';
 import { SignalBodyMarkdown, SignalInlineMarkdown } from './signalMarkdown';
+import { answersWithComposerText } from '../../signalComposerText';
 
 // Every element carries a stable, unhashed class name (`signal-*`), styled by
 // this package's own `styles.css`. Lived in chat-core until 2026-09-10; that
@@ -25,8 +26,8 @@ import { SignalBodyMarkdown, SignalInlineMarkdown } from './signalMarkdown';
 
 export interface SignalCardProps {
   signal: Signal;
-  /** The answer being composed for this signal. A signal is answered with
-   *  options or with freeform text, NEVER both — picking one clears the other. */
+  /** The answer being composed for this signal: picked options, typed text, or
+   *  both. Picking leaves the text alone and typing leaves the picks alone. */
   answer?: SignalAnswerDraft;
   onChangeAnswer?: (answer: SignalAnswerDraft) => void;
   /** Send this answer immediately, without waiting for a Submit.
@@ -67,7 +68,9 @@ export interface SignalCardProps {
    *     (`TestAnswerDerivedQuestionsLeavesToolParksToTheHookVerb`), because the
    *     harness is blocked on its hook, not on stdin. But AskUserQuestion always
    *     carries options, and every option is editable: rewriting one is how you
-   *     answer a tool question in your own words here.
+   *     answer a tool question in your own words here. And the card's own Answer
+   *     takes whatever is in the composer with it, when the surface passes
+   *     `composerText`.
    *  So a card with no options in the chat pane has nothing to click, and says
    *  so by drawing no Answer button either. */
   startCollapsedToAnswers?: boolean;
@@ -146,16 +149,15 @@ export function SignalCard({
 
   /** Pick one option, replacing whatever was picked before. */
   const chooseOne = (value: string) => {
-    const draft: SignalAnswerDraft = { pickedOptionValues: [value] };
+    const draft: SignalAnswerDraft = { ...answer, pickedOptionValues: [value] };
     if (submitsOnPick) onAnswerAndSubmit?.(draft);
     else onChangeAnswer?.(draft);
   };
 
-  /** Add or remove one option on a pick-many question. Toggling replaces the
-   *  composed answer, which is what clears any typed text. */
+  /** Add or remove one option on a pick-many question. Typed text stays. */
   const toggleOption = (value: string) => {
     const next = chosen.includes(value) ? chosen.filter((v) => v !== value) : [...chosen, value];
-    onChangeAnswer?.({ pickedOptionValues: next });
+    onChangeAnswer?.({ ...answer, pickedOptionValues: next });
   };
 
   /** Open the editor on one option. `startingText` is what the human reads on the
@@ -184,6 +186,7 @@ export function SignalCard({
     // going to send.
     if (multiple) {
       onChangeAnswer?.({
+        ...answer,
         pickedOptionValues: [...chosen.filter((v) => v !== previous), rewritten],
       });
     } else {
@@ -377,7 +380,7 @@ export function SignalCard({
           placeholder={options.length > 0 ? '…or answer in your own words' : 'Type your answer'}
           value={text}
           disabled={busy || !onChangeAnswer}
-          onChange={(e) => onChangeAnswer?.({ text: e.target.value })}
+          onChange={(e) => onChangeAnswer?.({ ...answer, text: e.target.value })}
           rows={2}
         />
       )}
@@ -409,6 +412,17 @@ export interface SignalRequestCardProps {
    *
    *  Off by default, so a chat surface keeps answering as its only close. */
   allowDismissWithoutAnswer?: boolean;
+  /** The chat composer's text, sent with the answers and cleared once they are
+   *  accepted. For the chat pane, whose cards draw no text box because the
+   *  composer is right below: see `answersWithComposerText`. */
+  composerText?: ComposerTextForAnswer;
+}
+
+/** What a card needs from the chat composer: what is typed there now, and a way
+ *  to empty it once that text has gone out with an answer. */
+export interface ComposerTextForAnswer {
+  text: string;
+  clear: () => void;
 }
 
 /**
@@ -434,6 +448,7 @@ export function SignalRequestCard({
   compact,
   startCollapsedToAnswers,
   allowDismissWithoutAnswer,
+  composerText,
 }: SignalRequestCardProps): JSX.Element {
   const { api } = useChatContext();
   const [answers, setAnswers] = useState<Record<string, SignalAnswerDraft>>({});
@@ -441,7 +456,11 @@ export function SignalRequestCard({
   const [error, setError] = useState<string | null>(null);
 
   const questions = questionsIn(request);
-  const allAnswered = everyQuestionAnswered(request, answers);
+  const typedInComposer = composerText?.text ?? '';
+  const allAnswered = everyQuestionAnswered(
+    request,
+    answersWithComposerText(questions, answers, typedInComposer),
+  );
 
   /** The question that answers on a click, or null.
    *
@@ -474,12 +493,13 @@ export function SignalRequestCard({
    *  success. A failed resolve must leave the card on screen — the question is
    *  still open and the only way out is another click. */
   const run = useCallback(
-    async (verb: () => Promise<void>) => {
+    async (verb: () => Promise<void>, afterSuccess?: () => void) => {
       if (busy) return;
       setBusy(true);
       setError(null);
       try {
         await verb();
+        afterSuccess?.();
         onResolved?.();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -496,13 +516,19 @@ export function SignalRequestCard({
    *  old one. */
   const submitAnswers = useCallback(
     (composed: Record<string, SignalAnswerDraft>) => {
-      if (!everyQuestionAnswered(request, composed)) return;
+      const withComposer = answersWithComposerText(questions, composed, typedInComposer);
+      if (!everyQuestionAnswered(request, withComposer)) return;
       // One verb for both producers: it sends a tool request's answers back
       // through its parked hook, and a derived question's answer as the session's
       // next message. The branch lives in the store, not in this card.
-      void run(() => answerSignalRequest(api, request, composed));
+      // The composer is emptied only once the answer is accepted, so a refusal
+      // leaves the human's text where they typed it.
+      void run(
+        () => answerSignalRequest(api, request, withComposer),
+        typedInComposer.trim() !== '' ? composerText?.clear : undefined,
+      );
     },
-    [run, api, request],
+    [run, api, request, questions, typedInComposer, composerText],
   );
 
   const submit = useCallback(() => {
