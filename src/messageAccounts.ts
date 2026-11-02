@@ -3,6 +3,7 @@
 // from message-store. These are the pure rules of the bot view
 // (test/messageAccounts.test.ts); BridgeMessageAccountView draws them.
 import type { Account, Button, Conversation, Embed, Message } from '@kayushkin/message-store-types'
+import type { DiscordNames } from './messageBody'
 
 /** The URL parameter that holds the picked account's id; absent means "Me". */
 export const ACCOUNT_PARAMETER = 'account'
@@ -42,10 +43,28 @@ export function pickedBotAccount(accounts: readonly Account[], accountID: string
   return pickableBotAccounts(accounts).find(account => account.id === accountID) ?? null
 }
 
-/** A conversation's name in an account's list: a group's title, and a direct
- *  message named by whoever in it is not the account. */
-export function accountConversationName(conversation: Conversation, account: Account): string {
-  if (conversation.is_group) return conversation.title || conversation.id
+/** Whether a conversation is a thread: message-store names the channel a
+ *  thread hangs off in `parent_source_ref`. */
+export function conversationIsThread(conversation: Pick<Conversation, 'parent_source_ref'>): boolean {
+  return !!conversation.parent_source_ref
+}
+
+/** What a conversation is, for its badge in an account's list. */
+export function accountConversationKind(conversation: Conversation): 'thread' | 'channel' | 'direct message' {
+  if (!conversation.is_group) return 'direct message'
+  return conversationIsThread(conversation) ? 'thread' : 'channel'
+}
+
+/** A conversation's name in an account's list: a group's title — a thread's
+ *  as `#channel › thread` when the account's list holds its channel — and a
+ *  direct message named by whoever in it is not the account. */
+export function accountConversationName(conversation: Conversation, account: Account, conversations: readonly Conversation[] = []): string {
+  if (conversation.is_group) {
+    const title = conversation.title || conversation.id
+    if (!conversationIsThread(conversation)) return title
+    const parent = conversations.find(other => other.source === conversation.source && other.source_ref === conversation.parent_source_ref)
+    return parent?.title ? `#${parent.title} › ${title}` : title
+  }
   const others = (conversation.participants ?? []).filter(participant => participant.handle !== account.handle)
   const names = others.map(participant => participant.display_name || participant.handle)
   return names.length > 0 ? names.join(', ') : conversation.title || conversation.id
@@ -112,4 +131,43 @@ export function accountConversationParameters(accountID: string, conversationID:
   const next = accountPickParameters(accountID)
   if (conversationID) next.set(ACCOUNT_CONVERSATION_PARAMETER, conversationID)
   return next
+}
+
+/** A count with its noun, singular for one: "1 message", "3 messages". */
+export function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+/** Names for the Discord tokens in an account's conversation: people by the
+ *  conversation's participants (their handle is their Discord id), channels
+ *  by the account's conversations (a channel's source_ref is its Discord id). */
+export function accountDiscordNames(conversation: Conversation, conversations: readonly Conversation[]): DiscordNames {
+  const userNames = new Map<string, string>()
+  for (const participant of conversation.participants ?? []) {
+    if (participant.display_name) userNames.set(participant.handle, participant.display_name)
+  }
+  const channelNames = new Map<string, string>()
+  for (const other of conversations) {
+    if (other.source === 'discord' && other.is_group && other.title) channelNames.set(other.source_ref, other.title)
+  }
+  return { channelNames, userNames }
+}
+
+/** The most characters Discord takes in one message; the send route refuses more. */
+export const DISCORD_MESSAGE_LIMIT = 2000
+/** How close to the limit the composer starts showing the count. */
+export const MESSAGE_LIMIT_WARNING_AT = 1800
+
+/** The host's route that sends as an account into one of its conversations
+ *  (dash: server/api_message_account_send.go), under `messageAccountsBasePath`. */
+export function accountSendPath(accountID: string, conversationID: string): string {
+  return `/${encodeURIComponent(accountID)}/conversations/${encodeURIComponent(conversationID)}/messages`
+}
+
+/** Why a draft cannot be sent as it is, or null when it can. */
+export function accountDraftProblem(draft: string): string | null {
+  if (!draft.trim()) return 'Write something to send.'
+  const length = [...draft].length
+  if (length > DISCORD_MESSAGE_LIMIT) return `Discord takes at most ${DISCORD_MESSAGE_LIMIT} characters; this is ${length}.`
+  return null
 }

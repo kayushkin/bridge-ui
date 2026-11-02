@@ -283,6 +283,11 @@ export interface BridgeConfig {
    * their one-to-one chats it holds that no live room carries, read only.
    * Empty means the host does not carry it, and those tabs are not drawn. */
   messageStoreBasePath: string
+  /** Base path of the host's route that sends as one of the operator's
+   * accounts in message-store (dash: "/api/message-accounts", taking
+   * `/{account}/conversations/{conversation}/messages`). A bot's view on
+   * Conversations draws a composer only when it is set. */
+  messageAccountsBasePath: string
   /** Path to the HOST's own people page (dash: "/people"), which a person chip
    * opens as `{path}?id=person_000001`. A plain path for the same reason as
    * `mailPagePath`. Empty hides the chip's "Open person" link. */
