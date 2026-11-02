@@ -13,6 +13,8 @@ import { withoutPeerMessageSignals } from '../../peerMessages'
 import { useWaitingPeerMessages } from '../PeerMessageCards'
 import { chatKey } from './storageKeys'
 import { NeedsYouDropdown } from './SignalsInbox'
+import { ConnectedServersPeerMessages, useConnectedServerWaitingCounts } from './ConnectedServersPeerMessages'
+import { useOpenConnectedServerSession } from './refChipServer'
 
 // OrchestratorConfig mirrors the configView the orchestrator service returns from
 // GET/PUT /config and POST /config/reset-week.
@@ -76,14 +78,21 @@ export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSes
   const [limitDraft, setLimitDraft] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // Needs you: the operator's questions, and the messages from connected servers that
-  // wait on a person, counted the way the signals page counts them. A message's own
+  // Needs you: the operator's questions, the messages from connected servers that
+  // wait on a person here, and those waiting on a connected server this one
+  // administers — counted the way the signals page counts them. A message's own
   // signal is taken out of the questions so it is counted once.
   const { operator, error: signalsError } = useOpenSignalsByAttention()
   const operatorQuestions = useMemo(() => withoutPeerMessageSignals(operator), [operator])
   const needsYouSection = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
   const peerMessages = useWaitingPeerMessages()
-  const needsYou = needsYouSection.signalCount + peerMessages.waiting.length
+  const connectedServerWaiting = useConnectedServerWaitingCounts()
+  const openConnectedServerSession = useOpenConnectedServerSession()
+  const selectConnectedServerSession = useCallback(
+    (connectionId: string, sessionId: string) => openConnectedServerSession?.({ connectionId, sessionId }),
+    [openConnectedServerSession],
+  )
+  const needsYou = needsYouSection.signalCount + peerMessages.waiting.length + connectedServerWaiting.total
   const raisedAt = useMemo(
     () => [...operatorQuestions.signals.map((signal) => signal.createdAt), ...peerMessages.waiting.map((message) => message.created_at)],
     [operatorQuestions, peerMessages.waiting],
@@ -231,9 +240,17 @@ export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSes
         >{expanded ? '▾' : '⚙'}</button>
       </div>
 
+      {/* Counts what waits on each connected server for the number above; draws nothing. */}
+      <ConnectedServersPeerMessages
+        drawn={false}
+        onWaitingCount={connectedServerWaiting.report}
+        onSelectSession={selectConnectedServerSession}
+      />
+
       {signalsOpen && (
         <NeedsYouDropdown
           onSelectSession={onSelectSession}
+          onSelectConnectedServerSession={selectConnectedServerSession}
           onOpenSignalsPage={() => {
             setSignalsOpen(false)
             onOpenSignalsPage()

@@ -7,7 +7,7 @@ import { timeAgo } from '../../utils'
 import styles from './Chat.module.css'
 import { PeerMessagesNeedingYou, useWaitingPeerMessages } from '../PeerMessageCards'
 import { withoutPeerMessageSignals } from '../../peerMessages'
-import { ConnectedServersPeerMessages } from './ConnectedServersPeerMessages'
+import { ConnectedServersPeerMessages, useConnectedServerWaitingCounts } from './ConnectedServersPeerMessages'
 
 /** How many background cards the open background section draws at a time. There
  *  were 319 on 2026-10-20, nearly all notifications with a markdown body, and
@@ -51,13 +51,7 @@ export default function SignalsPage({
   const needsYou = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
   const peerMessages = useWaitingPeerMessages()
   // What waits on each connected server this one administers, by connection id.
-  const [connectedServerWaiting, setConnectedServerWaiting] = useState<Record<string, number>>({})
-  const reportConnectedServerWaiting = useCallback((connectionID: string, waiting: number) => {
-    setConnectedServerWaiting(previous =>
-      (previous[connectionID] ?? 0) === waiting ? previous : { ...previous, [connectionID]: waiting },
-    )
-  }, [])
-  const connectedServerWaitingCount = Object.values(connectedServerWaiting).reduce((sum, waiting) => sum + waiting, 0)
+  const { total: connectedServerWaitingCount, report: reportConnectedServerWaiting } = useConnectedServerWaitingCounts()
   const backgroundSection = useMemo(() => signalSection(background), [background])
   const sessionIds = useMemo(
     () => [...needsYou.requests, ...backgroundSection.requests].map(request => request.sessionId),
@@ -123,6 +117,7 @@ export default function SignalsPage({
         )}
 
         <ConnectedServersPeerMessages
+          drawn
           onWaitingCount={reportConnectedServerWaiting}
           onSelectSession={onSelectConnectedServerSession}
         />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import type { PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import { BridgeContext, useBridgeConfig } from '../../context'
 import { PEER_CONNECTIONS_PATH, peerConnectionBridgeConfig, peerRouteErrorText } from '../../peers'
@@ -6,7 +6,8 @@ import { connectedServerLabel, connectionsThisServerAdministers } from '../../se
 import { PeerMessagesNeedingYou, useWaitingPeerMessages } from '../PeerMessageCards'
 import styles from './Chat.module.css'
 
-// The Signals page's sections for the servers this one administers: each
+// The sections for the servers this one administers, on the Signals page and
+// in the sidebar's Needs you dropdown: each
 // server's own waiting requests and notices, read and decided through this
 // server's proxy for the connection. Each section runs the same cards as this
 // server's own, under that server's config (`peerConnectionBridgeConfig`), so
@@ -16,9 +17,27 @@ import styles from './Chat.module.css'
 /** How often the connection list is read again, as the chat's list does. */
 const CONNECTIONS_POLL_MS = 30_000
 
+/** How many messages wait on each connected server, reported by
+ *  `ConnectedServersPeerMessages`, and their total for a Needs you count. */
+export function useConnectedServerWaitingCounts(): {
+  total: number
+  report: (connectionID: string, waiting: number) => void
+} {
+  const [byConnection, setByConnection] = useState<Record<string, number>>({})
+  const report = useCallback((connectionID: string, waiting: number) => {
+    setByConnection(previous =>
+      (previous[connectionID] ?? 0) === waiting ? previous : { ...previous, [connectionID]: waiting },
+    )
+  }, [])
+  const total = Object.values(byConnection).reduce((sum, waiting) => sum + waiting, 0)
+  return { total, report }
+}
+
 /** One section per connected server this one administers. Each reports how
- *  many messages wait there, by connection id, for the page's count. */
-export function ConnectedServersPeerMessages({ onWaitingCount, onSelectSession }: {
+ *  many messages wait there, by connection id, for a Needs you count. With
+ *  `drawn` false it draws nothing and only reports: the sidebar row's count. */
+export function ConnectedServersPeerMessages({ drawn, onWaitingCount, onSelectSession }: {
+  drawn: boolean
   onWaitingCount: (connectionID: string, waiting: number) => void
   onSelectSession: (connectionID: string, sessionID: string) => void
 }): JSX.Element | null {
@@ -59,11 +78,12 @@ export function ConnectedServersPeerMessages({ onWaitingCount, onSelectSession }
   if (views.length === 0 && error === null) return null
   return (
     <>
-      {error !== null && <p className={styles.inboxError}>Couldn’t read the connected servers: {error}</p>}
+      {drawn && error !== null && <p className={styles.inboxError}>Couldn’t read the connected servers: {error}</p>}
       {views.map(view => (
         <ConnectedServerPeerMessages
           key={view.connection.id}
           view={view}
+          drawn={drawn}
           onWaitingCount={onWaitingCount}
           onSelectSession={onSelectSession}
         />
@@ -72,8 +92,9 @@ export function ConnectedServersPeerMessages({ onWaitingCount, onSelectSession }
   )
 }
 
-function ConnectedServerPeerMessages({ view, onWaitingCount, onSelectSession }: {
+function ConnectedServerPeerMessages({ view, drawn, onWaitingCount, onSelectSession }: {
   view: PeerConnectionView
+  drawn: boolean
   onWaitingCount: (connectionID: string, waiting: number) => void
   onSelectSession: (connectionID: string, sessionID: string) => void
 }): JSX.Element {
@@ -85,6 +106,7 @@ function ConnectedServerPeerMessages({ view, onWaitingCount, onSelectSession }: 
       <WaitingOnConnectedServer
         connectionID={connectionID}
         label={connectedServerLabel(view).label}
+        drawn={drawn}
         onWaitingCount={onWaitingCount}
         onSelectSession={onSelectSession}
       />
@@ -94,9 +116,10 @@ function ConnectedServerPeerMessages({ view, onWaitingCount, onSelectSession }: 
 
 /** Runs under the connected server's config, so every read and decision goes
  *  to that server. */
-function WaitingOnConnectedServer({ connectionID, label, onWaitingCount, onSelectSession }: {
+function WaitingOnConnectedServer({ connectionID, label, drawn, onWaitingCount, onSelectSession }: {
   connectionID: string
   label: string
+  drawn: boolean
   onWaitingCount: (connectionID: string, waiting: number) => void
   onSelectSession: (connectionID: string, sessionID: string) => void
 }): JSX.Element | null {
@@ -106,7 +129,7 @@ function WaitingOnConnectedServer({ connectionID, label, onWaitingCount, onSelec
   }, [onWaitingCount, connectionID, waiting.length])
   useEffect(() => () => onWaitingCount(connectionID, 0), [onWaitingCount, connectionID])
 
-  if (waiting.length === 0 && error === null) return null
+  if (!drawn || (waiting.length === 0 && error === null)) return null
   return (
     <section className={styles.signalsPageSection}>
       <h3 className={styles.signalsPageSectionTitle}>Waiting on {label} · {waiting.length}</h3>

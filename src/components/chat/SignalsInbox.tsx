@@ -6,6 +6,7 @@ import { backgroundSessionTypeLabel, sessionTypeOfRequest, signalSection } from 
 import styles from './Chat.module.css'
 import { PeerMessagesNeedingYou, useWaitingPeerMessages } from '../PeerMessageCards'
 import { withoutPeerMessageSignals } from '../../peerMessages'
+import { ConnectedServersPeerMessages, useConnectedServerWaitingCounts } from './ConnectedServersPeerMessages'
 
 /**
  * Everything waiting on the operator, across every session — the sidebar's "Needs you" —
@@ -206,17 +207,21 @@ function backgroundCardLabel(
 
 /**
  * Needs you as a dropdown under the orchestrator row: the same cards as the inbox
- * above — peer messages waiting on a person first, then the operator's questions and
+ * above — peer messages waiting on a person here first, then those waiting on each
+ * connected server this one administers, then the operator's questions and
  * notifications — and a button to see them all on the signals page. It reads the same
  * shared signals and peer-message polls as the row's count, so opening it asks for
  * nothing new except the names of the sessions it draws.
  */
 export function NeedsYouDropdown({
   onSelectSession,
+  onSelectConnectedServerSession,
   onOpenSignalsPage,
 }: {
   /** Open the session a card belongs to. */
   onSelectSession: (sessionId: string) => void
+  /** Open a session on a connected server: one a message waiting there started. */
+  onSelectConnectedServerSession: (connectionId: string, sessionId: string) => void
   /** Show every signal on the thread pane's full width (`SignalsPage`). */
   onOpenSignalsPage: () => void
 }) {
@@ -225,7 +230,8 @@ export function NeedsYouDropdown({
   const needsYou = useMemo(() => signalSection(operatorQuestions), [operatorQuestions])
   const peerMessages = useWaitingPeerMessages()
   const sessionName = useSessionNames(useMemo(() => needsYou.requests.map(request => request.sessionId), [needsYou]))
-  const nothingWaiting = needsYou.signalCount === 0 && peerMessages.waiting.length === 0
+  const connectedServerWaiting = useConnectedServerWaitingCounts()
+  const nothingWaiting = needsYou.signalCount === 0 && peerMessages.waiting.length === 0 && connectedServerWaiting.total === 0
 
   return (
     <div className={`${styles.inboxBody} bc-needs-you-dropdown`} role="region" aria-label="Signals needing you, from the orchestrator row">
@@ -244,6 +250,11 @@ export function NeedsYouDropdown({
         error={peerMessages.error}
         reload={peerMessages.reload}
         onSelectSession={onSelectSession}
+      />
+      <ConnectedServersPeerMessages
+        drawn
+        onWaitingCount={connectedServerWaiting.report}
+        onSelectSession={onSelectConnectedServerSession}
       />
       {needsYou.requests.map(request => (
         <SignalRequestCard
