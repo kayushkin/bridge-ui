@@ -207,9 +207,9 @@ function backgroundCardLabel(
 
 /**
  * Needs you as a dropdown under the orchestrator row: the same cards as the inbox
- * above — peer messages waiting on a person here first, then those waiting on each
- * connected server this one administers, then the operator's questions and
- * notifications — and a button to see them all on the signals page. It reads the same
+ * above — peer messages waiting on a person here first, then the operator's
+ * questions and notifications, then what waits on each connected server this one
+ * administers — and a button to see them all on the signals page. It reads the same
  * shared signals and peer-message polls as the row's count, so opening it asks for
  * nothing new except the names of the sessions it draws.
  */
@@ -251,11 +251,6 @@ export function NeedsYouDropdown({
         reload={peerMessages.reload}
         onSelectSession={onSelectSession}
       />
-      <ConnectedServersPeerMessages
-        drawn
-        onWaitingCount={connectedServerWaiting.report}
-        onSelectSession={onSelectConnectedServerSession}
-      />
       {needsYou.requests.map(request => (
         <SignalRequestCard
           key={request.requestId || request.signals[0]?.id}
@@ -277,6 +272,13 @@ export function NeedsYouDropdown({
           }
         />
       ))}
+      {/* Last: its heading would otherwise seem to hold the questions and
+          notifications below it, which carry no headings here. */}
+      <ConnectedServersPeerMessages
+        drawn
+        onWaitingCount={connectedServerWaiting.report}
+        onSelectSession={onSelectConnectedServerSession}
+      />
     </div>
   )
 }
