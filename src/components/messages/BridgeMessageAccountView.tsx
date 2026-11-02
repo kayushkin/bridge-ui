@@ -309,7 +309,7 @@ function AccountMessage({ message, sentByAccount, account, discordNames }: { mes
         {message.edited && <span className={styles.time}>edited</span>}
         {message.deleted_on_platform && <span className={styles.time}>deleted on {message.source}</span>}
       </div>
-      <div className={styles.messageBody}>
+      <div className={`${styles.messageBody} ${message.kind === 'system' ? styles.accountSystemLine : ''}`} data-kind={message.kind}>
         {message.body && (
           <MessageContent message={{ body: message.body, format: storedMessageFormat(message) }} messageType={message.kind} discordNames={discordNames} />
         )}

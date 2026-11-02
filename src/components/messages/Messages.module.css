@@ -478,3 +478,6 @@ a.buttonChip:hover { text-decoration: underline; }
 .accountComposerHead { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8em; color: var(--text-muted); }
 .accountComposerRow { display: flex; align-items: flex-end; gap: 8px; }
 .accountComposerRow > textarea.input { flex: 1; resize: vertical; }
+
+/* A line the platform wrote (someone added to a thread, a pin), in a bot view. */
+.accountSystemLine { color: var(--text-muted); font-style: italic; }

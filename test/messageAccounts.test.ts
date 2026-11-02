@@ -110,7 +110,7 @@ describe('threads, mentions, counts and sending', () => {
 
   it('badges threads, channels and direct messages, and names a thread by its channel when the list holds it', () => {
     expect([thread, channel, direct].map(accountConversationKind)).toEqual(['thread', 'channel', 'direct message'])
-    expect(accountConversationName(thread, bot, [channel, thread])).toBe('#events › picnic')
+    expect(accountConversationName(thread, bot, [channel, thread])).toBe('events › picnic')
     expect(accountConversationName(orphanThread, bot, [channel])).toBe('hike')
     expect(accountConversationName(direct, bot)).toBe('Carol')
   })
@@ -120,6 +120,14 @@ describe('threads, mentions, counts and sending', () => {
     expect(names.userNames.get('42')).toBe('Carol')
     expect(names.channelNames.get('700')).toBe('events')
     expect(names.channelNames.has('channel')).toBe(false)
+  })
+
+  it('names someone mentioned in a channel they never wrote in from the account\'s other conversations, the open one first', () => {
+    const quiet = conversation({ id: 'conversation_000020', source_ref: '710', title: 'reminders', is_group: true, participants: [participant('200', 'Helper')] })
+    const elsewhere = conversation({ id: 'conversation_000021', source_ref: '711', title: 'chat', is_group: true, participants: [participant('42', 'Carol R')] })
+    expect(accountDiscordNames(quiet, [quiet, elsewhere]).userNames.get('42')).toBe('Carol R')
+    const here = conversation({ id: 'conversation_000022', participants: [participant('42', 'Carol')] })
+    expect(accountDiscordNames(here, [elsewhere, here]).userNames.get('42')).toBe('Carol')
   })
 
   it('says one message and one person, and plurals otherwise', () => {

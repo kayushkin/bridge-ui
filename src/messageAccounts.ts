@@ -56,14 +56,14 @@ export function accountConversationKind(conversation: Conversation): 'thread' | 
 }
 
 /** A conversation's name in an account's list: a group's title — a thread's
- *  as `#channel › thread` when the account's list holds its channel — and a
+ *  as `channel › thread` when the account's list holds its channel — and a
  *  direct message named by whoever in it is not the account. */
 export function accountConversationName(conversation: Conversation, account: Account, conversations: readonly Conversation[] = []): string {
   if (conversation.is_group) {
     const title = conversation.title || conversation.id
     if (!conversationIsThread(conversation)) return title
     const parent = conversations.find(other => other.source === conversation.source && other.source_ref === conversation.parent_source_ref)
-    return parent?.title ? `#${parent.title} › ${title}` : title
+    return parent?.title ? `${parent.title} › ${title}` : title
   }
   const others = (conversation.participants ?? []).filter(participant => participant.handle !== account.handle)
   const names = others.map(participant => participant.display_name || participant.handle)
@@ -138,13 +138,17 @@ export function countLabel(count: number, singular: string, plural: string): str
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-/** Names for the Discord tokens in an account's conversation: people by the
- *  conversation's participants (their handle is their Discord id), channels
- *  by the account's conversations (a channel's source_ref is its Discord id). */
+/** Names for the Discord tokens in an account's conversation: people by
+ *  their handle (their Discord id), from the open conversation's participants
+ *  first and then every other conversation of the account, since a message
+ *  can name someone who never wrote where it was posted; channels by the
+ *  account's conversations (a channel's source_ref is its Discord id). */
 export function accountDiscordNames(conversation: Conversation, conversations: readonly Conversation[]): DiscordNames {
   const userNames = new Map<string, string>()
-  for (const participant of conversation.participants ?? []) {
-    if (participant.display_name) userNames.set(participant.handle, participant.display_name)
+  for (const holder of [conversation, ...conversations]) {
+    for (const participant of holder.participants ?? []) {
+      if (participant.display_name && !userNames.has(participant.handle)) userNames.set(participant.handle, participant.display_name)
+    }
   }
   const channelNames = new Map<string, string>()
   for (const other of conversations) {
