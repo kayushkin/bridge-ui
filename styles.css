@@ -6929,6 +6929,21 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
   min-width: 12em;
 }
 
+.pm-approve-target {
+  flex-basis: 100%;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.pm-approve-warning {
+  flex-basis: 100%;
+  font-size: 0.9em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
 .pm-error {
   margin: 0;
 }

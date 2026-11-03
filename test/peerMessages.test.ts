@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  approvalMachineGroups,
+  approvalTargetDescription,
+  approvalTargetWarning,
   formatAttachmentSize,
   isPeerMessageSignal,
   peerAttachmentCanRetry,
@@ -200,5 +203,40 @@ describe('patches', () => {
     expect(peerMessageRequestBody('t', 'p').attachment_ids).toBeUndefined()
     expect(peerMessageRequestBody('t', 'p', undefined, ['a']).attachment_ids).toEqual(['a'])
     expect(peerMessageNoticeBody('s', [], 'm', []).attachment_ids).toBeUndefined()
+  })
+})
+
+describe('the approval picker says which machine an instance runs on', () => {
+  const machine = (id: string, name: string, transport: string) => ({ id, name, transport, computer_use_allowed: false, created_at: '', updated_at: '' })
+  const here = machine('m_1', 'server', 'local')
+  const mediaServer = machine('m_2', 'media-server', 'runner')
+  const instance = (id: string, name: string, onMachine: ReturnType<typeof machine> | undefined, enabled = true) => ({
+    id, name, harness_type: 'claude_code', machine_id: onMachine?.id ?? '', enabled, created_at: '', updated_at: '', machine: onMachine,
+  })
+  const instances = [
+    instance('inst_3', 'media-server/claude_code', mediaServer),
+    instance('inst_2', 'Codex', here),
+    instance('inst_1', 'Claude', here),
+    instance('inst_4', 'Off', here, false),
+    instance('inst_5', 'Orphan', undefined),
+  ]
+
+  it('groups by machine, this server first, and leaves out disabled instances', () => {
+    const groups = approvalMachineGroups(instances)
+    expect(groups.map(group => [group.machineName, group.isThisServer, group.instances.map(i => i.id)])).toEqual([
+      ['server', true, ['inst_1', 'inst_2']],
+      ['machine not reported', false, ['inst_5']],
+      ['media-server', false, ['inst_3']],
+    ])
+  })
+
+  it('says where the approval runs, and warns only for a patch on another machine', () => {
+    const [server, unreported, media] = approvalMachineGroups(instances)
+    expect(approvalTargetDescription(server)).toBe('Runs on server, this server.')
+    expect(approvalTargetDescription(media)).toBe('Runs on media-server, another machine, not this server.')
+    expect(approvalTargetDescription(unreported)).toMatch(/did not say/)
+    expect(approvalTargetWarning('patch', server)).toBeNull()
+    expect(approvalTargetWarning('request', media)).toBeNull()
+    expect(approvalTargetWarning('patch', media)).toMatch(/media-server, which does not hold them/)
   })
 })

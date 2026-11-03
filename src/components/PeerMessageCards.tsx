@@ -7,6 +7,9 @@ import { useBridgeInstances } from '../useBridgeInstances'
 import { PEER_CONNECTIONS_PATH, peerRouteErrorText } from '../peers'
 import { connectedServerLabel } from '../serverListings'
 import {
+  approvalMachineGroups,
+  approvalTargetDescription,
+  approvalTargetWarning,
   formatAttachmentSize,
   peerAttachmentCanRetry,
   peerAttachmentDownloadable,
@@ -388,8 +391,10 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
 }): JSX.Element {
   const { fetch: fetchFn, basePath, orchestratorBasePath } = useBridgeConfig()
   const { instances } = useBridgeInstances()
-  const enabled = useMemo(() => instances.filter(instance => instance.enabled), [instances])
+  const machineGroups = useMemo(() => approvalMachineGroups(instances), [instances])
   const [instanceID, setInstanceID] = useState('')
+  const chosenGroup = machineGroups.find(group => group.instances.some(instance => instance.id === instanceID))
+  const targetWarning = chosenGroup ? approvalTargetWarning(message.kind, chosenGroup) : null
   const [declining, setDeclining] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -433,13 +438,19 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
             Start it on{' '}
             <select value={instanceID} onChange={event => setInstanceID(event.target.value)} disabled={busy}>
               <option value="">Choose an instance…</option>
-              {enabled.map(instance => (
-                <option key={instance.id} value={instance.id}>
-                  {instance.name} ({instance.harness_type})
-                </option>
+              {machineGroups.map(group => (
+                <optgroup key={group.machineID || 'unreported'} label={group.isThisServer ? `${group.machineName} (this server)` : group.machineName}>
+                  {group.instances.map(instance => (
+                    <option key={instance.id} value={instance.id}>
+                      {instance.name} ({instance.harness_type})
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>
+          {chosenGroup && <span className="pm-approve-target">{approvalTargetDescription(chosenGroup)}</span>}
+          {targetWarning && <span className="pm-approve-warning" role="alert">{targetWarning}</span>}
           <button
             type="button"
             className="bc-ctrl-btn bc-ctrl-btn-active"

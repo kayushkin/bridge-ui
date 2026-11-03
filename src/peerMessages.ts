@@ -44,6 +44,8 @@ import {
   PeerMessageKindStatus,
   PeerMessageStatePending,
   SignalSourcePeerMessage,
+  TransportLocal,
+  type Instance,
   type PeerMessage,
   type PeerMessageAttachment,
   type PeerMessageApproveRequest,
@@ -283,4 +285,59 @@ const PEER_MESSAGE_REFUSALS: Readonly<Record<string, string>> = {
  *  shows the server's own message). */
 export function peerMessageRefusalText(code: string): string | null {
   return PEER_MESSAGE_REFUSALS[code] ?? null
+}
+
+/** One machine's instances in the approval picker. `machineID` is empty, and
+ *  `machineName` says so, for an instance whose answer carried no machine. */
+export interface ApprovalMachineGroup {
+  machineID: string
+  machineName: string
+  /** The machine this server runs on (transport `local`), where its repos are. */
+  isThisServer: boolean
+  instances: Instance[]
+}
+
+/** The enabled instances a request or patch may be approved onto, grouped by
+ *  the machine each runs on: this server's own machine first, then the others
+ *  by name. On 2026-11-03 two patches were approved onto
+ *  `sscitadel/claude_code`, listed beside this server's `Clawd` with nothing
+ *  to say it was another machine, and landed nothing. */
+export function approvalMachineGroups(instances: readonly Instance[]): ApprovalMachineGroup[] {
+  const groups = new Map<string, ApprovalMachineGroup>()
+  for (const instance of instances) {
+    if (!instance.enabled) continue
+    const machine = instance.machine
+    const key = machine?.id ?? ''
+    let group = groups.get(key)
+    if (!group) {
+      group = {
+        machineID: key,
+        machineName: machine?.name ?? 'machine not reported',
+        isThisServer: machine?.transport === TransportLocal,
+        instances: [],
+      }
+      groups.set(key, group)
+    }
+    group.instances.push(instance)
+  }
+  const ordered = [...groups.values()]
+  for (const group of ordered) group.instances.sort((a, b) => a.name.localeCompare(b.name))
+  ordered.sort((a, b) => Number(b.isThisServer) - Number(a.isThisServer) || a.machineName.localeCompare(b.machineName))
+  return ordered
+}
+
+/** Where an approval would run, said in words under the picker. */
+export function approvalTargetDescription(group: ApprovalMachineGroup): string {
+  if (group.isThisServer) return `Runs on ${group.machineName}, this server.`
+  if (!group.machineID) return 'The server did not say which machine this instance runs on.'
+  return `Runs on ${group.machineName}, another machine, not this server.`
+}
+
+/** The warning shown when a patch is about to be approved onto a machine
+ *  other than this server's: a patch lands in this server's repos, which a
+ *  session elsewhere does not have. Null when there is nothing to warn of.
+ *  Approving stays possible: the person decides. */
+export function approvalTargetWarning(kind: string, group: ApprovalMachineGroup): string | null {
+  if (kind !== PeerMessageKindPatch || group.isThisServer) return null
+  return `This patch lands in ${group.machineID ? "this server's" : 'its'} repos, but the session would run on ${group.machineName}, which does not hold them. Choose an instance on this server unless you know the repo is there.`
 }
