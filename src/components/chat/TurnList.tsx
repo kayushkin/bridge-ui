@@ -39,6 +39,7 @@ import { SharedFileCard, SharedImageGrid, ToolResultImageStrip, galleryImageOfSh
 import { SessionImagesProvider, useSessionImages, type GalleryImage } from './ImageGallery'
 import { mayDrawAsImage } from '../../sessionFileAttachments'
 import { SessionActionEntry, SessionActionsContext } from './SessionActions'
+import { heldMessageOutcomes, heldMessageRow, type HeldMessageOutcome } from '../../heldMessages'
 
 // react-markdown types `components` over intrinsic elements only; `ref-chip` is the
 // custom hast element remarkRefChips emits, so we cast the map like bridge-ui does.
@@ -824,7 +825,17 @@ function isHarnessNotification(text: string): boolean {
  *  markers — exactly like bridge-ui's rowsToTurns emits a `user` item for the prompt and a
  *  distinct `assistant` item for the turn's assistant content. */
 type RenderItem =
-  | { kind: 'user'; key: string; ts: string; text: string; entryIds: string[] }
+  | {
+      kind: 'user'
+      key: string
+      ts: string
+      text: string
+      entryIds: string[]
+      /** Set on a message the server held while it waited to restart, drawn from
+       *  its `message_held_for_restart` event until the message is sent. Absent
+       *  `failedBecause` means it is still waiting. */
+      held?: { failedBecause?: string }
+    }
   | { kind: 'marker'; key: string; ts: string }
   /** A HIDDEN harness task-notification that opened this turn. Not a user row —
    *  the reader never wrote it — but the span renderer surfaces it as a
@@ -926,11 +937,25 @@ function buildTurnItems(
     return g
   }
 
+  // How each held message ended, read only when this turn holds one: the
+  // delivered or failed event can land in a later turn than the held one.
+  let heldOutcomes: Map<string, HeldMessageOutcome> | null = null
+  const outcomesOfHeldMessages = () => (heldOutcomes ??= heldMessageOutcomes(entries))
+
   for (const id of entryIds) {
     const e = entries[id]
     if (!e) continue
     if (e.kind === 'system' && e.subtype === 'compact_boundary') {
       out.push({ kind: 'marker', key: id, ts: e.ts })
+      continue
+    }
+    // A message the server held while it waited to restart: it stands where
+    // the person sent it until it is sent (then its own user_message is the
+    // row), or with the reason it was not.
+    const held = heldMessageRow(e, outcomesOfHeldMessages)
+    if (held === 'hidden') continue
+    if (held) {
+      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text ?? '', entryIds: [id], held })
       continue
     }
     if (e.kind === 'file' && e.sessionFile) {
@@ -1374,6 +1399,13 @@ const UserTurnRow = memo(function UserTurnRow({
         <span className="bc-turns-actor">You</span>
         <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
         <SourcesTag names={sourceNames} />
+        {item.held && (
+          <span className="bc-turns-held" data-held={item.held.failedBecause === undefined ? 'waiting' : 'failed'}>
+            {item.held.failedBecause === undefined
+              ? 'waiting: the server sends this once it has restarted'
+              : `not sent: ${item.held.failedBecause}`}
+          </span>
+        )}
       </div>
       <div className="bc-turns-text">{item.text}</div>
     </div>
