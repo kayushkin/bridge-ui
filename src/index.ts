@@ -168,6 +168,7 @@ export type { BundleStoreResult } from './bundleStoreClient'
 // their schemas and newest rows — read-only, through the bridge server's
 // `/services` routes on `basePath`.
 export { BridgeServiceInventory } from './components/BridgeServiceInventory'
+export { BridgeMachines } from './components/machines/BridgeMachines'
 export { listServices, readDatabaseSchema, readDatabaseRows, rowsQueryString } from './servicesClient'
 export type { ServicesResult, RowsQuery } from './servicesClient'
 // One card as a page of its own, assembled from its four separately addressable

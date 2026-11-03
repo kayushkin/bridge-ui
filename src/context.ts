@@ -38,6 +38,10 @@ export interface BridgeRoutes {
    *  Not `/services`: dash owns that path for its topology page and matches
    *  it before the bridge's splat, so the bridge page there was unreachable. */
   serviceInventory: string
+  /** The health of every machine this server and each connected server
+   *  knows: CPU, memory, drives, batteries, uptime, with history. Backed by
+   *  llm-bridge-server's `/machines/stats` routes. */
+  machines: string
   /** Hooks: the shell commands the bridge wires into a harness's hook
    *  mechanism at spawn, by scope. llm-bridge-server's /hooks routes. */
   hooks: string
@@ -114,6 +118,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   grants: '/grants',
   bundles: '/bundles',
   serviceInventory: '/service-inventory',
+  machines: '/machines',
   effectiveConfig: '/effective-config',
   serviceSettings: '/service-settings',
   models: '/models',

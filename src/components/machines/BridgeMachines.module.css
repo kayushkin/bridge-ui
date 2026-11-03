@@ -1,0 +1,112 @@
+/* The Machines page. A CSS module, copied into dist/ beside its .js by
+   scripts/copy-css.mjs. Every color is a theme variable, so the light, dark
+   and zine themes all draw it without rules of their own. */
+
+.page { display: flex; flex-direction: column; gap: 20px; }
+.header { display: flex; flex-direction: column; gap: 4px; }
+.title { margin: 0; font-size: 1.2em; color: var(--text); }
+.subtitle { margin: 0; font-size: 0.85em; color: var(--text-muted); max-width: 90ch; }
+.muted { color: var(--text-muted); font-size: 0.85em; }
+.error {
+  margin: 0; padding: 8px 10px; font-size: 0.85em; white-space: pre-wrap;
+  color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px;
+}
+.notice {
+  margin: 0; padding: 8px 10px; font-size: 0.85em;
+  color: var(--text-muted); background: var(--bg-surface); border: 1px dashed var(--border); border-radius: 6px;
+}
+
+.server { display: flex; flex-direction: column; gap: 10px; }
+.serverHeading { margin: 0; font-size: 1em; color: var(--text); display: flex; align-items: baseline; gap: 8px; }
+
+.chip { font-size: 0.72em; font-weight: normal; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; color: var(--text-muted); }
+.pill { font-size: 0.72em; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pillFresh { color: var(--success); background: var(--success-bg); }
+.pillStale { color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); }
+
+.button {
+  font: inherit; font-size: 0.8em; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+}
+.button:hover { border-color: var(--accent); }
+.buttonSelected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+.card {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface);
+}
+.cardOpen { grid-column: 1 / -1; }
+/* A machine that stopped reporting: its last numbers stay readable but grey. */
+.cardStale .reading { opacity: 0.55; filter: grayscale(1); }
+.cardHeader { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cardHeader .button { margin-left: auto; }
+.cardTitle { margin: 0; font-size: 1em; color: var(--text); }
+
+.reading { display: flex; flex-direction: column; gap: 10px; }
+.facts { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.85em; color: var(--text); align-items: baseline; }
+
+.row { display: flex; flex-direction: column; gap: 3px; }
+.rowHead { display: flex; align-items: baseline; gap: 8px; font-size: 0.85em; flex-wrap: wrap; }
+.rowLabel { font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.rowValue { color: var(--text); font-variant-numeric: tabular-nums; }
+.rowDetail { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 0.75em; color: var(--text-muted); }
+
+/* A thin meter: the track a step off the surface, the fill carrying the level. */
+.meter { height: 6px; border-radius: 3px; background: var(--border-subtle, var(--border)); overflow: hidden; }
+.meterFill { height: 100%; border-radius: 3px; }
+.meterNormal { background: var(--accent); }
+.meterWarning { background: var(--warning); }
+.meterDanger { background: var(--error); }
+.levelWord { font-size: 0.72em; font-weight: 600; padding: 0 6px; border-radius: 4px; color: var(--text); }
+.levelWarning { background: var(--warning-bg); border: 1px solid var(--warning); }
+.levelDanger { background: var(--error-bg); border: 1px solid var(--error); color: var(--error); }
+
+.collectionErrors {
+  font-size: 0.78em; color: var(--text); padding: 6px 8px; border-radius: 6px;
+  background: var(--warning-bg); border: 1px solid var(--warning);
+}
+.collectionErrors ul { margin: 2px 0 0; padding-left: 18px; }
+
+.history { border-top: 1px solid var(--border); padding-top: 10px; }
+.historyBody { display: flex; flex-direction: column; gap: 10px; }
+.historyRefreshing { opacity: 0.6; transition: opacity 0.2s; }
+.rangeRow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+
+/* Charts */
+.chart { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.chartCaption { display: flex; flex-direction: column; gap: 1px; font-size: 0.82em; }
+.chartTitle { color: var(--text-muted); }
+.chartReadout { color: var(--text); font-variant-numeric: tabular-nums; min-height: 1.3em; }
+.chartLegend { display: flex; gap: 12px; font-size: 0.72em; color: var(--text-muted); }
+.legendLine { display: inline-block; width: 14px; height: 2px; vertical-align: middle; background: var(--accent); border-radius: 1px; }
+.legendBand { display: inline-block; width: 14px; height: 8px; vertical-align: middle; background: var(--accent); opacity: 0.18; border-radius: 2px; }
+.chartFrame { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
+.chartAxisY {
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;
+  font-size: 0.68em; color: var(--text-muted); font-variant-numeric: tabular-nums; height: 110px;
+}
+.chartAxisY span { line-height: 1; }
+.chartPlot { position: relative; height: 110px; cursor: crosshair; outline: none; touch-action: pan-y; }
+.chartPlot:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 2px; }
+.chartSvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.chartGrid { stroke: var(--border-subtle, var(--border)); stroke-width: 1; }
+.chartLine { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chartBand { fill: var(--accent); fill-opacity: 0.16; stroke: none; }
+.chartCrosshair { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--text-muted); pointer-events: none; }
+.chartDot {
+  position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg-surface); pointer-events: none;
+}
+.chartAxisX {
+  display: flex; justify-content: space-between; font-size: 0.68em; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; margin-left: 40px;
+}
+
+.tableDetails summary { cursor: pointer; font-size: 0.8em; color: var(--text-muted); }
+.tableScroll { max-height: 320px; overflow: auto; margin-top: 6px; }
+.table { border-collapse: collapse; font-size: 0.75em; font-variant-numeric: tabular-nums; }
+.table th, .table td { padding: 2px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; color: var(--text); }
+.table th { position: sticky; top: 0; background: var(--bg-surface); color: var(--text-muted); font-weight: 600; }
+.table th:first-child, .table td:first-child { text-align: left; }

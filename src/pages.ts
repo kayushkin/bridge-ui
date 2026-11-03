@@ -27,6 +27,7 @@ import { BridgePrincipals } from './components/BridgePrincipals'
 import { BridgeGrants } from './components/BridgeGrants'
 import { BridgeBundles } from './components/BridgeBundles'
 import { BridgeServiceInventory } from './components/BridgeServiceInventory'
+import { BridgeMachines } from './components/machines/BridgeMachines'
 import { BridgeOrchestrator } from './components/BridgeOrchestrator'
 import { BridgeConformance } from './components/BridgeConformance'
 import { BridgeEffectiveConfig } from './components/BridgeEffectiveConfig'
@@ -164,6 +165,10 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // Reads the bridge server itself (`GET /services` on basePath), so no store
   // base path gates it; a host whose server lacks the route turns it off.
   { route: 'serviceInventory', label: 'Service inventory', group: 'system', listed: true, available: (_, f) => f.showServiceInventory, component: BridgeServiceInventory },
+  // Every machine's health on this server and each connected one. Reads the
+  // bridge server itself, so no store path gates it; a server built before
+  // machine stats says so on the page.
+  { route: 'machines', label: 'Machines', group: 'system', listed: true, component: BridgeMachines },
   { route: 'conformance', label: 'Conformance', group: 'system', listed: true, available: (_, f) => f.showConformance, component: BridgeConformance },
 ]
 

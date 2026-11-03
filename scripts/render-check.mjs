@@ -62,6 +62,9 @@ import {
 } from '../src/components/chat/splitDragGeometry.ts'
 import { groupSignalsByRequest, ChatContext, ChatProvider } from '@kayushkin/chat-core'
 import { SessionActionEntry, SessionActionInText, SessionActionsContext } from '../src/components/chat/SessionActions.tsx'
+import { BridgeMachines, HistoryCharts, MachineCard } from '../src/components/machines/BridgeMachines.tsx'
+import { machineStatsOverviewPoll, peerConnectionsPoll, serverDescriptionPoll } from '../src/useMachineStats.ts'
+import { machineStatsFixtureFetch, machineStatsFixtureHistory, machineStatsFixtureOverview } from '../test/fixtures/machineStatsFixture.ts'
 
 let failures = 0
 const check = (name, cond, detail) => {
@@ -2268,7 +2271,65 @@ console.log('A connected server’s session gets the full thread view')
   check('a file still on its way offers no download', arriving.includes('log.txt') && !arriving.includes('>Download<'), arriving.slice(0, 1500))
 }
 
-agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(
+
+// The Machines page against made-up readings: what each card says, what a
+// connected server too old for machine stats and one with no access show,
+// and that the history draws a chart per measure.
+async function machinesChecks() {
+  console.log('\nMachines')
+  const now = new Date()
+  const basePath = '/api/bridge'
+  const fetchFn = machineStatsFixtureFetch(basePath, () => now)
+  await serverDescriptionPoll(fetchFn, basePath).refresh()
+  await peerConnectionsPoll(fetchFn, basePath).refresh()
+  await machineStatsOverviewPoll(fetchFn, basePath).refresh()
+  const olderServerBase = peerConnectionBridgeConfig({ fetch: fetchFn, basePath, routes: DEFAULT_BRIDGE_ROUTES }, 'peer_connection_000001').basePath
+  await machineStatsOverviewPoll(fetchFn, olderServerBase).refresh()
+  const config = { fetch: fetchFn, basePath, routes: DEFAULT_BRIDGE_ROUTES }
+  const page = renderToStaticMarkup(h(BridgeContext.Provider, { value: config }, h(BridgeMachines)))
+  check('the page lists this server first, by its name, then connected servers by name',
+    page.indexOf('home') < page.indexOf('no-access-server') && page.indexOf('no-access-server') < page.indexOf('older-server'), page.slice(0, 800))
+  check('a connected server built before machine stats says so, not an error',
+    page.includes('does not report machine stats yet') && !page.includes('machine not found'), page)
+  check('a connected server with no access says why', page.includes('has not given this server any access'), page)
+  check("this server's machines each get a card", ['home-server', 'laptop', 'old-box', 'spare', 'workstation'].every(name => page.includes(name)), page.slice(0, 2000))
+
+  const overview = machineStatsFixtureOverview(now)
+  const card = name => renderToStaticMarkup(h(MachineCard, { overview: overview.find(entry => entry.machine.name === name), now, open: false, onToggle: () => {}, serverConfig: config }))
+  const server = card('home-server')
+  check('a card shows OS, uptime, reboot, CPU model and cores, load, memory and swap',
+    server.includes('Ubuntu 24.04.1 LTS') && server.includes('Up 9 d 3 h') && server.includes('last reboot') &&
+      server.includes('AMD EPYC') && server.includes('8 logical cores') && server.includes('load 1.52') &&
+      server.includes('18.2 GiB of 31.3 GiB') && server.includes('Swap'), server)
+  check('a drive at 86% is marked high, in words as well as color', server.includes('271 GiB of 315 GiB') && server.includes('>high<'), server)
+  const windows = card('workstation')
+  check('a WSL runner says its numbers are the Windows host', windows.includes('Windows host, read from WSL'), windows)
+  check('a drive at 96% is marked critical', windows.includes('>critical<'), windows)
+  check('parts that could not be read are listed', windows.includes('Could not read') && windows.includes('Win32_Battery timed out'), windows)
+  const laptop = card('laptop')
+  check('a battery shows charge, state, time left, health and cycles',
+    laptop.includes('InternalBattery-0') && laptop.includes('64%') && laptop.includes('on battery') && laptop.includes('4 h 25 min left') &&
+      laptop.includes('health 91%') && laptop.includes('212 cycles'), laptop)
+  check('no battery block on a machine without one', !server.includes('Battery'), server)
+  const stale = card('old-box')
+  check('a machine that stopped reporting is stale and says when it last reported', stale.includes('stale · last reported 47m ago'), stale)
+  check('its uptime is as of its last reading, not carried on to now', stale.includes('Was up 8 d 7 h at its last reading'), stale)
+  check('a runner that is not connected says so', stale.includes('runner not connected'), stale)
+  const never = card('spare')
+  check('a machine that never reported says so', never.includes('never sent a reading') && never.includes('not reporting'), never)
+
+  const laptopLatest = overview.find(entry => entry.machine.name === 'laptop').latest
+  const history = machineStatsFixtureHistory('m_000002', laptopLatest, new Date(now.getTime() - 86400_000), now, 180)
+  const charts = renderToStaticMarkup(h(HistoryCharts, { history }))
+  check('history draws CPU with its peak band, memory, each drive and each battery',
+    charts.includes('CPU in use') && charts.includes('peak') && charts.includes('Memory in use') && charts.includes('/ used') &&
+      charts.includes('Battery InternalBattery-0 charge'), charts.slice(0, 1500))
+  check('a gap in the readings breaks the line into two runs',
+    (charts.match(/<path[^>]*d="M/g) ?? []).length >= 2 * 4, charts.slice(0, 600))
+  check('history offers the same numbers as a table', charts.includes('Show as a table') && charts.includes('<table'), charts.slice(-600))
+}
+
+agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(machinesChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)
