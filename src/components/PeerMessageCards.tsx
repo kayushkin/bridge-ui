@@ -6,8 +6,11 @@ import type { FetchFn } from '../types'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { PEER_CONNECTIONS_PATH, peerRouteErrorText } from '../peers'
 import { connectedServerLabel } from '../serverListings'
+import { fetchServiceSettings } from '../serviceSettings'
 import {
   approvalMachineGroups,
+  orchestratorPlacesApprovals,
+  peerMessagePlacementText,
   approvalTargetDescription,
   approvalTargetWarning,
   formatAttachmentSize,
@@ -260,6 +263,7 @@ export function PeerMessageCard({ message, serverName, onDecided, onSelectSessio
           )}
         </p>
       )}
+      {peerMessagePlacementText(message) !== null && <p className="pm-session">{peerMessagePlacementText(message)}</p>}
       {decidable && <PeerMessageDecision message={message} onDecided={onDecided} onSelectSession={onSelectSession} />}
     </article>
   )
@@ -384,12 +388,27 @@ function PeerMessageAttachments({ message, onChanged }: { message: PeerMessage; 
   )
 }
 
+/** Whether a server hands approved requests and patches to its orchestrator
+ *  (true) or a person picks the instance here (false), read from that
+ *  server's own settings, so a connected server's card follows that server.
+ *  Null until the first read. One shared read per server, every five minutes. */
+export function approvalWayPoll(fetchFn: FetchFn, basePath: string): SharedPoll<boolean | null> {
+  return sharedPoll(fetchFn, `approval-way ${basePath}`, () =>
+    new SharedPoll<boolean | null>(async () => {
+      const answer = await fetchServiceSettings(fetchFn, basePath)
+      if (answer.phase === 'described') return { ok: true, value: orchestratorPlacesApprovals(answer.described) }
+      if (answer.phase === 'failed') return { ok: false, error: answer.message, failure: 'unreachable' }
+      return { ok: false, error: `GET ${basePath}/settings answered HTTP ${answer.status}`, failure: 'refused' }
+    }, null, 5 * 60_000))
+}
+
 function PeerMessageDecision({ message, onDecided, onSelectSession }: {
   message: PeerMessage
   onDecided: () => void
   onSelectSession?: (sessionID: string) => void
 }): JSX.Element {
-  const { fetch: fetchFn, basePath, orchestratorBasePath } = useBridgeConfig()
+  const { fetch: fetchFn, basePath } = useBridgeConfig()
+  const approvalWay = useSharedPoll(approvalWayPoll(fetchFn, basePath))
   const { instances } = useBridgeInstances()
   const machineGroups = useMemo(() => approvalMachineGroups(instances), [instances])
   const [instanceID, setInstanceID] = useState('')
@@ -433,6 +452,18 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
   return (
     <div className="pm-decision">
       {message.kind === 'request' || message.kind === 'patch' ? (
+        approvalWay.data === null ? (
+          approvalWay.error !== null
+            ? <p className="bridge-error pm-error">Cannot approve: {approvalWay.error}</p>
+            : <p className="pm-approve">Reading how this server starts approved work…</p>
+        ) : approvalWay.data ? (
+          <div className="pm-approve">
+            <button type="button" className="bc-ctrl-btn bc-ctrl-btn-active" disabled={busy} onClick={() => void approve({})}>
+              {message.kind === 'patch' ? 'Approve and land it' : 'Approve'}
+            </button>
+            <span className="pm-approve-target">The orchestrator chooses the machine it runs on.</span>
+          </div>
+        ) : (
         <div className="pm-approve">
           <label>
             Start it on{' '}
@@ -459,12 +490,8 @@ function PeerMessageDecision({ message, onDecided, onSelectSession }: {
           >
             {message.kind === 'patch' ? 'Approve and land it' : 'Approve'}
           </button>
-          {orchestratorBasePath && (
-            <button type="button" className="bc-ctrl-btn" disabled={busy} onClick={() => void approve({ handoff: 'orchestrator' })}>
-              Hand to the orchestrator
-            </button>
-          )}
         </div>
+        )
       ) : (
         <div className="pm-approve">
           <button type="button" className="bc-ctrl-btn bc-ctrl-btn-active" disabled={busy} onClick={() => void approve({})}>

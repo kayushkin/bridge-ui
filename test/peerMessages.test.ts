@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   approvalMachineGroups,
+  orchestratorPlacesApprovals,
+  peerMessagePlacementText,
   approvalTargetDescription,
   approvalTargetWarning,
   formatAttachmentSize,
@@ -238,5 +240,33 @@ describe('the approval picker says which machine an instance runs on', () => {
     expect(approvalTargetWarning('patch', server)).toBeNull()
     expect(approvalTargetWarning('request', media)).toBeNull()
     expect(approvalTargetWarning('patch', media)).toMatch(/media-server, which does not hold them/)
+  })
+})
+
+describe('the orchestrator places approved work', () => {
+  const settingsWith = (value: string) => ({
+    service: 'llm-bridge-server',
+    settings: [{ key: 'orchestrator.url', value, environment_variable: 'LLMBRIDGE_ORCHESTRATOR_URL', kind: 'behavior', value_type: 'text', description: '', source: 'stored' }],
+  }) as unknown as Parameters<typeof orchestratorPlacesApprovals>[0]
+
+  it('reads the server’s own orchestrator.url', () => {
+    expect(orchestratorPlacesApprovals(settingsWith('http://localhost:9999'))).toBe(true)
+    expect(orchestratorPlacesApprovals(settingsWith('  '))).toBe(false)
+    expect(orchestratorPlacesApprovals({ service: 'llm-bridge-server', settings: [] } as unknown as Parameters<typeof orchestratorPlacesApprovals>[0])).toBe(false)
+  })
+
+  const handed = {
+    id: 'peer_message_000002', connection_id: 'peer_connection_000001', direction: 'incoming', kind: 'patch',
+    body: { repo: 'kanban-store' }, state: 'approved', created_at: '', updated_at: '',
+    placement_session_id: 'br_1',
+  } as unknown as PeerMessage
+
+  it('says what an approved message waits on, and where it went', () => {
+    expect(peerMessagePlacementText({ ...handed, placement_session_id: undefined })).toBeNull()
+    expect(peerMessagePlacementText(handed)).toBe('Waiting for the orchestrator (br_1) to choose a machine.')
+    expect(peerMessagePlacementText({ ...handed, placed_by: 'session:br_1', placement_reason: 'a patch lands here' }))
+      .toBe('Placed by the orchestrator: a patch lands here')
+    expect(peerMessagePlacementText({ ...handed, placed_by: 'principal_000001', placement_reason: 'by hand' }))
+      .toBe('Placed by principal_000001: by hand')
   })
 })

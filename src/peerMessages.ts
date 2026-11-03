@@ -48,6 +48,7 @@ import {
   type Instance,
   type PeerMessage,
   type PeerMessageAttachment,
+  type ServiceSettings,
   type PeerMessageApproveRequest,
   type PeerMessageCreateRequest,
   type PeerMessageDirection,
@@ -273,7 +274,10 @@ const PEER_MESSAGE_REFUSALS: Readonly<Record<string, string>> = {
   self_update_not_configured: 'This server has no update command set (self_update.command on its settings), so it cannot take an update.',
   peer_message_not_found: 'This server has no such message.',
   unknown_instance: 'That instance is not one of this server’s.',
-  orchestrator_not_configured: 'This server has no orchestrator to hand the request to.',
+  orchestrator_refused: 'The orchestrator did not take it (it may be over its weekly limit), so the message waits here again.',
+  orchestrator_unreachable: 'The orchestrator did not answer, so the message waits here again.',
+  orchestrator_places_sessions: 'This server hands approved work to its orchestrator, which chooses the machine. Reload and approve again.',
+  patch_needs_this_server: 'A patch lands only on this server, where its files and repos are. Choose an instance on this server.',
   peer_attachments_not_fetched: 'Its files have not all arrived and been checked here yet. Approve it once they have; a file that failed can be fetched again.',
   attachment_too_large: 'A file is larger than this server takes (peer_messages.attachment_maximum_bytes on its settings).',
   empty_attachment: 'A file is empty.',
@@ -285,6 +289,26 @@ const PEER_MESSAGE_REFUSALS: Readonly<Record<string, string>> = {
  *  shows the server's own message). */
 export function peerMessageRefusalText(code: string): string | null {
   return PEER_MESSAGE_REFUSALS[code] ?? null
+}
+
+/** Whether a server hands approved requests and patches to its orchestrator,
+ *  which chooses the machine, read from the server's own `orchestrator.url`
+ *  setting. Then the approval card has no instance picker; a server with
+ *  none keeps the picker, since nothing else can start the session. */
+export function orchestratorPlacesApprovals(settings: ServiceSettings): boolean {
+  return (settings.settings.find(setting => setting.key === 'orchestrator.url')?.value.trim() ?? '') !== ''
+}
+
+/** What an approved request or patch handed to the orchestrator is waiting
+ *  on, or where it was placed and why, for the card; nothing for a message
+ *  that was never handed over. */
+export function peerMessagePlacementText(message: PeerMessage): string | null {
+  if (!message.placement_session_id) return null
+  if (!message.placed_by) {
+    return message.state === 'approved' ? `Waiting for the orchestrator (${message.placement_session_id}) to choose a machine.` : null
+  }
+  const by = message.placed_by === `session:${message.placement_session_id}` ? 'the orchestrator' : message.placed_by
+  return `Placed by ${by}: ${message.placement_reason ?? ''}`.trim()
 }
 
 /** One machine's instances in the approval picker. `machineID` is empty, and

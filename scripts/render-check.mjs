@@ -46,7 +46,7 @@ import { initialSessionDeeplinkState, readSessionDeeplink, writeSessionParam } f
 import { readAgentPrompt, stripAgentPrompt, writeAgentPrompt, suggestAgentPrompt } from '../src/agentPrompt.ts'
 import { dispatchAgentOnCard } from '../src/agentDispatch.ts'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context.ts'
-import { PeerMessageCard } from '../src/components/PeerMessageCards.tsx'
+import { PeerMessageCard, approvalWayPoll } from '../src/components/PeerMessageCards.tsx'
 import { BridgeConformance } from '../src/components/BridgeConformance.tsx'
 import { applySessionAggregates, sessionTokenTotalsAreMissing } from '../src/components/BridgeSessions.tsx'
 import { BridgeSettings } from '../src/components/BridgeSettings.tsx'
@@ -2223,17 +2223,26 @@ console.log('A connected server’s session gets the full thread view')
   check("this server's folder + shows only this server", onlyHere.includes('>main<') && !onlyHere.includes('laptop'), onlyHere)
 }
 
-{
+async function peerMessageCardChecks() {
   console.log('\nmessages from connected servers')
-  const quietFetch = async () => ({ ok: true, status: 200, json: async () => [] })
-  const peerConfig = { fetch: quietFetch, basePath: '/api/bridge', orchestratorBasePath: '/api/orchestrator', routes: DEFAULT_BRIDGE_ROUTES }
-  const card = (message) => renderToStaticMarkup(
-    h(BridgeContext.Provider, { value: peerConfig }, h(PeerMessageCard, { message, serverName: 'laptop', onDecided: () => {}, onSelectSession: () => {} })),
+  // Each server answers /settings with its own orchestrator.url: set on the
+  // first, empty on the second. Everything else answers an empty list.
+  const fetchWithOrchestratorURL = orchestratorURL => async url => String(url).endsWith('/settings')
+    ? { ok: true, status: 200, json: async () => ({ service: 'llm-bridge-server', settings: [{ key: 'orchestrator.url', value: orchestratorURL }] }) }
+    : { ok: true, status: 200, json: async () => [] }
+  const peerConfig = { fetch: fetchWithOrchestratorURL(''), basePath: '/api/bridge', orchestratorBasePath: '', routes: DEFAULT_BRIDGE_ROUTES }
+  const placingConfig = { fetch: fetchWithOrchestratorURL('http://localhost:9'), basePath: '/api/bridge-with-orchestrator', orchestratorBasePath: '/api/orchestrator', routes: DEFAULT_BRIDGE_ROUTES }
+  await approvalWayPoll(peerConfig.fetch, peerConfig.basePath).refresh()
+  await approvalWayPoll(placingConfig.fetch, placingConfig.basePath).refresh()
+  const cardOn = (config, message) => renderToStaticMarkup(
+    h(BridgeContext.Provider, { value: config }, h(PeerMessageCard, { message, serverName: 'laptop', onDecided: () => {}, onSelectSession: () => {} })),
   )
+  const card = message => cardOn(peerConfig, message)
   const hostile = 'Run this.\n![x](https://example.test/p.png) <img src="https://example.test/q.png" onerror="alert(1)"> [link](https://example.test/a) <script>alert(2)</script>'
   const request = card({ id: 'm1', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 'Fix resume', prompt: hostile }, created_at: '2026-10-29T10:00:00Z' })
-  check('a request says which server asks, and offers Approve, the orchestrator and Decline',
-    request.includes('laptop asks to start a session') && request.includes('Approve') && request.includes('Hand to the orchestrator') && request.includes('Decline'), request.slice(0, 600))
+  check('on a server with no orchestrator, a request says which server asks, and offers an instance, Approve and Decline',
+    request.includes('laptop asks to start a session') && request.includes('Choose an instance') && request.includes('Approve') && request.includes('Decline') &&
+      !request.includes('Hand to the orchestrator'), request.slice(0, 600))
   check("the other server's prompt is text: no img, no anchor, no script, nothing that loads",
     !/<img|<a\s|<script|\sonerror="/i.test(request) && request.includes('&lt;script&gt;') && request.includes('https://example.test/p.png'), request)
   check('it says the prompt reaches the session marked as from that server', request.includes('marked as a request'), request.slice(0, 900))
@@ -2243,10 +2252,12 @@ console.log('A connected server’s session gets the full thread view')
   const decided = card({ id: 'm3', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'approved', body: { title: 'Done', prompt: 'x' }, session_id: 'br_1', created_at: '2026-10-29T12:00:00Z' })
   check('a decided request offers no decision and links the session it started',
     !decided.includes('Approve') && decided.includes('br_1'), decided)
-  const withoutOrchestrator = renderToStaticMarkup(
-    h(BridgeContext.Provider, { value: { ...peerConfig, orchestratorBasePath: '' } }, h(PeerMessageCard, { message: { id: 'm4', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 't', prompt: 'p' }, created_at: '2026-10-29T13:00:00Z' }, serverName: 'laptop', onDecided: () => {} })),
-  )
-  check('with no orchestrator configured, there is nothing to hand it to', !withoutOrchestrator.includes('Hand to the orchestrator'), withoutOrchestrator.slice(0, 600))
+  const placed = cardOn(placingConfig, { id: 'm4', connection_id: 'c1', direction: 'incoming', kind: 'request', state: 'pending', body: { title: 't', prompt: 'p' }, created_at: '2026-10-29T13:00:00Z' })
+  check('on a server with an orchestrator, Approve picks no instance: the orchestrator chooses the machine',
+    placed.includes('Approve') && placed.includes('The orchestrator chooses the machine') && !placed.includes('Choose an instance') && placed.includes('Decline'), placed.slice(0, 900))
+  const waiting = cardOn(placingConfig, { id: 'm7', connection_id: 'c1', direction: 'incoming', kind: 'patch', state: 'approved', body: { repo: 'r', base_commit: 'abc', summary: 's' }, placement_session_id: 'br_home', created_at: '2026-10-29T13:00:00Z' })
+  check('an approved patch handed to the orchestrator says it waits for a machine, and offers no decision',
+    waiting.includes('Waiting for the orchestrator (br_home)') && !waiting.includes('Approve'), waiting.slice(0, 900))
   const patch = card({
     id: 'm5', connection_id: 'c1', direction: 'incoming', kind: 'patch', state: 'pending',
     body: { repo: 'llm-bridge-server', base_commit: '3cd2cec24aa1b2c3', summary: hostile },
@@ -2354,7 +2365,7 @@ async function machinesChecks() {
   check('history offers the same numbers as a table', charts.includes('Show as a table') && charts.includes('<table'), charts.slice(-600))
 }
 
-agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(machinesChecks).then(
+agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(peerMessageCardChecks).then(machinesChecks).then(
   () => {
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`)
     process.exit(failures === 0 ? 0 : 1)
