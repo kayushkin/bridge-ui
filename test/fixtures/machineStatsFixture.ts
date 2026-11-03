@@ -67,7 +67,7 @@ export function machineStatsFixtureOverview(now: Date): MachineStatsOverview[] {
   }
   const windows: MachineStats = {
     collected_at: minutesAgo(0.2), source: 'windows_from_wsl', hostname: 'DESKTOP-1',
-    operating_system: 'Microsoft Windows 11 Pro', booted_at: minutesAgo(26 * 60),
+    operating_system: 'Microsoft Windows 11 Pro', kernel_version: '10.0.26200', booted_at: minutesAgo(26 * 60),
     cpu_model: 'Intel(R) Core(TM) i7-12700K', cpu_logical_cores: 20, cpu_usage_percent: 41.5,
     memory_total_bytes: 32 * GIB, memory_used_bytes: 28.2 * GIB, memory_available_bytes: 3.8 * GIB,
     memory_committed_bytes: 47.4 * GIB, memory_commit_limit_bytes: 51.8 * GIB,

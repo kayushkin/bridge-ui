@@ -2306,46 +2306,67 @@ async function machinesChecks() {
   check("this server's machines each get a card", ['home-server', 'laptop', 'old-box', 'spare', 'workstation', 'storage'].every(name => page.includes(name)), page.slice(0, 2000))
 
   const overview = machineStatsFixtureOverview(now)
-  const card = name => renderToStaticMarkup(h(MachineCard, { overview: overview.find(entry => entry.machine.name === name), now, open: false, onToggle: () => {}, serverConfig: config }))
+  const render = (name, initiallyShowDetails) => renderToStaticMarkup(h(MachineCard, {
+    overview: overview.find(entry => entry.machine.name === name), now, open: false, onToggle: () => {}, serverConfig: config, initiallyShowDetails,
+  }))
+  const card = name => render(name, false)
+  const details = name => render(name, true)
+
   const server = card('home-server')
-  check('a card shows OS, uptime, reboot, CPU model and cores, load, memory and swap',
-    server.includes('Ubuntu 24.04.1 LTS') && server.includes('Up 9 d 3 h') && server.includes('last reboot') &&
-      server.includes('AMD EPYC') && server.includes('8 logical cores') && server.includes('load 1.52') &&
-      server.includes('18.2 GiB of 31.3 GiB') && server.includes('Swap'), server)
-  check('a drive at 86% is marked high, in words as well as color', server.includes('271 GiB of 315 GiB') && server.includes('>high<'), server)
+  check('a compact card shows OS and kernel on one line, uptime, a CPU dial, memory and each drive in a row',
+    server.includes('Ubuntu 24.04.1 LTS · 6.8.0-139-generic') && server.includes('up 9 d 3 h') &&
+      server.includes('aria-label="CPU in use"') && server.includes('18.2/31.3 GiB') &&
+      server.includes('/mnt/backup') && server.includes('380 GiB free'), server)
+  check('a compact card leaves the facts, the memory key and swap for Details, with the CPU model and host in tooltips',
+    !server.includes('>AMD EPYC') && !server.includes('>Last reboot') && !server.includes('>file cache') && !server.includes('>Swap<') &&
+      server.includes('title="AMD EPYC 7713 64-Core Processor · 8 logical cores"') && server.includes('title="host server-1 · last reboot') &&
+      server.includes('>Details<'), server)
+  check('a drive at 86% is marked high, in words as well as color', server.includes('>high<'), server)
+  const serverDetails = details('home-server')
+  check('Details shows host, last reboot, CPU model, cores, load, the memory key and swap',
+    serverDetails.includes('server-1') && serverDetails.includes('Last reboot') && serverDetails.includes('AMD EPYC') &&
+      serverDetails.includes('8 logical') && serverDetails.includes('1.52 · 1.10 · 0.94') &&
+      serverDetails.includes('file cache') && serverDetails.includes('>Swap<') && serverDetails.includes('614 MiB/4.00 GiB'), serverDetails)
+
   const windows = card('workstation')
-  check('a WSL runner says its numbers are the Windows host', windows.includes('Windows host, read from WSL'), windows)
-  check('a WSL runner shows Windows and WSL as two parts, each with its own OS and kernel',
-    windows.indexOf('>Windows</h5>') >= 0 && windows.indexOf('>Windows</h5>') < windows.indexOf('>WSL</h5>') &&
-      windows.includes('Microsoft Windows 11 Pro') && windows.includes('5.15.167.4-microsoft-standard-WSL2') &&
-      windows.includes('Virtual disk') && windows.includes('Commit charge'), windows)
-  check('a drive at 90% is marked high, and its free space is said in words',
-    windows.includes('>high<') && windows.includes('93.0 GiB free of 930 GiB'), windows)
-  check('a graphics card shows a dial, its memory and its temperature',
-    windows.includes('NVIDIA GeForce RTX 3080 Ti') && windows.includes('3.50 GiB of 12.0 GiB memory') && windows.includes('31 °C') &&
-      windows.includes('data-hue="gpu"'), windows)
-  check('a desktop gets the desktop picture hook', windows.includes('data-picture="desktop"'), windows)
-  check('parts that could not be read are listed', windows.includes('Could not read') && windows.includes('Win32_Battery timed out'), windows)
+  check('a WSL runner shows Windows and WSL as two parts, each headed by its OS and kernel',
+    windows.indexOf('Microsoft Windows 11 Pro · 10.0.26200') >= 0 &&
+      windows.indexOf('Microsoft Windows 11 Pro · 10.0.26200') < windows.indexOf('WSL · Ubuntu 24.04.1 LTS · 5.15.167.4-microsoft-standard-WSL2'), windows)
+  check('a high commit charge shows inline though its bar is in Details',
+    windows.includes('commit charge high') && !windows.includes('Commit charge<'), windows)
+  check('a drive at 90% is marked high, with its free space', windows.includes('>high<') && windows.includes('93.0 GiB free'), windows)
+  check('a graphics card gets a dial, and a desktop the desktop picture',
+    windows.includes('aria-label="GPU in use"') && windows.includes('data-picture="desktop"'), windows)
+  check('parts that could not be read are counted on the card', windows.includes('could not read one part'), windows)
+  const windowsDetails = details('workstation')
+  check('Details on a WSL runner lists the GPU in full, commit charge, the WSL virtual disk and what could not be read',
+    windowsDetails.includes('NVIDIA GeForce RTX 3080 Ti · 3.50/12.0 GiB memory (29%) · 31 °C') && windowsDetails.includes('Commit charge') &&
+      windowsDetails.includes('/dev/sdd') && windowsDetails.includes('Win32_Battery timed out'), windowsDetails)
+
   const stale = card('old-box')
   check('a drive at 97% is marked critical', stale.includes('>critical<'), stale)
+  check('a machine that stopped reporting is stale and says when, with no uptime carried on',
+    stale.includes('stale · 47m ago') && !stale.includes('up 8 d'), stale)
+  check('its uptime in Details is as of its last reading', details('old-box').includes('was up 8 d 7 h at its last reading'), details('old-box'))
+  check('a runner that is not connected says so', stale.includes('runner not connected'), stale)
+
   const busy = card('storage')
   check('a dial past 85% says high in words, and a server gets the server picture',
-    busy.includes('aria-valuetext="88%, high"') && busy.includes('data-picture="server"'), busy)
+    busy.includes('aria-valuetext="88%, high"') && busy.includes('>high<') && busy.includes('data-picture="server"'), busy)
+
   const laptop = card('laptop')
-  check('a battery shows charge, state, time left, health and cycles',
-    laptop.includes('InternalBattery-0') && laptop.includes('9.0%') && laptop.includes('on battery') && laptop.includes('7 h 15 min left') &&
-      laptop.includes('health 98%') && laptop.includes('30 cycles') && laptop.includes('>low<'), laptop)
-  check('a Mac shows compressed memory, file cache and its pressure',
-    laptop.includes('data-segment="compressed"') && laptop.includes('data-segment="cached"') && laptop.includes('Pressure') &&
-      laptop.includes('macOS could free 60% of memory') && laptop.includes('data-picture="laptop"'), laptop)
-  check('a GPU with no memory total says what it uses, with no bar or temperature', laptop.includes('1.00 GiB memory in use') && !laptop.includes('°C'), laptop)
-  check('no battery block on a machine without one', !server.includes('Battery'), server)
-  check('a machine that stopped reporting is stale and says when it last reported', stale.includes('stale · last reported 47m ago'), stale)
-  check('its uptime is as of its last reading, not carried on to now', stale.includes('Was up 8 d 7 h at its last reading'), stale)
-  check('a runner that is not connected says so', stale.includes('runner not connected'), stale)
+  check('a battery shows charge and time left in its row, and is low',
+    laptop.includes('9.0%') && laptop.includes('7 h 15 min left') && laptop.includes('>low<') && laptop.includes('data-picture="laptop"'), laptop)
+  const laptopDetails = details('laptop')
+  check('Details shows the battery health and cycles, compressed memory and the pressure',
+    laptopDetails.includes('health 98% of design capacity') && laptopDetails.includes('30 cycles') &&
+      laptopDetails.includes('compressed') && laptopDetails.includes('macOS could free 60% of memory') &&
+      laptopDetails.includes('Apple M2 · 1.00 GiB memory in use'), laptopDetails)
+  check('no battery row on a machine without one', !server.includes('Battery'), server)
+
   const never = card('spare')
-  check('a machine that never reported says so, with no picture of a kind it cannot know',
-    never.includes('never sent a reading') && never.includes('not reporting') && !never.includes('data-picture'), never)
+  check('a machine that never reported says so, with no picture of a kind it cannot know and no Details',
+    never.includes('never sent a reading') && never.includes('not reporting') && !never.includes('data-picture') && !never.includes('>Details<'), never)
 
   const laptopLatest = overview.find(entry => entry.machine.name === 'laptop').latest
   const history = machineStatsFixtureHistory('m_000002', laptopLatest, new Date(now.getTime() - 86400_000), now, 180)

@@ -36,6 +36,9 @@ import {
   largestTotal,
   machineKind,
   machineReadingParts,
+  machinePartTitle,
+  memoryAlerts,
+  formatBytesOfTotal,
   machineStatsFreshness,
   machineStatsSourceNote,
   machineUptimeSeconds,
@@ -66,10 +69,13 @@ import {
   Bar,
   BatteryGlyph,
   Dial,
+  LEVEL_WORD,
   LevelWord,
   MachinePicture,
   MemoryBar,
+  MemoryKey,
   ThinBarRow,
+  type MachineHue,
   type MachinePictureName,
 } from './MachineGauges'
 import styles from './BridgeMachines.module.css'
@@ -168,43 +174,69 @@ function ServerMachines({ server, config, now }: { server: MachineStatsServer; c
   )
 }
 
-export function MachineCard({ overview, now, open, onToggle, serverConfig }: {
+export function MachineCard({ overview, now, open, onToggle, serverConfig, initiallyShowDetails = false }: {
   overview: MachineStatsOverview
   now: Date
+  /** Whether its history is shown. */
   open: boolean
   onToggle: () => void
   serverConfig: BridgeConfig
+  initiallyShowDetails?: boolean
 }) {
   const { machine, latest } = overview
+  const [showDetails, setShowDetails] = useState(initiallyShowDetails)
   const freshness = machineStatsFreshness(latest, now)
+  const fresh = freshness === 'fresh'
   const runnerText = runnerConnectionText(overview)
   const historyID = `machine-history-${machine.id}`
+  const detailsID = `machine-details-${machine.id}`
   const kind = machineKind(latest)
-  const sourceNote = latest ? machineStatsSourceNote(latest.source) : ''
+  const parts = latest ? machineReadingParts(latest) : []
+  const uptime = latest && fresh ? machineUptimeSeconds(latest, now) : null
 
   return (
     <article
-      className={`${styles.card} ${freshness !== 'fresh' ? styles.cardStale : ''} ${open ? styles.cardOpen : ''} bc-machine-card`}
+      className={`${styles.card} ${!fresh ? styles.cardStale : ''} ${open ? styles.cardOpen : ''} ${parts.length > 1 ? styles.cardTwoParts : ''} bc-machine-card`}
       data-freshness={freshness}
       data-open={open ? 'true' : undefined}
     >
       <header className={styles.cardHeader}>
-        {kind ? <MachinePicture name={kind} /> : null}
-        <div className={styles.cardIdentity}>
-          <h4 className={`${styles.cardTitle} bc-machine-card-title`}>
-            {machine.emoji ? <span aria-hidden="true">{machine.emoji} </span> : null}{machine.name}
-          </h4>
-          {sourceNote ? <p className={styles.cardSubtitle}><span className={styles.chip}>{sourceNote}</span></p> : null}
-        </div>
-        <div className={styles.cardStatus}>
-          <FreshnessPill freshness={freshness} collectedAt={latest?.collected_at} />
-          {runnerText ? <span className={styles.chip}>{runnerText}</span> : null}
-          <button type="button" className={`${styles.button} bc-machine-button`} aria-expanded={open} aria-controls={historyID} onClick={onToggle}>
-            {open ? 'Hide history' : 'History'}
+        {kind ? <MachinePicture name={kind} size="small" /> : null}
+        <h4 className={`${styles.cardTitle} bc-machine-card-title`} title={runnerText ?? undefined}>
+          {machine.emoji ? <span aria-hidden="true">{machine.emoji} </span> : null}{machine.name}
+        </h4>
+        <FreshnessMark freshness={freshness} collectedAt={latest?.collected_at} runnerText={runnerText} />
+        {/* A stale machine may be down: its uptime at the last reading is in Details. */}
+        {uptime !== null && fresh ? <span className={styles.uptime} title={uptimeTitle(latest!)}>up {formatDurationSeconds(uptime)}</span> : null}
+        <span className={styles.cardButtons}>
+          {latest ? (
+            <button type="button" className={`${styles.linkButton} bc-machine-button`} aria-expanded={showDetails} aria-controls={detailsID} onClick={() => setShowDetails(shown => !shown)}>
+              {showDetails ? 'Less' : 'Details'}
+            </button>
+          ) : null}
+          <button type="button" className={`${styles.linkButton} bc-machine-button`} aria-expanded={open} aria-controls={historyID} onClick={onToggle} title={open ? 'Hide history' : 'History'}>
+            <HistoryIcon />
+            <span className={styles.visuallyHidden}>{open ? 'Hide history' : 'History'}</span>
           </button>
-        </div>
+        </span>
       </header>
-      {latest ? <MachineReading stats={latest} now={now} fresh={freshness === 'fresh'} /> : <p className={styles.muted}>This machine has never sent a reading.</p>}
+      {latest ? (
+        <>
+          {parts.length === 1 ? <p className={`${styles.osLine} bc-machine-os-line`} title={uptimeTitle(latest)}>{machinePartTitle(parts[0]) || 'operating system not reported'}</p> : null}
+          {parts.length === 1 && machineStatsSourceNote(latest.source) ? <span className={styles.sourceNote}>{machineStatsSourceNote(latest.source)}</span> : null}
+          <div className={`${styles.reading} ${parts.length > 1 ? styles.readingTwoParts : ''}`}>
+            {parts.map(part => <ReadingPart key={part.key} part={part} showTitle={parts.length > 1} />)}
+          </div>
+          {!showDetails && latest.collection_errors?.length ? (
+            <span className={styles.errorChip}>could not read {latest.collection_errors.length === 1 ? 'one part' : `${latest.collection_errors.length} parts`} · see Details</span>
+          ) : null}
+          {showDetails ? (
+            <div id={detailsID} className={`${styles.details} ${parts.length > 1 ? styles.readingTwoParts : ''} bc-machine-details`}>
+              {parts.map(part => <PartDetails key={part.key} part={part} showTitle={parts.length > 1} now={now} fresh={fresh} />)}
+            </div>
+          ) : null}
+        </>
+      ) : <p className={styles.muted}>This machine has never sent a reading.</p>}
       {open ? (
         <div id={historyID} className={styles.history}>
           <MachineHistory serverConfig={serverConfig} machineID={machine.id} />
@@ -214,256 +246,254 @@ export function MachineCard({ overview, now, open, onToggle, serverConfig }: {
   )
 }
 
-function FreshnessPill({ freshness, collectedAt }: { freshness: ReturnType<typeof machineStatsFreshness>; collectedAt: string | undefined }) {
-  if (freshness === 'never reported') return <span className={`${styles.pill} ${styles.pillStale} bc-machine-pill`} data-freshness={freshness}>not reporting</span>
-  const when = new Date(collectedAt!).toLocaleString()
-  if (freshness === 'stale') {
-    return <span className={`${styles.pill} ${styles.pillStale} bc-machine-pill`} data-freshness={freshness} title={when}>stale · last reported {timeAgo(collectedAt!)} ({when})</span>
-  }
-  return <span className={`${styles.pill} ${styles.pillFresh} bc-machine-pill`} data-freshness={freshness} title={when}>reporting</span>
-}
-
-/** One part of a card: a heading with the zine's picture for it, a headline
- *  value beside the heading, and the marks under it. */
-function MachineSection({ picture, title, headline, children }: {
-  picture: MachinePictureName
-  title: string
-  headline?: ReactNode
-  children: ReactNode
-}) {
+function HistoryIcon() {
   return (
-    <section className={`${styles.section} bc-machine-section`} data-section={picture} aria-label={title}>
-      <h5 className={`${styles.sectionHeading} bc-machine-section-heading`}>
-        <MachinePicture name={picture} />
-        <span className={`${styles.sectionTitle} bc-machine-section-title`}>{title}</span>
-        {headline ? <span className={styles.sectionHeadline}>{headline}</span> : null}
-      </h5>
-      {children}
-    </section>
+    <svg className={styles.icon} viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M1.5 13.5h13M2.5 10.5l3.5-4 3 2.5 4.5-6" />
+    </svg>
   )
 }
 
-export function MachineReading({ stats, now, fresh }: { stats: MachineStats; now: Date; fresh: boolean }) {
-  const parts = machineReadingParts(stats)
+function uptimeTitle(stats: MachineStats): string {
+  const words: string[] = []
+  if (stats.hostname) words.push(`host ${stats.hostname}`)
+  if (!isUnsetTime(stats.booted_at)) words.push(`last reboot ${new Date(stats.booted_at!).toLocaleString()}`)
+  return words.join(' · ')
+}
+
+/** A dot and a word: reporting, stale (and since when), or not reporting. */
+function FreshnessMark({ freshness, collectedAt, runnerText }: {
+  freshness: ReturnType<typeof machineStatsFreshness>
+  collectedAt: string | undefined
+  runnerText: string | null
+}) {
+  const when = collectedAt && freshness !== 'never reported' ? new Date(collectedAt).toLocaleString() : ''
+  const word = freshness === 'fresh' ? 'reporting'
+    : freshness === 'stale' ? `stale · ${timeAgo(collectedAt!)}`
+      : 'not reporting'
+  const title = [word === 'reporting' ? 'reporting' : '', when ? `last reading ${when}` : '', runnerText ?? ''].filter(Boolean).join(' · ')
   return (
-    <div className={styles.reading}>
-      <div className={`${styles.parts} ${parts.length > 1 ? styles.partsSideBySide : ''}`}>
-        {parts.map(part => <ReadingPart key={part.key} part={part} now={now} fresh={fresh} />)}
+    <span className={`${styles.freshness} bc-machine-freshness`} data-freshness={freshness} title={title || undefined}>
+      <span className={`${styles.freshnessDot} bc-machine-freshness-dot`} aria-hidden="true" />
+      {/* A machine that reports is the usual case: its green dot says so, and
+          the word is kept for screen readers only. */}
+      <span className={freshness === 'fresh' ? styles.visuallyHidden : undefined}>{word}</span>
+    </span>
+  )
+}
+
+/** One compact row: an icon, a short name, the mark and the number. Rows
+ *  share their parent's grid columns, so every bar in a part lines up. */
+function MeasureRow({ picture, name, nameTitle, mark, value }: {
+  picture: MachinePictureName
+  name: ReactNode
+  nameTitle?: string
+  mark: ReactNode
+  value: ReactNode
+}) {
+  return (
+    <div className={`${styles.row} bc-machine-row`} data-row={picture}>
+      <MachinePicture name={picture} size="small" />
+      <span className={styles.rowName} title={nameTitle}>{name}</span>
+      <span className={styles.rowMark}>{mark}</span>
+      <span className={styles.rowValue}>{value}</span>
+    </div>
+  )
+}
+
+/** A part of a card — a whole machine, or the Windows host or the WSL
+ *  machine of a runner in WSL — as compact rows. */
+function ReadingPart({ part, showTitle }: { part: MachineReadingPart; showTitle: boolean }) {
+  const { stats } = part
+  const gpus = stats.gpus ?? []
+  const breakdown = memoryBreakdown(stats)
+  const level = memoryLevel(stats)
+  const alerts = memoryAlerts(stats)
+  const cpu = stats.cpu_usage_percent
+
+  return (
+    <div className={`${styles.part} bc-machine-part`} data-part={part.key}>
+      {showTitle ? (
+        <h5 className={`${styles.partTitle} bc-machine-part-heading`} title={`${machinePartTitle(part)}${uptimeTitle(stats) ? `\n${uptimeTitle(stats)}` : ''}`}>
+          {machinePartTitle(part) || part.label}
+        </h5>
+      ) : null}
+      <div className={styles.dials}>
+        {cpu !== undefined && cpu !== null ? (
+          <SmallDial picture="cpu" name="CPU" percent={cpu} hue="cpu" title={[stats.cpu_model, stats.cpu_logical_cores ? `${stats.cpu_logical_cores} logical cores` : ''].filter(Boolean).join(' · ')} />
+        ) : <span className={styles.muted}>CPU not reported</span>}
+        {gpus.map((gpu, index) => gpu.usage_percent !== undefined && gpu.usage_percent !== null ? (
+          <SmallDial key={`${index}-${gpu.name}`} picture="gpu" name={gpus.length > 1 ? `GPU ${index + 1}` : 'GPU'} percent={gpu.usage_percent} hue="gpu" title={gpu.name} />
+        ) : null)}
+      </div>
+      <div className={styles.rows}>
+        {breakdown ? (
+          <MeasureRow
+            picture="memory"
+            name="RAM"
+            mark={<MemoryBar breakdown={breakdown} level={level} />}
+            value={(
+              <>
+                <span>{formatBytesOfTotal(breakdown.usedBytes, breakdown.totalBytes)}</span>
+                <span className={styles.percent}>{formatPercent(breakdown.usedPercent)}</span>
+                <LevelWord level={level} />
+              </>
+            )}
+          />
+        ) : null}
+        {alerts.length ? (
+          <span className={styles.rowAlerts}>
+            {alerts.map(alert => <LevelWord key={alert.name} level={alert.level} word={`${alert.name} ${LEVEL_WORD[alert.level]}`} />)}
+          </span>
+        ) : null}
+        {(stats.drives ?? []).map(drive => {
+          const percent = percentOf(drive.used_bytes, drive.total_bytes)
+          return (
+            <MeasureRow
+              key={drive.mount_point}
+              picture="drive"
+              name={<span className={`${styles.mountPoint} bc-machine-mount-point`}>{drive.mount_point}</span>}
+              nameTitle={[drive.label, part.key === 'wsl' ? 'virtual disk' : '', drive.device].filter(Boolean).join(' · ') || undefined}
+              mark={<Bar percent={percent ?? 0} label={`${drive.mount_point} in use`} hue="drive" thickness="thin" />}
+              value={(
+                <>
+                  <span className={styles.percent}>{formatPercent(percent)}</span>
+                  <span className={styles.free}>· {formatBytes(drive.free_bytes)} free</span>
+                  <LevelWord level={usageLevel(percent)} />
+                </>
+              )}
+            />
+          )
+        })}
+        {(stats.batteries ?? []).map(battery => {
+          const time = batteryTimeText(battery)
+          const batteryLevelNow = batteryLevel(battery)
+          return (
+            <MeasureRow
+              key={battery.name}
+              picture="battery"
+              name="Battery"
+              nameTitle={battery.name}
+              mark={<BatteryGlyph battery={battery} />}
+              value={(
+                <>
+                  <span className={styles.percent}>{formatPercent(battery.charge_percent)}</span>
+                  <span className={styles.free}>· {time ?? batteryStateText(battery.state)}</span>
+                  <LevelWord level={batteryLevelNow} word={batteryLevelNow === 'danger' ? 'nearly empty' : 'low'} />
+                </>
+              )}
+            />
+          )
+        })}
       </div>
     </div>
   )
 }
 
-/** One part of a card — a whole machine, or the Windows host or the WSL
- *  machine of a runner in WSL — with its own OS, kernel and uptime lines. */
-function ReadingPart({ part, now, fresh }: { part: MachineReadingPart; now: Date; fresh: boolean }) {
+/** A dial about 44px across with its name and number beside it. */
+function SmallDial({ picture, name, percent, hue, title }: { picture: MachinePictureName; name: string; percent: number; hue: MachineHue; title: string }) {
+  const level = usageLevel(percent)
+  return (
+    <div className={`${styles.smallDial} bc-machine-small-dial`} title={title || undefined}>
+      <MachinePicture name={picture} size="small" />
+      <Dial percent={percent} label={`${name} in use`} hue={hue} size="small" />
+      <span className={styles.smallDialText}>
+        <span className={styles.smallDialName}>{name}</span>
+        <span className={`${styles.smallDialNumber} bc-machine-dial-number`}>{formatPercent(percent)}</span>
+      </span>
+      <LevelWord level={level} />
+    </div>
+  )
+}
+
+/** Everything the compact rows leave out, for one part: the facts, the
+ *  memory key, swap, pressure and commit charge, each GPU and drive in full,
+ *  the battery's health, and what could not be read. */
+function PartDetails({ part, showTitle, now, fresh }: { part: MachineReadingPart; showTitle: boolean; now: Date; fresh: boolean }) {
   const { stats } = part
   // A machine that stopped reporting may be down, so its uptime is given as
   // of its last reading rather than carried on to now.
   const uptime = machineUptimeSeconds(stats, fresh ? now : new Date(stats.collected_at))
-  const gpus = stats.gpus ?? []
-  // Each part lists what it could not read itself, so a Windows error does
-  // not read as the WSL machine's.
-  const errors = stats.collection_errors ?? []
-
-  return (
-    <div className={`${styles.part} bc-machine-part`} data-part={part.key}>
-      {part.label ? <h5 className={`${styles.partHeading} bc-machine-part-heading`}>{part.label}</h5> : null}
-      <dl className={`${styles.facts} bc-machine-facts`}>
-        {stats.operating_system ? <><dt>OS</dt><dd>{stats.operating_system}</dd></> : null}
-        {stats.kernel_version ? <><dt>Kernel</dt><dd>{stats.kernel_version}</dd></> : null}
-        {stats.hostname ? <><dt>Host</dt><dd>{stats.hostname}</dd></> : null}
-        <dt>Uptime</dt>
-        <dd>
-          {uptime === null
-            ? <span className={styles.muted}>not reported</span>
-            : <span>{fresh ? 'Up' : 'Was up'} {formatDurationSeconds(uptime)}{fresh ? '' : ' at its last reading'}</span>}
-          {!isUnsetTime(stats.booted_at) ? <span className={styles.muted}> · last reboot {new Date(stats.booted_at!).toLocaleString()}</span> : null}
-        </dd>
-      </dl>
-
-      <div className={styles.dialRow}>
-        <CPUSection stats={stats} />
-        {gpus.map((gpu, index) => <GPUSection key={`${index}-${gpu.name}`} gpu={gpu} numbered={gpus.length > 1 ? index + 1 : null} />)}
-      </div>
-
-      <MemorySection stats={stats} />
-      {stats.drives?.length ? <DrivesSection drives={stats.drives} virtualDisk={part.key === 'wsl'} /> : null}
-      {stats.batteries?.length ? <BatterySection batteries={stats.batteries} /> : null}
-
-      {errors.length ? (
-        <div className={styles.collectionErrors}>
-          <span>Could not read:</span>
-          <ul>{errors.map(text => <li key={text}>{text}</li>)}</ul>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function CPUSection({ stats }: { stats: MachineStats }) {
-  const percent = stats.cpu_usage_percent
-  return (
-    <MachineSection picture="cpu" title="CPU">
-      <div className={styles.dialBody}>
-        {percent !== undefined && percent !== null
-          ? <Dial percent={percent} label="CPU in use" hue="cpu" />
-          : <span className={styles.muted}>use not reported</span>}
-        <div className={styles.dialDetail}>
-          {stats.cpu_model ? <span className={styles.model}>{stats.cpu_model}</span> : null}
-          {stats.cpu_logical_cores ? <span>{stats.cpu_logical_cores} logical cores</span> : null}
-          {stats.load_average?.length ? <span>load {stats.load_average.map(load => load.toFixed(2)).join(' · ')}</span> : null}
-        </div>
-      </div>
-    </MachineSection>
-  )
-}
-
-function GPUSection({ gpu, numbered }: { gpu: MachineGPU; numbered: number | null }) {
-  const memoryPercent = gpuMemoryPercent(gpu)
-  return (
-    <MachineSection picture="gpu" title={numbered === null ? 'GPU' : `GPU ${numbered}`}>
-      <div className={styles.dialBody}>
-        {gpu.usage_percent !== undefined && gpu.usage_percent !== null
-          ? <Dial percent={gpu.usage_percent} label={`${gpu.name} in use`} hue="gpu" />
-          : <span className={styles.muted}>use not reported</span>}
-        <div className={styles.dialDetail}>
-          <span className={styles.model}>{gpu.name}</span>
-          {memoryPercent !== null ? (
-            <>
-              <span>{formatBytes(gpu.memory_used_bytes!)} of {formatBytes(gpu.memory_total_bytes!)} memory</span>
-              <Bar percent={memoryPercent} label={`${gpu.name} memory in use`} hue="gpu" thickness="thin" />
-            </>
-          ) : gpu.memory_used_bytes !== undefined && gpu.memory_used_bytes !== null
-            ? <span>{formatBytes(gpu.memory_used_bytes)} memory in use</span>
-            : null}
-          {gpu.temperature_celsius !== undefined && gpu.temperature_celsius !== null ? <span>{Math.round(gpu.temperature_celsius)} °C</span> : null}
-        </div>
-      </div>
-    </MachineSection>
-  )
-}
-
-function MemorySection({ stats }: { stats: MachineStats }) {
   const breakdown = memoryBreakdown(stats)
   const level = memoryLevel(stats)
   const pressure = memoryPressurePercent(stats)
   const commit = commitCharge(stats)
   const swapPercent = percentOf(stats.swap_used_bytes ?? 0, stats.swap_total_bytes ?? 0)
-  if (!breakdown && !stats.swap_total_bytes) return null
 
   return (
-    <MachineSection
-      picture="memory"
-      title="Memory"
-      headline={breakdown ? (
-        <>
-          <span className={styles.value}>{formatBytes(breakdown.usedBytes)} of {formatBytes(breakdown.totalBytes)}</span>
-          <span className={styles.muted}>{formatPercent(breakdown.usedPercent)}</span>
-          {/* On a Mac the pressure row carries the level; here it would repeat it. */}
-          {pressure === null ? <LevelWord level={level} /> : null}
-        </>
-      ) : null}
-    >
-      {breakdown ? <MemoryBar breakdown={breakdown} level={level} /> : null}
+    <div className={styles.part}>
+      {showTitle ? <h5 className={`${styles.partTitle} bc-machine-part-heading`}>{part.label}</h5> : null}
+      <dl className={`${styles.facts} bc-machine-facts`}>
+        {stats.operating_system ? <><dt>OS</dt><dd>{stats.operating_system}</dd></> : null}
+        {stats.kernel_version ? <><dt>Kernel</dt><dd>{stats.kernel_version}</dd></> : null}
+        {stats.hostname ? <><dt>Host</dt><dd>{stats.hostname}</dd></> : null}
+        {uptime !== null ? <><dt>Uptime</dt><dd>{fresh ? 'up' : 'was up'} {formatDurationSeconds(uptime)}{fresh ? '' : ' at its last reading'}</dd></> : null}
+        {!isUnsetTime(stats.booted_at) ? <><dt>Last reboot</dt><dd>{new Date(stats.booted_at!).toLocaleString()}</dd></> : null}
+        {stats.cpu_model ? <><dt>CPU</dt><dd>{stats.cpu_model}</dd></> : null}
+        {stats.cpu_logical_cores ? <><dt>Cores</dt><dd>{stats.cpu_logical_cores} logical</dd></> : null}
+        {stats.load_average?.length ? <><dt>Load</dt><dd>{stats.load_average.map(load => load.toFixed(2)).join(' · ')}</dd></> : null}
+        {(stats.gpus ?? []).map((gpu, index) => (
+          <GPUFacts key={`${index}-${gpu.name}`} gpu={gpu} numbered={(stats.gpus ?? []).length > 1 ? index + 1 : null} />
+        ))}
+        {(stats.drives ?? []).map(drive => (
+          <DriveFacts key={drive.mount_point} drive={drive} />
+        ))}
+        {(stats.batteries ?? []).map(battery => (
+          <BatteryFacts key={battery.name} battery={battery} />
+        ))}
+      </dl>
+      {breakdown ? <MemoryKey breakdown={breakdown} level={level} /> : null}
       <div className={styles.thinRows}>
         {pressure !== null ? (
-          <ThinBarRow
-            name="Pressure"
-            percent={pressure}
-            valueText={formatPercent(pressure)}
-            hue="memory"
-            note={`macOS could free ${formatPercent(stats.memory_free_under_pressure_percent)} of memory`}
-          />
+          <ThinBarRow name="Pressure" percent={pressure} valueText={formatPercent(pressure)} hue="memory"
+            note={`macOS could free ${formatPercent(stats.memory_free_under_pressure_percent)} of memory`} />
         ) : null}
         {commit ? (
-          <ThinBarRow
-            name="Commit charge"
-            percent={commit.percent}
-            valueText={`${formatBytes(commit.committedBytes)} of ${formatBytes(commit.limitBytes)}`}
-            hue="memory"
-            note="memory promised to programs, against RAM and the page file"
-          />
+          <ThinBarRow name="Commit charge" percent={commit.percent} valueText={formatBytesOfTotal(commit.committedBytes, commit.limitBytes)} hue="memory"
+            note="memory promised to programs, against RAM and the page file" />
         ) : null}
         {stats.swap_total_bytes ? (
-          <ThinBarRow
-            name="Swap"
-            percent={swapPercent ?? 0}
-            valueText={`${formatBytes(stats.swap_used_bytes ?? 0)} of ${formatBytes(stats.swap_total_bytes)}`}
-            hue="swap"
-          />
+          <ThinBarRow name="Swap" percent={swapPercent ?? 0} valueText={formatBytesOfTotal(stats.swap_used_bytes ?? 0, stats.swap_total_bytes)} hue="swap" />
         ) : null}
       </div>
-    </MachineSection>
-  )
-}
-
-function DrivesSection({ drives, virtualDisk }: { drives: readonly MachineDrive[]; virtualDisk: boolean }) {
-  const title = virtualDisk ? (drives.length === 1 ? 'Virtual disk' : 'Virtual disks') : (drives.length === 1 ? 'Drive' : 'Drives')
-  return (
-    <MachineSection picture="drive" title={title}>
-      <div className={styles.drives}>
-        {drives.map(drive => <DriveRow key={drive.mount_point} drive={drive} />)}
-      </div>
-    </MachineSection>
-  )
-}
-
-function DriveRow({ drive }: { drive: MachineDrive }) {
-  const percent = percentOf(drive.used_bytes, drive.total_bytes)
-  return (
-    <div className={styles.drive}>
-      <div className={styles.driveHead}>
-        <span className={styles.driveName} title={drive.device}>
-          <span className={`${styles.mountPoint} bc-machine-mount-point`}>{drive.mount_point}</span>
-          {drive.label ? <span className={styles.driveLabel}>{drive.label}</span> : null}
-        </span>
-        <span className={styles.driveFree}>
-          <LevelWord level={usageLevel(percent)} />
-          {driveFreeText(drive)}
-        </span>
-      </div>
-      <div className={styles.driveBarRow}>
-        <Bar percent={percent ?? 0} label={`${drive.mount_point} in use`} hue="drive" thickness="thick" />
-        <span className={`${styles.driveUsed} ${styles.value}`}>{formatPercent(percent)}</span>
-      </div>
-      <div className={styles.rowDetail}>
-        <span>{formatBytes(drive.used_bytes)} of {formatBytes(drive.total_bytes)} used</span>
-        {drive.filesystem_type ? <span>{drive.filesystem_type}</span> : null}
-        {drive.device ? <span>{drive.device}</span> : null}
-      </div>
+      {stats.collection_errors?.length ? (
+        <div className={styles.collectionErrors}>
+          <span>Could not read:</span>
+          <ul>{stats.collection_errors.map(text => <li key={text}>{text}</li>)}</ul>
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function BatterySection({ batteries }: { batteries: readonly MachineBattery[] }) {
-  return (
-    <MachineSection picture="battery" title={batteries.length === 1 ? 'Battery' : 'Batteries'}>
-      {batteries.map(battery => <BatteryRow key={battery.name} battery={battery} />)}
-    </MachineSection>
-  )
+function GPUFacts({ gpu, numbered }: { gpu: MachineGPU; numbered: number | null }) {
+  const memoryPercent = gpuMemoryPercent(gpu)
+  const words = [gpu.name]
+  if (memoryPercent !== null) words.push(`${formatBytesOfTotal(gpu.memory_used_bytes!, gpu.memory_total_bytes!)} memory (${formatPercent(memoryPercent)})`)
+  else if (gpu.memory_used_bytes !== undefined && gpu.memory_used_bytes !== null) words.push(`${formatBytes(gpu.memory_used_bytes)} memory in use`)
+  if (gpu.temperature_celsius !== undefined && gpu.temperature_celsius !== null) words.push(`${Math.round(gpu.temperature_celsius)} °C`)
+  return <><dt>{numbered === null ? 'GPU' : `GPU ${numbered}`}</dt><dd>{words.join(' · ')}</dd></>
 }
 
-function BatteryRow({ battery }: { battery: MachineBattery }) {
-  const time = batteryTimeText(battery)
-  return (
-    <div className={styles.batteryRow}>
-      <BatteryGlyph battery={battery} />
-      <div className={styles.batteryText}>
-        <span className={styles.batteryCharge}>
-          <span className={styles.batteryPercent}>{formatPercent(battery.charge_percent)}</span>
-          <span>{batteryStateText(battery.state)}</span>
-          {time ? <span className={styles.value}>{time}</span> : null}
-          <LevelWord level={batteryLevel(battery)} word={batteryLevel(battery) === 'danger' ? 'nearly empty' : 'low'} />
-        </span>
-        <span className={styles.rowDetail}>
-          <span title="The name the operating system gives this battery">{battery.name}</span>
-          {battery.health_percent !== undefined ? <span>health {formatPercent(battery.health_percent)} of design capacity</span> : null}
-          {battery.cycle_count !== undefined ? <span>{battery.cycle_count} cycles</span> : null}
-        </span>
-      </div>
-    </div>
-  )
+function DriveFacts({ drive }: { drive: MachineDrive }) {
+  const words = [
+    drive.label ?? '',
+    `${formatBytesOfTotal(drive.used_bytes, drive.total_bytes)} used`,
+    driveFreeText(drive),
+    drive.filesystem_type ?? '',
+    drive.device ?? '',
+  ].filter(Boolean)
+  return <><dt className={styles.mountPoint}>{drive.mount_point}</dt><dd>{words.join(' · ')}</dd></>
+}
+
+function BatteryFacts({ battery }: { battery: MachineBattery }) {
+  const words = [
+    batteryStateText(battery.state),
+    batteryTimeText(battery) ?? '',
+    battery.health_percent !== undefined ? `health ${formatPercent(battery.health_percent)} of design capacity` : '',
+    battery.cycle_count !== undefined ? `${battery.cycle_count} cycles` : '',
+  ].filter(Boolean)
+  return <><dt>{battery.name}</dt><dd>{words.join(' · ')}</dd></>
 }
 
 function MachineHistory({ serverConfig, machineID }: { serverConfig: BridgeConfig; machineID: string }) {

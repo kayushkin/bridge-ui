@@ -46,8 +46,10 @@ export type MachinePictureName =
   | 'server' | 'desktop' | 'laptop'
   | 'crab-waiting'
 
-export function MachinePicture({ name }: { name: MachinePictureName }) {
-  return <span className={`${styles.picture} bc-machine-picture`} data-picture={name} aria-hidden="true" />
+/** `small` is the compact card's size: 32px for a machine's kind, 20px for
+ *  a measure's icon. */
+export function MachinePicture({ name, size }: { name: MachinePictureName; size?: 'small' }) {
+  return <span className={`${styles.picture} bc-machine-picture`} data-picture={name} data-size={size} aria-hidden="true" />
 }
 
 // ── The dial ────────────────────────────────────────────────────────────────
@@ -80,7 +82,13 @@ export function dialArcPath(fromPercent: number, toPercent: number): string {
 /** A round gauge: a track whose last stretch is tinted where the warning and
  *  danger thresholds begin, the share in the measure's hue over it, and the
  *  number in the middle. */
-export function Dial({ percent, label, hue }: { percent: number; label: string; hue: MachineHue }) {
+export function Dial({ percent, label, hue, size }: {
+  percent: number
+  label: string
+  hue: MachineHue
+  /** `small` draws the dial alone, about 44px, for the number to sit beside it. */
+  size?: 'small'
+}) {
   const level = usageLevel(percent)
   const track = dialArcPath(0, 100)
   const value = dialArcPath(0, percent)
@@ -88,6 +96,7 @@ export function Dial({ percent, label, hue }: { percent: number; label: string; 
     <div
       className={`${styles.dial} bc-machine-dial`}
       data-hue={hue}
+      data-size={size}
       data-level={level}
       role="meter"
       aria-label={label}
@@ -105,10 +114,12 @@ export function Dial({ percent, label, hue }: { percent: number; label: string; 
         <path className={styles.dialZone} data-arc="danger-zone" d={dialArcPath(USAGE_DANGER_PERCENT, 100)} />
         {value ? <path className={styles.dialValue} data-arc="value" d={value} /> : null}
       </svg>
-      <div className={styles.dialReadout} aria-hidden="true">
-        <span className={`${styles.dialNumber} bc-machine-dial-number`}>{formatPercent(percent)}</span>
-        <LevelWord level={level} />
-      </div>
+      {size === 'small' ? null : (
+        <div className={styles.dialReadout} aria-hidden="true">
+          <span className={`${styles.dialNumber} bc-machine-dial-number`}>{formatPercent(percent)}</span>
+          <LevelWord level={level} />
+        </div>
+      )}
     </div>
   )
 }
@@ -177,41 +188,48 @@ const MEMORY_SEGMENT_WORDS: Record<MemorySegmentKind, string> = {
   free: 'free',
 }
 
+function segmentLevel(kind: MemorySegmentKind, level: UsageLevel): UsageLevel {
+  return kind === 'used' || kind === 'compressed' ? level : 'normal'
+}
+
 /** Memory as one bar split into what programs hold, the compressor's share,
- *  file cache and free, with a key under it that names each part and its size. */
+ *  file cache and free; `MemoryKey` names each part and its size. */
 export function MemoryBar({ breakdown, level }: { breakdown: MemoryBreakdown; level: UsageLevel }) {
   const usedPercent = breakdown.usedPercent
   return (
-    <div className={styles.memory}>
-      <div
-        className={`${styles.memoryBar} bc-machine-memory-bar`}
-        role="meter"
-        aria-label="Memory in use"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(usedPercent)}
-        aria-valuetext={`${formatPercent(usedPercent)} in use${LEVEL_WORD[level] ? `, ${LEVEL_WORD[level]}` : ''}`}
-      >
-        {breakdown.segments.map(segment => (
-          <div
-            key={segment.kind}
-            className={styles.memorySegment}
-            data-segment={segment.kind}
-            data-level={segment.kind === 'used' || segment.kind === 'compressed' ? level : 'normal'}
-            style={{ flexGrow: segment.percent }}
-            title={`${MEMORY_SEGMENT_WORDS[segment.kind]}: ${formatBytes(segment.bytes)}`}
-          />
-        ))}
-      </div>
-      <ul className={styles.memoryKey}>
-        {breakdown.segments.map(segment => (
-          <li key={segment.kind}>
-            <span className={styles.memorySwatch} data-segment={segment.kind} data-level={segment.kind === 'used' || segment.kind === 'compressed' ? level : 'normal'} aria-hidden="true" />
-            {MEMORY_SEGMENT_WORDS[segment.kind]} <strong>{formatBytes(segment.bytes)}</strong>
-          </li>
-        ))}
-      </ul>
+    <div
+      className={`${styles.memoryBar} bc-machine-memory-bar`}
+      role="meter"
+      aria-label="Memory in use"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(usedPercent)}
+      aria-valuetext={`${formatPercent(usedPercent)} in use${LEVEL_WORD[level] ? `, ${LEVEL_WORD[level]}` : ''}`}
+    >
+      {breakdown.segments.map(segment => (
+        <div
+          key={segment.kind}
+          className={styles.memorySegment}
+          data-segment={segment.kind}
+          data-level={segmentLevel(segment.kind, level)}
+          style={{ flexGrow: segment.percent }}
+          title={`${MEMORY_SEGMENT_WORDS[segment.kind]}: ${formatBytes(segment.bytes)}`}
+        />
+      ))}
     </div>
+  )
+}
+
+export function MemoryKey({ breakdown, level }: { breakdown: MemoryBreakdown; level: UsageLevel }) {
+  return (
+    <ul className={styles.memoryKey}>
+      {breakdown.segments.map(segment => (
+        <li key={segment.kind}>
+          <span className={styles.memorySwatch} data-segment={segment.kind} data-level={segmentLevel(segment.kind, level)} aria-hidden="true" />
+          {MEMORY_SEGMENT_WORDS[segment.kind]} <strong>{formatBytes(segment.bytes)}</strong>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -235,7 +253,7 @@ export function BatteryGlyph({ battery }: { battery: Pick<MachineBattery, 'charg
       aria-valuetext={`${formatPercent(battery.charge_percent)}, ${batteryStateText(battery.state)}`}
     >
       <svg className={styles.batterySvg} viewBox="0 0 68 32" aria-hidden="true">
-        <rect className={styles.batteryBody} data-part="body" x={1.5} y={1.5} width={58} height={29} rx={6} />
+        <rect className={styles.batteryBody} data-part="body" x={2} y={2} width={57} height={28} rx={6} />
         <rect className={styles.batteryNub} data-part="nub" x={61} y={10} width={5.5} height={12} rx={2} />
         {share > 0 ? <rect className={styles.batteryFill} data-part="fill" x={5} y={5} width={51 * share} height={22} rx={3} /> : null}
         {charging ? <path className={styles.batteryBolt} data-part="bolt" d="M33 3 L21 18 H29 L26 29 L39 13 H31 Z" /> : null}

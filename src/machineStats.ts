@@ -225,6 +225,19 @@ export function machineReadingParts(stats: MachineStats): MachineReadingPart[] {
   return parts
 }
 
+/** The short line a part is headed by: its OS and kernel, with the part's
+ *  name first when the OS name does not already say it ("WSL · Ubuntu 24.04.1
+ *  LTS · 5.15.167.4-microsoft-standard-WSL2", "Microsoft Windows 11 Pro ·
+ *  10.0.26200"). */
+export function machinePartTitle(part: Pick<MachineReadingPart, 'label' | 'stats'>): string {
+  const os = part.stats.operating_system ?? ''
+  const words: string[] = []
+  if (part.label && !os.toLowerCase().includes(part.label.toLowerCase())) words.push(part.label)
+  if (os) words.push(os)
+  if (part.stats.kernel_version) words.push(part.stats.kernel_version)
+  return words.join(' · ')
+}
+
 // ── Memory ──────────────────────────────────────────────────────────────────
 
 /** One part of the memory bar, in the order it is drawn: what programs hold
@@ -314,6 +327,43 @@ export function commitCharge(stats: Pick<MachineStats, 'memory_committed_bytes' 
     limitBytes: stats.memory_commit_limit_bytes,
     percent: (stats.memory_committed_bytes / stats.memory_commit_limit_bytes) * 100,
   }
+}
+
+/** What sits behind the memory bar on a card's details — swap, macOS
+ *  pressure, Windows commit charge — that has reached a threshold, so the
+ *  compact row can say so without showing the bars. */
+export interface MemoryAlert {
+  name: 'swap' | 'pressure' | 'commit charge'
+  level: UsageLevel
+}
+
+export function memoryAlerts(stats: Pick<MachineStats,
+  'swap_total_bytes' | 'swap_used_bytes' | 'memory_free_under_pressure_percent' | 'memory_committed_bytes' | 'memory_commit_limit_bytes'>): MemoryAlert[] {
+  const alerts: MemoryAlert[] = []
+  const swap = percentOf(stats.swap_used_bytes ?? 0, stats.swap_total_bytes ?? 0)
+  const pressure = memoryPressurePercent(stats)
+  const commit = commitCharge(stats)
+  const candidates: [MemoryAlert['name'], number | null][] = [
+    ['pressure', pressure],
+    ['commit charge', commit ? commit.percent : null],
+    ['swap', swap],
+  ]
+  for (const [name, percent] of candidates) {
+    const level = usageLevel(percent)
+    if (level !== 'normal') alerts.push({ name, level })
+  }
+  return alerts
+}
+
+/** A used size against its total, the unit said once when both share it:
+ *  "28.2/32.0 GiB", "614 MiB/4.00 GiB". */
+export function formatBytesOfTotal(used: number, total: number): string {
+  const usedText = formatBytes(used)
+  const totalText = formatBytes(total)
+  const usedUnit = usedText.split(' ')[1]
+  const totalUnit = totalText.split(' ')[1]
+  if (usedUnit && usedUnit === totalUnit) return `${usedText.split(' ')[0]}/${totalText}`
+  return `${usedText}/${totalText}`
 }
 
 // ── Drives and graphics ─────────────────────────────────────────────────────

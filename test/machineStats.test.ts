@@ -16,6 +16,9 @@ import {
   historyHasWSL,
   machineKind,
   machineReadingParts,
+  machinePartTitle,
+  memoryAlerts,
+  formatBytesOfTotal,
   wslCPUSeries,
   wslMemoryUsedSeries,
   memoryBreakdown,
@@ -349,5 +352,30 @@ describe('Windows and WSL', () => {
     expect(historyHasWSL([points[0]])).toBe(false)
     expect(wslCPUSeries(points).map(p => p.value)).toEqual([null, 3])
     expect(wslMemoryUsedSeries(points).map(p => p.value)).toEqual([null, 1315 * 1024 ** 2])
+  })
+})
+
+describe('compact card words', () => {
+  it('heads a part by OS and kernel, naming the part only when the OS does not', () => {
+    expect(machinePartTitle({ label: 'WSL', stats: { collected_at: '', source: 'linux', operating_system: 'Ubuntu 24.04.1 LTS', kernel_version: '5.15.167.4-microsoft-standard-WSL2' } }))
+      .toBe('WSL · Ubuntu 24.04.1 LTS · 5.15.167.4-microsoft-standard-WSL2')
+    expect(machinePartTitle({ label: 'Windows', stats: { collected_at: '', source: 'windows_from_wsl', operating_system: 'Microsoft Windows 11 Pro', kernel_version: '10.0.26200' } }))
+      .toBe('Microsoft Windows 11 Pro · 10.0.26200')
+    expect(machinePartTitle({ label: null, stats: { collected_at: '', source: 'linux' } })).toBe('')
+  })
+
+  it('says the unit once when used and total share it', () => {
+    expect(formatBytesOfTotal(28.2 * GIB, 32 * GIB)).toBe('28.2/32.0 GiB')
+    expect(formatBytesOfTotal(614 * 1024 ** 2, 4 * GIB)).toBe('614 MiB/4.00 GiB')
+  })
+
+  it('raises swap, pressure and commit charge only once they pass a threshold', () => {
+    expect(memoryAlerts({ swap_total_bytes: 4 * GIB, swap_used_bytes: 1 * GIB })).toEqual([])
+    expect(memoryAlerts({
+      swap_total_bytes: 4 * GIB, swap_used_bytes: 3.9 * GIB,
+      memory_committed_bytes: 47.4 * GIB, memory_commit_limit_bytes: 51.8 * GIB,
+      memory_free_under_pressure_percent: 60,
+    })).toEqual([{ name: 'commit charge', level: 'warning' }, { name: 'swap', level: 'danger' }])
+    expect(memoryAlerts({ memory_free_under_pressure_percent: 4 })).toEqual([{ name: 'pressure', level: 'danger' }])
   })
 })
