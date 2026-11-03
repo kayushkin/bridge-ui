@@ -150,6 +150,7 @@ export default function SignalsPage({
 
         <ConnectedServersPeerMessages
           drawn
+          countInHeading
           onWaitingCount={reportConnectedServerWaiting}
           onSelectSession={onSelectConnectedServerSession}
         />

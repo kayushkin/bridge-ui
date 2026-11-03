@@ -243,6 +243,7 @@ export function OrchestratorRow({ homeSessionId, homeSessionError, onOpenHomeSes
       {/* Counts what waits on each connected server for the number above; draws nothing. */}
       <ConnectedServersPeerMessages
         drawn={false}
+        countInHeading={false}
         onWaitingCount={connectedServerWaiting.report}
         onSelectSession={selectConnectedServerSession}
       />

@@ -276,6 +276,7 @@ export function NeedsYouDropdown({
           notifications below it, which carry no headings here. */}
       <ConnectedServersPeerMessages
         drawn
+        countInHeading={false}
         onWaitingCount={connectedServerWaiting.report}
         onSelectSession={onSelectConnectedServerSession}
       />

@@ -35,9 +35,12 @@ export function useConnectedServerWaitingCounts(): {
 
 /** One section per connected server this one administers. Each reports how
  *  many messages wait there, by connection id, for a Needs you count. With
- *  `drawn` false it draws nothing and only reports: the sidebar row's count. */
-export function ConnectedServersPeerMessages({ drawn, onWaitingCount, onSelectSession }: {
+ *  `drawn` false it draws nothing and only reports: the sidebar row's count.
+ *  `countInHeading` adds the section's count to its heading, where there is
+ *  room for it: the Signals page, not the sidebar's dropdown. */
+export function ConnectedServersPeerMessages({ drawn, countInHeading, onWaitingCount, onSelectSession }: {
   drawn: boolean
+  countInHeading: boolean
   onWaitingCount: (connectionID: string, waiting: number) => void
   onSelectSession: (connectionID: string, sessionID: string) => void
 }): JSX.Element | null {
@@ -84,6 +87,7 @@ export function ConnectedServersPeerMessages({ drawn, onWaitingCount, onSelectSe
           key={view.connection.id}
           view={view}
           drawn={drawn}
+          countInHeading={countInHeading}
           onWaitingCount={onWaitingCount}
           onSelectSession={onSelectSession}
         />
@@ -92,9 +96,10 @@ export function ConnectedServersPeerMessages({ drawn, onWaitingCount, onSelectSe
   )
 }
 
-function ConnectedServerPeerMessages({ view, drawn, onWaitingCount, onSelectSession }: {
+function ConnectedServerPeerMessages({ view, drawn, countInHeading, onWaitingCount, onSelectSession }: {
   view: PeerConnectionView
   drawn: boolean
+  countInHeading: boolean
   onWaitingCount: (connectionID: string, waiting: number) => void
   onSelectSession: (connectionID: string, sessionID: string) => void
 }): JSX.Element {
@@ -107,6 +112,7 @@ function ConnectedServerPeerMessages({ view, drawn, onWaitingCount, onSelectSess
         connectionID={connectionID}
         label={connectedServerLabel(view).label}
         drawn={drawn}
+        countInHeading={countInHeading}
         onWaitingCount={onWaitingCount}
         onSelectSession={onSelectSession}
       />
@@ -116,10 +122,11 @@ function ConnectedServerPeerMessages({ view, drawn, onWaitingCount, onSelectSess
 
 /** Runs under the connected server's config, so every read and decision goes
  *  to that server. */
-function WaitingOnConnectedServer({ connectionID, label, drawn, onWaitingCount, onSelectSession }: {
+function WaitingOnConnectedServer({ connectionID, label, drawn, countInHeading, onWaitingCount, onSelectSession }: {
   connectionID: string
   label: string
   drawn: boolean
+  countInHeading: boolean
   onWaitingCount: (connectionID: string, waiting: number) => void
   onSelectSession: (connectionID: string, sessionID: string) => void
 }): JSX.Element | null {
@@ -132,7 +139,7 @@ function WaitingOnConnectedServer({ connectionID, label, drawn, onWaitingCount, 
   if (!drawn || (waiting.length === 0 && error === null)) return null
   return (
     <section className={styles.signalsPageSection}>
-      <h3 className={styles.signalsPageSectionTitle}>Waiting on {label} · {waiting.length}</h3>
+      <h3 className={styles.signalsPageSectionTitle}>Waiting on {label}{countInHeading && ` · ${waiting.length}`}</h3>
       <PeerMessagesNeedingYou
         waiting={waiting}
         error={error}
