@@ -1,7 +1,9 @@
 // Made-up machine readings for the Machines page's render check and for
-// looking at the page without a server: a Linux server, a laptop on battery,
-// a Windows machine read from WSL with a nearly full drive, a machine that
-// stopped reporting, and one that never reported. A fetch that answers the
+// looking at the page without a server: two Linux servers (one with a busy
+// CPU and a 7.3 TiB drive), a Mac laptop low on battery with compressed
+// memory, pressure and a GPU, a Windows desktop read from WSL with commit
+// charge, a graphics card and the WSL machine inside it, a machine that stopped reporting with a
+// nearly full drive, and one that never reported. A fetch that answers the
 // page's routes from them, with one connected server built before machine
 // stats (it answers 404) and one that holds no access.
 
@@ -14,6 +16,8 @@ import type {
   PeerConnectionView,
 } from '@kayushkin/llm-bridge-types'
 
+const KIB = 1024
+const MIB = 1024 ** 2
 const GIB = 1024 ** 3
 
 function machine(id: string, name: string, emoji: string, transport: string): Machine {
@@ -32,37 +36,62 @@ export function machineStatsFixtureOverview(now: Date): MachineStatsOverview[] {
     operating_system: 'Ubuntu 24.04.1 LTS', kernel_version: '6.8.0-139-generic',
     booted_at: minutesAgo(9 * 24 * 60 + 200), uptime_seconds: (9 * 24 * 60 + 200) * 60,
     cpu_model: 'AMD EPYC 7713 64-Core Processor', cpu_logical_cores: 8, cpu_usage_percent: 23.4, load_average: [1.52, 1.1, 0.94],
-    memory_total_bytes: 31.3 * GIB, memory_used_bytes: 18.2 * GIB, memory_available_bytes: 13.1 * GIB,
+    memory_total_bytes: 31.3 * GIB, memory_used_bytes: 18.2 * GIB, memory_available_bytes: 13.1 * GIB, memory_cached_bytes: 9.6 * GIB,
     swap_total_bytes: 4 * GIB, swap_used_bytes: 0.6 * GIB,
     drives: [
       { mount_point: '/', device: '/dev/sda', filesystem_type: 'ext4', total_bytes: 315 * GIB, used_bytes: 271 * GIB, free_bytes: 28 * GIB },
       { mount_point: '/mnt/backup', device: '/dev/sdb', label: 'backup', filesystem_type: 'ext4', total_bytes: 500 * GIB, used_bytes: 120 * GIB, free_bytes: 380 * GIB },
     ],
   }
+  const storage: MachineStats = {
+    collected_at: minutesAgo(0.7), source: 'linux', hostname: 'storage-1',
+    operating_system: 'Ubuntu 24.04.1 LTS', kernel_version: '6.8.0-88-generic',
+    booted_at: minutesAgo(41 * 24 * 60), cpu_model: 'Intel(R) Core(TM) i5-8500T', cpu_logical_cores: 6, cpu_usage_percent: 88.2,
+    load_average: [5.4, 4.9, 4.1],
+    memory_total_bytes: 15.5 * GIB, memory_used_bytes: 4.1 * GIB, memory_available_bytes: 11.4 * GIB, memory_cached_bytes: 10.2 * GIB,
+    swap_total_bytes: 2 * GIB, swap_used_bytes: 0,
+    drives: [
+      { mount_point: '/', device: '/dev/md0', filesystem_type: 'ext4', total_bytes: 7.3 * 1024 * GIB, used_bytes: 4.6 * 1024 * GIB, free_bytes: 2.7 * 1024 * GIB },
+    ],
+  }
   const laptop: MachineStats = {
     collected_at: minutesAgo(1), source: 'darwin', hostname: 'laptop.local',
     operating_system: 'macOS 15.1', kernel_version: '24.1.0',
-    booted_at: minutesAgo(3 * 60 + 12), cpu_model: 'Apple M3 Pro', cpu_logical_cores: 12, cpu_usage_percent: 8.2, load_average: [2.1, 2.4, 2.2],
-    memory_total_bytes: 18 * GIB, memory_used_bytes: 15.6 * GIB, memory_available_bytes: 2.4 * GIB,
+    booted_at: minutesAgo(3 * 60 + 12), cpu_model: 'Apple M2', cpu_logical_cores: 8, cpu_usage_percent: 12.6, load_average: [2.1, 2.4, 2.2],
+    memory_total_bytes: 16 * GIB, memory_used_bytes: 15 * GIB, memory_available_bytes: 1 * GIB, memory_cached_bytes: 0.7 * GIB,
+    memory_compressed_bytes: 4.8 * GIB, memory_free_under_pressure_percent: 60,
+    swap_total_bytes: 3 * GIB, swap_used_bytes: 1.9 * GIB,
     drives: [{ mount_point: '/', device: 'disk3s1', label: 'Macintosh HD', filesystem_type: 'apfs', total_bytes: 460 * GIB, used_bytes: 212 * GIB, free_bytes: 248 * GIB }],
-    batteries: [{ name: 'InternalBattery-0', charge_percent: 64, state: 'discharging', seconds_remaining: 4 * 3600 + 25 * 60, health_percent: 91, cycle_count: 212 }],
+    batteries: [{ name: 'InternalBattery-0', charge_percent: 9, state: 'discharging', seconds_remaining: 7 * 3600 + 15 * 60, health_percent: 97.7, cycle_count: 30 }],
+    gpus: [{ name: 'Apple M2', usage_percent: 18, memory_used_bytes: 1 * GIB }],
   }
   const windows: MachineStats = {
     collected_at: minutesAgo(0.2), source: 'windows_from_wsl', hostname: 'DESKTOP-1',
     operating_system: 'Microsoft Windows 11 Pro', booted_at: minutesAgo(26 * 60),
-    cpu_model: 'Intel(R) Core(TM) i7-12700K', cpu_logical_cores: 20, cpu_usage_percent: 91.5,
-    memory_total_bytes: 64 * GIB, memory_used_bytes: 22 * GIB, memory_available_bytes: 42 * GIB,
-    swap_total_bytes: 16 * GIB, swap_used_bytes: 1 * GIB,
+    cpu_model: 'Intel(R) Core(TM) i7-12700K', cpu_logical_cores: 20, cpu_usage_percent: 41.5,
+    memory_total_bytes: 32 * GIB, memory_used_bytes: 28.2 * GIB, memory_available_bytes: 3.8 * GIB,
+    memory_committed_bytes: 47.4 * GIB, memory_commit_limit_bytes: 51.8 * GIB,
+    swap_total_bytes: 19.8 * GIB, swap_used_bytes: 2.1 * GIB,
     drives: [
-      { mount_point: 'C:', label: 'Windows', filesystem_type: 'NTFS', total_bytes: 930 * GIB, used_bytes: 890 * GIB, free_bytes: 40 * GIB },
-      { mount_point: 'D:', label: 'Media', filesystem_type: 'NTFS', total_bytes: 3726 * GIB, used_bytes: 3200 * GIB, free_bytes: 526 * GIB },
+      { mount_point: 'C:', label: 'Windows', filesystem_type: 'NTFS', total_bytes: 930 * GIB, used_bytes: 837 * GIB, free_bytes: 93 * GIB },
+      { mount_point: 'D:', label: 'Media', filesystem_type: 'NTFS', total_bytes: 3726 * GIB, used_bytes: 1118 * GIB, free_bytes: 2608 * GIB },
+      { mount_point: 'G:', label: 'Games', filesystem_type: 'NTFS', total_bytes: 1863 * GIB, used_bytes: 1546 * GIB, free_bytes: 317 * GIB },
     ],
+    gpus: [{ name: 'NVIDIA GeForce RTX 3080 Ti', usage_percent: 0, memory_used_bytes: 3.5 * GIB, memory_total_bytes: 12 * GIB, temperature_celsius: 31 }],
     collection_errors: ['batteries: Get-CimInstance Win32_Battery timed out after 5s'],
+    wsl: {
+      collected_at: minutesAgo(0.2), source: 'linux', hostname: 'DESKTOP-1',
+      operating_system: 'Ubuntu 24.04.1 LTS', kernel_version: '5.15.167.4-microsoft-standard-WSL2',
+      booted_at: minutesAgo(5 * 60 + 40), cpu_logical_cores: 20, cpu_usage_percent: 3.1, load_average: [0.08, 0.12, 0.09],
+      memory_total_bytes: 15952 * MIB, memory_used_bytes: 1315 * MIB, memory_cached_bytes: 2175 * MIB, memory_available_bytes: 14297 * MIB,
+      swap_total_bytes: 4096 * MIB, swap_used_bytes: 9 * MIB,
+      drives: [{ mount_point: '/', device: '/dev/sdd', filesystem_type: 'ext4', total_bytes: 1_055_762_868 * KIB, used_bytes: 140_362_036 * KIB, free_bytes: (1_055_762_868 - 140_362_036) * KIB }],
+    },
   }
   const stale: MachineStats = {
     collected_at: minutesAgo(47), source: 'linux', operating_system: 'Debian GNU/Linux 12', booted_at: minutesAgo(200 * 60),
     cpu_usage_percent: 2, cpu_logical_cores: 4, memory_total_bytes: 8 * GIB, memory_used_bytes: 2 * GIB,
-    drives: [{ mount_point: '/', total_bytes: 64 * GIB, used_bytes: 20 * GIB, free_bytes: 44 * GIB }],
+    drives: [{ mount_point: '/', total_bytes: 64 * GIB, used_bytes: 62 * GIB, free_bytes: 2 * GIB }],
   }
   return [
     { machine: machine('m_000001', 'home-server', '🏠', 'local'), latest: server },
@@ -70,6 +99,7 @@ export function machineStatsFixtureOverview(now: Date): MachineStatsOverview[] {
     { machine: machine('m_000003', 'old-box', '📦', 'runner'), runner_connected: false, latest: stale },
     { machine: machine('m_000004', 'spare', '', 'ssh') },
     { machine: machine('m_000005', 'workstation', '🖥', 'runner'), runner_connected: true, latest: windows },
+    { machine: machine('m_000006', 'storage', '', 'ssh'), latest: storage },
   ]
 }
 
@@ -86,6 +116,11 @@ export function machineStatsFixtureHistory(machineID: string, latest: MachineSta
     const peak = average + 10 + (i % 50 === 0 ? 55 : (i * 13) % 17)
     const drives = (latest.drives ?? []).map(drive => ({ ...drive, used_bytes: drive.used_bytes * (0.94 + 0.06 * phase) }))
     const batteries = (latest.batteries ?? []).map(battery => ({ ...battery, charge_percent: 100 - 60 * ((phase * 3) % 1) }))
+    const gpus = (latest.gpus ?? []).map(gpu => ({
+      ...gpu,
+      usage_percent: gpu.usage_percent === undefined ? undefined : Math.max(0, 30 + 28 * Math.sin(phase * Math.PI * 4) + (i % 11)),
+      memory_used_bytes: gpu.memory_used_bytes === undefined ? undefined : gpu.memory_used_bytes * (0.6 + 0.5 * phase),
+    }))
     points.push({
       at: at.toISOString(),
       sample_count: Math.max(1, Math.round(stepSeconds / 60)),
@@ -98,6 +133,13 @@ export function machineStatsFixtureHistory(machineID: string, latest: MachineSta
         memory_used_bytes: (latest.memory_total_bytes ?? 0) * (0.45 + 0.2 * Math.sin(phase * Math.PI * 2)),
         drives,
         batteries,
+        gpus,
+        wsl: latest.wsl ? {
+          ...latest.wsl,
+          collected_at: at.toISOString(),
+          cpu_usage_percent: Math.max(0, 4 + 6 * Math.sin(phase * Math.PI * 10) + (i % 5)),
+          memory_used_bytes: (latest.wsl.memory_used_bytes ?? 0) * (0.7 + 0.8 * phase),
+        } : undefined,
       },
     })
   }

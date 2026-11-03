@@ -3,8 +3,24 @@ import type { MachineStatsHistoryPoint, MachineStatsOverview, PeerConnection, Pe
 import {
   MACHINE_STATS_HISTORY_MAX_POINTS,
   MACHINE_STATS_HISTORY_RANGES,
+  batteryLevel,
   batteryTimeText,
   chartRuns,
+  commitCharge,
+  driveFreeText,
+  gpuMemoryPercent,
+  gpuMemoryUsedSeries,
+  gpuUsageSeries,
+  historyGPUs,
+  largestGPUMemoryTotal,
+  historyHasWSL,
+  machineKind,
+  machineReadingParts,
+  wslCPUSeries,
+  wslMemoryUsedSeries,
+  memoryBreakdown,
+  memoryLevel,
+  memoryPressurePercent,
   driveUsedPercentSeries,
   formatBytes,
   formatDurationSeconds,
@@ -203,5 +219,135 @@ describe('charts', () => {
     ]
     expect(historyDriveMountPoints(points)).toEqual(['/', '/mnt/old'])
     expect(driveUsedPercentSeries(points, '/').map(p => p.value)).toEqual([null, 50])
+  })
+})
+
+const GIB = 1024 ** 3
+
+describe('machine kind', () => {
+  it('calls a machine with a battery a laptop, whatever else it has', () => {
+    expect(machineKind({ source: 'darwin', batteries: [{ name: 'b', charge_percent: 9, state: 'discharging' }], gpus: [{ name: 'Apple M2' }] })).toBe('laptop')
+  })
+  it('calls Windows read from WSL, or a GPU without a battery, a desktop', () => {
+    expect(machineKind({ source: 'windows_from_wsl' })).toBe('desktop')
+    expect(machineKind({ source: 'linux', gpus: [{ name: 'RTX' }] })).toBe('desktop')
+  })
+  it('calls anything else a server, and a machine with no reading nothing', () => {
+    expect(machineKind({ source: 'linux', gpus: [], batteries: [] })).toBe('server')
+    expect(machineKind(undefined)).toBeNull()
+  })
+})
+
+describe('memory', () => {
+  it('splits a Mac into used, compressed, cached and free, adding up to the total', () => {
+    const breakdown = memoryBreakdown({ memory_total_bytes: 16 * GIB, memory_used_bytes: 15 * GIB, memory_compressed_bytes: 4.8 * GIB, memory_cached_bytes: 0.5 * GIB })!
+    expect(breakdown.segments.map(segment => segment.kind)).toEqual(['used', 'compressed', 'cached', 'free'])
+    expect(breakdown.segments[0].bytes).toBeCloseTo(10.2 * GIB)
+    expect(breakdown.segments[1].bytes).toBe(4.8 * GIB)
+    expect(breakdown.freeBytes).toBeCloseTo(0.5 * GIB)
+    expect(breakdown.segments.reduce((sum, segment) => sum + segment.percent, 0)).toBeCloseTo(100)
+    expect(breakdown.usedPercent).toBeCloseTo(93.75)
+  })
+
+  it('leaves out the parts a machine does not report', () => {
+    const breakdown = memoryBreakdown({ memory_total_bytes: 32 * GIB, memory_used_bytes: 28 * GIB })!
+    expect(breakdown.segments.map(segment => segment.kind)).toEqual(['used', 'free'])
+    expect(breakdown.compressedBytes).toBeNull()
+    expect(breakdown.cachedBytes).toBeNull()
+    expect(memoryBreakdown({})).toBeNull()
+  })
+
+  it('cuts a part too big for the room left so the bar never passes the total', () => {
+    const breakdown = memoryBreakdown({ memory_total_bytes: 8 * GIB, memory_used_bytes: 6 * GIB, memory_cached_bytes: 5 * GIB, memory_compressed_bytes: 9 * GIB })!
+    expect(breakdown.compressedBytes).toBe(6 * GIB)
+    expect(breakdown.cachedBytes).toBe(2 * GIB)
+    expect(breakdown.segments.map(segment => segment.kind)).toEqual(['compressed', 'cached'])
+  })
+
+  it('judges a Mac by its pressure, not by how much reads as used', () => {
+    const mac = { memory_total_bytes: 16 * GIB, memory_used_bytes: 15.5 * GIB, memory_free_under_pressure_percent: 60 }
+    expect(memoryPressurePercent(mac)).toBe(40)
+    expect(memoryLevel(mac)).toBe('normal')
+    expect(memoryLevel({ ...mac, memory_free_under_pressure_percent: 12 })).toBe('warning')
+    expect(memoryLevel({ ...mac, memory_free_under_pressure_percent: 4 })).toBe('danger')
+  })
+
+  it('judges every other machine by its used share', () => {
+    expect(memoryPressurePercent({})).toBeNull()
+    expect(memoryLevel({ memory_total_bytes: 32 * GIB, memory_used_bytes: 28.2 * GIB })).toBe('warning')
+    expect(memoryLevel({ memory_total_bytes: 32 * GIB, memory_used_bytes: 10 * GIB })).toBe('normal')
+  })
+
+  it('gives Windows commit charge only when both numbers are there', () => {
+    const charge = commitCharge({ memory_committed_bytes: 47.4 * GIB, memory_commit_limit_bytes: 51.8 * GIB })!
+    expect(charge.percent).toBeCloseTo(91.5, 1)
+    expect(commitCharge({ memory_committed_bytes: 47.4 * GIB })).toBeNull()
+  })
+})
+
+describe('batteries, drives and graphics', () => {
+  it('warns about a draining battery at 15% left and calls 5% danger', () => {
+    expect(batteryLevel({ state: 'discharging', charge_percent: 9 })).toBe('warning')
+    expect(batteryLevel({ state: 'discharging', charge_percent: 4 })).toBe('danger')
+    expect(batteryLevel({ state: 'discharging', charge_percent: 40 })).toBe('normal')
+    expect(batteryLevel({ state: 'charging', charge_percent: 3 })).toBe('normal')
+  })
+
+  it('says a drive\'s free space in words', () => {
+    expect(driveFreeText({ free_bytes: 93 * GIB, total_bytes: 932 * GIB })).toBe('93.0 GiB free of 932 GiB')
+  })
+
+  it('gives GPU memory as a share only with a total', () => {
+    expect(gpuMemoryPercent({ memory_used_bytes: 3 * GIB, memory_total_bytes: 12 * GIB })).toBe(25)
+    expect(gpuMemoryPercent({ memory_used_bytes: 1 * GIB })).toBeNull()
+    expect(gpuMemoryPercent({ memory_used_bytes: 0, memory_total_bytes: 12 * GIB })).toBe(0)
+  })
+
+  it('follows each GPU by its place and name, so two cards of one model stay apart', () => {
+    const at = (minute: number) => new Date(Date.parse('2026-11-03T11:00:00Z') + minute * 60_000).toISOString()
+    const point = (minute: number, gpus: { name: string; usage_percent?: number; memory_used_bytes?: number; memory_total_bytes?: number }[]): MachineStatsHistoryPoint => ({
+      at: at(minute), sample_count: 1, stats: { collected_at: at(minute), source: 'linux', gpus },
+    })
+    const points = [
+      point(0, [{ name: 'Old card', usage_percent: 5 }]),
+      point(1, [{ name: 'Twin', usage_percent: 10, memory_used_bytes: 1, memory_total_bytes: 8 }, { name: 'Twin', usage_percent: 90, memory_used_bytes: 7, memory_total_bytes: 12 }]),
+    ]
+    const gpus = historyGPUs(points)
+    expect(gpus).toEqual([{ index: 0, name: 'Twin' }, { index: 1, name: 'Twin' }, { index: 0, name: 'Old card' }])
+    expect(gpuUsageSeries(points, gpus[1]).map(p => p.value)).toEqual([null, 90])
+    expect(gpuUsageSeries(points, gpus[2]).map(p => p.value)).toEqual([5, null])
+    expect(gpuMemoryUsedSeries(points, gpus[0]).map(p => p.value)).toEqual([null, 1])
+    expect(largestGPUMemoryTotal(points, gpus[1])).toBe(12)
+    expect(largestGPUMemoryTotal(points, gpus[2])).toBe(0)
+  })
+})
+
+describe('Windows and WSL', () => {
+  const wsl = { collected_at: '2026-11-03T11:59:00Z', source: 'linux', operating_system: 'Ubuntu 24.04.1 LTS', cpu_usage_percent: 3, memory_total_bytes: 15952 * 1024 ** 2, memory_used_bytes: 1315 * 1024 ** 2 }
+  const windows = { collected_at: '2026-11-03T11:59:00Z', source: 'windows_from_wsl', operating_system: 'Microsoft Windows 11 Pro', wsl }
+
+  it('splits a WSL runner into the Windows host and the WSL machine', () => {
+    const parts = machineReadingParts(windows)
+    expect(parts.map(part => [part.key, part.label])).toEqual([['windows', 'Windows'], ['wsl', 'WSL']])
+    expect(parts[1].stats.operating_system).toBe('Ubuntu 24.04.1 LTS')
+  })
+
+  it('still names the Windows part when the runner sent no WSL reading', () => {
+    expect(machineReadingParts({ ...windows, wsl: undefined }).map(part => part.label)).toEqual(['Windows'])
+  })
+
+  it('leaves any other machine as one unnamed part', () => {
+    expect(machineReadingParts(wsl).map(part => [part.key, part.label])).toEqual([['machine', null]])
+  })
+
+  it('follows the WSL CPU and memory through a history, null where a reading has none', () => {
+    const points: MachineStatsHistoryPoint[] = [
+      { at: '2026-11-03T11:00:00Z', sample_count: 1, stats: { ...windows, wsl: undefined } },
+      { at: '2026-11-03T11:01:00Z', sample_count: 1, stats: windows },
+    ]
+    expect(historyHasWSL(points)).toBe(true)
+    expect(historyHasWSL([points[0]])).toBe(false)
+    expect(wslCPUSeries(points).map(p => p.value)).toEqual([null, 3])
+    expect(wslMemoryUsedSeries(points).map(p => p.value)).toEqual([null, 1315 * 1024 ** 2])
   })
 })

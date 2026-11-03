@@ -1,12 +1,42 @@
 /* The Machines page. A CSS module, copied into dist/ beside its .js by
-   scripts/copy-css.mjs. Every color is a theme variable, so the light, dark
-   and zine themes all draw it without rules of their own. */
+   scripts/copy-css.mjs. Every color is a theme variable or a mix of them, so
+   light and dark draw it without rules of their own; the zine skin restyles
+   it through the bc-machine-* hooks and by setting the --machine-* variables
+   below on .bc-machines.
 
-.page { display: flex; flex-direction: column; gap: 20px; }
+   Each measure has a hue of its own, set once here and read by its mark and
+   its history chart through --hue. Warning and danger take the theme's status
+   colors, with stripes, and always come with a word beside them. */
+
+.page {
+  --machine-hue-cpu: var(--accent);
+  --machine-hue-gpu: var(--info);
+  --machine-hue-memory: color-mix(in oklab, var(--success) 55%, var(--info));
+  --machine-hue-swap: var(--machine-hue-memory);
+  --machine-hue-drive: color-mix(in oklab, var(--text) 60%, var(--bg-surface));
+  --machine-hue-battery: var(--success);
+  --machine-track: color-mix(in oklab, var(--text) 13%, var(--bg-surface));
+  --machine-edge: transparent;
+  --machine-warning: var(--warning);
+  --machine-danger: var(--error);
+  --machine-stripes: repeating-linear-gradient(-45deg, transparent 0 5px, rgb(255 255 255 / 0.3) 5px 8px);
+  --machine-card-radius: 10px;
+  --machine-part-rule: 1px dashed var(--border);
+
+  display: flex; flex-direction: column; gap: 22px;
+}
+.page [data-hue="cpu"] { --hue: var(--machine-hue-cpu); }
+.page [data-hue="gpu"] { --hue: var(--machine-hue-gpu); }
+.page [data-hue="memory"] { --hue: var(--machine-hue-memory); }
+.page [data-hue="swap"] { --hue: var(--machine-hue-swap); }
+.page [data-hue="drive"] { --hue: var(--machine-hue-drive); }
+.page [data-hue="battery"] { --hue: var(--machine-hue-battery); }
+
 .header { display: flex; flex-direction: column; gap: 4px; }
 .title { margin: 0; font-size: 1.2em; color: var(--text); }
 .subtitle { margin: 0; font-size: 0.85em; color: var(--text-muted); max-width: 90ch; }
 .muted { color: var(--text-muted); font-size: 0.85em; }
+.value { color: var(--text); font-variant-numeric: tabular-nums; }
 .error {
   margin: 0; padding: 8px 10px; font-size: 0.85em; white-space: pre-wrap;
   color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px;
@@ -15,14 +45,20 @@
   margin: 0; padding: 8px 10px; font-size: 0.85em;
   color: var(--text-muted); background: var(--bg-surface); border: 1px dashed var(--border); border-radius: 6px;
 }
+.notReported { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.notReported .notice { flex: 1 1 260px; }
 
-.server { display: flex; flex-direction: column; gap: 10px; }
-.serverHeading { margin: 0; font-size: 1em; color: var(--text); display: flex; align-items: baseline; gap: 8px; }
+/* A picture only the zine skin draws: hidden everywhere else. */
+.picture { display: none; }
+
+.server { display: flex; flex-direction: column; gap: 12px; }
+.serverHeading { margin: 0; font-size: 1.05em; color: var(--text); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.serverName { overflow-wrap: anywhere; }
 
 .chip { font-size: 0.72em; font-weight: normal; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; color: var(--text-muted); }
 .pill { font-size: 0.72em; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
 .pillFresh { color: var(--success); background: var(--success-bg); }
-.pillStale { color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); }
+.pillStale { color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); white-space: normal; }
 
 .button {
   font: inherit; font-size: 0.8em; padding: 3px 10px; border-radius: 6px; cursor: pointer;
@@ -31,36 +67,157 @@
 .button:hover { border-color: var(--accent); }
 .buttonSelected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+/* ── Cards ─────────────────────────────────────────────────────────────── */
+
+/* Columns rather than a grid, so a short card does not leave a hole beside a
+   tall one; an open card spans them all. */
+.cards { columns: 380px; column-gap: 18px; }
+/* inline-flex at full width: a column never splits an inline box, nor
+   anything drawn just outside its top edge */
 .card {
-  display: flex; flex-direction: column; gap: 10px; min-width: 0;
-  padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface);
+  display: inline-flex; width: 100%; vertical-align: top; flex-direction: column; gap: 12px; min-width: 0;
+  break-inside: avoid; margin: 6px 0 18px;
+  padding: 14px; border: 1px solid var(--border); border-radius: var(--machine-card-radius); background: var(--bg-surface);
 }
-.cardOpen { grid-column: 1 / -1; }
+.cardOpen { display: flex; column-span: all; }
 /* A machine that stopped reporting: its last numbers stay readable but grey. */
 .cardStale .reading { opacity: 0.55; filter: grayscale(1); }
-.cardHeader { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.cardHeader .button { margin-left: auto; }
-.cardTitle { margin: 0; font-size: 1em; color: var(--text); }
+.cardHeader { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cardIdentity { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 140px; }
+.cardTitle { margin: 0; font-size: 1.05em; color: var(--text); overflow-wrap: anywhere; }
+.cardSubtitle { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 0.8em; color: var(--text-muted); }
+.cardStatus { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
-.reading { display: flex; flex-direction: column; gap: 10px; }
-.facts { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.85em; color: var(--text); align-items: baseline; }
+.reading { display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+/* A runner in WSL has two parts, Windows and WSL; the second sits under a rule. */
+.part { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.parts { display: flex; flex-direction: column; gap: 14px; }
+.part + .part { border-top: var(--machine-part-rule); padding-top: 12px; }
+/* An open card is as wide as the page: Windows and WSL side by side. */
+@container (min-width: 860px) {
+  .partsSideBySide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .partsSideBySide .part + .part { border-top: none; padding-top: 0; border-left: var(--machine-part-rule); padding-left: 24px; }
+}
+.partHeading {
+  margin: 0; align-self: flex-start; font-size: 0.74em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text); padding: 1px 8px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border);
+}
 
-.row { display: flex; flex-direction: column; gap: 3px; }
-.rowHead { display: flex; align-items: baseline; gap: 8px; font-size: 0.85em; flex-wrap: wrap; }
-.rowLabel { font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
-.rowValue { color: var(--text); font-variant-numeric: tabular-nums; }
+/* OS, kernel, host and uptime: one fact a line, the name in a narrow column. */
+.facts { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; font-size: 0.82em; color: var(--text); }
+.facts dt { color: var(--text-muted); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; align-self: baseline; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+
+.section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sectionHeading { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.85em; font-weight: normal; }
+.sectionTitle { font-weight: 700; font-size: 0.82em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.sectionHeadline { display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .rowDetail { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 0.75em; color: var(--text-muted); }
 
-/* A thin meter: the track a step off the surface, the fill carrying the level. */
-.meter { height: 6px; border-radius: 3px; background: var(--border-subtle, var(--border)); overflow: hidden; }
-.meterFill { height: 100%; border-radius: 3px; }
-.meterNormal { background: var(--accent); }
-.meterWarning { background: var(--warning); }
-.meterDanger { background: var(--error); }
-.levelWord { font-size: 0.72em; font-weight: 600; padding: 0 6px; border-radius: 4px; color: var(--text); }
-.levelWarning { background: var(--warning-bg); border: 1px solid var(--warning); }
-.levelDanger { background: var(--error-bg); border: 1px solid var(--error); color: var(--error); }
+.levelWord {
+  font-size: 0.72em; font-weight: 700; padding: 0 6px; border-radius: 4px; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+}
+.levelWord[data-level="warning"] { background: var(--warning-bg); border: 1px solid var(--warning); }
+.levelWord[data-level="danger"] { background: var(--error-bg); border: 1px solid var(--error); color: var(--error); }
+
+/* ── Dials: CPU and GPU ────────────────────────────────────────────────── */
+
+.dialRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 14px 18px; }
+.dialBody { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+/* beside the dial when there is room, under it when there is not */
+.dialDetail { display: flex; flex-direction: column; gap: 3px; font-size: 0.78em; color: var(--text-muted); min-width: 0; flex: 1 1 130px; }
+.model { color: var(--text); font-size: 1.05em; overflow-wrap: anywhere; }
+
+.dial { position: relative; width: 112px; flex: none; aspect-ratio: 120 / 100; }
+.dialSvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dialSvg path { fill: none; stroke-linecap: round; }
+.dialEdge { stroke: var(--machine-edge); stroke-width: 15; }
+.dialTrack { stroke: var(--machine-track); stroke-width: 10; }
+.dialValue { stroke: var(--hue); stroke-width: 10; transition: d 0.4s; }
+.dial[data-level="warning"] .dialValue { stroke: var(--machine-warning); }
+.dial[data-level="danger"] .dialValue { stroke: var(--machine-danger); }
+/* past a threshold the arc also breaks into dashes, long for warning and
+   short for danger, so the level shows in its shape as well as its color */
+.dial[data-level="warning"] .dialValue { stroke-linecap: butt; stroke-dasharray: 9 3; }
+.dial[data-level="danger"] .dialValue { stroke-linecap: butt; stroke-dasharray: 4 3; }
+.dialSvg .dialZone { stroke-width: 10; stroke-linecap: butt; }
+.dialZone[data-arc="warning-zone"] { stroke: color-mix(in oklab, var(--machine-warning) 40%, var(--machine-track)); }
+.dialZone[data-arc="danger-zone"] { stroke: color-mix(in oklab, var(--machine-danger) 45%, var(--machine-track)); }
+.dialReadout {
+  position: absolute; left: 0; right: 0; top: 34%;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1;
+}
+.dialNumber { font-size: 1.35em; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.dialReadout .levelWord { font-size: 0.62em; }
+
+/* ── Bars ──────────────────────────────────────────────────────────────── */
+
+.bar { position: relative; background: var(--machine-track); border-radius: 999px; overflow: hidden; min-width: 0; }
+.bar[data-thickness="thin"] { height: 6px; }
+.bar[data-thickness="thick"] { height: 16px; border-radius: 5px; }
+.barFill { height: 100%; background: var(--hue); border-radius: inherit; }
+.barFill[data-level="warning"] { background: var(--machine-stripes), var(--machine-warning); }
+.barFill[data-level="danger"] { background: var(--machine-stripes), var(--machine-danger); }
+
+.thinRows { display: flex; flex-direction: column; gap: 6px; }
+.thinRow {
+  display: grid; grid-template-columns: 7.5em minmax(48px, 1fr) auto; align-items: center; gap: 2px 10px;
+  font-size: 0.8em;
+}
+.thinName { color: var(--text-muted); }
+.thinValue { color: var(--text); font-variant-numeric: tabular-nums; display: inline-flex; gap: 6px; align-items: baseline; justify-content: flex-end; }
+.thinNote { grid-column: 2 / -1; font-size: 0.9em; color: var(--text-muted); }
+
+/* Memory: one bar split into parts, two pixels of surface between them. */
+.memory { display: flex; flex-direction: column; gap: 6px; }
+.memoryBar { display: flex; gap: 2px; height: 20px; border-radius: 6px; overflow: hidden; background: var(--bg-surface); }
+.memorySegment { min-width: 3px; background: var(--machine-track); }
+.memorySegment[data-segment="used"], .memorySwatch[data-segment="used"] { background: var(--machine-hue-memory); }
+.memorySegment[data-segment="compressed"], .memorySwatch[data-segment="compressed"] {
+  background: repeating-linear-gradient(45deg, var(--machine-hue-memory) 0 3px, color-mix(in oklab, var(--machine-hue-memory) 35%, var(--bg-surface)) 3px 6px);
+}
+.memorySegment[data-segment="cached"], .memorySwatch[data-segment="cached"] { background: color-mix(in oklab, var(--machine-hue-memory) 32%, var(--bg-surface)); }
+.memorySegment[data-segment="free"], .memorySwatch[data-segment="free"] { background: var(--machine-track); }
+.memorySegment[data-segment="used"][data-level="warning"], .memorySwatch[data-segment="used"][data-level="warning"] { background: var(--machine-stripes), var(--machine-warning); }
+.memorySegment[data-segment="used"][data-level="danger"], .memorySwatch[data-segment="used"][data-level="danger"] { background: var(--machine-stripes), var(--machine-danger); }
+.memorySegment[data-segment="compressed"][data-level="warning"], .memorySwatch[data-segment="compressed"][data-level="warning"] {
+  background: repeating-linear-gradient(45deg, var(--machine-warning) 0 3px, var(--warning-bg) 3px 6px);
+}
+.memorySegment[data-segment="compressed"][data-level="danger"], .memorySwatch[data-segment="compressed"][data-level="danger"] {
+  background: repeating-linear-gradient(45deg, var(--machine-danger) 0 3px, var(--error-bg) 3px 6px);
+}
+.memoryKey { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 0.75em; color: var(--text-muted); }
+.memoryKey li { display: inline-flex; align-items: center; gap: 5px; }
+.memoryKey strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.memorySwatch { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
+
+/* Drives: thick bars, the mount point large, free space in words. */
+.drives { display: flex; flex-direction: column; gap: 10px; }
+.drive { display: flex; flex-direction: column; gap: 4px; }
+.driveHead { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap; font-size: 0.85em; }
+.driveName { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.mountPoint { font-weight: 700; color: var(--text); font-family: var(--mono, ui-monospace, monospace); }
+.driveLabel { color: var(--text-muted); }
+.driveFree { color: var(--text); font-variant-numeric: tabular-nums; display: inline-flex; align-items: baseline; gap: 8px; }
+.driveBarRow { display: grid; grid-template-columns: minmax(0, 1fr) 3.4em; align-items: center; gap: 10px; }
+.driveUsed { font-size: 0.85em; text-align: right; }
+
+/* The battery: a drawn battery, its charge large beside it. */
+.batteryRow { display: flex; align-items: center; gap: 14px; }
+.battery { width: 76px; flex: none; aspect-ratio: 68 / 32; }
+.batterySvg { width: 100%; height: 100%; display: block; overflow: visible; }
+.batteryBody { fill: none; stroke: var(--text); stroke-width: 2.5; }
+.batteryNub { fill: var(--text); }
+.batteryFill { fill: var(--machine-hue-battery); }
+.battery[data-level="warning"] .batteryFill { fill: var(--machine-warning); }
+.battery[data-level="danger"] .batteryFill { fill: var(--machine-danger); }
+.batteryBolt { fill: var(--machine-warning); stroke: var(--bg-surface); stroke-width: 2; stroke-linejoin: round; }
+.batteryText { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.batteryCharge { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; font-size: 0.85em; color: var(--text-muted); }
+.batteryPercent { font-size: 1.5em; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
 
 .collectionErrors {
   font-size: 0.78em; color: var(--text); padding: 6px 8px; border-radius: 6px;
@@ -68,20 +225,28 @@
 }
 .collectionErrors ul { margin: 2px 0 0; padding-left: 18px; }
 
-.history { border-top: 1px solid var(--border); padding-top: 10px; }
+/* ── History ───────────────────────────────────────────────────────────── */
+
+.history { border-top: 1px solid var(--border); padding-top: 12px; }
 .historyBody { display: flex; flex-direction: column; gap: 10px; }
 .historyRefreshing { opacity: 0.6; transition: opacity 0.2s; }
 .rangeRow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
 
-/* Charts */
-.chart { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* Charts: each in its measure's hue. */
+.chart { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; --hue: var(--accent); }
+.chart[data-hue="cpu"] { --hue: var(--machine-hue-cpu); }
+.chart[data-hue="gpu"] { --hue: var(--machine-hue-gpu); }
+.chart[data-hue="memory"] { --hue: var(--machine-hue-memory); }
+.chart[data-hue="swap"] { --hue: var(--machine-hue-swap); }
+.chart[data-hue="drive"] { --hue: var(--machine-hue-drive); }
+.chart[data-hue="battery"] { --hue: var(--machine-hue-battery); }
 .chartCaption { display: flex; flex-direction: column; gap: 1px; font-size: 0.82em; }
 .chartTitle { color: var(--text-muted); }
 .chartReadout { color: var(--text); font-variant-numeric: tabular-nums; min-height: 1.3em; }
 .chartLegend { display: flex; gap: 12px; font-size: 0.72em; color: var(--text-muted); }
-.legendLine { display: inline-block; width: 14px; height: 2px; vertical-align: middle; background: var(--accent); border-radius: 1px; }
-.legendBand { display: inline-block; width: 14px; height: 8px; vertical-align: middle; background: var(--accent); opacity: 0.18; border-radius: 2px; }
+.legendLine { display: inline-block; width: 14px; height: 2px; vertical-align: middle; background: var(--hue); border-radius: 1px; }
+.legendBand { display: inline-block; width: 14px; height: 8px; vertical-align: middle; background: var(--hue); opacity: 0.18; border-radius: 2px; }
 .chartFrame { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
 .chartAxisY {
   display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;
@@ -92,12 +257,12 @@
 .chartPlot:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 2px; }
 .chartSvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .chartGrid { stroke: var(--border-subtle, var(--border)); stroke-width: 1; }
-.chartLine { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.chartBand { fill: var(--accent); fill-opacity: 0.16; stroke: none; }
+.chartLine { fill: none; stroke: var(--hue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chartBand { fill: var(--hue); fill-opacity: 0.16; stroke: none; }
 .chartCrosshair { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--text-muted); pointer-events: none; }
 .chartDot {
   position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 0 2px var(--bg-surface); pointer-events: none;
+  background: var(--hue); box-shadow: 0 0 0 2px var(--bg-surface); pointer-events: none;
 }
 .chartAxisX {
   display: flex; justify-content: space-between; font-size: 0.68em; color: var(--text-muted);
@@ -110,3 +275,12 @@
 .table th, .table td { padding: 2px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; color: var(--text); }
 .table th { position: sticky; top: 0; background: var(--bg-surface); color: var(--text-muted); font-weight: 600; }
 .table th:first-child, .table td:first-child { text-align: left; }
+
+@media (max-width: 520px) {
+  .card { padding: 12px 10px; }
+  .thinRow { grid-template-columns: 6.5em minmax(40px, 1fr) auto; }
+  .cardStatus { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialValue { transition: none; }
+}

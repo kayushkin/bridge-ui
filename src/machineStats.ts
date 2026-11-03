@@ -13,6 +13,8 @@
 
 import type {
   MachineBattery,
+  MachineDrive,
+  MachineGPU,
   MachineStats,
   MachineStatsHistoryPoint,
   MachineStatsOverview,
@@ -179,6 +181,153 @@ export function usageLevel(percent: number | null): UsageLevel {
 export function formatPercent(percent: number | null | undefined): string {
   if (percent === null || percent === undefined || !Number.isFinite(percent)) return '—'
   return `${percent < 10 ? percent.toFixed(1) : Math.round(percent)}%`
+}
+
+/** A battery's level: running low is the danger, so it reads the share left
+ *  against the same thresholds — warning at 15% left, danger at 5% — and only
+ *  while it is draining. One on mains is never a warning. */
+export function batteryLevel(battery: Pick<MachineBattery, 'state' | 'charge_percent'>): UsageLevel {
+  if (battery.state !== 'discharging') return 'normal'
+  return usageLevel(100 - battery.charge_percent)
+}
+
+// ── Machine kind ────────────────────────────────────────────────────────────
+
+/** What sort of machine a reading comes from, for the picture on its card:
+ *  one with a battery is a laptop; a Windows machine read from WSL, or one
+ *  with a graphics processor and no battery, is a desktop; anything else is a
+ *  server. Null for a machine that has never sent a reading. */
+export type MachineKind = 'laptop' | 'desktop' | 'server'
+
+export function machineKind(stats: Pick<MachineStats, 'batteries' | 'gpus' | 'source'> | null | undefined): MachineKind | null {
+  if (!stats) return null
+  if (stats.batteries?.length) return 'laptop'
+  if (stats.source === MachineStatsSourceWindowsFromWSL || stats.gpus?.length) return 'desktop'
+  return 'server'
+}
+
+// ── Parts of a reading ──────────────────────────────────────────────────────
+
+/** One part of a machine's card: the machine itself, or — for a runner in
+ *  WSL — the Windows host and the WSL Linux virtual machine inside it, each
+ *  with its own OS, kernel, uptime, CPU, memory and drives. */
+export interface MachineReadingPart {
+  key: 'machine' | 'windows' | 'wsl'
+  /** The part's heading; null for a machine that is one part only. */
+  label: string | null
+  stats: MachineStats
+}
+
+export function machineReadingParts(stats: MachineStats): MachineReadingPart[] {
+  if (stats.source !== MachineStatsSourceWindowsFromWSL) return [{ key: 'machine', label: null, stats }]
+  const parts: MachineReadingPart[] = [{ key: 'windows', label: 'Windows', stats }]
+  if (stats.wsl) parts.push({ key: 'wsl', label: 'WSL', stats: stats.wsl })
+  return parts
+}
+
+// ── Memory ──────────────────────────────────────────────────────────────────
+
+/** One part of the memory bar, in the order it is drawn: what programs hold
+ *  (`used`, less any compressed part), the compressor's share of it
+ *  (`compressed`, macOS), file cache the OS hands back on demand (`cached`),
+ *  and the rest (`free`). */
+export type MemorySegmentKind = 'used' | 'compressed' | 'cached' | 'free'
+
+export interface MemorySegment {
+  kind: MemorySegmentKind
+  bytes: number
+  percent: number
+}
+
+export interface MemoryBreakdown {
+  totalBytes: number
+  /** Everything the machine reports as used, compressed part included. */
+  usedBytes: number
+  usedPercent: number
+  /** Present only when the machine reports them. */
+  compressedBytes: number | null
+  cachedBytes: number | null
+  /** Total less used less cache. */
+  freeBytes: number
+  /** The bar's parts, empty ones left out; they add up to the total. */
+  segments: MemorySegment[]
+}
+
+/** How a machine's memory splits into used, compressed, cached and free, or
+ *  null when it gave no total. Compressed is part of used and cache is part
+ *  of available, as llm-bridge reports them; a part bigger than the room left
+ *  for it is cut to fit, so the bar never adds up to more than the total. */
+export function memoryBreakdown(stats: Pick<MachineStats,
+  'memory_total_bytes' | 'memory_used_bytes' | 'memory_cached_bytes' | 'memory_compressed_bytes'>): MemoryBreakdown | null {
+  const total = stats.memory_total_bytes ?? 0
+  if (!total) return null
+  const used = Math.min(stats.memory_used_bytes ?? 0, total)
+  const compressed = stats.memory_compressed_bytes ? Math.min(stats.memory_compressed_bytes, used) : null
+  const cached = stats.memory_cached_bytes ? Math.min(stats.memory_cached_bytes, total - used) : null
+  const free = total - used - (cached ?? 0)
+  const parts: [MemorySegmentKind, number][] = [
+    ['used', used - (compressed ?? 0)],
+    ['compressed', compressed ?? 0],
+    ['cached', cached ?? 0],
+    ['free', free],
+  ]
+  return {
+    totalBytes: total,
+    usedBytes: used,
+    usedPercent: (used / total) * 100,
+    compressedBytes: compressed,
+    cachedBytes: cached,
+    freeBytes: free,
+    segments: parts.filter(([, bytes]) => bytes > 0).map(([kind, bytes]) => ({ kind, bytes, percent: (bytes / total) * 100 })),
+  }
+}
+
+/** macOS' memory pressure as a share in use: 100 less the share it says it
+ *  could free. Null where the machine does not report it. */
+export function memoryPressurePercent(stats: Pick<MachineStats, 'memory_free_under_pressure_percent'>): number | null {
+  const free = stats.memory_free_under_pressure_percent
+  if (free === undefined || free === null) return null
+  return 100 - free
+}
+
+/** The memory bar's level. Where the machine reports pressure (macOS), that
+ *  decides it: a Mac keeps nearly all its memory in use by design, so the used
+ *  share alone would cry wolf. Elsewhere, the used share. */
+export function memoryLevel(stats: Pick<MachineStats,
+  'memory_total_bytes' | 'memory_used_bytes' | 'memory_free_under_pressure_percent'>): UsageLevel {
+  const pressure = memoryPressurePercent(stats)
+  if (pressure !== null) return usageLevel(pressure)
+  return usageLevel(percentOf(stats.memory_used_bytes ?? 0, stats.memory_total_bytes ?? 0))
+}
+
+export interface CommitCharge {
+  committedBytes: number
+  limitBytes: number
+  percent: number
+}
+
+/** Windows' commit charge against its limit, or null where it is not reported. */
+export function commitCharge(stats: Pick<MachineStats, 'memory_committed_bytes' | 'memory_commit_limit_bytes'>): CommitCharge | null {
+  if (!stats.memory_committed_bytes || !stats.memory_commit_limit_bytes) return null
+  return {
+    committedBytes: stats.memory_committed_bytes,
+    limitBytes: stats.memory_commit_limit_bytes,
+    percent: (stats.memory_committed_bytes / stats.memory_commit_limit_bytes) * 100,
+  }
+}
+
+// ── Drives and graphics ─────────────────────────────────────────────────────
+
+/** A drive's free space in words: "93.0 GiB free of 932 GiB". */
+export function driveFreeText(drive: Pick<MachineDrive, 'free_bytes' | 'total_bytes'>): string {
+  return `${formatBytes(drive.free_bytes)} free of ${formatBytes(drive.total_bytes)}`
+}
+
+/** A graphics processor's memory in use as a share, or null when the driver
+ *  gives no total. */
+export function gpuMemoryPercent(gpu: Pick<MachineGPU, 'memory_used_bytes' | 'memory_total_bytes'>): number | null {
+  if (gpu.memory_used_bytes === undefined || gpu.memory_used_bytes === null || !gpu.memory_total_bytes) return null
+  return percentOf(gpu.memory_used_bytes, gpu.memory_total_bytes)
 }
 
 // ── Words ───────────────────────────────────────────────────────────────────
@@ -367,6 +516,52 @@ export function historyBatteryNames(points: readonly MachineStatsHistoryPoint[])
   return order
 }
 
+/** One graphics processor followed through a history. A GPU has no id of its
+ *  own, only a name, and two cards of one model share it; so it is followed by
+ *  its place in each reading's list and its name together, and a reading
+ *  whose GPU at that place has another name counts as having none. */
+export interface HistoryGPU {
+  index: number
+  name: string
+}
+
+/** The GPUs a history covers, those of the newest reading first. */
+export function historyGPUs(points: readonly MachineStatsHistoryPoint[]): HistoryGPU[] {
+  const order: HistoryGPU[] = []
+  const seen = new Set<string>()
+  for (let i = points.length - 1; i >= 0; i--) {
+    ;(points[i].stats.gpus ?? []).forEach((gpu, index) => {
+      const key = `${index}\u0000${gpu.name}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        order.push({ index, name: gpu.name })
+      }
+    })
+  }
+  return order
+}
+
+/** One GPU's reading at one point, or null where that place holds another GPU or none. */
+export function historyGPUAt(point: MachineStatsHistoryPoint, gpu: HistoryGPU): MachineGPU | null {
+  const candidate = point.stats.gpus?.[gpu.index]
+  return candidate && candidate.name === gpu.name ? candidate : null
+}
+
+export function gpuUsageSeries(points: readonly MachineStatsHistoryPoint[], gpu: HistoryGPU): ChartPoint[] {
+  return points.map(point => ({ at: pointTime(point), value: historyGPUAt(point, gpu)?.usage_percent ?? null }))
+}
+
+export function gpuMemoryUsedSeries(points: readonly MachineStatsHistoryPoint[], gpu: HistoryGPU): ChartPoint[] {
+  return points.map(point => ({ at: pointTime(point), value: historyGPUAt(point, gpu)?.memory_used_bytes ?? null }))
+}
+
+/** The largest memory total one GPU reported over a history, 0 for none. */
+export function largestGPUMemoryTotal(points: readonly MachineStatsHistoryPoint[], gpu: HistoryGPU): number {
+  let largest = 0
+  for (const point of points) largest = Math.max(largest, historyGPUAt(point, gpu)?.memory_total_bytes ?? 0)
+  return largest
+}
+
 export function pointTime(point: MachineStatsHistoryPoint): number {
   return Date.parse(point.at)
 }
@@ -400,6 +595,21 @@ export function cpuAverageSeries(points: readonly MachineStatsHistoryPoint[]): C
 
 export function cpuMaximumSeries(points: readonly MachineStatsHistoryPoint[]): ChartPoint[] {
   return points.map(point => ({ at: pointTime(point), value: point.cpu_usage_percent_maximum ?? null }))
+}
+
+/** Whether any reading in a history carries a WSL reading inside it. */
+export function historyHasWSL(points: readonly MachineStatsHistoryPoint[]): boolean {
+  return points.some(point => point.stats.wsl)
+}
+
+/** The WSL virtual machine's CPU at each point: the newest reading in the
+ *  bucket, since the bucket's average and peak are the Windows host's. */
+export function wslCPUSeries(points: readonly MachineStatsHistoryPoint[]): ChartPoint[] {
+  return points.map(point => ({ at: pointTime(point), value: point.stats.wsl?.cpu_usage_percent ?? null }))
+}
+
+export function wslMemoryUsedSeries(points: readonly MachineStatsHistoryPoint[]): ChartPoint[] {
+  return points.map(point => ({ at: pointTime(point), value: point.stats.wsl?.memory_total_bytes ? point.stats.wsl.memory_used_bytes ?? 0 : null }))
 }
 
 /** The largest total a series of readings reported, for the top of a byte

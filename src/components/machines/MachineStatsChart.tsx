@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { chartRuns, formatChartTime, nearestPointIndex, type ChartPoint } from '../../machineStats'
+import type { MachineHue } from './MachineGauges'
 import styles from './BridgeMachines.module.css'
 
 /** The width of the drawing space. The SVG stretches it to the chart's width,
@@ -10,6 +11,9 @@ const VIEW_HEIGHT = 100
 
 export interface MachineStatsChartProps {
   title: string
+  /** Which measure it is, for its color: the same hue as the measure's mark
+   *  on the card. */
+  hue: MachineHue
   /** The line, one point per history bucket. */
   points: readonly ChartPoint[]
   /** A faint band from the line up to these values, at the same times: the
@@ -29,7 +33,7 @@ export interface MachineStatsChartProps {
  *  gridlines, and a crosshair that snaps to the nearest bucket under the
  *  pointer or the arrow keys and reads out its time and values. */
 export function MachineStatsChart({
-  title, points, bandTops, lineName, bandName, since, until, stepSeconds, yMaximum, formatValue,
+  title, hue, points, bandTops, lineName, bandName, since, until, stepSeconds, yMaximum, formatValue,
 }: MachineStatsChartProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const span = Math.max(1, until - since)
@@ -83,9 +87,9 @@ export function MachineStatsChart({
     : null
 
   return (
-    <figure className={styles.chart}>
+    <figure className={`${styles.chart} bc-machine-chart`} data-hue={hue}>
       <figcaption className={styles.chartCaption}>
-        <span className={styles.chartTitle}>{title}</span>
+        <span className={`${styles.chartTitle} bc-machine-chart-title`}>{title}</span>
         <span className={styles.chartReadout} aria-live="polite">
           {shown && shown.value !== null ? (
             <>

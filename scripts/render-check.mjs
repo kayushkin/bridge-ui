@@ -2289,10 +2289,10 @@ async function machinesChecks() {
   const page = renderToStaticMarkup(h(BridgeContext.Provider, { value: config }, h(BridgeMachines)))
   check('the page lists this server first, by its name, then connected servers by name',
     page.indexOf('home') < page.indexOf('no-access-server') && page.indexOf('no-access-server') < page.indexOf('older-server'), page.slice(0, 800))
-  check('a connected server built before machine stats says so, not an error',
-    page.includes('does not report machine stats yet') && !page.includes('machine not found'), page)
+  check('a connected server built before machine stats says so, not an error, beside the waiting crab',
+    page.includes('does not report machine stats yet') && !page.includes('machine not found') && page.includes('data-picture="crab-waiting"'), page)
   check('a connected server with no access says why', page.includes('has not given this server any access'), page)
-  check("this server's machines each get a card", ['home-server', 'laptop', 'old-box', 'spare', 'workstation'].every(name => page.includes(name)), page.slice(0, 2000))
+  check("this server's machines each get a card", ['home-server', 'laptop', 'old-box', 'spare', 'workstation', 'storage'].every(name => page.includes(name)), page.slice(0, 2000))
 
   const overview = machineStatsFixtureOverview(now)
   const card = name => renderToStaticMarkup(h(MachineCard, { overview: overview.find(entry => entry.machine.name === name), now, open: false, onToggle: () => {}, serverConfig: config }))
@@ -2304,28 +2304,53 @@ async function machinesChecks() {
   check('a drive at 86% is marked high, in words as well as color', server.includes('271 GiB of 315 GiB') && server.includes('>high<'), server)
   const windows = card('workstation')
   check('a WSL runner says its numbers are the Windows host', windows.includes('Windows host, read from WSL'), windows)
-  check('a drive at 96% is marked critical', windows.includes('>critical<'), windows)
+  check('a WSL runner shows Windows and WSL as two parts, each with its own OS and kernel',
+    windows.indexOf('>Windows</h5>') >= 0 && windows.indexOf('>Windows</h5>') < windows.indexOf('>WSL</h5>') &&
+      windows.includes('Microsoft Windows 11 Pro') && windows.includes('5.15.167.4-microsoft-standard-WSL2') &&
+      windows.includes('Virtual disk') && windows.includes('Commit charge'), windows)
+  check('a drive at 90% is marked high, and its free space is said in words',
+    windows.includes('>high<') && windows.includes('93.0 GiB free of 930 GiB'), windows)
+  check('a graphics card shows a dial, its memory and its temperature',
+    windows.includes('NVIDIA GeForce RTX 3080 Ti') && windows.includes('3.50 GiB of 12.0 GiB memory') && windows.includes('31 °C') &&
+      windows.includes('data-hue="gpu"'), windows)
+  check('a desktop gets the desktop picture hook', windows.includes('data-picture="desktop"'), windows)
   check('parts that could not be read are listed', windows.includes('Could not read') && windows.includes('Win32_Battery timed out'), windows)
+  const stale = card('old-box')
+  check('a drive at 97% is marked critical', stale.includes('>critical<'), stale)
+  const busy = card('storage')
+  check('a dial past 85% says high in words, and a server gets the server picture',
+    busy.includes('aria-valuetext="88%, high"') && busy.includes('data-picture="server"'), busy)
   const laptop = card('laptop')
   check('a battery shows charge, state, time left, health and cycles',
-    laptop.includes('InternalBattery-0') && laptop.includes('64%') && laptop.includes('on battery') && laptop.includes('4 h 25 min left') &&
-      laptop.includes('health 91%') && laptop.includes('212 cycles'), laptop)
+    laptop.includes('InternalBattery-0') && laptop.includes('9.0%') && laptop.includes('on battery') && laptop.includes('7 h 15 min left') &&
+      laptop.includes('health 98%') && laptop.includes('30 cycles') && laptop.includes('>low<'), laptop)
+  check('a Mac shows compressed memory, file cache and its pressure',
+    laptop.includes('data-segment="compressed"') && laptop.includes('data-segment="cached"') && laptop.includes('Pressure') &&
+      laptop.includes('macOS could free 60% of memory') && laptop.includes('data-picture="laptop"'), laptop)
+  check('a GPU with no memory total says what it uses, with no bar or temperature', laptop.includes('1.00 GiB memory in use') && !laptop.includes('°C'), laptop)
   check('no battery block on a machine without one', !server.includes('Battery'), server)
-  const stale = card('old-box')
   check('a machine that stopped reporting is stale and says when it last reported', stale.includes('stale · last reported 47m ago'), stale)
   check('its uptime is as of its last reading, not carried on to now', stale.includes('Was up 8 d 7 h at its last reading'), stale)
   check('a runner that is not connected says so', stale.includes('runner not connected'), stale)
   const never = card('spare')
-  check('a machine that never reported says so', never.includes('never sent a reading') && never.includes('not reporting'), never)
+  check('a machine that never reported says so, with no picture of a kind it cannot know',
+    never.includes('never sent a reading') && never.includes('not reporting') && !never.includes('data-picture'), never)
 
   const laptopLatest = overview.find(entry => entry.machine.name === 'laptop').latest
   const history = machineStatsFixtureHistory('m_000002', laptopLatest, new Date(now.getTime() - 86400_000), now, 180)
   const charts = renderToStaticMarkup(h(HistoryCharts, { history }))
-  check('history draws CPU with its peak band, memory, each drive and each battery',
-    charts.includes('CPU in use') && charts.includes('peak') && charts.includes('Memory in use') && charts.includes('/ used') &&
-      charts.includes('Battery InternalBattery-0 charge'), charts.slice(0, 1500))
+  check('history draws CPU with its peak band, the GPU, memory, each drive and each battery',
+    charts.includes('CPU in use') && charts.includes('peak') && charts.includes('Apple M2 in use') && charts.includes('Apple M2 memory') &&
+      charts.includes('Memory in use') && charts.includes('/ used') && charts.includes('Battery InternalBattery-0 charge') && !charts.includes('WSL'),
+    charts.slice(0, 1500))
   check('a gap in the readings breaks the line into two runs',
     (charts.match(/<path[^>]*d="M/g) ?? []).length >= 2 * 4, charts.slice(0, 600))
+  const windowsLatest = overview.find(entry => entry.machine.name === 'workstation').latest
+  const windowsCharts = renderToStaticMarkup(h(HistoryCharts, { history: machineStatsFixtureHistory('m_000005', windowsLatest, new Date(now.getTime() - 86400_000), now, 180) }))
+  check('a WSL runner\'s history names Windows and charts the WSL CPU and memory on their own',
+    windowsCharts.includes('Windows CPU in use') && windowsCharts.includes('Windows memory in use') &&
+      windowsCharts.includes('WSL CPU in use') && windowsCharts.includes('WSL memory in use') && windowsCharts.includes('<th>WSL CPU</th>'),
+    windowsCharts.slice(0, 1500))
   check('history offers the same numbers as a table', charts.includes('Show as a table') && charts.includes('<table'), charts.slice(-600))
 }
 
