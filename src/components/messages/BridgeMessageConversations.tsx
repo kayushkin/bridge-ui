@@ -268,10 +268,10 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
   // is replaced in the URL by the room's current one.
   useEffect(() => {
     if (!addressedPath || roomParameter || pathKnown || !shortNameStore.configured) return
-    let cancelled = false
+    let canceled = false
     setLookup({ path: addressedPath, state: 'loading' })
     resolveShortName(addressedPath).then(answer => {
-      if (cancelled) return
+      if (canceled) return
       if (answer.kind === 'missing') { setLookup({ path: addressedPath, state: 'missing' }); return }
       const { current } = answer.resolution
       if (current.entity_type !== MULTICHAT_ROOM_ENTITY_TYPE) {
@@ -283,8 +283,8 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
         return
       }
       setLookup({ path: addressedPath, state: 'found', roomID: current.entity_id })
-    }).catch(err => { if (!cancelled) setLookup({ path: addressedPath, state: 'error', error: errorText(err) }) })
-    return () => { cancelled = true }
+    }).catch(err => { if (!canceled) setLookup({ path: addressedPath, state: 'error', error: errorText(err) }) })
+    return () => { canceled = true }
   }, [addressedPath, roomParameter, pathKnown, shortNameStore.configured, resolveShortName, navigate, routes.messageConversations, search])
 
   const currentLookup = lookup && lookup.path === addressedPath && !pathKnown && !roomParameter ? lookup : null
@@ -581,15 +581,15 @@ function usePersonStoredChats(personID: string): { conversations: StoreConversat
   const [answer, setAnswer] = useState<{ personID: string; conversations: StoreConversation[] | null; error: string | null }>({ personID: '', conversations: null, error: null })
   useEffect(() => {
     if (!personID || !messageStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     hostFetch(`${messageStoreBasePath}${personHistoryConversationsPath(personID)}`)
       .then(async res => {
         if (!res.ok) throw new Error(`message-store: ${res.status} ${(await res.text()).trim()}`)
         return await res.json() as StoreConversation[] | null
       })
-      .then(conversations => { if (!cancelled) setAnswer({ personID, conversations: conversations ?? [], error: null }) })
-      .catch(err => { if (!cancelled) setAnswer({ personID, conversations: null, error: errorText(err) }) })
-    return () => { cancelled = true }
+      .then(conversations => { if (!canceled) setAnswer({ personID, conversations: conversations ?? [], error: null }) })
+      .catch(err => { if (!canceled) setAnswer({ personID, conversations: null, error: errorText(err) }) })
+    return () => { canceled = true }
   }, [personID, messageStoreBasePath, hostFetch])
   return answer.personID === personID ? answer : { conversations: null, error: null }
 }
@@ -805,14 +805,14 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, st
   }
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     Promise.all(roomIDs.map(sourceID => sourcePage(sourceID, null))).then(answers => {
-      if (cancelled) return
+      if (canceled) return
       pendingScroll.current = { kind: 'bottom' }
       setPages(Object.fromEntries(answers.map((page, index) => [roomIDs[index], page])))
       setError(null)
-    }).catch(err => { if (!cancelled) setError(errorText(err)) })
-    return () => { cancelled = true }
+    }).catch(err => { if (!canceled) setError(errorText(err)) })
+    return () => { canceled = true }
     // roomKey stands for roomIDs, which is a new array on every list poll.
   }, [roomKey, sourcePage])
 
@@ -1063,7 +1063,7 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, st
     updateReactions(message.roomID, target, reactions => withReactionPosted(reactions, posted.value.key || choice.key, posted.value.event_id, 'You', shortcode))
   }
 
-  /** The favourites the quick-react bar under each message offers here. */
+  /** The favorites the quick-react bar under each message offers here. */
   const quickReactions = emoji.favorites.slice(0, catalog?.settings.quick_reaction_count ?? 0)
 
   /** A quick reaction adds ours, or takes back the one we posted from here. */
@@ -1298,11 +1298,11 @@ function useDiscordStatus(isDiscord: boolean): DiscordBridgeStatus | null {
   const [status, setStatus] = useState<DiscordBridgeStatus | null>(null)
   useEffect(() => {
     if (!isDiscord) return
-    let cancelled = false
+    let canceled = false
     read<DiscordBridgeStatus>('/discord/status')
-      .then(answer => { if (!cancelled) setStatus(answer) })
+      .then(answer => { if (!canceled) setStatus(answer) })
       .catch(err => console.error('Discord channel names and custom emoji are not available:', err))
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [isDiscord, read])
   return status
 }

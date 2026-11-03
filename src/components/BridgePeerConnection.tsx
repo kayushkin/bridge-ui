@@ -39,19 +39,19 @@ export function BridgePeerConnection() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void (async () => {
       const path = peerConnectionPath(connectionId)
       try {
         const res = await fetchFn(`${basePath}${path}`)
-        if (!res.ok) { if (!cancelled) setError(await peerRouteErrorText(res, `GET ${path}`)); return }
+        if (!res.ok) { if (!canceled) setError(await peerRouteErrorText(res, `GET ${path}`)); return }
         const found = (await res.json()) as PeerConnectionView
-        if (!cancelled) setView(found)
+        if (!canceled) setView(found)
       } catch (err) {
-        if (!cancelled) setError(`GET ${path}: ${err instanceof Error ? err.message : String(err)}`)
+        if (!canceled) setError(`GET ${path}: ${err instanceof Error ? err.message : String(err)}`)
       }
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, basePath, connectionId])
 
   const peerConfig = useMemo(() => peerConnectionBridgeConfig(config, connectionId), [config, connectionId])

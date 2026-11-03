@@ -38,7 +38,7 @@ const MENU_ITEM_SELECTOR = 'button[role="menuitem"]:not(:disabled)'
  *
  *  Availability is per harness, not per instance: the server reports it on
  *  `HarnessInfo.available`, and every instance of a harness whose process is
- *  gone is equally unreachable. It gates the dot's colour, the button's
+ *  gone is equally unreachable. It gates the dot's color, the button's
  *  `disabled`, its title and the click itself together.
  *
  *  Arrow keys move between the items, Home and End jump, Enter picks (the

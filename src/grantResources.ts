@@ -115,7 +115,7 @@ export function skillOption(skill: SkillRecord): ResourceOption {
   return { id: String(skill.id), label: skill.name, detail: skill.source_name, disabled: !skill.enabled }
 }
 
-/** Labelled by `name`, which every tool has, with `display_name` beside the
+/** Labeled by `name`, which every tool has, with `display_name` beside the
  *  kind when there is one — the Bundles composer's wording. */
 export function toolOption(tool: ToolRecord): ResourceOption {
   const detail = tool.display_name && tool.display_name !== tool.name ? `${tool.kind} · ${tool.display_name}` : tool.kind

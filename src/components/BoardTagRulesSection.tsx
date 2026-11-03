@@ -198,16 +198,16 @@ function TagRulesPreview({ board, storedRules, savedRulesVersion, pickers }: {
   const [answer, setAnswer] = useState<{ forReadKey: string; effective: EffectiveDefaults | null; error: string | null } | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const timer = setTimeout(() => {
       getEffectiveDefaultsForTags(fetchFn, base, board.id, JSON.parse(tagsKey) as string[]).then(result => {
-        if (cancelled) return
+        if (canceled) return
         setAnswer(result.ok
           ? { forReadKey: readKey, effective: result.value, error: null }
           : { forReadKey: readKey, effective: null, error: result.error })
       })
     }, PREVIEW_DELAY_MS)
-    return () => { cancelled = true; clearTimeout(timer) }
+    return () => { canceled = true; clearTimeout(timer) }
   }, [fetchFn, base, board.id, tagsKey, readKey])
 
   const current = answer?.forReadKey === readKey ? answer : null

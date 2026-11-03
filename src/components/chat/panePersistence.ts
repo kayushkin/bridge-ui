@@ -81,7 +81,7 @@ const PANES_HIDDEN_KEY = chatKey('panes-hidden')
  *
  *  ⚠️ Only the RATIO is meaningful, never the magnitudes. `{turns: 2, timeline: 1}`
  *  and `{turns: 20, timeline: 10}` are the same layout, and `splitGrowUnitsAfterDrag`
- *  conserves the pair's total rather than normalising it — so whatever total a drag
+ *  conserves the pair's total rather than normalizing it — so whatever total a drag
  *  starts from is the total it writes back. Nothing may read a single pane's number
  *  and conclude anything from it alone. */
 export type PaneSizes = Record<PaneKey, number>
@@ -132,7 +132,7 @@ export const DEFAULT_MOBILE_PANE: PaneKey = 'turns'
  *  Layout must not depend on that.
  *
  *  The row draws a drag handle between each ADJACENT pair of what this returns, so a
- *  pane hidden in the middle closes the gap and the two survivors become neighbours
+ *  pane hidden in the middle closes the gap and the two survivors become neighbors
  *  with one boundary — rather than leaving a handle that measures a pane nobody can
  *  see. */
 export function visiblePanes(panesHidden: PanesHidden, drawable: PaneDrawable = {}): PaneKey[] {
@@ -220,7 +220,7 @@ function storage(): Storage | null {
  *  the whole record on a partial read would instead give a new pane whatever `false`
  *  happens to mean for it.
  *
- *  Only booleans under known keys are honoured. Anything else is treated as absent, so a
+ *  Only booleans under known keys are honored. Anything else is treated as absent, so a
  *  truncated write or a hand-edited row degrades to the page chat has always opened as
  *  rather than to a pane set nobody chose.
  *
@@ -331,7 +331,7 @@ export function loadMobilePane(): PaneKey {
 
 /** Whether the Turns pane's vibe legend is expanded.
  *
- *  Per PANE, not per turn and not per session: the legend explains a colour scheme that
+ *  Per PANE, not per turn and not per session: the legend explains a color scheme that
  *  is the same in every turn of every session, so a reader who has learnt it wants it
  *  shut everywhere and a reader who has not wants it open everywhere.
  *

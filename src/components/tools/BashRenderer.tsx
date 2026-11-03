@@ -46,7 +46,7 @@ function BashRenderer({ tool, running }: ToolRendererProps) {
 
   useEffect(() => {
     if (!needsFetch) return
-    let cancelled = false
+    let canceled = false
     setState('loading')
     ;(async () => {
       try {
@@ -65,16 +65,16 @@ function BashRenderer({ tool, running }: ToolRendererProps) {
             hint: sidesHint(entry.before, entry.after),
           })
         }
-        if (cancelled) return
+        if (canceled) return
         setDiffs(loaded)
         setState('ready')
       } catch (err) {
-        if (cancelled) return
+        if (canceled) return
         setState('error')
         setErrorHint(String(err))
       }
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [needsFetch, sessionId, tool.tool_id, fetchFn, basePath])
 
   return (

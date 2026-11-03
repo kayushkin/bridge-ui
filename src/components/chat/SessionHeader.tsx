@@ -667,7 +667,7 @@ function SessionDetailsPanel({
     ['harness session', pending(detail?.harnessSessionId), true],
     // Named for the id it actually holds. The server's own field is `parent_id` and its
     // doc comment says it is neither a session id nor a general parent — it is the fork
-    // parent's HARNESS id, fed to `--fork`. Labelling it "parent" beside a row called
+    // parent's HARNESS id, fed to `--fork`. Labeling it "parent" beside a row called
     // "session id" invites reading one as the other.
     ['fork parent (harness id)', pending(detail?.forkParentHarnessSessionId), true],
     ['forked from', pending(detail?.forkedFromSessionId), true],
@@ -749,7 +749,7 @@ const PERM_MODE_TITLES: Record<string, string> = {
 
 /** Draw a separator before Custom so the power-user escape hatch reads as apart from the
  *  everyday modes. `<select>` has no real separator element, so it is a disabled option —
- *  every browser honours the disabled state. */
+ *  every browser honors the disabled state. */
 const PERM_MODE_DIVIDER_BEFORE = new Set<string>(['custom'])
 
 /** When a harness advertises no modes at all, offer only the two every harness in the
@@ -757,7 +757,7 @@ const PERM_MODE_DIVIDER_BEFORE = new Set<string>(['custom'])
  *  the harness never made. Same fallback as bridge-ui's SessionPermissionMode. */
 const PERM_MODE_UNADVERTISED_FALLBACK: string[] = ['ask', 'bypass']
 
-/** The modes this harness will actually honour, in canonical order.
+/** The modes this harness will actually honor, in canonical order.
  *
  *  Offering a mode the harness does not implement is not harmless — the select shows the
  *  user a setting that silently does nothing on the next spawn, and for a permission
@@ -961,7 +961,7 @@ const PANE_TABS: Record<PaneKey, { label: string; short: string; title: string }
   attach: { label: 'Terminal', short: '>_', title: 'The session terminal — pty mode only' },
 }
 
-/** The view tabs: one labelled tab per pane this session can draw. A click shows that pane
+/** The view tabs: one labeled tab per pane this session can draw. A click shows that pane
  *  alone; Shift-, Ctrl- or ⌘-click adds it beside the others (or takes it away), which is
  *  how two panes end up side by side. The number keys 1–5 do the same (BridgeChat).
  *

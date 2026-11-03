@@ -34,7 +34,7 @@ describe('promptOutputState', () => {
 })
 
 describe('tags', () => {
-  it('normalises the way agent-store stores them', () => {
+  it('normalizes the way agent-store stores them', () => {
     expect(parseTagInput(' Stores, scheduler  stores,')).toEqual(['scheduler', 'stores'])
     expect(parseTagInput('')).toEqual([])
   })

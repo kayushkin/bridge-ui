@@ -20,13 +20,13 @@ export function CardsForEmail({ locator }: { locator: string }) {
 
   useEffect(() => {
     if (!kanbanStoreBasePath || !locator) return
-    let cancelled = false
+    let canceled = false
     setCards([])
     setTicketFromThisEmail(new Set())
     setError(null)
     void (async () => {
       const result = await listCardsForEntity(fetchFn, kanbanStoreBasePath, 'email', locator)
-      if (cancelled) return
+      if (canceled) return
       if (!result.ok) {
         setError(result.error)
         return
@@ -34,7 +34,7 @@ export function CardsForEmail({ locator }: { locator: string }) {
       setCards(result.value)
       // An email lands on a handful of cards at most, so one ticket read each.
       const tickets = await Promise.all(result.value.map(card => getCardTicket(fetchFn, kanbanStoreBasePath, card.card_id)))
-      if (cancelled) return
+      if (canceled) return
       const fromThisEmail = new Set<string>()
       tickets.forEach((ticket, index) => {
         if (!ticket.ok) {
@@ -48,7 +48,7 @@ export function CardsForEmail({ locator }: { locator: string }) {
       })
       setTicketFromThisEmail(fromThisEmail)
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, kanbanStoreBasePath, locator])
 
   if (!kanbanStoreBasePath || (cards.length === 0 && !error)) return null

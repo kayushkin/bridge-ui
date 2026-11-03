@@ -82,11 +82,11 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
   const [stores, setStores] = useState<ReadonlyMap<string, ChatContextValue>>(new Map())
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void (async () => {
       try {
         const res = await fetchFn(`${basePath}${THIS_SERVER_PATH}`)
-        if (cancelled) return
+        if (canceled) return
         // A server that does not describe itself yet answers 404; its folder is
         // then "This server", which is the truth, not an error to show.
         if (res.status === 404) return
@@ -94,19 +94,19 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
         const body = (await res.json()) as ServerDescription
         setThisServerName(body.name?.trim() || null)
       } catch (err) {
-        if (!cancelled) setThisServerNameError(`GET ${THIS_SERVER_PATH}: ${err instanceof Error ? err.message : String(err)}`)
+        if (!canceled) setThisServerNameError(`GET ${THIS_SERVER_PATH}: ${err instanceof Error ? err.message : String(err)}`)
       }
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, basePath])
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const read = async () => {
       if (typeof document !== 'undefined' && document.hidden) return
       try {
         const res = await fetchFn(`${basePath}${PEER_CONNECTIONS_PATH}`)
-        if (cancelled) return
+        if (canceled) return
         // Only an administrator may list connections. Anyone else has no
         // connected servers to see, which is not an error.
         if (res.status === 401 || res.status === 403) { setViews([]); setConnectionsError(null); return }
@@ -114,14 +114,14 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
         setViews((await res.json()) as PeerConnectionView[])
         setConnectionsError(null)
       } catch (err) {
-        if (!cancelled) setConnectionsError(`GET ${PEER_CONNECTIONS_PATH}: ${err instanceof Error ? err.message : String(err)}`)
+        if (!canceled) setConnectionsError(`GET ${PEER_CONNECTIONS_PATH}: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
-        if (!cancelled) setConnectionsLoaded(true)
+        if (!canceled) setConnectionsLoaded(true)
       }
     }
     void read()
     const timer = setInterval(() => void read(), CONNECTIONS_POLL_MS)
-    return () => { cancelled = true; clearInterval(timer) }
+    return () => { canceled = true; clearInterval(timer) }
   }, [fetchFn, basePath])
 
   const servers = useMemo(() => connectedServerListings(views), [views])

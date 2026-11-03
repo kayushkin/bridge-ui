@@ -59,7 +59,7 @@ type OpenChatFn = (link: SessionLinkRef) => void
 // that describes what is happening to the card now.
 //
 // Cards carry a single session link today, so newest and first are the same row
-// and the old "return the first match" behaviour was never visibly wrong. It was
+// and the old "return the first match" behavior was never visibly wrong. It was
 // only ever right by accident: nothing stops a second dispatch adding a second
 // link, and on the day that happens, first-match silently reports the oldest
 // agent as the current one.
@@ -341,17 +341,17 @@ function KanbanBoardOnServer({ server, servers, boardsByServer, onPickBoardOnSer
     if (boardResolveAttempted.current === drawerCardID) return
     boardResolveAttempted.current = drawerCardID
 
-    let cancelled = false
+    let canceled = false
     void (async () => {
       try {
         const res = await fetchFn(
           `${kanbanStoreBasePath}/api/cards/${encodeURIComponent(drawerCardID)}/placements`,
         )
-        if (!res.ok || cancelled) return
+        if (!res.ok || canceled) return
         // ⚠️ kanban-store answers a card id it does not know with 200 and a JSON
         // `null` body, NOT a 404 — measured against the live service. So `res.ok`
         // is not evidence that a card exists, and annotating this `Placement[]`
-        // was a claim the wire does not honour.
+        // was a claim the wire does not honor.
         //
         // ⚪ This check changes NO observable answer, and that was measured
         // rather than assumed. Removing it and running the browser spec leaves
@@ -361,7 +361,7 @@ function KanbanBoardOnServer({ server, servers, boardsByServer, onPickBoardOnSer
         // because the throw is handled by design.
         //
         // It is kept for the TYPE, not the control flow: the response was
-        // annotated `Placement[]`, which is a claim the wire does not honour, so
+        // annotated `Placement[]`, which is a claim the wire does not honor, so
         // `unknown` plus a checked narrowing is the honest shape. Anyone
         // tempted to restore the annotation should know it was measured false.
         //
@@ -370,18 +370,18 @@ function KanbanBoardOnServer({ server, servers, boardsByServer, onPickBoardOnSer
         // guard for exactly this property and recorded the measurement in its
         // place. The only thing earning this one its keep is the type.
         const placements: unknown = await res.json()
-        if (!Array.isArray(placements) || cancelled) return
+        if (!Array.isArray(placements) || canceled) return
         const target = (placements as Placement[]).find(
           p => p.board_id && p.board_id !== selectedBoardID,
         )
-        if (target?.board_id && !cancelled) setSelectedBoardID(target.board_id)
+        if (target?.board_id && !canceled) setSelectedBoardID(target.board_id)
       } catch {
         // A link to a card that no longer exists is a dead link, not an error
         // state for the whole board — the drawer simply stays shut.
       }
     })()
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [drawerCardID, drawerCard, k.view, kanbanStoreBasePath, fetchFn, selectedBoardID])
 
@@ -1373,7 +1373,7 @@ function CardTiming({
 
   useEffect(() => {
     if (!session) return
-    let cancelled = false
+    let canceled = false
     setUnavailable(false)
     setLastActivity(null)
     setState(null)
@@ -1381,13 +1381,13 @@ function CardTiming({
     fetchFn(`${basePath}/sessions/${encodeURIComponent(session.ref)}`)
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(s => {
-        if (cancelled) return
+        if (canceled) return
         setLastActivity(typeof s?.updated_at === 'string' ? s.updated_at : null)
         setState(typeof s?.state === 'string' ? s.state : null)
       })
-      .catch(() => { if (!cancelled) setUnavailable(true) })
+      .catch(() => { if (!canceled) setUnavailable(true) })
 
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [session?.ref, basePath, fetchFn])
 
   const boardAge = formatAgeCompact(placement.created_at)
@@ -2179,16 +2179,16 @@ function EntityLinkRow({
 
   useEffect(() => {
     if (!isNoteLink || !noteboardBasePath) return
-    let cancelled = false
+    let canceled = false
     fetchNoteboardItemRef(fetchFn, noteboardBasePath, link.entity_ref)
       .then(ref => {
-        if (!cancelled && ref?.title) setTitle(ref.title)
+        if (!canceled && ref?.title) setTitle(ref.title)
       })
       .catch(() => {
         // Unresolvable is a legible outcome — the raw ref stays on screen.
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [isNoteLink, noteboardBasePath, fetchFn, link.entity_ref])
 
@@ -2453,7 +2453,7 @@ const ASSIGNEE_MATCHES_SHOWN = 30
  *
  * A directory that failed to load renders the failure, not an empty list. An
  * empty list here would say "there is nobody to assign", which is a claim
- * about the organisation, when the truth is that principal-store did not
+ * about the organization, when the truth is that principal-store did not
  * answer.
  */
 function AssigneePicker({

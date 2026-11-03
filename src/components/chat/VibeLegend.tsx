@@ -40,7 +40,7 @@ export default function VibeLegend() {
         className={styles.vibeLegendToggle}
         onClick={toggle}
         aria-expanded={open}
-        title={open ? 'Hide the vibe legend' : 'What do the coloured rails mean?'}
+        title={open ? 'Hide the vibe legend' : 'What do the colored rails mean?'}
       >
         legend {open ? '▴' : '▾'}
       </button>

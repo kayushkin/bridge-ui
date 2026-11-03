@@ -293,7 +293,7 @@ function PriorityLadderSection({ ladder, onSave }: { ladder: PriorityLadder | nu
         The top rung is the HIGHEST priority value — noteboard sorts priority descending — so P0 is a label on the
         highest number, not the number itself. Value 0 is reserved for unranked cards and refused. A board with no rungs
         ignores priorities entirely: its cards carry no limit. Default cost is the auto-hold dollar ceiling a card starts
-        with when it is created, attached or re-prioritised at that rung; it stays editable on each card, a ceiling set by
+        with when it is created, attached or re-prioritized at that rung; it stays editable on each card, a ceiling set by
         hand is never overwritten, and existing cards keep theirs when the ladder changes. The whole ladder is replaced on save.
       </p>
       {rows.length > 0 && (
@@ -399,12 +399,12 @@ function AssignmentPoolSection({ board, onSave, fetchFn, base }: {
   const [strategies, setStrategies] = useState<string[] | null>(null)
   const [strategiesError, setStrategiesError] = useState<string | null>(null)
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     listAssignmentStrategies(fetchFn, base).then(result => {
-      if (cancelled) return
+      if (canceled) return
       if (result.ok) { setStrategies(result.value); setStrategiesError(null) } else setStrategiesError(result.error)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, base])
 
   // Groups only: kanban-store refuses a pool that names a human.
@@ -504,12 +504,12 @@ function ClassifierSection({ board, onSave, fetchFn, mailBasePath }: {
 
   useEffect(() => {
     if (!mailBasePath) return
-    let cancelled = false
+    let canceled = false
     listMailAccounts(fetchFn, mailBasePath).then(result => {
-      if (cancelled) return
+      if (canceled) return
       if (result.ok) { setAccounts(result.value); setAccountsError(null) } else setAccountsError(result.error)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, mailBasePath])
 
   // What Save would send: with a mail route the ticked ids, without one the

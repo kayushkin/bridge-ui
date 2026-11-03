@@ -11,7 +11,7 @@ import type {
 
 // The work-graph view's pure rules: the paths it asks work-graph-store for,
 // the lane layout that turns a topological commit list into a drawing, the
-// colour each session gets, and what each session did in a repo. The component
+// color each session gets, and what each session did in a repo. The component
 // (`components/chat/WorkGraphView.tsx`) only fetches and draws; everything here
 // is covered by `test/workGraph.test.ts`.
 //
@@ -129,7 +129,7 @@ export function otherRepos<R extends { id: number; name: string }>(all: R[], act
 // Lane layout
 
 /** One line segment in one row of the drawing. Columns are lane indexes.
- *  `top` runs from the row's top edge to its centre, `bottom` from the centre to
+ *  `top` runs from the row's top edge to its center, `bottom` from the center to
  *  its bottom edge, `through` the whole height in one lane. */
 export interface WorkGraphSegment {
   part: 'top' | 'bottom' | 'through'
@@ -233,7 +233,7 @@ export function layoutCommitGraph(commits: Commit[]): WorkGraphLayout {
 }
 
 // ---------------------------------------------------------------------------
-// Session colours
+// Session colors
 
 /** A hue in [0, 360) that is the same for a session id every time, anywhere.
  *  FNV-1a over the id's UTF-16 code units, then spread by the golden angle so

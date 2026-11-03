@@ -638,7 +638,7 @@
 }
 
 /* ---------- status icons ----------
-   bridge-ui draws each session state as a coloured dot with a symbol; zine swaps in a
+   bridge-ui draws each session state as a colored dot with a symbol; zine swaps in a
    painted icon per state (zine-art's pieces.js, "status icons"). A state where something is
    happening is an animation: its PNG is a strip of square frames, left to right, and
    `zineFrames` steps the background across them — --zine-status-frames frames in
@@ -765,7 +765,7 @@
    bridge-ui marks each block of an answer with data-vibe (danger, warning,
    question, action, info, descriptive) and draws a rail and an emoji beside the
    ones that ask for attention. Here the emoji become stickers in the two inks,
-   each vibe its own shape as well as its own colour, the rails take the print's
+   each vibe its own shape as well as its own color, the rails take the print's
    inks, and the flat tint behind a flagged block becomes halftone dots. The
    legend reuses the same stickers. */
 [data-theme="zine"] {
@@ -797,7 +797,7 @@
     radial-gradient(circle, color-mix(in srgb, var(--vibe-hue) 22%, transparent) 0.9px, transparent 1.3px) 0 0 / 6px 6px,
     radial-gradient(circle, color-mix(in srgb, var(--vibe-hue) 22%, transparent) 0.9px, transparent 1.3px) 3px 3px / 6px 6px;
 }
-/* the sticker sits centred on the rail and hangs into the turn's left padding */
+/* the sticker sits centered on the rail and hangs into the turn's left padding */
 [data-theme="zine"] [class*="vibeProse"] > div:is([data-vibe-run='start'], [data-vibe-run='solo'])::before {
   left: -6px;
   top: 1px;

@@ -390,7 +390,7 @@ export function contactListPlatforms(contacts: readonly MultichatUnifiedContact[
   return [...new Set(contacts.flatMap(contactPlatforms))].sort()
 }
 
-/** The body of `POST /tags`. No colour is sent, so multichat picks its own. */
+/** The body of `POST /tags`. No color is sent, so multichat picks its own. */
 export function tagCreateBodyOf(name: string, existing: readonly MultichatTag[]): WireBodyResult<{ name: string }> {
   const trimmed = name.trim()
   if (!trimmed) return { ok: false, error: 'A tag needs a name.' }

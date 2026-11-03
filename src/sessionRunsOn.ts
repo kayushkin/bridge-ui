@@ -57,11 +57,11 @@ export function useSessionRunsOn(sessionID: string | null): { runsOn: SessionRun
     setRunsOn(null)
     setError(null)
     if (!sessionID) return
-    let cancelled = false
+    let canceled = false
     fetchSessionRunsOn(fetchFn, basePath, sessionID)
-      .then(value => { if (!cancelled) setRunsOn(value) })
-      .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)) })
-    return () => { cancelled = true }
+      .then(value => { if (!canceled) setRunsOn(value) })
+      .catch(err => { if (!canceled) setError(err instanceof Error ? err.message : String(err)) })
+    return () => { canceled = true }
   }, [sessionID, fetchFn, basePath])
 
   return { runsOn, error }

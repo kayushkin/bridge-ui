@@ -68,7 +68,7 @@ import {
 } from './panePersistence'
 
 /** `?view=` values, each a surface drawn in place of the thread: the work graph,
- *  each repo's commits coloured by the session that made them, the projects
+ *  each repo's commits colored by the session that made them, the projects
  *  (`&project=` opens one project's page), a multichat conversation
  *  (`&room=`), opened from the sidebar's Waiting on you section, and a session
  *  on a connected server (`&server=` the connection, `&server_session=` that
@@ -186,7 +186,7 @@ function BridgeChatPage() {
   // state replaces that component with the strip — a flag the sidebar owned would be
   // unmounted along with the sidebar the moment it was set.
   //
-  // Read in the `useState` initialiser, not in an effect: the first paint has to be the
+  // Read in the `useState` initializer, not in an effect: the first paint has to be the
   // stored answer, or every load of a collapsed page draws the full sidebar and folds it
   // away a frame later. Same rule the folder collapse and the MD/TXT preference follow.
   //
@@ -481,7 +481,7 @@ function BridgeChatPage() {
       {minimal && (
         <>
           {/* The drawer draws the list whatever `sidebarCollapsed` says. Collapsing is a
-              desktop arrangement of a row that is not on screen here, and honouring it
+              desktop arrangement of a row that is not on screen here, and honoring it
               would leave the phone with no way to reach the list at all. */}
           <SessionDrawer>{sidebar}</SessionDrawer>
           <ChromeSheet />
@@ -536,7 +536,7 @@ export function ThreadPane({
     setMobilePaneState(pane)
   }, [])
 
-  // Which panes are on screen. Read as a `useState` initialiser for the same reason the
+  // Which panes are on screen. Read as a `useState` initializer for the same reason the
   // sidebar collapse and the MD/TXT preference are: the first paint has to be the stored
   // answer, or a user who reads Turns beside Timeline gets one pane and a second one
   // sliding in a frame later, every load.
@@ -573,7 +573,7 @@ export function ThreadPane({
     setPanesHidden(next)
   }, [])
 
-  // How the two panes divide the row. Same `useState` initialiser as the record above,
+  // How the two panes divide the row. Same `useState` initializer as the record above,
   // for the same reason: a stored 3:1 that arrived a frame after paint would show the
   // user an even split and then snap.
   //
@@ -609,7 +609,7 @@ export function ThreadPane({
   // session in it because of one look is not a preference anyone expressed.
   const [raw, setRaw] = useState(false)
 
-  // Read as a `useState` initialiser, not in an effect: the first paint has to be the
+  // Read as a `useState` initializer, not in an effect: the first paint has to be the
   // stored answer. Rendering markdown and then swapping to plain text a frame later
   // reflows every assistant reply in the pane, and the user watching it has no way to
   // tell that from the toggle mis-firing on its own.
@@ -712,7 +712,7 @@ export function ThreadPane({
   //
   // The desktop answer is a LIST in draw order rather than a flag per pane, because
   // there are three of them now and the boundaries are between whichever ones survive:
-  // hiding Timeline makes Turns and the kanban cards neighbours, with one handle, and a
+  // hiding Timeline makes Turns and the kanban cards neighbors, with one handle, and a
   // per-pane flag cannot say that.
   //
   // `attach` is the one pane the stored record cannot decide alone: a session in events
@@ -839,7 +839,7 @@ export function ThreadPane({
         {/* One handle per ADJACENT pair of visible panes, so two panes draw one boundary
             and three draw two. Each handle names the pair it sits between, which is what
             lets a drag conserve that pair's total and leave every other pane's share
-            untouched — the third pane must not move because its neighbours renegotiated.
+            untouched — the third pane must not move because its neighbors renegotiated.
 
             `SplitDragHandle` is bridge-ui's, exported for this (`cdb2f0f`) rather than
             copied: its props are an axis, a class name and two accessors, so it needed no

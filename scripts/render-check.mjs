@@ -1749,7 +1749,7 @@ console.log('Session actions')
   const known = { newest: new Map([[offered.action_id, offered]]), placedInProse: new Set([offered.action_id]) }
 
   const placed = renderToStaticMarkup(inSession(known, h(SessionActionInText, { actionId: offered.action_id })))
-  check('an id this session offered is drawn as its button, labelled by the agent',
+  check('an id this session offered is drawn as its button, labeled by the agent',
     placed.includes('bc-session-action-button') && placed.includes('Deploy dash'), placed)
   check('and it is phrasing content, so it can sit in a paragraph',
     !/<(div|details|pre|p)[\s>]/.test(placed), placed)

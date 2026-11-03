@@ -39,11 +39,11 @@ export function BridgeEffectiveConfig() {
 
   useEffect(() => {
     if (!url) { setResult(null); setError(null); return }
-    let cancelled = false
+    let canceled = false
     setLoading(true)
     apiFetch(url).then(async res => {
       const text = await res.text()
-      if (cancelled) return
+      if (canceled) return
       if (!res.ok) {
         // The server's refusal, verbatim: it names what is missing.
         setError(`HTTP ${res.status}: ${text}`)
@@ -53,11 +53,11 @@ export function BridgeEffectiveConfig() {
       setError(null)
       setResult(JSON.parse(text) as EffectiveConfig)
     }).catch(err => {
-      if (cancelled) return
+      if (canceled) return
       setError(err instanceof Error ? err.message : String(err))
       setResult(null)
-    }).finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+    }).finally(() => { if (!canceled) setLoading(false) })
+    return () => { canceled = true }
   }, [apiFetch, url])
 
   const setInputs = (next: Partial<EffectiveConfigInputs>) => {

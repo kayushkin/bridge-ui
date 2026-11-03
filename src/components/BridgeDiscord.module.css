@@ -1,5 +1,5 @@
 /* The Discord page. A CSS module, like Previews, so the page carries its own
-   styles into dist/ beside its .js (scripts/copy-css.mjs). Colours are
+   styles into dist/ beside its .js (scripts/copy-css.mjs). Colors are
    theme.css variables so both themes work. */
 
 .page { display: flex; flex-direction: column; gap: 12px; max-width: 1200px; }

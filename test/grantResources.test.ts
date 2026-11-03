@@ -3,7 +3,7 @@ import { compareOptionsByLabel, toolOption, type ToolRecord } from '../src/grant
 
 // tool-store omits `display_name` when it is empty (`json:"display_name,omitempty"`),
 // and on 2026-09-11 eleven of its fifteen tools had none. The Grants picker
-// labelled tools by `display_name`, so sorting the catalog threw
+// labeled tools by `display_name`, so sorting the catalog threw
 // "Cannot read properties of undefined (reading 'localeCompare')".
 
 describe('toolOption', () => {

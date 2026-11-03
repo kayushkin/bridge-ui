@@ -248,7 +248,7 @@ export default function Sidebar({
   // The servers. With none connected the sidebar is this server's list, as it always
   // was. With one or more, "by server" in the filters picks between a tab per server
   // (this server's first) and one list of every server's sessions, newest first.
-  // Both read back in the useState initialiser, so the first paint is already right.
+  // Both read back in the useState initializer, so the first paint is already right.
   const { servers: connectedServerListings, thisServerName, thisServerNameError, storeOf } = useConnectedServers()
   const showServerChoice = connectedServerListings.length > 0
   const [groupByServer, setGroupByServerState] = useState(loadGroupByServer)
@@ -346,7 +346,7 @@ export default function Sidebar({
   )
 
   // Grouping by project. The toggle and each project group's collapse are read back
-  // in the initialiser like the folders above. The projects and every filed session
+  // in the initializer like the folders above. The projects and every filed session
   // come from one shared read (`useProjectStore`: `GET /projects` and
   // `GET /links?entity_type=session`), which the header's filing control refreshes,
   // so a filed session moves groups as soon as project-store has it.
@@ -752,7 +752,7 @@ export default function Sidebar({
               // ⚠️ Measured, not assumed: swapping this for the bare id does NOT drop
               // a row, and the spec beside this stays green with it. React's
               // production build renders both and only warns in development, so a
-              // duplicate key here is undefined reconciliation behaviour rather than a
+              // duplicate key here is undefined reconciliation behavior rather than a
               // visible break — the kind that surfaces later as row state attaching to
               // the wrong row. Scoped because it is right, not because a test caught
               // it; do not read the green spec as proof this line is load-bearing.
@@ -1163,7 +1163,7 @@ export default function Sidebar({
             className={`bc-sidebar-page-btn ${workGraphOpen ? 'bc-sidebar-page-btn-selected' : ''}`}
             onClick={onOpenWorkGraph}
             aria-current={workGraphOpen || undefined}
-            title="Work graph: each repo's commit graph, coloured by the agent session that made each commit"
+            title="Work graph: each repo's commit graph, colored by the agent session that made each commit"
             aria-label="Work graph"
           >
             ⎇
@@ -1538,7 +1538,7 @@ function ChipRow({
           {/* The harness mark, mirroring the session rows: the server's logo when the
               harness registers one, else its emoji, else nothing. bridge-ui's harness
               chips fall back once further, to a `·` — but those chips are icon-only, so
-              a mark is the whole chip and an empty one would be an unlabelled button.
+              a mark is the whole chip and an empty one would be an unlabeled button.
               These carry a name and a count, so a missing mark costs nothing and a dot
               standing in for one would appear on every status and type chip too. */}
           {o.image ? (

@@ -22,7 +22,7 @@ type Section = 'status' | 'diff_unstaged' | 'diff_staged' | 'log'
 /** Which sections hold a unified diff. A named predicate rather than an inline
  *  `startsWith('diff')`: `diff_unstaged` and `diff_staged` are the only two, and a
  *  section added later that merely happens to begin with those letters should not
- *  silently start being colourised. */
+ *  silently start being colorized. */
 function isDiffSection(section: Section): boolean {
   return section === 'diff_unstaged' || section === 'diff_staged'
 }
@@ -103,7 +103,7 @@ export function GitPanel({
       setView(null)
       return
     }
-    let cancelled = false
+    let canceled = false
     setLoadingView(true)
     setViewError(null)
     const url = `${basePath}/sessions/${sessionId}/git?repo=${encodeURIComponent(selectedRepo)}`
@@ -112,14 +112,14 @@ export function GitPanel({
         if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
         return r.json() as Promise<GitView>
       })
-      .then(data => { if (!cancelled) setView(data) })
+      .then(data => { if (!canceled) setView(data) })
       .catch(err => {
-        if (cancelled) return
+        if (canceled) return
         setViewError(`git: ${err instanceof Error ? err.message : String(err)}`)
         setView(null)
       })
-      .finally(() => { if (!cancelled) setLoadingView(false) })
-    return () => { cancelled = true }
+      .finally(() => { if (!canceled) setLoadingView(false) })
+    return () => { canceled = true }
   }, [sessionId, selectedRepo, refetchSignal, refreshTick, fetchFn, basePath])
 
   const error = reposError || viewError
@@ -202,7 +202,7 @@ export function GitPanel({
                   </button>
                   {open && (
                     // The two DIFF sections are rendered as diffs; `status` and `log`
-                    // are not diffs and must not be coloured as though they were. A
+                    // are not diffs and must not be colored as though they were. A
                     // `git status` line beginning `-` is a deleted file in a porcelain
                     // listing, not a removed line, and `git log` prose starting with a
                     // `+` is just prose — painting either red or green states something

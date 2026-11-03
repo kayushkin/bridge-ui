@@ -101,12 +101,12 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
 
   useEffect(() => {
     if (!projectStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     fetchFn(vocabularyPath(projectStoreBasePath))
       .then((r) => readJSON<ProjectVocabulary>(r, 'project-store vocabulary'))
-      .then((v) => { if (!cancelled) setVocabulary(v) })
+      .then((v) => { if (!canceled) setVocabulary(v) })
       .catch((error: Error) => console.error(error))
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, projectStoreBasePath])
 
   // Every rollup on the landing page; only the open project's on its page.
@@ -117,12 +117,12 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
   const wantedKey = wantedRollups.join(',')
   useEffect(() => {
     if (!projectStoreBasePath || wantedKey === '') return
-    let cancelled = false
+    let canceled = false
     const ids = wantedKey.split(',')
     setLoading(true)
     let next = 0
     const worker = async (): Promise<void> => {
-      while (!cancelled && next < ids.length) {
+      while (!canceled && next < ids.length) {
         const id = ids[next++]
         let slot: RollupSlot
         try {
@@ -133,31 +133,31 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
         } catch (error) {
           slot = { rollup: null, error: error instanceof Error ? error.message : String(error) }
         }
-        if (cancelled) return
+        if (canceled) return
         setRollups((previous) => new Map(previous).set(id, slot))
       }
     }
     void Promise.all(Array.from({ length: Math.min(ROLLUP_CONCURRENCY, ids.length) }, worker)).finally(() => {
-      if (!cancelled) setLoading(false)
+      if (!canceled) setLoading(false)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, projectStoreBasePath, wantedKey, reloadSignal])
 
   // The filed sessions' rows, for names, states and spend: one lookup by id,
   // because most of them are long past the sidebar's loaded page.
   useEffect(() => {
     if (filedKey === '') return
-    let cancelled = false
+    let canceled = false
     const ids = filedKey.split(',')
     api
       .getSummary({ sessionIds: ids, limit: ids.length })
       .then((answer) => {
-        if (cancelled) return
+        if (canceled) return
         setSummaries(new Map(answer.sessions.map((s) => [s.sessionId, s])))
         setSummaryError(null)
       })
-      .catch((error: Error) => { if (!cancelled) setSummaryError(error.message) })
-    return () => { cancelled = true }
+      .catch((error: Error) => { if (!canceled) setSummaryError(error.message) })
+    return () => { canceled = true }
   }, [api, filedKey, reloadSignal])
 
   const reload = useCallback(() => {

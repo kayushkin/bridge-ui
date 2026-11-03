@@ -57,7 +57,7 @@ export function useGitRepos(
       setError(null)
       return
     }
-    let cancelled = false
+    let canceled = false
     setLoading(true)
     setError(null)
     bridgeFetch(`${basePath}/sessions/${sessionId}/git/repos`)
@@ -66,10 +66,10 @@ export function useGitRepos(
         return (await response.json()) as { repos?: GitRepo[] }
       })
       .then(body => {
-        if (!cancelled) setRepos(body.repos ?? [])
+        if (!canceled) setRepos(body.repos ?? [])
       })
       .catch((err: unknown) => {
-        if (cancelled) return
+        if (canceled) return
         // Stated, not swallowed. `GitPanel` renders this string, so a session on a
         // machine that has gone away says so instead of showing an empty repo
         // dropdown that looks like a session with no repositories.
@@ -77,10 +77,10 @@ export function useGitRepos(
         setRepos([])
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!canceled) setLoading(false)
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [sessionId, refetchSignal, refreshTick, bridgeFetch, basePath])
 

@@ -178,7 +178,7 @@ export type SafeNode =
   | { kind: 'mention'; label: string; title: string }
 
 /** The tags the Matrix spec lets a client render (m.room.message, "HTML"),
- *  minus `font`, which only carries colours we do not apply, and `img`, which
+ *  minus `font`, which only carries colors we do not apply, and `img`, which
  *  is handled on its own. */
 const ALLOWED_TAGS = new Set([
   'del', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol', 'sup', 'sub', 'li',

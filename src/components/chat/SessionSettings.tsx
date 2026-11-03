@@ -221,7 +221,7 @@ const MODEL_VARIANT_SUFFIX = /\[[^\]]+\]$/
  *  window would be worse than one that reported an ugly id.
  *
  *  When neither lookup matches, the raw string survives untouched. That is the registry
- *  honestly having nothing to say about this model, not a licence to invent a nickname. */
+ *  honestly having nothing to say about this model, not a license to invent a nickname. */
 function matchRunningModel(
   models: { value: string; label: string; shortName: string }[],
   runningModel: string,

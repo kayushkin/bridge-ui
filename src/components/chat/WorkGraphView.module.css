@@ -1,7 +1,7 @@
 /* The work graph (`?view=work-graph`). A CSS module, like the Previews page, so
    the view carries its own styles into dist/ beside its .js
-   (scripts/copy-css.mjs). Colours are theme variables, so the dark, light and
-   zine themes each draw it in their own inks; only a session's colour is
+   (scripts/copy-css.mjs). Colors are theme variables, so the dark, light and
+   zine themes each draw it in their own inks; only a session's color is
    computed (src/workGraph.ts `sessionColor`). */
 
 .page { min-height: 0; }
@@ -95,7 +95,7 @@
   background: none; border: none; cursor: pointer; text-align: left;
 }
 .shaLink:disabled { color: var(--text-muted); cursor: default; }
-/* A link out to GitHub: the accent colour, like the in-graph sha links, but
+/* A link out to GitHub: the accent color, like the in-graph sha links, but
    underlined on hover only, so a row of them does not read as a wall of links. */
 .shaGitHub { color: var(--accent); text-decoration: none; }
 .shaGitHub:hover { text-decoration: underline; }

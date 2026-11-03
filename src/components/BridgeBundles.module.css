@@ -1,6 +1,6 @@
 /* The Bundles page. A CSS module rather than rules in styles.css, so the page
    carries its own styles into dist/ beside its .js (scripts/copy-css.mjs).
-   Colours come from theme.css variables, so both themes work. */
+   Colors come from theme.css variables, so both themes work. */
 
 .page { display: flex; flex-direction: column; gap: 16px; max-width: 1400px; }
 .header { display: flex; flex-direction: column; gap: 4px; }

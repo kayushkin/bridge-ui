@@ -21,11 +21,11 @@ export function useModelStoreRoles(): { state: ModelStoreRolesState; reload: () 
       setState({ phase: 'failed', error: 'This host does not proxy model-store (modelStoreBasePath is empty), so the roles cannot be listed.' })
       return
     }
-    let cancelled = false
+    let canceled = false
     fetchModelStoreRoles(fetchFn, modelStoreBasePath)
-      .then(roles => { if (!cancelled) setState({ phase: 'loaded', roles }) })
-      .catch(err => { if (!cancelled) setState({ phase: 'failed', error: err instanceof Error ? err.message : String(err) }) })
-    return () => { cancelled = true }
+      .then(roles => { if (!canceled) setState({ phase: 'loaded', roles }) })
+      .catch(err => { if (!canceled) setState({ phase: 'failed', error: err instanceof Error ? err.message : String(err) }) })
+    return () => { canceled = true }
   }, [fetchFn, modelStoreBasePath, generation])
 
   const reload = useCallback(() => setGeneration(g => g + 1), [])

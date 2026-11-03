@@ -26,7 +26,7 @@ export function EmojiFace({ choice, className }: { choice: EmojiChoice; classNam
 /**
  * What a room's pickers offer: the unicode emoji in the chosen skin tone, the
  * custom emoji of the room's Discord server (and of every other bridged
- * server when the setting says so), and the favourites among those.
+ * server when the setting says so), and the favorites among those.
  */
 export function useEmojiChoices(purpose: EmojiPurpose, discordRoom: DiscordRoom | null) {
   const { groups, error: groupsError } = useEmojiGroups()
@@ -94,7 +94,7 @@ export function EmojiPickerButton({ onPick, disabled, discordRoom }: {
 /** How many results a search shows. */
 const SEARCH_RESULT_LIMIT = 300
 
-/** One titled run of emoji in a grid: favourites, a server's custom emoji, a
+/** One titled run of emoji in a grid: favorites, a server's custom emoji, a
  *  unicode group, or a search's matches. */
 export interface EmojiGridSection {
   id: string
@@ -102,10 +102,10 @@ export interface EmojiGridSection {
   choices: readonly EmojiChoice[]
 }
 
-/** Favourites, then each server's custom emoji, then each unicode group. */
+/** Favorites, then each server's custom emoji, then each unicode group. */
 export function emojiSections(groups: readonly { name: string; emojis: readonly unknown[] }[] | null,
   unicode: readonly EmojiChoice[], custom: readonly EmojiChoice[], favorites: readonly EmojiChoice[]): EmojiGridSection[] {
-  const sections: EmojiGridSection[] = [{ id: 'favourites', name: 'Favourites', choices: favorites }]
+  const sections: EmojiGridSection[] = [{ id: 'favorites', name: 'Favorites', choices: favorites }]
   // By server id: two servers can share a name. The seen emoji have none, so
   // they share one section.
   const byServer = new Map<string, { name: string; choices: EmojiChoice[] }>()
@@ -195,7 +195,7 @@ export function VirtualEmojiGrid({ sections, renderCell, jumpBar }: {
   )
 }
 
-/** The searchable emoji panel: a jump bar, then favourites, the room's custom
+/** The searchable emoji panel: a jump bar, then favorites, the room's custom
  *  emoji and every unicode group. A search matches any part of a name (`:par`
  *  finds parrot and partyParrot) or a server's name (`pretend`, `reno kerm`),
  *  and Enter picks the first match. `heading`, when given, says what a pick
@@ -241,7 +241,7 @@ export function EmojiPickerPanel({ onPick, onClose, heading, purpose, discordRoo
         renderCell={choice => <EmojiCell key={choice.key} choice={choice} onPick={onPick} />} />
       <div className={styles.emojiPanelFoot}>
         {tone && <span className={styles.muted}>Skin tone {tone}</span>}
-        {routes.emoji && <Link to={routes.emoji} className={styles.muted}>Favourites and settings</Link>}
+        {routes.emoji && <Link to={routes.emoji} className={styles.muted}>Favorites and settings</Link>}
       </div>
     </div>
   )

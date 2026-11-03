@@ -68,7 +68,7 @@ root.walkRules((rule) => {
 })
 root.walkAtRules((at) => { if (/media|supports/.test(at.name) && at.nodes?.length === 0) at.remove() })
 
-console.log(`dynamic prefixes honoured: ${[...dynamicPrefixes].filter((p) => p.startsWith('b')).length}`)
+console.log(`dynamic prefixes honored: ${[...dynamicPrefixes].filter((p) => p.startsWith('b')).length}`)
 console.log(`orphaned classes: ${orphaned.size}`)
 console.log(`rules removed: ${removedRules}, selectors trimmed from rules: ${trimmedRules}, ~lines removed: ${removedLines}`)
 if (process.argv.includes('--write')) {

@@ -35,11 +35,11 @@ export function BridgeMessageSearch() {
   // let a linked room show its partner's name.
   useEffect(() => {
     if (!configured || !shortNamesConfigured) return
-    let cancelled = false
+    let canceled = false
     Promise.all([listRoomNames(), read<ConversationLink[] | null>('/conversations/links')])
-      .then(([names, links]) => { if (!cancelled) setRoomNames(roomShortNames(names, links ?? [])) })
-      .catch(err => { if (!cancelled) setRoomNamesError(errorText(err)) })
-    return () => { cancelled = true }
+      .then(([names, links]) => { if (!canceled) setRoomNames(roomShortNames(names, links ?? [])) })
+      .catch(err => { if (!canceled) setRoomNamesError(errorText(err)) })
+    return () => { canceled = true }
   }, [configured, shortNamesConfigured, listRoomNames, read])
 
   const run = async (term: string) => {

@@ -13,11 +13,11 @@ import styles from './Messages.module.css'
 
 /**
  * The emoji pickers' settings, stored by multichat (`GET /emoji`,
- * `PUT /emoji/favorites`, `PUT /emoji/settings`): the favourites, which the
+ * `PUT /emoji/favorites`, `PUT /emoji/settings`): the favorites, which the
  * quick-react bar under each message offers first; the skin tone; and which
  * servers' custom emoji a Discord room is offered. Below them, every bridged
  * server's custom emoji and every unicode emoji, each a click away from being
- * a favourite, and the refresh that lists the custom ones again from Discord.
+ * a favorite, and the refresh that lists the custom ones again from Discord.
  */
 export function BridgeEmoji() {
   useDailyNitroCheck()
@@ -48,7 +48,7 @@ export function BridgeEmoji() {
   const deferredQuery = useDeferredValue(query)
   const results = useMemo(() => searchEmojiIndex(index, deferredQuery, favoriteKeys), [index, deferredQuery, favoriteKeys])
   const resultSections = useMemo(() => [{ id: 'matches', name: 'Matches', choices: results }], [results])
-  // The favourites have their own list above, so the grid starts at the servers.
+  // The favorites have their own list above, so the grid starts at the servers.
   const sections = useMemo(() => emojiSections(groups, unicode, custom, []), [groups, unicode, custom])
 
   if (!configured) return <MultichatNotConfigured page="Emoji" />
@@ -73,7 +73,7 @@ export function BridgeEmoji() {
     return (
       <button key={choice.key} type="button" aria-pressed={favorite}
         className={`${styles.emojiCell} ${favorite ? styles.emojiCellFavorite : ''}`}
-        title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${customEmojiSectionName(choice.emoji)}` : ''}${notTaught ? '\nThe bridge learns this one the first time you react with it.' : ''}\n${favorite ? 'Click to take it out of your favourites' : 'Click to make it a favourite'}`}
+        title={`:${choice.name}:${choice.kind === 'custom' ? ` — ${customEmojiSectionName(choice.emoji)}` : ''}${notTaught ? '\nThe bridge learns this one the first time you react with it.' : ''}\n${favorite ? 'Click to take it out of your favorites' : 'Click to make it a favorite'}`}
         onClick={() => toggle(choice)}>
         <EmojiFace choice={choice} />
       </button>
@@ -85,7 +85,7 @@ export function BridgeEmoji() {
       <header className={styles.header}>
         <h2 className={styles.title}>Emoji</h2>
         <p className={styles.subtitle}>
-          Your favourites come first in every picker, and the first few sit beside each message as one-click reactions.
+          Your favorites come first in every picker, and the first few sit beside each message as one-click reactions.
           In a message, type <code>:</code> and part of a name; start with <code>+:</code> to react to the newest message instead.
         </p>
       </header>
@@ -133,8 +133,8 @@ export function BridgeEmoji() {
           </section>
 
           <section className={styles.emojiPageSection}>
-            <h3 className={styles.emojiPageHeading}>Favourites</h3>
-            {favorites.length === 0 ? <div className={styles.empty}>No favourites yet. Click any emoji below to add it.</div> : (
+            <h3 className={styles.emojiPageHeading}>Favorites</h3>
+            {favorites.length === 0 ? <div className={styles.empty}>No favorites yet. Click any emoji below to add it.</div> : (
               <ol className={styles.emojiFavoriteList}>
                 {favorites.map((choice, index) => (
                   <li key={choice.key} className={styles.emojiFavorite}>

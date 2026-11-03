@@ -18,7 +18,7 @@ import { ConnectedServersPeerMessages, useConnectedServerWaitingCounts } from '.
  * count is the operator's to clear. Autoworkers, delegates, scheduled tasks, system and
  * external sessions — and any session whose type is unknown — raise far more signals
  * than the operator does (319 of 408 open on 2026-10-19), so they are listed apart:
- * collapsed by default, neutral in colour, with their own count. Which group a signal
+ * collapsed by default, neutral in color, with their own count. Which group a signal
  * is in is chat-core's rule (`useOpenSignalsByAttention`), not this component's.
  *
  * ## Why a list, when the sidebar already marks the rows

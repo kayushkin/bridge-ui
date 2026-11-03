@@ -33,7 +33,7 @@ const groupsStore = createStore<GroupsState>({ groups: null, error: null })
 type CatalogState = { catalog: EmojiCatalog | null; error: string | null }
 
 /** One catalog per multichat base path, shared by every picker, suggestion
- *  list and quick-react bar on the page, so a favourite saved on one shows on
+ *  list and quick-react bar on the page, so a favorite saved on one shows on
  *  all. */
 const catalogStores = new Map<string, Store<CatalogState>>()
 
@@ -48,7 +48,7 @@ function catalogStoreFor(basePath: string) {
 
 /**
  * multichat's emoji catalog (`GET /emoji`): every bridged Discord server's
- * custom emoji, the favourites and the emoji settings, loaded once and shared.
+ * custom emoji, the favorites and the emoji settings, loaded once and shared.
  * The writes return multichat's refusal in its own words, or null.
  */
 export function useEmojiCatalog() {

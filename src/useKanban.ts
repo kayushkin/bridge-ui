@@ -54,7 +54,7 @@ export interface UseKanbanOptions {
   /** How many cards to load per column. 0 (the default) loads every card, which
    * is what every caller did before paging existed — and what costs 12 MB and
    * 1.6 seconds on this host's largest board, every fifteen seconds. A board
-   * surface should set it; a panel showing one card's neighbours need not. */
+   * surface should set it; a panel showing one card's neighbors need not. */
   columnPageSize?: number
 }
 export interface CreateColumnArgs {
@@ -163,11 +163,11 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
   }, [fetchFn, kanbanStoreBasePath, enabled, loadEntityTypes])
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const run = async () => {
       setLoading(true)
       await Promise.all([fetchBoards(), fetchView(), fetchEntityTypes()])
-      if (!cancelled) setLoading(false)
+      if (!canceled) setLoading(false)
     }
     run()
     // Only run the timer when one of the two calls it makes can actually fetch.
@@ -178,10 +178,10 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
     // and listEntityTags, which this timer has never called; the panel runs its
     // own refresh over those two, at the same cadence.
     if (!kanbanPollWouldFetch(enabled, loadBoards, boardID)) {
-      return () => { cancelled = true }
+      return () => { canceled = true }
     }
     const t = setInterval(() => { fetchBoards(); fetchView() }, 15000)
-    return () => { cancelled = true; clearInterval(t) }
+    return () => { canceled = true; clearInterval(t) }
   }, [fetchBoards, fetchView, fetchEntityTypes, enabled, loadBoards, boardID])
 
   const createBoard = useCallback(async (args: CreateBoardArgs): Promise<Board | null> => {

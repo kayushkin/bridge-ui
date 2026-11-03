@@ -75,7 +75,7 @@ export interface BridgeRoutes {
   /** Discord through multichat: the message log with deleted messages kept,
    *  and the bridge's status. `?tab=deleted|status`. Needs `multichatBasePath`. */
   discord: string
-  /** The emoji pickers' settings: favourites (the quick-react bar under each
+  /** The emoji pickers' settings: favorites (the quick-react bar under each
    *  message), skin tone, which servers' custom emoji a Discord room is
    *  offered, and every bridged server's custom emoji with a refresh from
    *  Discord. Needs `multichatBasePath`. */

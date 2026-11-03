@@ -50,11 +50,11 @@ export function ConnectedServersPeerMessages({ drawn, countInHeading, onWaitingC
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const read = async () => {
       try {
         const res = await fetchFn(`${basePath}${PEER_CONNECTIONS_PATH}`)
-        if (cancelled) return
+        if (canceled) return
         // A server with no peer routes has no connected servers to list.
         if (res.status === 404) {
           setViews([])
@@ -67,13 +67,13 @@ export function ConnectedServersPeerMessages({ drawn, countInHeading, onWaitingC
         setError(null)
         setViews(connectionsThisServerAdministers((await res.json()) as PeerConnectionView[]))
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        if (!canceled) setError(err instanceof Error ? err.message : String(err))
       }
     }
     void read()
     const timer = setInterval(read, CONNECTIONS_POLL_MS)
     return () => {
-      cancelled = true
+      canceled = true
       clearInterval(timer)
     }
   }, [fetchFn, basePath])

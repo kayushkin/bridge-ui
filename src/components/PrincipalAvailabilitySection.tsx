@@ -84,12 +84,12 @@ function WeekForm({ detail, fetchFn, base, save, onSaved }: {
   // vocabulary, and a form offering a code it does not accept would only
   // produce a 400 the reader cannot act on.
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void listWeekdayCodes(fetchFn, base).then(result => {
-      if (cancelled) return
+      if (canceled) return
       if (result.ok) { setCodes(result.value); setCodesError(null) } else setCodesError(result.error)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, base])
 
   const zones = useMemo(supportedTimeZones, [])
@@ -128,7 +128,7 @@ function WeekForm({ detail, fetchFn, base, save, onSaved }: {
             onChange={e => setDraft({ ...draft, tzid: e.target.value })}
           >
             {/* Starts on nothing on purpose. The reader picks the person's zone;
-                this browser's is offered as a labelled choice, never as the
+                this browser's is offered as a labeled choice, never as the
                 value already in the box. */}
             <option value="">— choose this person’s zone —</option>
             {browserZone && <option value={browserZone}>{browserZone} (this browser’s zone)</option>}
@@ -348,11 +348,11 @@ function AvailabilityProbe({ principalID, fetchFn, base }: { principalID: string
   const [servedReasons, setServedReasons] = useState<string[] | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void listAvailabilityReasons(fetchFn, base).then(result => {
-      if (!cancelled && result.ok) setServedReasons(result.value)
+      if (!canceled && result.ok) setServedReasons(result.value)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, base])
 
   const ask = useCallback(async (seconds: number | undefined) => {

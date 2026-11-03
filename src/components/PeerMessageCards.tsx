@@ -116,12 +116,12 @@ export function usePeerConnectionNames(): (connectionID: string) => string {
   const { fetch: fetchFn, basePath } = useBridgeConfig()
   const [views, setViews] = useState<PeerConnectionView[]>([])
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void (async () => {
       const res = await fetchFn(`${basePath}${PEER_CONNECTIONS_PATH}`).catch(() => null)
-      if (!cancelled && res?.ok) setViews((await res.json()) as PeerConnectionView[])
+      if (!canceled && res?.ok) setViews((await res.json()) as PeerConnectionView[])
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, basePath])
   return useMemo(() => {
     const names = new Map(views.map(view => [view.connection.id, connectedServerLabel(view).label]))

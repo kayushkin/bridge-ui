@@ -414,7 +414,7 @@ function NoteBody({ note }: { note: CardNote }) {
 
 /** Event kinds are stored as they were recorded, including kinds this UI has
  * never heard of. An unknown one reads as its own name with the underscores
- * taken out rather than being dropped or labelled "unknown" — the log is the
+ * taken out rather than being dropped or labeled "unknown" — the log is the
  * record, and a reader is better served by the raw kind than by nothing. */
 const EVENT_KIND_LABELS: Record<string, string> = {
   card_created: 'Card created',

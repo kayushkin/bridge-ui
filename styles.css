@@ -2951,8 +2951,8 @@
  *
  * Every surface here is opaque on purpose. This began (2026-04-26) as a glass
  * skin: translucent panels over a backdrop blur. Nothing under them was ever
- * anything but a flat colour, so each translucent value only ever produced one
- * opaque colour — the one written here now, as a mix of the real surface it
+ * anything but a flat color, so each translucent value only ever produced one
+ * opaque color — the one written here now, as a mix of the real surface it
  * sits on. Measured before the change: pixel-identical surfaces in both themes.
  * ========================================================================= */
 
@@ -4376,7 +4376,7 @@
   background: transparent; border: 1px solid var(--border);
   border-radius: 3px; color: inherit;
 }
-/* Run-an-agent, on the tile. Same footprint as its neighbours so it does not
+/* Run-an-agent, on the tile. Same footprint as its neighbors so it does not
    advertise itself — it spends money, so it should not be the most inviting
    thing on the card. */
 .bk-card-run {
@@ -4421,10 +4421,10 @@
    not parked. A question outranks a notification because it is blocking a
    session right now.
 
-   The kind colours the LABEL and the left border, never the title. The title
+   The kind colors the LABEL and the left border, never the title. The title
    is the signal's own words and has to stay readable, and tinting it muted
    grey (or fading it with opacity) took it to 3.9:1 — below WCAG AA at this
-   size. Colour is what the label is for. */
+   size. Color is what the label is for. */
 .bk-card-signal {
   display: flex; flex-direction: column; gap: 1px;
   font-size: 0.78em;
@@ -4434,7 +4434,7 @@
   border-radius: 2px;
 }
 /* A question is blocking a session that cannot proceed, so it takes the
-   warning colour rather than --accent: accent is what this board already
+   warning color rather than --accent: accent is what this board already
    paints its own buttons and borders with, so an accent badge reads as page
    chrome instead of as something asking for you. */
 .bk-card-signal-question { border-left-color: var(--warning); }
@@ -5179,7 +5179,7 @@
    same wherever it is mounted; the chat's own class still overrides it,
    because the fallback and the caller's class are never both applied.
 
-   The border is transparent rather than absent so a variant below can colour
+   The border is transparent rather than absent so a variant below can color
    it without moving the text by a pixel. */
 .ref-chip {
   display: inline-flex;
@@ -5211,7 +5211,7 @@
 /* An id from a connected server's transcript that this server cannot look
    up (refChipServer.ts). Muted text on no fill, with a dashed edge, so it
    never passes for one of this server's records, and no pointer: it opens
-   nothing. Built from the theme's own text and border colours, so it reads
+   nothing. Built from the theme's own text and border colors, so it reads
    in light, dark and the zine skin alike. */
 .ref-chip.ref-chip-remote {
   background: transparent;
@@ -5485,7 +5485,7 @@
 }
 
 /* A session chip whose session has an open question (SessionChipOpenQuestions).
-   The `?` sits inside the pill in the warning colours the State row's
+   The `?` sits inside the pill in the warning colors the State row's
    "question" badge uses, so the same fact looks the same in both places. The
    question follows the chip in the text, and its answer form, once opened,
    takes a block of its own in the flow: several chips with questions in one
@@ -6076,7 +6076,7 @@
 
 .bp-availability-week { display: flex; flex-direction: column; gap: 10px; }
 .bp-week-current { margin: 0; font-size: 0.9em; color: var(--text); }
-/* No declared week is not a blank — it means unavailable, so it is coloured
+/* No declared week is not a blank — it means unavailable, so it is colored
    like the warning it is rather than like missing text. */
 .bp-week-none { color: #d97757; }
 
@@ -6591,7 +6591,7 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-mc-drawer-page-active { border-color: var(--accent); color: var(--accent); }
 
 /* A background session (autoworker, delegate, system, external…) waiting on a human.
-   The state is still drawn, glyph and all, but still and grey: the pulse and the colour
+   The state is still drawn, glyph and all, but still and grey: the pulse and the color
    are what say "this needs you", and it does not. Set by the chat sidebar from
    chat-core's isOperatorSessionType. */
 .bc-status-dot.bc-status-dot-background-waiting {

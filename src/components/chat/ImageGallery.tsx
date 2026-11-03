@@ -118,7 +118,7 @@ const TALL_RATIO = 2.5
 
 interface View {
   scale: number
-  /** Pan in screen pixels, from the centre of the pane. */
+  /** Pan in screen pixels, from the center of the pane. */
   x: number
   y: number
 }
@@ -161,7 +161,7 @@ function maxScaleOf(geometry: PaneGeometry | undefined): number {
 }
 
 /** The view after zooming to `scale` about a point given relative to the pane's
- *  centre, so the spot under the pointer stays under it. */
+ *  center, so the spot under the pointer stays under it. */
 function zoomAbout(view: View, scale: number, pointX: number, pointY: number, maxScale: number): View {
   const next = clamp(scale, MIN_SCALE, maxScale)
   if (next === MIN_SCALE) return FITTED
@@ -514,7 +514,7 @@ function GalleryPane({
     pinchDistance: null,
   })
 
-  const centreOf = () => {
+  const centerOf = () => {
     const rect = paneRef.current!.getBoundingClientRect()
     return { cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 }
   }
@@ -542,7 +542,7 @@ function GalleryPane({
       const distance = Math.hypot(a!.x - b!.x, a!.y - b!.y)
       const factor = distance / gesture.current.pinchDistance
       gesture.current.pinchDistance = distance
-      const { cx, cy } = centreOf()
+      const { cx, cy } = centerOf()
       const limit = maxScaleOf(geometry ?? undefined)
       setView((v) => zoomAbout(v, v.scale * factor, (a!.x + b!.x) / 2 - cx, (a!.y + b!.y) / 2 - cy, limit))
       return
@@ -572,7 +572,7 @@ function GalleryPane({
   }
 
   const onDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const { cx, cy } = centreOf()
+    const { cx, cy } = centerOf()
     const limit = maxScaleOf(geometry ?? undefined)
     setView((v) => (v.scale > 1 ? FITTED : zoomAbout(v, 2.5, event.clientX - cx, event.clientY - cy, limit)))
   }

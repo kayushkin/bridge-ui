@@ -193,7 +193,7 @@ describe('the signal cards render what the record says', () => {
 
   it('gives a question a freeform box even when allow_freeform is absent from the wire', () => {
     // signalFromWire defaults the flag to FALSE when the key is missing, so
-    // honouring it meant an older row — or any producer that omits it — rendered
+    // honoring it meant an older row — or any producer that omits it — rendered
     // a question nobody could answer. Nothing sets it false on purpose: both
     // producers hardcode it true and the server never rejects a freeform answer.
     const signal = signalFromWire({

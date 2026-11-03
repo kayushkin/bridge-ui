@@ -122,19 +122,19 @@ export function BridgeSessions() {
     if (aggregatesInFlight.current) return
     if (!sessionTokenTotalsAreMissing(sessions, tokensMapRef.current)) return
 
-    let cancelled = false
+    let canceled = false
     aggregatesInFlight.current = true
     ;(async () => {
       try {
         const res = await apiFetch(`${basePath}/sessions/aggregates`)
         if (!res.ok) return
         const aggregates: SessionAggregate[] = await res.json() ?? []
-        if (cancelled) return
+        if (canceled) return
         setTokensMap(applySessionAggregates(tokensMapRef.current, aggregates, sessionsRef.current))
       } catch { /* leave the column blank */ }
       finally { aggregatesInFlight.current = false }
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [sessions, apiFetch, basePath])
 
   // The chat opens a session from its `?session=` deep link. This used to pass the id

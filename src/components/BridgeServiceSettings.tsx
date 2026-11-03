@@ -13,7 +13,7 @@ import { SettingsSection } from './settings/SettingsSection'
  *  configuration (`GET {base}/settings`, llm-bridge's `msg.ServiceSettings`).
  *  A service that answers is drawn from its answer — what each setting is, the
  *  value in force and whether the environment, the service's own record or a
- *  built-in default decided it. Behaviour settings the service stores are
+ *  built-in default decided it. Behavior settings the service stores are
  *  edited here and apply with no restart; addresses, paths and secrets are
  *  shown with their variable name and change only where the process is started.
  *  A service that does not answer is listed as such: that list is what is left
@@ -28,7 +28,7 @@ export function BridgeServiceSettings() {
       <header>
         <h2 className="bh-title">Service settings</h2>
         <p className="bh-subtitle">
-          Each service describes its own configuration. <strong>Behaviour</strong> settings are stored by the service and
+          Each service describes its own configuration. <strong>Behavior</strong> settings are stored by the service and
           changed here, with no restart. <strong>Wiring</strong>, <strong>paths</strong> and <strong>secrets</strong> belong to the
           environment the process is started in: they are shown with the variable that sets them, and a secret shows only
           whether it is set.
@@ -47,13 +47,13 @@ function ServicePanel({ source, roles }: { source: ServiceSettingsSource; roles:
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void fetchServiceSettings(apiFetch, source.basePath).then(answer => {
-      if (cancelled) return
+      if (canceled) return
       setState(answer)
       if (answer.phase === 'described') setExpanded(true)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [apiFetch, source.basePath])
 
   /** One write. The service answers with its whole description, so the page

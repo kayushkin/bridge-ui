@@ -54,7 +54,7 @@ export function useAttachToken(
       setState({ status: 'idle' })
       return
     }
-    let cancelled = false
+    let canceled = false
     setState({ status: 'loading' })
     bridgeFetch(`${basePath}/sessions/${sessionId}/attach-token`)
       .then(async response => {
@@ -63,7 +63,7 @@ export function useAttachToken(
         return (await response.json()) as { attach_token?: string }
       })
       .then(body => {
-        if (cancelled) return
+        if (canceled) return
         if (body === null) {
           setState({ status: 'absent' })
           return
@@ -74,14 +74,14 @@ export function useAttachToken(
         setState(token ? { status: 'ready', token } : { status: 'absent' })
       })
       .catch((err: unknown) => {
-        if (cancelled) return
+        if (canceled) return
         setState({
           status: 'error',
           message: err instanceof Error ? err.message : String(err),
         })
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [sessionId, isPty, refreshTick, bridgeFetch, basePath])
 

@@ -81,7 +81,7 @@ export function toToolEvent(entry: Entry): ToolEvent {
  *   - the id appears in `resulted` (cold-loaded models keep call and result as
  *     two rows, so the call's own fields say nothing);
  *   - the entry is `unpairable` — no tool id was ever emitted, so its result can
- *     never be recognised. Rendering that as a spinner would leave a tool
+ *     never be recognized. Rendering that as a spinner would leave a tool
  *     spinning forever on every OTel-derived stand-in.
  */
 export function isToolRunning(entry: Entry, resulted: ReadonlySet<string>): boolean {

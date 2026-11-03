@@ -4,7 +4,7 @@
 //
 // `npm run check` renders these panes through react-dom/server, which proves
 // what they render and cannot prove what the browser does with it. Everything
-// the window's design rests on is browser behaviour: revealing earlier blocks
+// the window's design rests on is browser behavior: revealing earlier blocks
 // inserts content ABOVE the viewport, and the pane has no spacer to hold the
 // reader's place, so it records the distance from the bottom and restores it
 // in a layout effect. Whether that actually leaves the content still is a

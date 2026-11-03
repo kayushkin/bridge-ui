@@ -59,7 +59,7 @@ function useListReadOnce<T>(url: string | null, toOption: (row: T) => ResourceOp
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     if (!url) return
-    let cancelled = false
+    let canceled = false
     fetchFn(url)
       .then(async res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -67,9 +67,9 @@ function useListReadOnce<T>(url: string | null, toOption: (row: T) => ResourceOp
         if (!Array.isArray(body)) throw new Error('the answer was not a list')
         return (body as T[]).map(toOption).sort(compareOptionsByLabel)
       })
-      .then(list => { if (!cancelled) { setOptions(list); setError(null) } })
-      .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)) })
-    return () => { cancelled = true }
+      .then(list => { if (!canceled) { setOptions(list); setError(null) } })
+      .catch(err => { if (!canceled) setError(err instanceof Error ? err.message : String(err)) })
+    return () => { canceled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, fetchFn])
   return { options, error }
@@ -203,11 +203,11 @@ export function useInstancesListedForPrincipals(principalIDs: readonly string[])
       setState({ listedBy: new Map(), error: null })
       return
     }
-    let cancelled = false
+    let canceled = false
     const ids = key.split(',')
     Promise.all(ids.map(id => listEffectiveGrants(fetchFn, base, id, { relation: 'works_with', resourceType: 'instance' }).then(result => ({ id, result }))))
       .then(answers => {
-        if (cancelled) return
+        if (canceled) return
         const listedBy = new Map<string, string[]>()
         const failures: string[] = []
         for (const { id, result } of answers) {
@@ -223,7 +223,7 @@ export function useInstancesListedForPrincipals(principalIDs: readonly string[])
         }
         setState({ listedBy, error: failures.length > 0 ? failures.join('; ') : null })
       })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [base, key, fetchFn])
   return state
 }

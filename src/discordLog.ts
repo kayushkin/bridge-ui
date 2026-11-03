@@ -84,7 +84,7 @@ export function serverOptions(status: DiscordBridgeStatus | null): { serverID: s
 }
 
 /** The channels of one server, or of every bridged server when none is
- *  picked, labelled with the server's name when more than one could be shown. */
+ *  picked, labeled with the server's name when more than one could be shown. */
 export function channelOptions(status: DiscordBridgeStatus | null, serverID: string): ChannelOption[] {
   const servers = (status?.bridged_servers ?? []).filter(s => !serverID || s.discord_server_id === serverID)
   const withServerName = servers.length > 1

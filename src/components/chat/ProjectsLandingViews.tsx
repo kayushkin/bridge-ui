@@ -90,11 +90,11 @@ export function ProjectTimeline({
 
   useEffect(() => {
     if (!projectStoreBasePath || idsKey === '') return
-    let cancelled = false
+    let canceled = false
     const ids = idsKey.split(',')
     let next = 0
     const worker = async (): Promise<void> => {
-      while (!cancelled && next < ids.length) {
+      while (!canceled && next < ids.length) {
         const id = ids[next++]
         let slot: ActivitySlot
         try {
@@ -105,12 +105,12 @@ export function ProjectTimeline({
         } catch (error) {
           slot = { events: null, error: error instanceof Error ? error.message : String(error) }
         }
-        if (cancelled) return
+        if (canceled) return
         setActivity((previous) => new Map(previous).set(id, slot))
       }
     }
     void Promise.all(Array.from({ length: Math.min(ACTIVITY_CONCURRENCY, ids.length) }, worker))
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, projectStoreBasePath, idsKey])
 
   const nowSeconds = Math.floor(Date.now() / 1000)
@@ -202,12 +202,12 @@ export function ProjectMonthStrip({ projectId }: { projectId: string }): JSX.Ele
   const [slot, setSlot] = useState<ActivitySlot | null>(null)
   useEffect(() => {
     if (!projectStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     fetchFn(projectActivityPath(projectStoreBasePath, projectId, TIMELINE_DAYS))
       .then((r) => readJSON<ActivityAnswer>(r, 'project activity'))
-      .then((answer) => { if (!cancelled) setSlot({ events: answer.events, error: null }) })
-      .catch((error: Error) => { if (!cancelled) setSlot({ events: null, error: error.message }) })
-    return () => { cancelled = true }
+      .then((answer) => { if (!canceled) setSlot({ events: answer.events, error: null }) })
+      .catch((error: Error) => { if (!canceled) setSlot({ events: null, error: error.message }) })
+    return () => { canceled = true }
   }, [fetchFn, projectStoreBasePath, projectId])
   if (!slot) return null
   if (slot.error !== null) return <p className={styles.error}>{slot.error}</p>

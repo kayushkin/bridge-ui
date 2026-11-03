@@ -29,11 +29,11 @@ export function useMessageStoreAccounts(): { configured: boolean; accounts: Acco
   const [answer, setAnswer] = useState<{ accounts: Account[] | null; error: string | null }>({ accounts: null, error: null })
   useEffect(() => {
     if (!messageStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     readMessageStore<Account[] | null>(ACCOUNTS_PATH)
-      .then(accounts => { if (!cancelled) setAnswer({ accounts: accounts ?? [], error: null }) })
-      .catch(err => { if (!cancelled) setAnswer({ accounts: null, error: errorText(err) }) })
-    return () => { cancelled = true }
+      .then(accounts => { if (!canceled) setAnswer({ accounts: accounts ?? [], error: null }) })
+      .catch(err => { if (!canceled) setAnswer({ accounts: null, error: errorText(err) }) })
+    return () => { canceled = true }
   }, [messageStoreBasePath, readMessageStore])
   return { configured: !!messageStoreBasePath, ...answer }
 }
@@ -83,12 +83,12 @@ export function BridgeMessageAccountView({ account, accountPicker, conversationI
   const [text, setText] = useState('')
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     setConversations(null)
     readMessageStore<Conversation[] | null>(accountConversationsPath(account.id))
-      .then(answer => { if (!cancelled) { setConversations(answer ?? []); setLoadError(null) } })
-      .catch(err => { if (!cancelled) setLoadError(errorText(err)) })
-    return () => { cancelled = true }
+      .then(answer => { if (!canceled) { setConversations(answer ?? []); setLoadError(null) } })
+      .catch(err => { if (!canceled) setLoadError(errorText(err)) })
+    return () => { canceled = true }
   }, [account.id, readMessageStore])
 
   const needle = text.trim().toLowerCase()
@@ -172,17 +172,17 @@ function AccountConversationThread({ account, conversation, conversations }: {
   const pendingScroll = useRef<{ kind: 'bottom' } | { kind: 'keep'; fromBottom: number } | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     readMessageStore<MessagePage>(accountConversationMessagesPath(conversation.id))
       .then(page => {
-        if (cancelled) return
+        if (canceled) return
         pendingScroll.current = { kind: 'bottom' }
         setMessages([...(page.messages ?? [])].reverse())
         setOlderCursor(page.next)
         setError(null)
       })
-      .catch(err => { if (!cancelled) setError(errorText(err)) })
-    return () => { cancelled = true }
+      .catch(err => { if (!canceled) setError(errorText(err)) })
+    return () => { canceled = true }
   }, [conversation.id, readMessageStore])
 
   useLayoutEffect(() => {

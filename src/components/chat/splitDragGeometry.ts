@@ -17,7 +17,7 @@ export interface SplitDragGeometry {
   /** The pair's combined grow, which a drag redistributes but never changes. */
   totalGrowUnits: number
   /** MINIMUM_PANE_PIXELS in grow units, capped at half the pair so a pair too
-   *  small to honour the minimum splits evenly instead of inverting. */
+   *  small to honor the minimum splits evenly instead of inverting. */
   minimumGrowUnits: number
   startGrowUnitsBefore: number
   startGrowUnitsAfter: number
@@ -51,7 +51,7 @@ export interface SplitGrowUnits {
 }
 
 /**
- * The grow numbers a pointer that has travelled `pointerDeltaPixels` from where
+ * The grow numbers a pointer that has traveled `pointerDeltaPixels` from where
  * the drag started should produce. The pair's total is conserved, so the two
  * returned values always sum to `totalGrowUnits`.
  */

@@ -57,7 +57,7 @@ describe('name search', () => {
       .toBe('134 servers listed. The last listing checked 132 of your 134 servers.')
   })
 
-  it('puts favourites first among equal matches', () => {
+  it('puts favorites first among equal matches', () => {
     expect(searchEmojiChoices(choices, 'parrot', ['🦜']).map(c => c.key)[0]).toBe('🦜')
   })
 
@@ -149,7 +149,7 @@ describe('skin tones', () => {
   })
 })
 
-describe('favourites', () => {
+describe('favorites', () => {
   it('toggles and moves', () => {
     expect(withFavoriteToggled(['🔥'], '👍')).toEqual(['🔥', '👍'])
     expect(withFavoriteToggled(['🔥', '👍'], '🔥')).toEqual(['👍'])
@@ -157,12 +157,12 @@ describe('favourites', () => {
     expect(withFavoriteMoved(['a', 'b'], 'a', -1)).toEqual(['a', 'b'])
   })
 
-  it('names unicode favourites from the table and drops deleted custom ones', () => {
+  it('names unicode favorites from the table and drops deleted custom ones', () => {
     const choices = favoriteChoices(['👍🏽', 'discord-emoji:1', 'discord-emoji:gone'], [emoji('1', 'parrot')], unicodeNamesOf(EMOJI_GROUPS))
     expect(choices.map(c => c.name)).toEqual(['thumbs up', 'parrot'])
   })
 
-  it('matches a custom favourite to its live reactions by the bridge’s mxc', () => {
+  it('matches a custom favorite to its live reactions by the bridge’s mxc', () => {
     const custom = [emoji('1', 'parrot', 'reno', 'mxc://chat/abc')]
     const group = (key: string) => ({ key } as MessageReactionGroup)
     expect(reactionGroupIsEmoji(group('mxc://chat/abc'), 'discord-emoji:1', custom)).toBe(true)

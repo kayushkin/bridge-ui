@@ -615,13 +615,13 @@ function Activity({ projectId, onActivateSession }: { projectId: string; onActiv
 
   useEffect(() => {
     if (!projectStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     setError(null)
     fetchFn(projectActivityPath(projectStoreBasePath, projectId, days))
       .then((r) => readJSON<ActivityAnswer>(r, 'project activity'))
-      .then((a) => { if (!cancelled) setAnswer(a) })
-      .catch((e: Error) => { if (!cancelled) setError(e.message) })
-    return () => { cancelled = true }
+      .then((a) => { if (!canceled) setAnswer(a) })
+      .catch((e: Error) => { if (!canceled) setError(e.message) })
+    return () => { canceled = true }
   }, [fetchFn, projectStoreBasePath, projectId, days])
 
   const events = answer?.events ?? []

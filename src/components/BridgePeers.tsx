@@ -95,14 +95,14 @@ function useThisServerSettings(): { settings: ServiceSettings | null; error: str
   const [settings, setSettings] = useState<ServiceSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void fetchServiceSettings(fetchFn, basePath).then(answer => {
-      if (cancelled) return
+      if (canceled) return
       if (answer.phase === 'described') setSettings(answer.described)
       else if (answer.phase === 'failed') setError(answer.message)
       else setError(`GET ${basePath}/settings answered HTTP ${answer.status}`)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, basePath])
   return { settings, error }
 }

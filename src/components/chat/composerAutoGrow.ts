@@ -7,7 +7,7 @@
  *  therefore lands a border-width short of the content it was measured from, so
  *  the content never fits and `overflow-y: auto` gives the textarea a scrollbar at
  *  **every** size rather than only past the cap. On this origin that was 2px, and
- *  it was small enough to read as a rendering artefact for as long as it shipped.
+ *  it was small enough to read as a rendering artifact for as long as it shipped.
  *
  *  The border is added back only under `border-box`. Under `content-box` the
  *  assigned height already excludes the border, so adding it would overshoot by

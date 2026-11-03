@@ -124,7 +124,7 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The Discord message log, deleted messages with their text, and the bridge's
   // status. Read-only: GET /message-log and GET /discord/status.
   { route: 'discord', label: 'Discord', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeDiscord },
-  // The emoji pickers' favourites and settings, and every bridged server's
+  // The emoji pickers' favorites and settings, and every bridged server's
   // custom emoji: GET /emoji and its writes.
   { route: 'emoji', label: 'Emoji', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeEmoji },
   // An emoji on everything one person sends: from the operator's own account

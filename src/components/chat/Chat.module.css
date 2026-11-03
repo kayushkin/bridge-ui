@@ -566,7 +566,7 @@
   flex-shrink: 0;
 }
 
-/* Done is the one icon that earns a colour: it is the only control on the row
+/* Done is the one icon that earns a color: it is the only control on the row
    that changes what the session IS rather than how it is displayed. */
 .iconButtonDone[aria-pressed='true'] {
   color: #22c55e;
@@ -727,7 +727,7 @@
    for renders as an unstyled div, which is the same page chat drew before any of this
    existed.
 
-   Every colour is a THEME token (--error / --warning / --accent / --success / --info /
+   Every color is a THEME token (--error / --warning / --accent / --success / --info /
    --border), so light and dark both come from the palette that already clears contrast
    in `index.css` rather than from six hex literals that would only have been checked in
    one of them. */
@@ -765,7 +765,7 @@
    them — 0.6em between paragraphs, 0.8em before a heading (bridge-ui `styles.css`). Every
    block after the first in its run extends its rail up by the larger of the two to close
    that gap. Overshooting into the block above is harmless: by definition it is the same
-   vibe and the same colour, so the two stripes union. */
+   vibe and the same color, so the two stripes union. */
 .vibeProse > div[data-vibe-run='mid']::after,
 .vibeProse > div[data-vibe-run='end']::after {
   top: -0.8em;
@@ -794,7 +794,7 @@
    opaque and wider than the 6px rail, so letting the stripe run through behind it is what
    makes it read as overlaid.
 
-   11px because 9px was measured unreadable — at that size a glyph is a coloured speck and
+   11px because 9px was measured unreadable — at that size a glyph is a colored speck and
    the reader is getting the hue twice instead of a hue and a symbol.
 
    CSS alt text (`/ "warning"`) so a screen reader gets the vibe's NAME rather than an
@@ -875,7 +875,7 @@
 
 /* bridge-ui zeroes the first and last child's outer margins on `.bc-turns-md` so prose
    sits flush in its bubble. Those rules are `>` selectors and the wrappers are now the
-   direct children, so the margin they were cancelling moved one level down with the
+   direct children, so the margin they were canceling moved one level down with the
    content. Re-cancel it there — without this a reply that opens with a heading gains
    0.8em of space it never had. */
 .vibeProse > div[data-vibe]:first-child > :first-child {
@@ -977,7 +977,7 @@
   color: var(--text-muted);
 }
 
-/* The legend has to SHOW the colours it is explaining, or it is a list of words. Each
+/* The legend has to SHOW the colors it is explaining, or it is a list of words. Each
    row carries its vibe as a data attribute and draws the same rail the prose does, from
    the same tokens — a legend with its own palette would be the second copy of the one
    thing here that must not have two. */

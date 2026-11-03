@@ -37,14 +37,14 @@ export function useCardEffectiveDefaults(boardID: string | null, cardID: string,
       setState({ effective: null, error: 'this host has no route to kanban-store, so the card’s defaults cannot be read', forReadKey: readKey })
       return
     }
-    let cancelled = false
+    let canceled = false
     getCardEffectiveDefaults(fetchFn, kanbanStoreBasePath, boardID, cardID).then(result => {
-      if (cancelled) return
+      if (canceled) return
       setState(result.ok
         ? { effective: result.value, error: null, forReadKey: readKey }
         : { effective: null, error: result.error, forReadKey: readKey })
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, kanbanStoreBasePath, boardID, cardID, readKey])
   if (!boardID) return { effective: null, error: null, pending: false }
   // An answer for another card or an older tag set must not stand in for this one's.

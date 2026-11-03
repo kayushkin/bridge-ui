@@ -23,13 +23,13 @@ export function useBundles(): BundlesList {
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     if (!bundleStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     listBundles(fetchFn, bundleStoreBasePath).then(result => {
-      if (cancelled) return
+      if (canceled) return
       // Go encodes an empty slice it never allocated as null.
       if (result.ok) { setBundles(result.value ?? []); setError(null) } else setError(result.error)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, bundleStoreBasePath])
   return { enabled: !!bundleStoreBasePath, bundles, error }
 }

@@ -31,12 +31,12 @@ export function EmailRefChip({ locator, className }: { locator: string; classNam
 
   useEffect(() => {
     if (!parsed || !mailBasePath) return;
-    let cancelled = false;
+    let canceled = false;
     loadMessage(fetchFn, mailBasePath, locator).then(
-      (loaded) => { if (!cancelled) setMessage(loaded); },
-      (failure: unknown) => { if (!cancelled) setError(String(failure)); },
+      (loaded) => { if (!canceled) setMessage(loaded); },
+      (failure: unknown) => { if (!canceled) setError(String(failure)); },
     );
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
     // parsed is derived from locator, so locator is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchFn, mailBasePath, locator]);

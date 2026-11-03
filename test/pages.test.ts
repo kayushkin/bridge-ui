@@ -39,7 +39,7 @@ describe('navEntriesFor', () => {
     expect(withStores).toContain('Kanban')
   })
 
-  it('honours the two shell flags', () => {
+  it('honors the two shell flags', () => {
     const labels = navEntriesFor(config(), { showConformance: false, showServiceInventory: false }).map(e => e.label)
     expect(labels).not.toContain('Conformance')
     expect(labels).not.toContain('Service inventory')

@@ -32,43 +32,43 @@ export function useKanbanServers(config: BridgeConfig): KanbanServersValue {
   const [viewsError, setViewsError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void (async () => {
       try {
         const res = await fetchFn(`${basePath}${THIS_SERVER_PATH}`)
-        if (cancelled) return
+        if (canceled) return
         if (!res.ok) { setThisServerError(await peerRouteErrorText(res, `GET ${THIS_SERVER_PATH}`)); return }
         setThisServer((await res.json()) as ServerDescription)
         setThisServerError(null)
       } catch (err) {
-        if (!cancelled) setThisServerError(`GET ${THIS_SERVER_PATH}: ${err instanceof Error ? err.message : String(err)}`)
+        if (!canceled) setThisServerError(`GET ${THIS_SERVER_PATH}: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
-        if (!cancelled) setThisServerRead(true)
+        if (!canceled) setThisServerRead(true)
       }
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, basePath])
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const read = async () => {
       if (typeof document !== 'undefined' && document.hidden) return
       try {
         const res = await fetchFn(`${basePath}${PEER_CONNECTIONS_PATH}`)
-        if (cancelled) return
+        if (canceled) return
         if (res.status === 401 || res.status === 403) { setViews([]); setViewsError(null); return }
         if (!res.ok) { setViewsError(await peerRouteErrorText(res, `GET ${PEER_CONNECTIONS_PATH}`)); return }
         setViews((await res.json()) as PeerConnectionView[])
         setViewsError(null)
       } catch (err) {
-        if (!cancelled) setViewsError(`GET ${PEER_CONNECTIONS_PATH}: ${err instanceof Error ? err.message : String(err)}`)
+        if (!canceled) setViewsError(`GET ${PEER_CONNECTIONS_PATH}: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
-        if (!cancelled) setViewsRead(true)
+        if (!canceled) setViewsRead(true)
       }
     }
     void read()
     const timer = setInterval(() => void read(), CONNECTIONS_POLL_MS)
-    return () => { cancelled = true; clearInterval(timer) }
+    return () => { canceled = true; clearInterval(timer) }
   }, [fetchFn, basePath])
 
   const servers = useMemo(() => kanbanServers(thisServer, views), [thisServer, views])
@@ -93,7 +93,7 @@ export function useBoardsOnServers(servers: readonly KanbanServer[], config: Bri
   const serversKey = servers.map(server => `${serverBoardsKey(server)}=${server.serverId}:${server.blockedReason ?? ''}`).join('\n')
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const initial = new Map<string, ServerBoards>()
     for (const server of servers) {
       initial.set(serverBoardsKey(server), server.blockedReason ? { state: 'blocked', reason: server.blockedReason } : { state: 'loading' })
@@ -113,10 +113,10 @@ export function useBoardsOnServers(servers: readonly KanbanServer[], config: Bri
         } catch (err) {
           answer = { state: 'failed', error: `GET /api/boards: ${err instanceof Error ? err.message : String(err)}` }
         }
-        if (!cancelled) setBoards(prev => new Map(prev).set(key, answer))
+        if (!canceled) setBoards(prev => new Map(prev).set(key, answer))
       })()
     }
-    return () => { cancelled = true }
+    return () => { canceled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serversKey, config])
 

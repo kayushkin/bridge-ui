@@ -372,7 +372,7 @@ export function SignalCard({
           when the key is absent, so an older row or a producer that omits it
           loses its answer box with no way to tell. A display hint that is never
           deliberately false, and fails closed onto an unanswerable card, is not
-          worth honouring. The field stays parsed — it is the wire's, and this
+          worth honoring. The field stays parsed — it is the wire's, and this
           layer passes it through — it simply no longer decides this. */}
       {rendersFreeformBox(signal, startCollapsedToAnswers === true) && (
         <textarea

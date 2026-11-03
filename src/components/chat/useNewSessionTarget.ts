@@ -61,7 +61,7 @@ export interface NewSessionTarget {
  *  ceiling and disabled-tool list were dropped outright.
  *
  *  Prefs are the same server-side record the original chat at `/` reads and writes
- *  (`GET/PUT {basePath}/bridge-prefs`), so a choice made on either surface is honoured
+ *  (`GET/PUT {basePath}/bridge-prefs`), so a choice made on either surface is honored
  *  by the other. `basePath` comes from the BridgeProvider context rather than a literal
  *  so both pages resolve one endpoint. */
 export function useNewSessionTarget(): NewSessionTarget {

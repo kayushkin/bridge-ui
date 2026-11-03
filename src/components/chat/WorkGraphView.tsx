@@ -36,8 +36,8 @@ import styles from './WorkGraphView.module.css'
 // The work graph, opened in the chat's workspace in place of the thread, as the
 // signals page and the Orchestrator are (`?view=work-graph`). It draws one repo's
 // commit graph from work-graph-store, the way `git log --graph` does, with each
-// commit's dot in the colour of the agent session that made it, and lists the
-// sessions that worked the repo and what each did. The rules — lanes, colours,
+// commit's dot in the color of the agent session that made it, and lists the
+// sessions that worked the repo and what each did. The rules — lanes, colors,
 // what each session did — are `src/workGraph.ts`; this file fetches and draws.
 //
 // Session ids are always written in full, so the chat's reference detection and
@@ -50,7 +50,7 @@ const DOT_RADIUS = 5
 const HEAD_DOT_RADIUS = 6
 const GRAPH_POLL_MS = 30_000
 
-/** Line colours by lane, from the theme, so every theme draws its own. */
+/** Line colors by lane, from the theme, so every theme draws its own. */
 const LANE_COLORS = ['var(--accent)', 'var(--info)', 'var(--success)', 'var(--warning)', 'var(--error)', 'var(--text-muted)']
 
 function laneColor(column: number): string {
@@ -116,39 +116,39 @@ export function WorkGraphView({ initialRepoId = null, initialCommitSha = null, o
   // none active, nothing is picked rather than a guess.
   useEffect(() => {
     if (!workGraphStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     fetchFn(workGraphActivityPath(workGraphStoreBasePath, WORK_GRAPH_ACTIVITY_HOURS))
       .then(response => readJSON<WorkGraphActivityAnswer>(response, 'work-graph-store activity'))
       .then(answer => {
-        if (cancelled) return
+        if (canceled) return
         const ordered = reposByRecentActivity(answer.repos)
         setActiveRepos(ordered)
         setRepoId(current => current ?? ordered[0]?.repo.id ?? null)
       })
-      .catch((error: Error) => { if (!cancelled) setPickerError(error.message) })
+      .catch((error: Error) => { if (!canceled) setPickerError(error.message) })
     if (repoStoreBasePath) {
       fetchFn(`${repoStoreBasePath}/repos`)
         .then(response => readJSON<RepoStoreRepo[]>(response, 'repo-store repos'))
-        .then(repos => { if (!cancelled) setAllRepos(repos) })
-        .catch((error: Error) => { if (!cancelled) setPickerError(error.message) })
+        .then(repos => { if (!canceled) setAllRepos(repos) })
+        .catch((error: Error) => { if (!canceled) setPickerError(error.message) })
     }
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [fetchFn, workGraphStoreBasePath, repoStoreBasePath])
 
   useEffect(() => {
     if (!workGraphStoreBasePath || repoId === null) return
-    let cancelled = false
+    let canceled = false
     setLoading(true)
     fetchFn(workGraphRepoGraphPath(workGraphStoreBasePath, repoId, maxCommits))
       .then(response => readJSON<WorkGraph>(response, 'work-graph-store graph'))
       .then(answer => {
-        if (cancelled) return
+        if (canceled) return
         setGraph(answer)
         setGraphError(null)
       })
-      .catch((error: Error) => { if (!cancelled) setGraphError(error.message) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+      .catch((error: Error) => { if (!canceled) setGraphError(error.message) })
+      .finally(() => { if (!canceled) setLoading(false) })
+    return () => { canceled = true }
   }, [fetchFn, workGraphStoreBasePath, repoId, maxCommits, reloadSignal])
 
   // Agents move refs all the time; the graph follows while the tab is visible.

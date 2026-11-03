@@ -37,7 +37,7 @@ function HunkView({ hunk }: { hunk: Hunk }) {
 }
 
 /**
- * A unified diff that ALREADY EXISTS, coloured.
+ * A unified diff that ALREADY EXISTS, colored.
  *
  * `DiffView` above cannot do this job and the difference is the whole reason this
  * exists. It takes a file's `before` and `after` CONTENTS and computes the patch
@@ -47,7 +47,7 @@ function HunkView({ hunk }: { hunk: Hunk }) {
  * already unified and possibly spanning many files. There is nothing to diff.
  *
  * So this renders what it is given, line by line, using the same `bc-diff-*`
- * classes and therefore the same colours as the tool cards. What it adds over the
+ * classes and therefore the same colors as the tool cards. What it adds over the
  * `<pre>` the Git pane used to draw is only that: `+` green, `-` red, `@@` and the
  * `diff --git` / `index` / `+++` / `---` file headers set apart from the body.
  *

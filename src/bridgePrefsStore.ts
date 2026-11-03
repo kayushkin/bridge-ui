@@ -19,7 +19,7 @@ import type { BridgePrefs, FetchFn } from './types'
 // without reading its status, so a refused write leaves every subscriber
 // showing a value the server does not have. Sharing the record makes that
 // visible on more surfaces at once rather than causing it; changing it is a
-// behaviour change and is filed separately.
+// behavior change and is filed separately.
 
 type Listener = () => void
 
@@ -74,7 +74,7 @@ function sameValue(a: unknown, b: unknown): boolean {
  *  the value did not change — the whole record when nothing changed, and each
  *  unchanged sub-record otherwise.
  *
- *  Not a micro-optimisation. `useBridgePrefs` deliberately re-creates
+ *  Not a micro-optimization. `useBridgePrefs` deliberately re-creates
  *  `getDefaults` whenever `prefs.defaults` changes identity, because the
  *  settings form hangs a seeding effect off it — and that effect calls
  *  `setLocalDefaults`, throwing away edits the user has not saved. A re-read

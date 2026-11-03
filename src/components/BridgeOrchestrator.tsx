@@ -62,12 +62,12 @@ function HomeSessionLink(): JSX.Element | null {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     fetchHomeSessionId(apiFetch, orchestratorBasePath).then(
-      (id) => { if (!cancelled) { setSessionId(id); setError(null) } },
-      (e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) },
+      (id) => { if (!canceled) { setSessionId(id); setError(null) } },
+      (e: unknown) => { if (!canceled) setError(e instanceof Error ? e.message : String(e)) },
     )
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [apiFetch, orchestratorBasePath])
 
   if (!routes.chat) return null

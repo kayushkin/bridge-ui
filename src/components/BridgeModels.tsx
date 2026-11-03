@@ -45,14 +45,14 @@ function BackgroundCalls({ sources, roles }: { sources: ServiceSettingsSource[];
   const [answers, setAnswers] = useState<Record<string, SourceState>>({})
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     setAnswers(Object.fromEntries(sources.map(source => [source.configKey, { phase: 'loading' } as SourceState])))
     for (const source of sources) {
       void fetchServiceSettings(apiFetch, source.basePath).then(answer => {
-        if (!cancelled) setAnswers(previous => ({ ...previous, [source.configKey]: answer }))
+        if (!canceled) setAnswers(previous => ({ ...previous, [source.configKey]: answer }))
       })
     }
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [apiFetch, sources])
 
   const save = useCallback(async (row: BackgroundCallRow, role: string): Promise<string | null> => {
@@ -158,11 +158,11 @@ function Roles({ roles, onSaved }: { roles: ModelStoreRolesState; onSaved: () =>
 
   useEffect(() => {
     if (!modelStoreBasePath) return
-    let cancelled = false
+    let canceled = false
     fetchModelStoreModels(apiFetch, modelStoreBasePath)
-      .then(list => { if (!cancelled) setModels({ phase: 'loaded', models: list }) })
-      .catch(err => { if (!cancelled) setModels({ phase: 'failed', error: err instanceof Error ? err.message : String(err) }) })
-    return () => { cancelled = true }
+      .then(list => { if (!canceled) setModels({ phase: 'loaded', models: list }) })
+      .catch(err => { if (!canceled) setModels({ phase: 'failed', error: err instanceof Error ? err.message : String(err) }) })
+    return () => { canceled = true }
   }, [apiFetch, modelStoreBasePath])
 
   return (

@@ -18,7 +18,7 @@ import type { FetchFn } from './types'
 // subscriber starts the poll, the rest attach to the answer it already has,
 // and the last one to leave stops the timer. N callers cost one request.
 //
-// Deliberately not a cache library. It keeps the exact behaviour the hooks had
+// Deliberately not a cache library. It keeps the exact behavior the hooks had
 // — `loading` means "the first attempt has not settled yet" and stays false
 // afterwards, a failed refresh keeps the last good data and sets `error`, and
 // an unchanged payload keeps the previous array so React can bail out of the

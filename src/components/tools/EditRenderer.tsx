@@ -51,7 +51,7 @@ function EditRenderer({ tool, running }: ToolRendererProps) {
 
   useEffect(() => {
     if (!needsFetch || !sessionId) return
-    let cancelled = false
+    let canceled = false
     setState('loading')
     ;(async () => {
       try {
@@ -70,18 +70,18 @@ function EditRenderer({ tool, running }: ToolRendererProps) {
 
         const beforeSide = await loadSide(fetchFn, basePath, 'Before', before, fastBefore)
         const afterSide = await loadSide(fetchFn, basePath, 'After', after, fastAfter)
-        if (cancelled) return
+        if (canceled) return
 
         setSides({ before: beforeSide, after: afterSide })
         setHint(sidesHint(before, after))
         setState('ready')
       } catch (err) {
-        if (cancelled) return
+        if (canceled) return
         setState('error')
         setHint(String(err))
       }
     })()
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [needsFetch, sessionId, tool.tool_id, fetchFn, basePath, fastBefore, fastAfter, filePath])
 
   const label = tool.tool

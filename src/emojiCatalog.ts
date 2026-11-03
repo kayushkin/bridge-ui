@@ -1,7 +1,7 @@
 // The emoji pickers' rules, shared by the reaction picker, the composer's `:`
 // suggestions, the quick-react bar and the Emoji page: which emoji a room is
 // offered, how a name search ranks them, where a `:query` sits in the text,
-// what a `+:name:` command reacts with, and how a favourite is matched to a
+// what a `+:name:` command reacts with, and how a favorite is matched to a
 // reaction already on a message. The records are multichat's (`GET /emoji`);
 // everything here is covered by test/emojiCatalog.test.ts.
 import type {
@@ -36,7 +36,7 @@ export function customEmojiSectionName(emoji: DiscordCustomEmoji): string {
   return emoji.discord_server_name || SEEN_EMOJI_SECTION_NAME
 }
 
-/** One emoji a picker can offer. `key` is what a reaction or a favourite
+/** One emoji a picker can offer. `key` is what a reaction or a favorite
  *  carries: the unicode text (with the skin tone applied), or
  *  `discord-emoji:<id>` for a custom emoji. */
 export type EmojiChoice =
@@ -185,7 +185,7 @@ export function emojiNameMatchRank(name: string, query: string): number | null {
 }
 
 /** The indexed choices that match the query, best match first; among equals,
- *  favourites, then shorter names (for a name match), then the order given. */
+ *  favorites, then shorter names (for a name match), then the order given. */
 export function searchEmojiIndex(index: readonly EmojiSearchEntry[], query: string, favoriteKeys: readonly string[],
   limit = Infinity): EmojiChoice[] {
   const normalized = normalizedEmojiQuery(query)
@@ -250,8 +250,8 @@ export function choiceNamed(choices: readonly EmojiChoice[], name: string): Emoj
   return choices.find(choice => emojiNameMatchRank(choice.name, normalized) === 0) ?? null
 }
 
-/** The favourites that still name an emoji: a custom one deleted from its
- *  server since it was favourited is left out. Unicode names come from the
+/** The favorites that still name an emoji: a custom one deleted from its
+ *  server since it was favorited is left out. Unicode names come from the
  *  table, matched without a skin tone. */
 export function favoriteChoices(favoriteKeys: readonly string[], custom: readonly DiscordCustomEmoji[],
   unicodeNames: ReadonlyMap<string, string>): EmojiChoice[] {
@@ -265,7 +265,7 @@ export function favoriteChoices(favoriteKeys: readonly string[], custom: readonl
   })
 }
 
-/** Unicode emoji names by emoji, for naming favourites. */
+/** Unicode emoji names by emoji, for naming favorites. */
 export function unicodeNamesOf(groups: readonly EmojiGroup[]): Map<string, string> {
   return new Map(groups.flatMap(group => group.emojis.map(([emoji, name]) => [withoutSkinTone(emoji), name] as const)))
 }
@@ -274,12 +274,12 @@ function withoutSkinTone(emoji: string): string {
   return emoji.replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '').replace(/️/g, '')
 }
 
-/** The favourites with `key` added at the end, or taken out if it is there. */
+/** The favorites with `key` added at the end, or taken out if it is there. */
 export function withFavoriteToggled(favoriteKeys: readonly string[], key: string): string[] {
   return favoriteKeys.includes(key) ? favoriteKeys.filter(k => k !== key) : [...favoriteKeys, key]
 }
 
-/** The favourites with `key` moved one place earlier (-1) or later (+1). */
+/** The favorites with `key` moved one place earlier (-1) or later (+1). */
 export function withFavoriteMoved(favoriteKeys: readonly string[], key: string, step: -1 | 1): string[] {
   const from = favoriteKeys.indexOf(key)
   const to = from + step

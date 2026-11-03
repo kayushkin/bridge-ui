@@ -1,6 +1,6 @@
 /* The projects view (`?view=projects`). A CSS module, like the work graph, so
    the view carries its own styles into dist/ beside its .js
-   (scripts/copy-css.mjs). Every colour is a theme variable, so the zine, light
+   (scripts/copy-css.mjs). Every color is a theme variable, so the zine, light
    and dark themes each draw it in their own inks. */
 
 .page { min-height: 0; }

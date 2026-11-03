@@ -15,8 +15,8 @@ export function MultichatNotConfigured({ page }: { page: string }) {
   )
 }
 
-/** A tag drawn in its own colour, as a border and a dot, so it reads on either
- *  theme whatever colour it was given. */
+/** A tag drawn in its own color, as a border and a dot, so it reads on either
+ *  theme whatever color it was given. */
 export function TagChip({ tag, onRemove, disabled }: { tag: MultichatTag; onRemove?: () => void; disabled?: boolean }) {
   return (
     <span className={styles.tag} style={{ borderColor: tag.color }} data-tag-id={tag.id}>

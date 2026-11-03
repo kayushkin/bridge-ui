@@ -279,13 +279,13 @@ function BotAutoReactions() {
   useEffect(() => {
     const trimmed = query.trim()
     if (!guildID || trimmed === '' || member) { setMembers([]); return }
-    let cancelled = false
+    let canceled = false
     const timer = window.setTimeout(() => {
       call<{ members: DiscordSignupMember[] }>('GET', memberSearchPath(guildID, trimmed))
-        .then(found => { if (!cancelled) setMembers(found.members) })
-        .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)) })
+        .then(found => { if (!canceled) setMembers(found.members) })
+        .catch(err => { if (!canceled) setError(err instanceof Error ? err.message : String(err)) })
     }, 250)
-    return () => { cancelled = true; window.clearTimeout(timer) }
+    return () => { canceled = true; window.clearTimeout(timer) }
   }, [call, guildID, query, member, setError])
 
   const add = () => act(async () => {

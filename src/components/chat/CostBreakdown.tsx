@@ -42,9 +42,9 @@ export interface SpendCeiling {
   maxBudgetUSD: number
 }
 
-// ceilingTone grades spend against the ceiling for the chip's colour.
+// ceilingTone grades spend against the ceiling for the chip's color.
 // Matches the context-tokens thresholds SessionHeader already uses, so the
-// two budget-ish readouts in the header change colour on the same scale.
+// two budget-ish readouts in the header change color on the same scale.
 function ceilingTone(spendUSD: number, maxBudgetUSD: number): '' | 'warn' | 'crit' {
   if (maxBudgetUSD <= 0) return ''
   const pct = (spendUSD / maxBudgetUSD) * 100
@@ -91,7 +91,7 @@ export function CostBreakdown({ rows, fallbackTotalUSD = 0, fallbackTitle, aggre
   const apiSpend = latestApiSpend(rows ?? [])
 
   // With a ceiling, the chip reads "$3.00 / $10.00" and the ceiling's own
-  // pair drives both the text and the colour — see SpendCeiling for why it
+  // pair drives both the text and the color — see SpendCeiling for why it
   // is that pair and not the drill-down's figure.
   const tone = ceiling ? ceilingTone(ceiling.spendUSD, ceiling.maxBudgetUSD) : ''
   const chipClass = ceiling ? ` bc-cost-ceiling${tone ? ` bc-cost-ceiling-${tone}` : ''}` : ''

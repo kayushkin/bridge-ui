@@ -60,7 +60,7 @@ export interface UseBridgeAttachOptions {
 
 // wsUrlFor turns a relative basePath like "/api/bridge" into a fully
 // qualified ws(s):// URL on the current page origin. Absolute basePaths
-// (http://x or https://x) are honoured verbatim — useful for dev setups
+// (http://x or https://x) are honored verbatim — useful for dev setups
 // pointing at bridge-server on a different host.
 function wsUrlFor(basePath: string, sessionId: string, token: string): string {
   const path = `/sessions/${encodeURIComponent(sessionId)}/attach?token=${encodeURIComponent(token)}`

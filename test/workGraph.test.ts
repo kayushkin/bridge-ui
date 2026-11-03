@@ -103,8 +103,8 @@ describe('layoutCommitGraph', () => {
   })
 })
 
-describe('session colours', () => {
-  it('gives an id the same colour every time and different ids different hues', () => {
+describe('session colors', () => {
+  it('gives an id the same color every time and different ids different hues', () => {
     expect(sessionColor('br_1790493336445928690')).toBe(sessionColor('br_1790493336445928690'))
     expect(sessionHue('br_1790493336445928690')).not.toBe(sessionHue('br_1790493336445928691'))
     const hue = sessionHue('br_1790578299365904445')

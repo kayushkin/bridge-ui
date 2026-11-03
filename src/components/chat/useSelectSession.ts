@@ -69,7 +69,7 @@ import { useBridgePrefs } from '../../useBridgePrefs'
  *
  *     So the two surfaces already agree, and the reasons above are why the agreement is
  *     the right one rather than an accident to be corrected. Do not "align chat with
- *     bridge-ui" by adding a write here: that would be aligning with a behaviour
+ *     bridge-ui" by adding a write here: that would be aligning with a behavior
  *     bridge-ui does not have.
  *   - a `[session:…]` reference chip in a transcript (`TurnList.tsx`). The session it
  *     names need not be in the visible list at all, so the same lookup is unreliable

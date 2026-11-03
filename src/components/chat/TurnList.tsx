@@ -1586,7 +1586,7 @@ function SpanRow({
   const lastAssistant = finalLast && finalLast.kind === 'assistant' ? finalLast : null
   const asideLive = streaming && !!(lastAssistant?.thinking || lastAssistant?.narration)
   // Only the final segment decides whether the row reads as failed. An earlier
-  // segment's error shows in that segment, as a chip. Colouring the whole row for one
+  // segment's error shows in that segment, as a chip. Coloring the whole row for one
   // made a successful answer read as a failure when an interrupt left a 138 ms errored
   // turn in front of it (br_1790618948251389077, 2026-09-28).
   const finalSegmentHasError = final.items.some((it) => it.kind === 'assistant' && it.errors.length > 0)

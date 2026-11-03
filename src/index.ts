@@ -195,7 +195,7 @@ export type { BridgeAttachProps } from './components/BridgeAttach'
 // File, and Edit/Write/MultiEdit/NotebookEdit); see components/tools/index.ts.
 export { ToolItem, DefaultRenderer, ToolsSection, getToolRenderer, registerToolRenderer } from './components/tools'
 // `DiffView` computes a patch from a file's before/after CONTENTS; `UnifiedDiffView`
-// colours a diff that already exists (git's own output). They are not interchangeable —
+// colors a diff that already exists (git's own output). They are not interchangeable —
 // see the note on `UnifiedDiffView`.
 export { DiffView, UnifiedDiffView } from './components/tools'
 export type { ToolRendererProps } from './components/tools'
@@ -334,7 +334,7 @@ export type { SplitDragGeometry, SplitGrowUnits } from './components/chat/splitD
 
 // The `?session=<bridge_id>` deeplink reconciler. Pure and dependency-free — no React,
 // no router — so any surface that owns its own routing can drive the two-way
-// behaviour. dash's chat page uses it verbatim rather than growing a second
+// behavior. dash's chat page uses it verbatim rather than growing a second
 // implementation that would have to be kept in step with this one. The `awaiting` latch
 // in there is the whole reason both directions can coexist; read its header before
 // wiring it.

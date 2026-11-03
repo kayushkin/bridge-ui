@@ -4,7 +4,7 @@
  * one sentence in it that says "this drops every un-acked message" reads exactly like
  * the four sentences around it that say what was renamed. This module cuts that answer
  * into its top-level markdown blocks and gives each block a VIBE — a member of a closed
- * six-value set — so the pane can draw a coloured rail and a gutter glyph beside the
+ * six-value set — so the pane can draw a colored rail and a gutter glyph beside the
  * unusual ones and leave an ordinary answer looking ordinary.
  *
  * Adjacent blocks that agree form a RUN, and each block is told where it sits in one
@@ -106,7 +106,7 @@ export interface Block {
  *  so this reads the source rather than a node type.
  *
  *  The five alert kinds do not map one-to-one onto six vibes, so the mapping is a
- *  judgement and is written down here rather than implied: NOTE and TIP are reference
+ *  judgment and is written down here rather than implied: NOTE and TIP are reference
  *  material (`info`), IMPORTANT and WARNING both ask the reader to be careful
  *  (`warning`), and CAUTION is GitHub's own "negative potential consequences"
  *  (`danger`). */

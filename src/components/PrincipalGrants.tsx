@@ -47,12 +47,12 @@ export function PrincipalGrantsSection({ detail, access, onOpen }: {
   const ticket = useRef(0)
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     access.listRelations().then(result => {
-      if (cancelled) return
+      if (canceled) return
       if (result.ok) { setRelations(result.value); setRelationsError(null) } else setRelationsError(result.error)
     })
-    return () => { cancelled = true }
+    return () => { canceled = true }
   }, [access])
 
   const load = useCallback(async () => {

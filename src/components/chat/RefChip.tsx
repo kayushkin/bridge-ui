@@ -94,7 +94,7 @@ export interface RefChipProps {
 
 /**
  * A reference chip: a bare session id or a cue-prefixed noteboard uuid, found in
- * message text by `remarkRefChips` and rendered here as a labelled chip with a
+ * message text by `remarkRefChips` and rendered here as a labeled chip with a
  * detail panel.
  *
  * Wire it into ReactMarkdown as the `ref-chip` component alongside
@@ -197,7 +197,7 @@ const VIEWPORT_MARGIN = 8;
  * whose list-item wrapper carries `contain: layout style` — which creates a
  * stacking context. A panel positioned inside that item therefore has its
  * `z-index` scoped to the item, and the very next turn's prose paints straight
- * over it: measured, the element at the panel's own centre point was a later
+ * over it: measured, the element at the panel's own center point was a later
  * turn's `<p>`, so the buttons could be seen and not clicked. No z-index on the
  * panel can fix that from inside the containing block; escaping it can. The
  * portal also escapes the scroll container's `overflow`, which would otherwise
