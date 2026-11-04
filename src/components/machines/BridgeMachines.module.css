@@ -20,10 +20,9 @@
   --machine-warning: var(--warning);
   --machine-danger: var(--error);
   --machine-stripes: repeating-linear-gradient(-45deg, transparent 0 5px, rgb(255 255 255 / 0.3) 5px 8px);
-  --machine-card-radius: 10px;
-  --machine-part-rule: 1px dashed var(--border);
+  --machine-card-radius: 8px;
 
-  display: flex; flex-direction: column; gap: 16px;
+  display: flex; flex-direction: column; gap: 14px;
 }
 .page [data-hue="cpu"] { --hue: var(--machine-hue-cpu); }
 .page [data-hue="gpu"] { --hue: var(--machine-hue-gpu); }
@@ -44,15 +43,9 @@
   margin: 0; padding: 8px 10px; font-size: 0.85em;
   color: var(--text-muted); background: var(--bg-surface); border: 1px dashed var(--border); border-radius: 6px;
 }
-.notReported { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.notReported .notice { flex: 1 1 260px; }
-
 /* A picture only the zine skin draws: hidden everywhere else. */
 .picture { display: none; }
 
-.server { display: flex; flex-direction: column; gap: 8px; }
-.serverHeading { margin: 0; font-size: 1.05em; color: var(--text); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.serverName { overflow-wrap: anywhere; }
 
 .chip { font-size: 0.72em; font-weight: normal; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; color: var(--text-muted); }
 
@@ -63,144 +56,181 @@
 .button:hover { border-color: var(--accent); }
 .buttonSelected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
-/* ── Cards ─────────────────────────────────────────────────────────────── */
+/* ── The sheet ─────────────────────────────────────────────────────────── */
 
-/* Compact cards of about one height, row after row. A Windows card with WSL
-   inside spans two columns where there are two to span; an open card spans
-   them all. */
-.cards {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; align-items: start;
-  grid-auto-flow: row dense; container-type: inline-size;
+/* One grid for the whole page; every server group, column heading row,
+   strip and WSL sub-strip is a subgrid of it, so a column lines up from the
+   first strip to the last whichever server it belongs to. The last column is
+   the strip's open/close control. */
+.page { container: machines / inline-size; }
+.sheet {
+  --machine-columns:
+    minmax(170px, 1.3fr) minmax(118px, 0.75fr) minmax(118px, 0.85fr) minmax(170px, 1.15fr)
+    minmax(230px, 1.9fr) minmax(118px, 0.75fr) 34px;
+  display: grid; grid-template-columns: var(--machine-columns); row-gap: 12px;
 }
-@container (min-width: 694px) {
-  .cardTwoParts { grid-column: span 2; }
+.server, .strip, .row, .columns { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+.server { row-gap: 10px; margin-top: 6px; }
+.span { grid-column: 1 / -1; }
+.serverHeading { grid-column: 1 / -1; margin: 0; font-size: 1.05em; color: var(--text); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.serverName { overflow-wrap: anywhere; }
+.notReported { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.notReported .notice { flex: 1 1 260px; }
+
+.columns {
+  margin-bottom: -4px; font-size: 0.68em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);
 }
-.card {
-  display: flex; flex-direction: column; gap: 6px; min-width: 0; container: machine-card / inline-size;
-  padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: var(--machine-card-radius); background: var(--bg-surface);
+.columns > span { display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+
+.strip { row-gap: 0; }
+.row {
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--machine-card-radius);
+  cursor: pointer; transition: border-color 0.15s;
 }
-.cardOpen { grid-column: 1 / -1; }
-/* an open card is as wide as the page; its rows keep a card's width */
-.cardOpen > .reading, .cardOpen > .details, .cardOpen > .osLine { max-width: 520px; }
-.cardOpen > .readingTwoParts { max-width: 1060px; }
+.row:hover { border-color: var(--accent); }
+.stripOpen > .row:first-child { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* The WSL machine: indented under its Windows strip, dashed, joined to it. */
+.subRow {
+  margin-left: 28px; border-style: dashed; border-top: none; border-radius: 0 0 var(--machine-card-radius) var(--machine-card-radius);
+  background: color-mix(in oklab, var(--bg-surface) 70%, var(--bg));
+}
+.strip > .row:first-child:has(+ .subRow) { border-bottom-left-radius: 0; }
 /* A machine that stopped reporting: its last numbers stay readable but grey. */
-.cardStale .reading, .cardStale .details { opacity: 0.55; filter: grayscale(1); }
+.strip[data-freshness="stale"] .row > .cell:not(.machineCell):not(.toggleCell),
+.strip[data-freshness="stale"] .picture { opacity: 0.5; filter: grayscale(1); }
 
-.cardHeader { display: flex; align-items: center; gap: 8px; min-width: 0; }
-/* one line: the name, status and uptime give way before the buttons do */
-.cardHeader > * { flex: none; }
-.cardHeader > .cardTitle { flex: 0 0 auto; max-width: 55%; }
-.cardHeader > .freshness, .cardHeader > .uptime { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.cardTitle { margin: 0; font-size: 1em; color: var(--text); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.freshness { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72em; color: var(--text-muted); white-space: nowrap; }
-.freshness > :last-child { overflow: hidden; text-overflow: ellipsis; }
-.freshnessDot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint, var(--text-muted)); flex: none; }
-.freshness[data-freshness="fresh"] .freshnessDot { background: var(--success); }
-.freshness[data-freshness="fresh"] { color: var(--success); }
-.uptime { font-size: 0.75em; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.cardButtons { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; }
-.linkButton {
-  font: inherit; font-size: 0.75em; padding: 2px 7px; border-radius: 5px; cursor: pointer; line-height: 1.3;
-  background: transparent; color: var(--text-muted); border: 1px solid var(--border);
-  display: inline-flex; align-items: center; gap: 4px;
+.cell {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px;
+  border-left: 1px dashed color-mix(in oklab, var(--text) 18%, transparent);
 }
-.linkButton:hover, .linkButton[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
-.icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.row > .cell:first-child { border-left: none; }
+.toggleCell { padding: 0; align-items: center; justify-content: center; }
+.neverCell { grid-column: 2 / -2; justify-content: center; color: var(--text-muted); font-size: 0.85em; }
+.cellLabel { display: none; }
+.absent { justify-content: flex-start; }
+.dash { color: color-mix(in oklab, var(--text) 30%, transparent); font-weight: 700; font-size: 1.2em; }
+
+.machineCell { flex-direction: row; align-items: flex-start; gap: 10px; }
+.machineText { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.machineName { margin: 0 0 2px; font-size: 1.05em; color: var(--text); overflow-wrap: anywhere; }
+.partName { font-size: 0.95em; }
+.osLine { font-size: 0.72em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72em; color: var(--text-muted); margin-top: 2px; white-space: nowrap; }
+.statusDot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint, var(--text-muted)); flex: none; }
+.status[data-freshness="fresh"] .statusDot { background: var(--success); }
+.errorChip {
+  align-self: flex-start; margin-top: 3px; font-size: 0.68em; padding: 0 6px; border-radius: 4px; color: var(--text);
+  background: var(--warning-bg); border: 1px solid var(--warning); white-space: nowrap;
+}
+
+.toggle {
+  width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;
+  background: transparent; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px;
+}
+.toggle:hover { color: var(--text); border-color: var(--accent); }
+.chevron { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+.toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.osLine { margin: -2px 0 0; font-size: 0.75em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sourceNote { align-self: flex-start; font-size: 0.68em; color: var(--text-muted); padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; }
-.errorChip {
-  align-self: flex-start; font-size: 0.7em; padding: 0 6px; border-radius: 4px; color: var(--text);
-  background: var(--warning-bg); border: 1px solid var(--warning);
+/* A share large, with its mark beside it. */
+.dialReading { display: flex; align-items: center; gap: 8px; }
+.bigStack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.big { font-size: 1.45em; font-weight: 800; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.big small { font-size: 0.55em; margin-left: 1px; }
+.detail { font-size: 0.7em; color: var(--text-muted); line-height: 1.3; overflow-wrap: anywhere; }
+/* a long CPU or GPU name keeps to two lines; Details has it in full */
+[data-cell="cpu"] > .detail, .gpu > .detail { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gpu { display: flex; flex-direction: column; gap: 4px; }
+.gpu + .gpu { margin-top: 4px; }
+
+.memoryTop { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ofTotal { font-size: 0.78em; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.note { white-space: nowrap; }
+.note .levelWord { margin-left: 4px; }
+
+.drives { display: flex; flex-direction: column; gap: 6px; }
+.drive {
+  display: grid; grid-template-columns: minmax(1.8em, max-content) minmax(60px, 110px) 2.8em minmax(0, max-content) max-content;
+  align-items: center; gap: 8px; font-size: 0.78em;
 }
-
-/* One part, or a Windows host and its WSL machine side by side. */
-.reading, .details { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.part { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.readingTwoParts > .part + .part { border-top: var(--machine-part-rule); padding-top: 8px; }
-/* side by side once the card is wide enough for two columns of rows */
-@container machine-card (min-width: 620px) {
-  .readingTwoParts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
-  .readingTwoParts > .part + .part { border-top: none; padding-top: 0; border-left: var(--machine-part-rule); padding-left: 16px; }
-}
-.partTitle {
-  margin: 0; align-self: flex-start; max-width: 100%; font-size: 0.7em; font-weight: 600; color: var(--text);
-  padding: 0 6px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* CPU and GPU: small dials side by side, the number beside each. */
-.dials { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
-.smallDial { display: inline-flex; align-items: center; gap: 6px; }
-.smallDialText { display: inline-flex; flex-direction: column; line-height: 1.1; }
-.smallDialName { font-size: 0.68em; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
-.smallDialNumber { font-size: 1em; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-
-/* The measure rows: icon, name, mark, number. The rows share the grid's
-   columns, so every bar in a part starts and ends at the same place. */
-.rows { display: grid; grid-template-columns: auto minmax(0, max-content) minmax(72px, 1fr) minmax(0, max-content); gap: 5px 8px; align-items: center; }
-.row { display: contents; }
-.rowName { font-size: 0.75em; color: var(--text-muted); white-space: nowrap; max-width: 8em; overflow: hidden; text-overflow: ellipsis; }
-.rowMark { min-width: 0; display: flex; align-items: center; }
-.rowMark > * { flex: 1; }
-.rowValue { font-size: 0.75em; color: var(--text); font-variant-numeric: tabular-nums; display: inline-flex; gap: 0 5px; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; text-align: right; }
-.rowValue > * { white-space: nowrap; }
-.percent { font-weight: 700; }
-/* swap, pressure or commit charge past a threshold, under the memory row */
-.rowAlerts { grid-column: 3 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: -2px; }
-.free { color: var(--text-muted); }
-/* Without the zine's pictures the icon column holds an empty box of no
-   width, so the other cells keep their columns. */
-.rows .picture { display: block; width: 0; height: 0; margin-right: -8px; }
-
-/* Details: the facts as a list, one per line. */
-.facts { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 1px 10px; font-size: 0.75em; color: var(--text); }
-.facts dt { color: var(--text-muted); }
-.facts dd { margin: 0; overflow-wrap: anywhere; }
+.drivePercent { font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.driveFree { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mountPoint { font-family: var(--mono, ui-monospace, monospace); font-weight: 700; color: var(--text); }
 
+.batteryReading { display: flex; flex-direction: column; gap: 4px; }
+
+/* Open: details and history under the strip, the strip's full width. */
+.panel {
+  grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; padding: 14px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-top: 1px dashed var(--border);
+  border-radius: 0 0 var(--machine-card-radius) var(--machine-card-radius);
+  cursor: auto;
+}
+.panelParts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px 28px; }
+.details { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.partTitle {
+  margin: 0; align-self: flex-start; font-size: 0.72em; font-weight: 700; color: var(--text);
+  padding: 0 6px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border);
+}
+.facts { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 1px 12px; font-size: 0.78em; color: var(--text); }
+.facts dt { color: var(--text-muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+
 .levelWord {
-  font-size: 0.72em; font-weight: 700; padding: 0 5px; border-radius: 4px; color: var(--text);
-  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+  font-size: 0.66em; font-weight: 800; padding: 0 5px; border-radius: 4px; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; line-height: 1.5;
 }
 .levelWord[data-level="warning"] { background: var(--warning-bg); border: 1px solid var(--warning); }
 .levelWord[data-level="danger"] { background: var(--error-bg); border: 1px solid var(--error); color: var(--error); }
 
+/* ── A narrow page: each strip a card of labeled rows ──────────────────── */
+
+@container machines (max-width: 899px) {
+  .sheet { display: flex; flex-direction: column; gap: 16px; }
+  .server { display: flex; flex-direction: column; gap: 12px; }
+  .columns { display: none; }
+  .strip { display: flex; flex-direction: column; }
+  .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row > .cell { border-left: none; border-top: 1px dashed color-mix(in oklab, var(--text) 18%, transparent); }
+  .row > .cell:first-child, .row > .neverCell { grid-column: 1 / -1; }
+  .row > .cell:first-child { border-top: none; }
+  .row > .wideCell { grid-column: 1 / -1; order: 2; }
+  .row > [data-cell="battery"] { order: 1; }
+  .row > .absent { display: none; }
+  .row > .toggleCell { position: absolute; }
+  .row { position: relative; }
+  .row > .toggleCell { top: 10px; right: 10px; }
+  .subRow { margin-left: 14px; }
+  .cellLabel { display: flex; align-items: center; gap: 5px; font-size: 0.66em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+  .drive { grid-template-columns: minmax(1.8em, max-content) minmax(0, 1fr) 2.8em; row-gap: 1px; }
+  .driveFree { grid-column: 2; grid-row: 2; }
+  .drive > .levelWord { grid-column: 3; grid-row: 2; justify-self: end; }
+  .machineCell { padding-right: 46px; }
+}
+
 /* ── Dials: CPU and GPU ────────────────────────────────────────────────── */
 
 
-.dial { position: relative; width: 112px; flex: none; aspect-ratio: 120 / 100; }
+.dial { position: relative; width: 48px; flex: none; aspect-ratio: 120 / 100; }
 .dialSvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .dialSvg path { fill: none; stroke-linecap: round; }
-.dialEdge { stroke: var(--machine-edge); stroke-width: 15; }
-.dialTrack { stroke: var(--machine-track); stroke-width: 10; }
-.dialValue { stroke: var(--hue); stroke-width: 10; transition: d 0.4s; }
+.dialEdge { stroke: var(--machine-edge); stroke-width: 24; }
+.dialTrack { stroke: var(--machine-track); stroke-width: 17; }
+.dialValue { stroke: var(--hue); stroke-width: 17; transition: d 0.4s; }
 .dial[data-level="warning"] .dialValue { stroke: var(--machine-warning); }
 .dial[data-level="danger"] .dialValue { stroke: var(--machine-danger); }
 /* past a threshold the arc also breaks into dashes, long for warning and
    short for danger, so the level shows in its shape as well as its color */
 .dial[data-level="warning"] .dialValue { stroke-linecap: butt; stroke-dasharray: 9 3; }
 .dial[data-level="danger"] .dialValue { stroke-linecap: butt; stroke-dasharray: 4 3; }
-.dialSvg .dialZone { stroke-width: 10; stroke-linecap: butt; }
+.dialSvg .dialZone { stroke-width: 17; stroke-linecap: butt; }
 .dialZone[data-arc="warning-zone"] { stroke: color-mix(in oklab, var(--machine-warning) 40%, var(--machine-track)); }
 .dialZone[data-arc="danger-zone"] { stroke: color-mix(in oklab, var(--machine-danger) 45%, var(--machine-track)); }
-/* the small dial: about 44px, with heavier strokes so they read at that size */
-.dial[data-size="small"] { width: 44px; }
-.dial[data-size="small"] .dialEdge { stroke-width: 24; }
-.dial[data-size="small"] .dialTrack, .dial[data-size="small"] .dialValue, .dial[data-size="small"] .dialZone { stroke-width: 17; }
-.dialReadout {
-  position: absolute; left: 0; right: 0; top: 34%;
-  display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1;
-}
-.dialNumber { font-size: 1.35em; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.dialReadout .levelWord { font-size: 0.62em; }
 
 /* ── Bars ──────────────────────────────────────────────────────────────── */
 
 .bar { position: relative; background: var(--machine-track); border-radius: 999px; overflow: hidden; min-width: 0; }
-.bar[data-thickness="thin"] { height: 6px; }
-.bar[data-thickness="thick"] { height: 16px; border-radius: 5px; }
+.bar { height: 8px; }
 .barFill { height: 100%; background: var(--hue); border-radius: inherit; }
 .barFill[data-level="warning"] { background: var(--machine-stripes), var(--machine-warning); }
 .barFill[data-level="danger"] { background: var(--machine-stripes), var(--machine-danger); }
@@ -215,7 +245,7 @@
 .thinNote { grid-column: 2 / -1; font-size: 0.9em; color: var(--text-muted); }
 
 /* Memory: one bar split into parts, two pixels of surface between them. */
-.memoryBar { display: flex; gap: 2px; height: 9px; border-radius: 999px; overflow: hidden; background: var(--bg-surface); }
+.memoryBar { display: flex; gap: 2px; height: 11px; border-radius: 999px; overflow: hidden; background: var(--bg-surface); }
 .memorySegment { min-width: 3px; background: var(--machine-track); }
 .memorySegment[data-segment="used"], .memorySwatch[data-segment="used"] { background: var(--machine-hue-memory); }
 .memorySegment[data-segment="compressed"], .memorySwatch[data-segment="compressed"] {
@@ -236,8 +266,8 @@
 .memoryKey strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .memorySwatch { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
 
-/* The battery: a small drawn battery in its row. */
-.battery { width: 30px; flex: none; aspect-ratio: 68 / 32; }
+/* The battery: a small drawn battery beside its charge. */
+.battery { width: 44px; flex: none; aspect-ratio: 68 / 32; }
 .batterySvg { width: 100%; height: 100%; display: block; overflow: visible; }
 .batteryBody { fill: none; stroke: var(--text); stroke-width: 4; }
 .batteryNub { fill: var(--text); }
@@ -254,7 +284,6 @@
 
 /* ── History ───────────────────────────────────────────────────────────── */
 
-.history { border-top: 1px solid var(--border); padding-top: 12px; }
 .historyBody { display: flex; flex-direction: column; gap: 10px; }
 .historyRefreshing { opacity: 0.6; transition: opacity 0.2s; }
 .rangeRow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

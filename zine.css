@@ -955,19 +955,18 @@
 [data-theme="zine"] .bc-awaiting-popup-close { color: var(--zine-ink); opacity: 0.7; }
 
 /* ---------- the Machines page ----------
-   Each machine is a small panel pasted onto the paper, taped at the top,
-   with a picture of what sort of machine it is beside its name and a small
-   picture as the icon of each row. The measures print in the zine's inks:
-   CPU orange, GPU pink, memory navy, drives a navy halftone over pink,
-   batteries green. A level past a threshold turns riso yellow or red, with
-   navy stripes or dashes, and always a word.
+   A spec sheet: one strip per machine, pasted onto the paper with a hard ink
+   edge, its columns under a typed heading row. A runner's WSL machine hangs
+   under its Windows strip as a dashed sub-strip. The measures print in the
+   zine's inks: CPU orange, GPU pink, memory navy, drives a navy halftone over
+   pink, batteries green. A level past a threshold turns riso yellow or red,
+   with navy stripes or dashes, and always a word.
 
    The pictures are empty `.bc-machine-picture` hooks that bridge-ui hides in
-   the other themes, named by `data-picture`: cpu, gpu, memory, drive and
-   battery as a row's icon; server, desktop and laptop beside a card's name;
-   crab-waiting where a server does not report machine stats yet. Each is
-   zine/machine-<name>.png. `data-size="small"` is the compact card's size:
-   20px for a row's icon, 32px for a machine's kind. */
+   the other themes, named by `data-picture`: server, desktop and laptop at
+   the start of a strip; cpu, gpu, memory, drive and battery in the column
+   headings (`data-size="small"`); crab-waiting where a server does not report
+   machine stats yet. Each is zine/machine-<name>.png. */
 [data-theme="zine"] .bc-machines {
   --machine-hue-cpu: var(--zine-orange);
   --machine-hue-gpu: var(--zine-pink-dark);
@@ -979,9 +978,8 @@
   --machine-edge: var(--zine-ink);
   --machine-warning: #E3B23C;
   --machine-danger: #D8404F;
-  --machine-stripes: repeating-linear-gradient(-45deg, transparent 0 3px, rgba(46, 59, 122, 0.45) 3px 5px);
+  --machine-stripes: repeating-linear-gradient(-45deg, transparent 0 4px, rgba(46, 59, 122, 0.45) 4px 7px);
   --machine-card-radius: 4px;
-  --machine-part-rule: 2px dashed var(--zine-ink);
   font-family: 'Nunito', system-ui, sans-serif;
 }
 
@@ -990,24 +988,19 @@
   flex: none;
   width: 40px;
   height: 40px;
-  margin: 0;
   background: center / contain no-repeat;
 }
-[data-theme="zine"] .bc-machine-picture[data-size="small"] { width: 20px; height: 20px; }
+[data-theme="zine"] .bc-machine-picture[data-size="small"] { width: 18px; height: 18px; }
 [data-theme="zine"] .bc-machine-picture[data-picture="cpu"] { background-image: url('./zine/machine-cpu.png'); }
 [data-theme="zine"] .bc-machine-picture[data-picture="gpu"] { background-image: url('./zine/machine-gpu.png'); }
 [data-theme="zine"] .bc-machine-picture[data-picture="memory"] { background-image: url('./zine/machine-memory.png'); }
 [data-theme="zine"] .bc-machine-picture[data-picture="drive"] { background-image: url('./zine/machine-drive.png'); }
 [data-theme="zine"] .bc-machine-picture[data-picture="battery"] { background-image: url('./zine/machine-battery.png'); }
 [data-theme="zine"] .bc-machine-picture:is([data-picture="server"], [data-picture="desktop"], [data-picture="laptop"]) {
-  width: 64px;
-  height: 64px;
+  width: 50px;
+  height: 50px;
+  margin: 2px 0 0 -2px;
   transform: rotate(-4deg);
-}
-[data-theme="zine"] .bc-machine-picture:is([data-picture="server"], [data-picture="desktop"], [data-picture="laptop"])[data-size="small"] {
-  width: 32px;
-  height: 32px;
-  margin: -6px 0 -6px -2px;
 }
 [data-theme="zine"] .bc-machine-picture[data-picture="server"] { background-image: url('./zine/machine-server.png'); }
 [data-theme="zine"] .bc-machine-picture[data-picture="desktop"] { background-image: url('./zine/machine-desktop.png'); }
@@ -1043,51 +1036,64 @@
   background: var(--zine-cream);
 }
 
-/* the panel: heavy ink edge, hard shadow, a strip of tape over the top */
-[data-theme="zine"] .bc-machine-card {
+/* the column headings, typed */
+[data-theme="zine"] .bc-machine-columns,
+[data-theme="zine"] .bc-machine-cell-label {
+  font-family: 'Space Mono', monospace;
+  color: var(--zine-ink-dark);
+}
+
+/* a strip: heavy ink edge and a hard shadow; the first of a group taped down */
+[data-theme="zine"] .bc-machine-row {
   position: relative;
   background: var(--zine-cream);
   border: 2px solid var(--zine-ink);
   box-shadow: 4px 4px 0 var(--zine-ink);
-  padding-top: 12px;
 }
-[data-theme="zine"] .bc-machine-card::before {
+[data-theme="zine"] .bc-machine-row:hover { border-color: var(--zine-ink); box-shadow: 4px 4px 0 var(--zine-pink); }
+[data-theme="zine"] .bc-machine-columns + .bc-machine-strip > .bc-machine-row:first-child::before {
   content: '';
   position: absolute;
-  top: -7px;
+  top: -8px;
   left: 50%;
-  width: 64px;
-  height: 13px;
-  margin-left: -32px;
+  width: 70px;
+  height: 14px;
+  margin-left: -35px;
   background: color-mix(in srgb, var(--zine-pink-light) 75%, transparent);
   border-left: 2px dotted rgba(255, 255, 255, 0.6);
   border-right: 2px dotted rgba(255, 255, 255, 0.6);
   transform: rotate(-2.5deg);
   pointer-events: none;
 }
-[data-theme="zine"] .bc-machine-card:nth-child(even)::before {
-  background: color-mix(in srgb, var(--zine-orange) 45%, transparent);
-  transform: rotate(2deg);
+[data-theme="zine"] .bc-machine-subrow {
+  background: color-mix(in srgb, var(--zine-paper) 70%, var(--zine-cream));
+  border: 2px dashed var(--zine-ink);
+  border-top: none;
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--zine-ink) 35%, transparent);
 }
-[data-theme="zine"] .bc-machine-card[data-freshness="stale"],
-[data-theme="zine"] .bc-machine-card[data-freshness="never reported"] {
+[data-theme="zine"] .bc-machine-strip[data-freshness="stale"] > .bc-machine-row,
+[data-theme="zine"] .bc-machine-strip[data-freshness="never reported"] > .bc-machine-row {
   border-style: dashed;
   box-shadow: 3px 3px 0 color-mix(in srgb, var(--zine-ink) 35%, transparent);
 }
-[data-theme="zine"] .bc-machine-card-title {
+[data-theme="zine"] .bc-machine-row > * { border-left-color: color-mix(in srgb, var(--zine-ink) 40%, transparent); }
+[data-theme="zine"] .bc-machine-name {
   font-family: 'Archivo Black', sans-serif;
   font-weight: 400;
-  font-size: 1rem;
+  font-size: 1.15rem;
   color: var(--zine-ink-dark);
   text-decoration: underline;
   text-decoration-color: var(--zine-pink-light);
-  text-decoration-thickness: 6px;
+  text-decoration-thickness: 7px;
   text-underline-offset: -2px;
   text-decoration-skip-ink: none;
 }
-[data-theme="zine"] .bc-machine-freshness { font-family: 'Space Mono', monospace; }
+[data-theme="zine"] .bc-machine-subrow .bc-machine-name { font-size: 0.95rem; }
+[data-theme="zine"] .bc-machine-big { font-family: 'Archivo Black', sans-serif; font-weight: 400; color: var(--zine-ink-dark); }
+[data-theme="zine"] .bc-machine-freshness { font-family: 'Space Mono', monospace; color: var(--zine-ink); }
 [data-theme="zine"] .bc-machine-freshness-dot { border: 1.5px solid var(--zine-ink); width: 8px; height: 8px; }
-[data-theme="zine"] .bc-machine-os-line { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--zine-ink); opacity: 0.8; }
+[data-theme="zine"] .bc-machine-os-line { font-family: 'Space Mono', monospace; font-size: 0.66rem; color: var(--zine-ink); opacity: 0.85; }
+[data-theme="zine"] .bc-machine-error-chip { font-family: 'Space Mono', monospace; border: 1.5px solid var(--zine-ink); background: var(--machine-warning); }
 [data-theme="zine"] .bc-machine-button {
   font-family: 'Space Mono', monospace;
   font-weight: 700;
@@ -1105,12 +1111,17 @@
 [data-theme="zine"] .bc-machine-button[aria-expanded="true"],
 [data-theme="zine"] .bc-machine-range .bc-machine-button[aria-pressed="true"] { background: var(--zine-pink-light); }
 
-/* the facts are typed, a label in mono beside each */
+/* open: the details and history as a sheet clipped under the strip */
+[data-theme="zine"] .bc-machine-panel {
+  background: var(--zine-cream);
+  border: 2px solid var(--zine-ink);
+  border-top: 2px dashed var(--zine-ink);
+  box-shadow: 4px 4px 0 var(--zine-ink);
+}
 [data-theme="zine"] .bc-machine-facts dt { font-family: 'Space Mono', monospace; color: var(--zine-pink-dark); }
-/* Windows and WSL: a strip of orange tape with the name on it */
 [data-theme="zine"] .bc-machine-part-heading {
   font-family: 'Space Mono', monospace;
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   color: var(--zine-ink-dark);
   background: color-mix(in srgb, var(--zine-orange) 50%, transparent);
   border: none;
@@ -1119,18 +1130,9 @@
   transform: rotate(-1.5deg);
 }
 
-/* dials: an inked rim, the number in the headline face */
-[data-theme="zine"] .bc-machine-dial-number {
-  font-family: 'Archivo Black', sans-serif;
-  font-weight: 400;
-  color: var(--zine-ink-dark);
-}
-
 /* bars: inked outlines, flat fills */
-[data-theme="zine"] .bc-machine-bar { border: 1.5px solid var(--zine-ink); }
-[data-theme="zine"] .bc-machine-bar[data-thickness="thin"] { height: 10px; border-radius: 2px; }
-[data-theme="zine"] .bc-machine-bar[data-thickness="thick"] { height: 20px; border-radius: 3px; box-shadow: 2px 2px 0 var(--zine-ink); }
-[data-theme="zine"] .bc-machine-bar > div { border-right: 1.5px solid var(--zine-ink); border-radius: 0; }
+[data-theme="zine"] .bc-machine-bar { height: 12px; border: 2px solid var(--zine-ink); border-radius: 2px; }
+[data-theme="zine"] .bc-machine-bar > div { border-right: 2px solid var(--zine-ink); border-radius: 0; }
 /* a drive prints as navy halftone over pink: two drums, slightly off register */
 [data-theme="zine"] .bc-machine-bar[data-hue="drive"] > div[data-level="normal"] {
   background:
@@ -1141,8 +1143,8 @@
 [data-theme="zine"] .bc-machine-mount-point { font-family: 'Space Mono', monospace; }
 
 [data-theme="zine"] .bc-machine-memory-bar {
-  height: 10px;
-  border: 1.5px solid var(--zine-ink);
+  height: 13px;
+  border: 2px solid var(--zine-ink);
   border-radius: 2px;
   background: var(--zine-ink);
 }
@@ -1153,11 +1155,11 @@
 }
 [data-theme="zine"] .bc-machines [data-segment="free"] { background: var(--zine-paper); }
 [data-theme="zine"] .bc-machines [data-segment="compressed"][data-level="normal"] {
-  background: repeating-linear-gradient(45deg, var(--zine-ink) 0 2px, var(--zine-pink-light) 2px 4.5px);
+  background: repeating-linear-gradient(45deg, var(--zine-ink) 0 2.5px, var(--zine-pink-light) 2.5px 5.5px);
 }
 
 /* the battery: a thick ink outline, a green fill, a yellow bolt */
-[data-theme="zine"] .bc-machine-battery [data-part="body"] { stroke: var(--zine-ink); stroke-width: 4.5; fill: var(--zine-cream); }
+[data-theme="zine"] .bc-machine-battery [data-part="body"] { stroke: var(--zine-ink); stroke-width: 4; fill: var(--zine-cream); }
 [data-theme="zine"] .bc-machine-battery [data-part="nub"] { fill: var(--zine-ink); }
 [data-theme="zine"] .bc-machine-battery [data-part="bolt"] { fill: #E3B23C; stroke: var(--zine-ink); stroke-width: 1.8; }
 

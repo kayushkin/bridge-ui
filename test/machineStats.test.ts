@@ -7,7 +7,6 @@ import {
   batteryTimeText,
   chartRuns,
   commitCharge,
-  driveFreeText,
   gpuMemoryPercent,
   gpuMemoryUsedSeries,
   gpuUsageSeries,
@@ -16,9 +15,9 @@ import {
   historyHasWSL,
   machineKind,
   machineReadingParts,
-  machinePartTitle,
-  memoryAlerts,
+  memoryNotes,
   formatBytesOfTotal,
+  formatPercent,
   wslCPUSeries,
   wslMemoryUsedSeries,
   memoryBreakdown,
@@ -296,9 +295,6 @@ describe('batteries, drives and graphics', () => {
     expect(batteryLevel({ state: 'charging', charge_percent: 3 })).toBe('normal')
   })
 
-  it('says a drive\'s free space in words', () => {
-    expect(driveFreeText({ free_bytes: 93 * GIB, total_bytes: 932 * GIB })).toBe('93.0 GiB free of 932 GiB')
-  })
 
   it('gives GPU memory as a share only with a total', () => {
     expect(gpuMemoryPercent({ memory_used_bytes: 3 * GIB, memory_total_bytes: 12 * GIB })).toBe(25)
@@ -355,13 +351,13 @@ describe('Windows and WSL', () => {
   })
 })
 
-describe('compact card words', () => {
-  it('heads a part by OS and kernel, naming the part only when the OS does not', () => {
-    expect(machinePartTitle({ label: 'WSL', stats: { collected_at: '', source: 'linux', operating_system: 'Ubuntu 24.04.1 LTS', kernel_version: '5.15.167.4-microsoft-standard-WSL2' } }))
-      .toBe('WSL · Ubuntu 24.04.1 LTS · 5.15.167.4-microsoft-standard-WSL2')
-    expect(machinePartTitle({ label: 'Windows', stats: { collected_at: '', source: 'windows_from_wsl', operating_system: 'Microsoft Windows 11 Pro', kernel_version: '10.0.26200' } }))
-      .toBe('Microsoft Windows 11 Pro · 10.0.26200')
-    expect(machinePartTitle({ label: null, stats: { collected_at: '', source: 'linux' } })).toBe('')
+describe('strip words', () => {
+  it('gives a small share one decimal, but not a whole number', () => {
+    expect(formatPercent(0.2)).toBe('0.2%')
+    expect(formatPercent(8.25)).toBe('8.3%')
+    expect(formatPercent(7)).toBe('7%')
+    expect(formatPercent(34.4)).toBe('34%')
+    expect(formatPercent(null)).toBe('—')
   })
 
   it('says the unit once when used and total share it', () => {
@@ -369,13 +365,18 @@ describe('compact card words', () => {
     expect(formatBytesOfTotal(614 * 1024 ** 2, 4 * GIB)).toBe('614 MiB/4.00 GiB')
   })
 
-  it('raises swap, pressure and commit charge only once they pass a threshold', () => {
-    expect(memoryAlerts({ swap_total_bytes: 4 * GIB, swap_used_bytes: 1 * GIB })).toEqual([])
-    expect(memoryAlerts({
-      swap_total_bytes: 4 * GIB, swap_used_bytes: 3.9 * GIB,
+  it('notes compressed memory, pressure, commit charge and swap, each with its level', () => {
+    expect(memoryNotes({})).toEqual([])
+    expect(memoryNotes({ memory_compressed_bytes: 4.8 * GIB, memory_free_under_pressure_percent: 60 })).toEqual([
+      { name: 'compressed', text: '4.80 GiB compressed', level: 'normal' },
+      { name: 'pressure', text: 'pressure 40%', level: 'normal' },
+    ])
+    expect(memoryNotes({
       memory_committed_bytes: 47.4 * GIB, memory_commit_limit_bytes: 51.8 * GIB,
-      memory_free_under_pressure_percent: 60,
-    })).toEqual([{ name: 'commit charge', level: 'warning' }, { name: 'swap', level: 'danger' }])
-    expect(memoryAlerts({ memory_free_under_pressure_percent: 4 })).toEqual([{ name: 'pressure', level: 'danger' }])
+      swap_total_bytes: 4 * GIB, swap_used_bytes: 3.9 * GIB,
+    })).toEqual([
+      { name: 'commit', text: 'commit 47.4/51.8 GiB', level: 'warning' },
+      { name: 'swap', text: 'swap 3.90/4.00 GiB', level: 'danger' },
+    ])
   })
 })

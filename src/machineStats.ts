@@ -13,7 +13,6 @@
 
 import type {
   MachineBattery,
-  MachineDrive,
   MachineGPU,
   MachineStats,
   MachineStatsHistoryPoint,
@@ -178,9 +177,12 @@ export function usageLevel(percent: number | null): UsageLevel {
   return 'normal'
 }
 
+/** A share: one decimal below 10 so a small one is not rounded to nothing,
+ *  except a whole number ("7%", "0.2%", "34%"). */
 export function formatPercent(percent: number | null | undefined): string {
   if (percent === null || percent === undefined || !Number.isFinite(percent)) return '—'
-  return `${percent < 10 ? percent.toFixed(1) : Math.round(percent)}%`
+  if (percent < 10 && !Number.isInteger(percent)) return `${percent.toFixed(1)}%`
+  return `${Math.round(percent)}%`
 }
 
 /** A battery's level: running low is the danger, so it reads the share left
@@ -223,19 +225,6 @@ export function machineReadingParts(stats: MachineStats): MachineReadingPart[] {
   const parts: MachineReadingPart[] = [{ key: 'windows', label: 'Windows', stats }]
   if (stats.wsl) parts.push({ key: 'wsl', label: 'WSL', stats: stats.wsl })
   return parts
-}
-
-/** The short line a part is headed by: its OS and kernel, with the part's
- *  name first when the OS name does not already say it ("WSL · Ubuntu 24.04.1
- *  LTS · 5.15.167.4-microsoft-standard-WSL2", "Microsoft Windows 11 Pro ·
- *  10.0.26200"). */
-export function machinePartTitle(part: Pick<MachineReadingPart, 'label' | 'stats'>): string {
-  const os = part.stats.operating_system ?? ''
-  const words: string[] = []
-  if (part.label && !os.toLowerCase().includes(part.label.toLowerCase())) words.push(part.label)
-  if (os) words.push(os)
-  if (part.stats.kernel_version) words.push(part.stats.kernel_version)
-  return words.join(' · ')
 }
 
 // ── Memory ──────────────────────────────────────────────────────────────────
@@ -329,30 +318,34 @@ export function commitCharge(stats: Pick<MachineStats, 'memory_committed_bytes' 
   }
 }
 
-/** What sits behind the memory bar on a card's details — swap, macOS
- *  pressure, Windows commit charge — that has reached a threshold, so the
- *  compact row can say so without showing the bars. */
-export interface MemoryAlert {
-  name: 'swap' | 'pressure' | 'commit charge'
+/** The line under a strip's memory bar: what the bar leaves out — the
+ *  compressor's share (macOS), memory pressure (macOS), commit charge
+ *  (Windows) and swap — each with its level, so one past a threshold can say
+ *  so in words. Only what the machine reports. */
+export interface MemoryNote {
+  name: 'compressed' | 'pressure' | 'commit' | 'swap'
+  text: string
   level: UsageLevel
 }
 
-export function memoryAlerts(stats: Pick<MachineStats,
-  'swap_total_bytes' | 'swap_used_bytes' | 'memory_free_under_pressure_percent' | 'memory_committed_bytes' | 'memory_commit_limit_bytes'>): MemoryAlert[] {
-  const alerts: MemoryAlert[] = []
-  const swap = percentOf(stats.swap_used_bytes ?? 0, stats.swap_total_bytes ?? 0)
-  const pressure = memoryPressurePercent(stats)
-  const commit = commitCharge(stats)
-  const candidates: [MemoryAlert['name'], number | null][] = [
-    ['pressure', pressure],
-    ['commit charge', commit ? commit.percent : null],
-    ['swap', swap],
-  ]
-  for (const [name, percent] of candidates) {
-    const level = usageLevel(percent)
-    if (level !== 'normal') alerts.push({ name, level })
+export function memoryNotes(stats: Pick<MachineStats,
+  'memory_compressed_bytes' | 'memory_free_under_pressure_percent' | 'memory_committed_bytes' | 'memory_commit_limit_bytes' |
+  'swap_total_bytes' | 'swap_used_bytes'>): MemoryNote[] {
+  const notes: MemoryNote[] = []
+  if (stats.memory_compressed_bytes) {
+    notes.push({ name: 'compressed', text: `${formatBytes(stats.memory_compressed_bytes)} compressed`, level: 'normal' })
   }
-  return alerts
+  const pressure = memoryPressurePercent(stats)
+  if (pressure !== null) notes.push({ name: 'pressure', text: `pressure ${formatPercent(pressure)}`, level: usageLevel(pressure) })
+  const commit = commitCharge(stats)
+  if (commit) {
+    notes.push({ name: 'commit', text: `commit ${formatBytesOfTotal(commit.committedBytes, commit.limitBytes)}`, level: usageLevel(commit.percent) })
+  }
+  if (stats.swap_total_bytes) {
+    const used = stats.swap_used_bytes ?? 0
+    notes.push({ name: 'swap', text: `swap ${formatBytesOfTotal(used, stats.swap_total_bytes)}`, level: usageLevel(percentOf(used, stats.swap_total_bytes)) })
+  }
+  return notes
 }
 
 /** A used size against its total, the unit said once when both share it:
@@ -367,11 +360,6 @@ export function formatBytesOfTotal(used: number, total: number): string {
 }
 
 // ── Drives and graphics ─────────────────────────────────────────────────────
-
-/** A drive's free space in words: "93.0 GiB free of 932 GiB". */
-export function driveFreeText(drive: Pick<MachineDrive, 'free_bytes' | 'total_bytes'>): string {
-  return `${formatBytes(drive.free_bytes)} free of ${formatBytes(drive.total_bytes)}`
-}
 
 /** A graphics processor's memory in use as a share, or null when the driver
  *  gives no total. */

@@ -26,7 +26,7 @@ import styles from './BridgeMachines.module.css'
 export type MachineHue = 'cpu' | 'gpu' | 'memory' | 'swap' | 'drive' | 'battery'
 
 /** Said beside a share that reached a threshold. */
-export const LEVEL_WORD: Record<UsageLevel, string> = {
+const LEVEL_WORD: Record<UsageLevel, string> = {
   normal: '',
   warning: 'high',
   danger: 'critical',
@@ -68,7 +68,7 @@ function dialPoint(degrees: number, radius: number): [number, number] {
 }
 
 /** The SVG path of the dial's arc between two shares, or '' when empty. */
-export function dialArcPath(fromPercent: number, toPercent: number): string {
+function dialArcPath(fromPercent: number, toPercent: number): string {
   const from = Math.min(100, Math.max(0, fromPercent)) / 100
   const to = Math.min(100, Math.max(0, toPercent)) / 100
   if (to <= from) return ''
@@ -79,15 +79,13 @@ export function dialArcPath(fromPercent: number, toPercent: number): string {
   return `M${startX.toFixed(2)},${startY.toFixed(2)} A${DIAL_RADIUS},${DIAL_RADIUS} 0 ${largeArc} 1 ${endX.toFixed(2)},${endY.toFixed(2)}`
 }
 
-/** A round gauge: a track whose last stretch is tinted where the warning and
- *  danger thresholds begin, the share in the measure's hue over it, and the
- *  number in the middle. */
-export function Dial({ percent, label, hue, size }: {
+/** A round gauge about 48px across: a track whose last stretch is tinted
+ *  where the warning and danger thresholds begin, and the share in the
+ *  measure's hue over it. Its number sits beside it, drawn by the caller. */
+export function Dial({ percent, label, hue }: {
   percent: number
   label: string
   hue: MachineHue
-  /** `small` draws the dial alone, about 44px, for the number to sit beside it. */
-  size?: 'small'
 }) {
   const level = usageLevel(percent)
   const track = dialArcPath(0, 100)
@@ -96,7 +94,6 @@ export function Dial({ percent, label, hue, size }: {
     <div
       className={`${styles.dial} bc-machine-dial`}
       data-hue={hue}
-      data-size={size}
       data-level={level}
       role="meter"
       aria-label={label}
@@ -114,12 +111,6 @@ export function Dial({ percent, label, hue, size }: {
         <path className={styles.dialZone} data-arc="danger-zone" d={dialArcPath(USAGE_DANGER_PERCENT, 100)} />
         {value ? <path className={styles.dialValue} data-arc="value" d={value} /> : null}
       </svg>
-      {size === 'small' ? null : (
-        <div className={styles.dialReadout} aria-hidden="true">
-          <span className={`${styles.dialNumber} bc-machine-dial-number`}>{formatPercent(percent)}</span>
-          <LevelWord level={level} />
-        </div>
-      )}
     </div>
   )
 }
@@ -130,13 +121,11 @@ function clampPercent(percent: number): number {
   return Math.min(100, Math.max(0, percent))
 }
 
-/** A bar with one fill: thin for swap, pressure, commit charge and GPU
- *  memory; thick for a drive. */
-export function Bar({ percent, label, hue, thickness, level }: {
+/** A bar with one fill: a drive, swap, pressure or commit charge. */
+export function Bar({ percent, label, hue, level }: {
   percent: number
   label: string
   hue: MachineHue
-  thickness: 'thin' | 'thick'
   /** The level when it is not the share's own (a Mac's memory pressure). */
   level?: UsageLevel
 }) {
@@ -144,7 +133,6 @@ export function Bar({ percent, label, hue, thickness, level }: {
   return (
     <div
       className={`${styles.bar} bc-machine-bar`}
-      data-thickness={thickness}
       data-hue={hue}
       role="meter"
       aria-label={label}
@@ -171,7 +159,7 @@ export function ThinBarRow({ name, percent, valueText, hue, level, note }: {
   return (
     <div className={styles.thinRow}>
       <span className={styles.thinName}>{name}</span>
-      <Bar percent={percent} label={name} hue={hue} thickness="thin" level={shown} />
+      <Bar percent={percent} label={name} hue={hue} level={shown} />
       <span className={styles.thinValue}>
         {valueText}
         <LevelWord level={shown} />
