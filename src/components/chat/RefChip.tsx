@@ -14,6 +14,7 @@ import { messageChipLabel, messageConversationHref, messageOfAnswer } from '../.
 import type { Photo } from '@kayushkin/photo-store-types';
 import { photoChipLabel, photoDateSourceLabel, photoMapUrl, photoThumbnailUrl } from '../../photoRefs';
 import type { Place, Trip, Visit } from '@kayushkin/location-store-types';
+import { PossessionStoreRefChip } from './PossessionRefChips';
 import {
   distanceLabel,
   durationLabel,
@@ -267,7 +268,12 @@ export function useAnchoredPanel(): {
       // The panel is no longer a descendant of the wrapper, so "outside" has to
       // clear BOTH or every click inside the panel would close it.
       const insideChip = wrapRef.current?.contains(target) ?? false;
-      const insidePanel = panelRef.current?.contains(target) ?? false;
+      // A chip inside this panel opens its own panel in another portal, which
+      // the DOM does not place inside this one; React's events still pass
+      // through this panel on the way up, and AnchoredPanel marks them.
+      const insidePanel =
+        (panelRef.current?.contains(target) ?? false) ||
+        (panelRef.current !== null && (panelsAMouseDownPassedThrough.get(e)?.has(panelRef.current) ?? false));
       if (!insideChip && !insidePanel) setOpen(false);
     };
     const onKey = (e: KeyboardEvent): void => {
@@ -283,6 +289,12 @@ export function useAnchoredPanel(): {
 
   return { open, toggle: () => setOpen((o) => !o), wrapRef, panelRef, panelStyle };
 }
+
+/** The panels a mousedown passed through in React's tree, which reaches a
+ *  panel's own handler before the document's listener sees the event. A chip
+ *  in a panel portals its own panel elsewhere in the DOM, so this is how a
+ *  click in that inner panel keeps the outer one open. */
+const panelsAMouseDownPassedThrough = new WeakMap<Event, Set<HTMLDivElement>>();
 
 /** The portaled panel shell. Kept in one place so both chips share the
  *  placement, the ref wiring and the dialog semantics. */
@@ -312,6 +324,13 @@ export function AnchoredPanel({
       // Without them the DOM cannot say which reference an open panel describes.
       data-ref-id={refId}
       data-ref-kind={refKind}
+      onMouseDown={(event) => {
+        const panel = panelRef.current;
+        if (!panel) return;
+        const passed = panelsAMouseDownPassedThrough.get(event.nativeEvent) ?? new Set<HTMLDivElement>();
+        passed.add(panel);
+        panelsAMouseDownPassedThrough.set(event.nativeEvent, passed);
+      }}
       // Placement is inline because it is measured, not themeable. Everything
       // else about the panel's appearance stays in the host's stylesheet.
       // `visibility` hides the first, unmeasured paint rather than letting it
@@ -1010,6 +1029,9 @@ function UnclassifiedRefChip({
     if (match.type === 'photo') {
       return <PhotoRefChip refId={refId} photo={match.data as Photo} className={className} />;
     }
+    if (match.service === 'possession-store') {
+      return <PossessionStoreRefChip refId={refId} match={match} className={className} />;
+    }
     if (match.type === 'place') {
       return <PlaceRefChip refId={refId} place={match.data as Place} className={className} />;
     }
@@ -1055,7 +1077,7 @@ function UnclassifiedRefChip({
 /** The honest rendering for an id that resolved ambiguously (several stores
  *  recognize it) or to a type this renderer has no dedicated chip for: a chip
  *  whose panel lists every match, so the reader does the picking. */
-function MultiMatchRefChip({
+export function MultiMatchRefChip({
   refId,
   matches,
   className,

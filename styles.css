@@ -5323,6 +5323,45 @@
   border-radius: 4px;
 }
 
+/* possession-store chips: ids in a panel drawn as chips, and a question for
+   the owner with a button per choice and a box to answer in words. */
+.ref-chip-possession-ids {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ref-chip-question-text {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ref-chip-question-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.ref-chip-question-choices .ref-chip-panel-btn {
+  text-align: left;
+}
+
+.ref-chip-question-words {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  margin-bottom: 6px;
+}
+
+.ref-chip-question-words textarea {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  resize: vertical;
+}
+
 /* A cited message's text, in a message chip's panel. */
 .ref-chip-panel-body {
   margin: 6px 0 2px;

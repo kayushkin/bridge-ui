@@ -282,6 +282,14 @@ export interface BridgeConfig {
    * thumbnail from `{base}/photos/{id}/thumbnail`. Empty means the host does
    * not carry it, and a photo chip shows no picture. */
   photoStoreBasePath: string
+  /** Base path for possession-store as the host proxies it (dash:
+   *  "/api/possessions"): the things the operator owns, `possession_000001`
+   *  and the ids it mints beside it. A possession, sighting or question chip
+   *  draws its cut-out picture from `{base}/{route}/{id}/image`, and a
+   *  question chip answers through `{base}/owner-questions/{id}/answer`.
+   *  Empty means the host does not carry it: no pictures, and a question
+   *  chip offers no answer. */
+  possessionStoreBasePath: string
   /** Base path for message-store as the host proxies it (dash:
    * "/api/message-store"): every chat message the operator sent or received,
    * kept apart from the chat apps. A person's page on Conversations shows

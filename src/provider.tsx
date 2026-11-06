@@ -65,6 +65,7 @@ export interface BridgeProviderProps {
   peopleStoreBasePath?: string
   journalStoreBasePath?: string
   photoStoreBasePath?: string
+  possessionStoreBasePath?: string
   messageStoreBasePath?: string
   messageAccountsBasePath?: string
   peoplePagePath?: string
@@ -128,6 +129,7 @@ export function BridgeProvider({
   peopleStoreBasePath = '',
   journalStoreBasePath = '',
   photoStoreBasePath = '',
+  possessionStoreBasePath = '',
   messageStoreBasePath = '',
   messageAccountsBasePath = '',
   peoplePagePath = '',
@@ -174,6 +176,7 @@ export function BridgeProvider({
     peopleStoreBasePath,
     journalStoreBasePath,
     photoStoreBasePath,
+    possessionStoreBasePath,
     messageStoreBasePath,
     messageAccountsBasePath,
     peoplePagePath,
@@ -198,7 +201,7 @@ export function BridgeProvider({
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, possessionStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>
