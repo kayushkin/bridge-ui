@@ -5,6 +5,7 @@
 // the answer to a question go through the host's proxy at
 // `possessionStoreBasePath` (dash: /api/possessions).
 
+import type { FetchFn } from './types'
 import type { OwnerQuestion, Possession, Purchase, Resolution } from './types-possession-store'
 
 /** The cut-out picture of a possession, a sighting or a question's sighting,
@@ -24,6 +25,25 @@ export function ownerQuestionAnswerUrl(basePath: string, questionId: string): st
  *  signs it with the caller (answered_by), so the page never sends that. */
 export function ownerQuestionAnswerBody(answer: { choice: number } | { text: string }): string {
   return JSON.stringify(answer)
+}
+
+/** Posts an owner's answer through the host and answers the question as the
+ *  store now holds it, with its resolution. A refusal (a second answer is a
+ *  409) is thrown with the store's status and words, never swallowed. */
+export async function answerOwnerQuestion(
+  fetchFn: FetchFn,
+  basePath: string,
+  questionId: string,
+  answer: { choice: number } | { text: string },
+): Promise<OwnerQuestion> {
+  const response = await fetchFn(ownerQuestionAnswerUrl(basePath, questionId), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: ownerQuestionAnswerBody(answer),
+  })
+  const text = await response.text()
+  if (!response.ok) throw new Error(`possession-store answered ${response.status}: ${text}`)
+  return JSON.parse(text) as OwnerQuestion
 }
 
 /** A kind's name in words: `computer_part` → "computer part"; no kind → "". */
@@ -118,6 +138,10 @@ export function resolutionSummary(resolution: Resolution): { text: string; id: s
       return { text: 'The same as the sighting', id: resolution.sighting_id ?? '' }
     case 'reject':
       return { text: 'Not a possession', id: '' }
+    case 'keep':
+      return { text: 'Left as recorded', id: '' }
+    case 'amend':
+      return { text: 'Amended the possession', id: '' }
     default:
       return { text: resolution.action, id: '' }
   }

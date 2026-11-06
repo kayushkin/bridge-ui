@@ -10,9 +10,8 @@ import { useState, type JSX, type ReactNode } from 'react';
 import type { ResolvedRefMatch } from '@kayushkin/chat-core';
 import { useBridgeConfig } from '../../context';
 import {
+  answerOwnerQuestion,
   moneyLabel,
-  ownerQuestionAnswerBody,
-  ownerQuestionAnswerUrl,
   possessionChipLabel,
   possessionKindFacts,
   possessionKindLabel,
@@ -375,17 +374,7 @@ export function OwnerQuestionPanel({
     setSending(true);
     setError('');
     try {
-      const response = await fetchFn(ownerQuestionAnswerUrl(possessionStoreBasePath, refId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: ownerQuestionAnswerBody(body),
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        setError(`possession-store answered ${response.status}: ${text}`);
-        return;
-      }
-      onAnswered(JSON.parse(text) as OwnerQuestion);
+      onAnswered(await answerOwnerQuestion(fetchFn, possessionStoreBasePath, refId, body));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {

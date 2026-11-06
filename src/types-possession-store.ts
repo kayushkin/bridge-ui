@@ -6,9 +6,9 @@
 // no struct to render for the record the chips read most. These mirror
 // ~/repos/possession-store/CONTRACT.md ("Possession, as every read answers
 // it") and the `Outfit`, `Purchase`, `PurchaseLine`, `PhotoReview`,
-// `Sighting`, `OwnerQuestion`, `Choice` and `Resolution` structs in its
-// outfits.go, purchases.go and review.go. They are partial on purpose: only
-// what a chip reads. When possession-store renders its own package, import it
+// `Sighting`, `Box`, `Proposal`, `OwnerQuestion`, `Choice` and `Resolution`
+// structs in its outfits.go, purchases.go, images.go and review.go. They are
+// partial on purpose: only what a chip or the host's review page reads. When possession-store renders its own package, import it
 // and delete this file.
 
 /** One photo a possession appears on, with where in it (fractions 0–1). */
@@ -114,12 +114,43 @@ export interface PhotoReview {
   cost_usd: number
 }
 
+/** Where in a photo a sighting is: each side a fraction 0–1 of the photo's
+ *  width or height, from its left or top edge. */
+export interface SightingBox {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** A possession as a reader proposes it: the store's `Proposal`. */
+export interface Proposal {
+  name: string
+  brand: string
+  model: string
+  description: string
+  quantity: number
+  kind: string
+  kind_fields: Record<string, unknown>
+  dropped_fields?: string[]
+  existing_possession_id?: string
+  existing_sighting_id?: string
+}
+
 export interface Sighting {
   id: string
   photo_review_id: string
   photo_id: string
   label: string
+  box: SightingBox
+  /** What the store would record: the readers' agreed entry, or the first
+   *  reader's when they differ. */
+  proposed: Proposal
+  /** Each reader's own entry by model id, when they differ. */
+  versions: Record<string, Proposal>
+  /** both_agree, readers_differ or one_reader_only. */
   agreement: string
+  /** proposed, accepted, rejected or same_as_other_sighting. */
   status: string
   same_as_sighting_id: string | null
   possession_id: string | null
@@ -130,8 +161,11 @@ export interface Sighting {
 
 /** What answering a question does to its sighting. */
 export interface Resolution {
-  /** accept, same_as, same_as_sighting or reject. */
+  /** accept, same_as, same_as_sighting or reject for a decision question;
+   *  keep or amend for a detail question. */
   action: string
+  /** For accept, what is recorded; for amend, the possession as it now reads. */
+  proposal?: Proposal
   possession_id?: string
   sighting_id?: string
   explanation?: string
@@ -146,6 +180,9 @@ export interface OwnerQuestion {
   id: string
   sighting_id: string
   photo_id: string
+  /** decision: the sighting waits on the answer; detail: the sighting is
+   *  recorded and the answer only adds to it. */
+  purpose: string
   question: string
   choices: Choice[]
   answer_choice: number | null

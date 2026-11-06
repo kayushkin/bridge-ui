@@ -282,6 +282,12 @@ export { CardRefChip } from './components/CardRefChip'
 export { CardsForEmail } from './components/CardsForEmail'
 export { BridgeEmailTickets } from './components/BridgeEmailTickets'
 export type { RefChipProps } from './components/chat/RefChip'
+// possession-store: its hand-written wire types, the answer to an owner
+// question, and the rules of a host's page that answers them photo by photo.
+export type { OwnerQuestion, Choice as OwnerQuestionChoice, Resolution as OwnerQuestionResolution, PhotoReview, Sighting, SightingBox, Proposal as PossessionProposal, Possession } from './types-possession-store'
+export { answerOwnerQuestion, resolutionSummary, possessionStoreImageUrl } from './possessionRefs'
+export { readEveryPage, photosWithOpenQuestions, questionsToAsk, questionAfter, sightingState, sightingBoxStyle, choiceIndexForKey, POSSESSION_REVIEW_PAGE_SIZE } from './possessionReview'
+export type { PhotoWithOpenQuestions, SightingState } from './possessionReview'
 
 // Minimal-chrome (mobile) primitives — auto-engaged below 640px viewport.
 // `MinimalChromeProvider` is automatically nested inside `BridgeProvider`,
