@@ -29,6 +29,7 @@ function WhoCountsSection() {
   const [tagsError, setTagsError] = useState<string | null>(null)
   const [draft, setDraft] = useState<AwaitingReplySettings | null>(null)
   const [anySizeTagsText, setAnySizeTagsText] = useState('')
+  const [neverCountTagsText, setNeverCountTagsText] = useState('')
   const save = useSectionSave()
   const stored = overview?.settings ?? null
 
@@ -39,6 +40,7 @@ function WhoCountsSection() {
     if (stored && !draft) {
       setDraft(stored)
       setAnySizeTagsText(stored.any_size_person_tags.join(', '))
+      setNeverCountTagsText(stored.never_count_person_tags.join(', '))
     }
   }, [stored, draft])
 
@@ -76,6 +78,13 @@ function WhoCountsSection() {
           onChange={e => setAnySizeTagsText(e.target.value)}
           onBlur={() => setDraft({ ...draft, any_size_person_tags: personTagsFromText(anySizeTagsText) })} />
         <span className={styles.muted}>people-store tags, comma-separated. Their messages count in a group of any size.</span>
+      </label>
+      <label className={styles.awaitingSettingsRow}>
+        <span className={styles.awaitingSettingsLabel}>Never count people tagged</span>
+        <input className={styles.input} type="text" value={neverCountTagsText} placeholder="political, spam"
+          onChange={e => setNeverCountTagsText(e.target.value)}
+          onBlur={() => setDraft({ ...draft, never_count_person_tags: personTagsFromText(neverCountTagsText) })} />
+        <span className={styles.muted}>people-store tags, comma-separated. Wins over every rule above except a tagged room.</span>
       </label>
       <label className={styles.awaitingSettingsRow}>
         <span className={styles.awaitingSettingsLabel}>Ignore messages older than</span>
