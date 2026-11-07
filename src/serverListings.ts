@@ -65,6 +65,9 @@ export function connectedServerBlockedWord(view: PeerConnectionView): string | n
 
 export interface ConnectedServerListing {
   connectionId: string
+  /** The `server_…` id the connected server reports, or empty while it has
+   *  reported none. What a `<id>@<server_id>` reference is matched on. */
+  serverId: string
   label: string
   /** False while the label is the typed connection name, not the server's own. */
   labelFromServer: boolean
@@ -86,6 +89,7 @@ export function connectedServerListings(views: readonly PeerConnectionView[]): C
       const { label, fromServer } = connectedServerLabel(view)
       return {
         connectionId: view.connection.id,
+        serverId: view.other_server_id ?? '',
         label,
         labelFromServer: fromServer,
         blockedReason: connectedServerBlockedReason(view),
@@ -162,4 +166,13 @@ export function connectionsThisServerAdministers(views: readonly PeerConnectionV
   return views.filter(
     view => connectedServerBlockedReason(view) === null && view.access_held?.level === PeerAccessLevelAdministrator,
   )
+}
+
+/** The connection to the server a `<id>@<server_id>` reference names, or null
+ *  when no live connection reports that id. Matched on the server's own id,
+ *  never its name or a connection id. A removed connection is no way to reach
+ *  it. */
+export function connectionOfServerId(servers: readonly ConnectedServerListing[], serverId: string): ConnectedServerListing | null {
+  if (!serverId) return null
+  return servers.find(server => server.serverId === serverId && server.blockedWord !== 'removed') ?? null
 }

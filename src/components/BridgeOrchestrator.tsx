@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
 import { formatCost } from '../utils'
 import { fetchHomeSessionId } from './chat/useHomeSession'
-import { OrchestratorMarkdown, OrchestratorTextWithReferenceChips } from './chat/orchestratorReferences'
+import { ReferenceMarkdown, TextWithReferenceChips } from './chat/ReferenceText'
 import { CostHeader, useOrchestratorResource } from './orchestratorShared'
 
 // The orchestrator's dedicated page. The orchestrator itself is an ordinary
@@ -15,7 +15,7 @@ import { CostHeader, useOrchestratorResource } from './orchestratorShared'
 //
 // Ported here from dash's own `pages/Orchestrator.tsx`, which is now a thin
 // mount of this component. References go through chat-core's chips
-// (`./chat/orchestratorReferences`) and every navigation target comes from
+// (`./chat/ReferenceText`) and every navigation target comes from
 // `routes`.
 //
 // ⚠️ Mount inside chat-core's `<ChatProvider>` and a react-router router. The
@@ -133,7 +133,7 @@ function Runs(): JSX.Element {
           {open === r.id && !r.error && (
             <div style={{ padding: '0 12px 10px', fontSize: 12 }}>
               <div style={{ opacity: 0.6, margin: '4px 0' }}>you: {r.message}</div>
-              <OrchestratorMarkdown text={r.reply} />
+              <ReferenceMarkdown text={r.reply} />
               <div style={{ opacity: 0.5, marginTop: 6 }}>
                 {r.model} · {r.input_tokens} in / {r.output_tokens} out · {(r.duration_ms / 1000).toFixed(1)}s
               </div>
@@ -217,7 +217,7 @@ function ContextInspector(): JSX.Element {
                 overflow: 'auto',
               }}
             >
-              <OrchestratorTextWithReferenceChips text={p.latest.content} />
+              <TextWithReferenceChips text={p.latest.content} />
             </pre>
           )}
         </details>

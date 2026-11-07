@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PeerAccess, PeerConnection, PeerConnectionView } from '@kayushkin/llm-bridge-types'
 import {
+  connectionOfServerId,
   CONNECTED_SERVER_PARAM,
   CONNECTED_SERVER_SESSION_PARAM,
   connectedServerBlockedReason,
@@ -122,5 +123,17 @@ describe('connected servers whose waiting messages this server decides', () => {
     expect(
       connectionsThisServerAdministers([administered, messagesOnly, noAccess, socketClosed, removed]).map(v => v.connection.id),
     ).toEqual(['peer_connection_000001'])
+  })
+})
+
+describe('connectionOfServerId', () => {
+  const listing = (connectionId: string, serverId: string, blockedWord: string | null = null) => ({
+    connectionId, serverId, label: connectionId, labelFromServer: true, blockedReason: blockedWord ? 'why' : null, blockedWord,
+  })
+  it('finds the connection by the server’s own id, never a removed one', () => {
+    const servers = [listing('c1', 'server_01AAAAAAAAAAAAAAAAAAAAAAAA', 'removed'), listing('c2', 'server_01AAAAAAAAAAAAAAAAAAAAAAAA'), listing('c3', '')]
+    expect(connectionOfServerId(servers, 'server_01AAAAAAAAAAAAAAAAAAAAAAAA')?.connectionId).toBe('c2')
+    expect(connectionOfServerId(servers, 'server_01BBBBBBBBBBBBBBBBBBBBBBBB')).toBeNull()
+    expect(connectionOfServerId(servers, '')).toBeNull()
   })
 })

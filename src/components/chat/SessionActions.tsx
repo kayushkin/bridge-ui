@@ -11,7 +11,7 @@ import {
   sessionActionTarget,
 } from '../../sessionActionView'
 import { RefChip } from './RefChip'
-import { OrchestratorMarkdown } from './orchestratorReferences'
+import { ReferenceMarkdown } from './ReferenceText'
 
 /**
  * Session actions in the chat: a button the agent offered, and a line for each step
@@ -239,7 +239,7 @@ function SessionActionResult({ action }: { action: SessionAction }) {
   return (
     <span className="bc-session-action-result">
       <SessionActionsContext.Provider value={NO_SESSION_ACTIONS}>
-        <OrchestratorMarkdown text={action.output ?? ''} />
+        <ReferenceMarkdown text={action.output ?? ''} />
       </SessionActionsContext.Provider>
     </span>
   )

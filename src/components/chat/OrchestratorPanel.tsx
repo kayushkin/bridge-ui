@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useBridgeConfig } from '../../context'
-import { OrchestratorTextWithReferenceLinks } from './orchestratorReferences'
+import { TextWithReferenceLinks } from './ReferenceText'
 
 // Compact in-chat view of the orchestrator's injected context. The full review
 // surface (WAL, prior versions, filters) lives on the host's own orchestrator
@@ -12,7 +12,7 @@ import { OrchestratorTextWithReferenceLinks } from './orchestratorReferences'
 // References in the dump used to be found by a local
 // `\[(session|task|todo):([^\]]+)\]` — a second copy of the grammar, which the
 // orchestrator page carried too and which had already drifted from it. Both
-// copies are gone: `OrchestratorTextWithReferenceLinks` reads chat-core's parser,
+// copies are gone: `TextWithReferenceLinks` reads chat-core's parser,
 // the one place that knows the orchestrator's dialect. Read that module's header
 // for why this pane renders LINKS while the page renders chips — in short, this
 // pane's only host mounts no `ChatProvider`, and a chip without one throws.
@@ -80,7 +80,7 @@ export function OrchestratorPanel({ onToggleCollapse, style }: OrchestratorPanel
             <summary style={{ cursor: 'pointer', opacity: 0.85 }}>
               {p.title} <span style={{ opacity: 0.5 }}>· ~{p.latest.tokens.toLocaleString()} tok · v{p.version_count}</span>
             </summary>
-            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><OrchestratorTextWithReferenceLinks text={p.latest.content} /></pre>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0', fontSize: 11.5 }}><TextWithReferenceLinks text={p.latest.content} /></pre>
           </details>
         ))}
       </div>

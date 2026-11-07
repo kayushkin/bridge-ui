@@ -277,6 +277,8 @@ export type { SignalCardProps, SignalRequestCardProps } from './components/chat/
 export { SessionSignals, SignalRequestList } from './components/chat/SessionSignals'
 export type { SessionSignalsProps, SignalRequestListProps } from './components/chat/SessionSignals'
 export { RefChip } from './components/chat/RefChip'
+export { ReferenceMarkdown, TextWithReferenceChips, TextWithReferenceLinks } from './components/chat/ReferenceText'
+export type { ReferenceMarkdownProps } from './components/chat/ReferenceText'
 export { EmailRefChip } from './components/chat/EmailRefChip'
 export { CardRefChip } from './components/CardRefChip'
 export { CardsForEmail } from './components/CardsForEmail'

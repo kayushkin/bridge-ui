@@ -67,6 +67,7 @@ import {
   useRefChipServer,
 } from './refChipServer';
 import { OnConnectedServer, useOptionalConnectedServers } from './ConnectedServers';
+import { connectionOfServerId } from '../../serverListings';
 
 /** Props for the {@link RefChip} renderer. When used as a ReactMarkdown custom
  *  component the mdast hProperties (`kind` / `refId`) arrive as props; rehype may
@@ -91,6 +92,10 @@ export interface RefChipProps {
    * chips announcing themselves as buttons and doing nothing.
    */
   onActivate?: (kind: string, refId: string) => void;
+  /** The `server_…` id of the server the record is on, when the text wrote
+   *  `<id>@<server_id>`; rehype may lowercase it to `serverid`. */
+  serverId?: string;
+  serverid?: string;
   [key: string]: unknown;
 }
 
@@ -124,9 +129,18 @@ export function RefChip(props: RefChipProps): JSX.Element {
   // than an empty chip so the message loses no content.
   if (!refId) return <>{String(props.children ?? '')}</>;
 
+  // `<id>@<server_id>`: drawn against the server that holds it.
+  const serverId = String(props.serverId ?? props.serverid ?? '');
+  if (serverId) {
+    return <ServerQualifiedRefChip refId={refId} kind={kind} serverId={serverId} className={props.className} onActivate={props.onActivate} />;
+  }
+
   // Inside a connected server's thread the id is that server's: never look it
   // up here (refChipServer.ts says why).
   const route = refChipRoute(kind, server);
+  if (server && route === 'remote-lookup') {
+    return <RemoteLookupRefChip refId={refId} kind={kind} serverName={server.serverName} className={props.className} />;
+  }
   if (server && route === 'remote-neutral') {
     return <RemoteRefChip refId={refId} kind={kind} serverName={server.serverName} />;
   }
@@ -509,6 +523,64 @@ function SessionOnConnectedServer({ refId, className }: { refId: string; classNa
         loading: !searched,
       }}
     />
+  );
+}
+
+/** A record id in a connected server's transcript, looked up by that
+ *  server's reference-store: this chip is mounted under that server's store,
+ *  so the lookup goes through its gateway. A server that cannot answer — one
+ *  with no reference-store yet, or a person it does not let read it — leaves
+ *  the neutral chip, which says where the id is from. */
+function RemoteLookupRefChip({ refId, kind, serverName, className }: { refId: string; kind: string; serverName: string; className?: string }): JSX.Element {
+  const { data: matches, error, loading } = useResolvedRef(refId);
+  if (loading || error || !matches || matches.length === 0) {
+    return <RemoteRefChip refId={refId} kind={kind} serverName={serverName} />;
+  }
+  return <UnclassifiedRefChip refId={refId} className={className} />;
+}
+
+/** `<id>@<server_id>`: a record on the server whose own id the text names.
+ *  This server's own id draws the plain chip; a connected server's draws under
+ *  that server's store, as in its own thread; a server this one is not
+ *  connected to, or cannot read now, draws the neutral chip with its id. */
+function ServerQualifiedRefChip({
+  refId,
+  kind,
+  serverId,
+  className,
+  onActivate,
+}: {
+  refId: string;
+  kind: string;
+  serverId: string;
+  className?: string;
+  onActivate?: (kind: string, refId: string) => void;
+}): JSX.Element {
+  const servers = useOptionalConnectedServers();
+  const openConnectedServerSession = useOpenConnectedServerSession();
+  if (servers?.thisServerId === serverId) {
+    return <RefChip kind={kind} refId={refId} className={className} onActivate={onActivate} />;
+  }
+  const connection = servers ? connectionOfServerId(servers.servers, serverId) : null;
+  if (!servers || !connection || connection.blockedReason !== null || !servers.storeOf(connection.connectionId)) {
+    const why = connection?.blockedReason ?? `this server is not connected to ${serverId}`;
+    return (
+      <span className="ref-chip ref-chip-remote" data-ref-kind={kind} data-ref-id={refId} data-ref-server={serverId} title={`${refId} — on ${connection?.label ?? serverId}: ${why}`}>
+        <span className="ref-chip-glyph" aria-hidden>🖥</span>
+        <span className="ref-chip-label">{refId}</span>
+        <span className="ref-chip-server">{connection?.label ?? serverId}</span>
+      </span>
+    );
+  }
+  const openSession = openConnectedServerSession
+    ? (sessionId: string) => openConnectedServerSession({ connectionId: connection.connectionId, sessionId })
+    : undefined;
+  return (
+    <OnConnectedServer connectionId={connection.connectionId}>
+      <RefChipServerContext.Provider value={{ connectionId: connection.connectionId, serverName: connection.label, openSession }}>
+        <RefChip kind={kind} refId={refId} className={className} />
+      </RefChipServerContext.Provider>
+    </OnConnectedServer>
   );
 }
 

@@ -6,11 +6,18 @@ import { useNavigate } from 'react-router-dom'
 import { parseRefChips, remarkRefChips, useResolvableIdPatterns } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import type { RefChipProps } from './RefChip'
+import { defaultUrlTransform } from 'react-markdown'
 import { useBridgeConfig } from '../../context'
 import type { BridgeRoutes } from '../../context'
 
-// How orchestrator text gets its `[session:…]` / `[todo:…]` /
-// `[note:…]` / `[task:…]` references rendered.
+// The one chip reader for every page: text with reference ids in it, drawn as
+// markdown or kept verbatim, with every id a chat-core chip. The chat's own
+// transcript (TurnList) uses the same parser and chip with extras of its own;
+// every other surface — the orchestrator, button output, notes, signal cards,
+// messages, journal entries, predictions — draws through here, so no page
+// spots a narrower set of ids than another. It understands bare ids of every
+// registered type, the orchestrator's `[kind:id]` brackets, `<id>@<server_id>`,
+// and a markdown link to `ref:<id>` (the journal's mention form).
 //
 // The GRAMMAR lives in exactly one place for every surface here:
 // `@kayushkin/chat-core`'s `parseRefChips` / `remarkRefChips`, which understand
@@ -104,29 +111,44 @@ function remarkPluginsFor(patterns: readonly string[] | null): MarkdownPlugins {
   return plugins
 }
 
-export interface OrchestratorMarkdownProps {
-  /** Orchestrator prose — a conversation message, a run's reply. */
+export interface ReferenceMarkdownProps {
+  /** Markdown prose: a message, a note's body, a run's reply. */
   text: string
   className?: string
+  /** Extra markdown parts a page draws its own way, such as the journal's
+   *  checklist line with its "make todo" button. `ref-chip` and `a` are this
+   *  reader's and cannot be replaced. */
+  components?: MarkdownComponents
 }
 
 /**
- * Orchestrator prose as markdown, with every reference rendered as a chat-core chip.
+ * Markdown, with every reference rendered as a chat-core chip, and a link to
+ * `ref:<id>` drawn as that id's chip.
  *
  * ⚠️ Must be mounted inside chat-core's `<ChatProvider>` — the chips resolve
  * their ids against llm-bridge and noteboard through its context, and its hooks
  * throw without it.
  */
-export function OrchestratorMarkdown({ text, className }: OrchestratorMarkdownProps): JSX.Element {
+export function ReferenceMarkdown({ text, className, components: pageComponents }: ReferenceMarkdownProps): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
   const components = useMemo(
     () =>
       ({
+        ...pageComponents,
         'ref-chip': (props: RefChipProps) => (
           <RefChip {...props} onActivate={onOpenSession} />
         ),
+        a: ({ href, children }: { href?: string; children?: ReactNode }) => {
+          const refId = refIdOfLink(href)
+          if (refId) return <RefChip kind="registered" refId={refId} onActivate={onOpenSession} />
+          return (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          )
+        },
       }) as unknown as MarkdownComponents,
-    [onOpenSession],
+    [onOpenSession, pageComponents],
   )
   const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns())
   // `bc-turns-md` by default, and not for want of a name of its own: it is the
@@ -136,7 +158,7 @@ export function OrchestratorMarkdown({ text, className }: OrchestratorMarkdownPr
   // component or leaving every host to re-derive those rules.
   return (
     <div className={className ?? 'bc-orchestrator-md bc-turns-md'}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components} urlTransform={keepReferenceLinks}>
         {text}
       </ReactMarkdown>
     </div>
@@ -144,7 +166,7 @@ export function OrchestratorMarkdown({ text, className }: OrchestratorMarkdownPr
 }
 
 /**
- * Orchestrator text kept VERBATIM, with its references as chat-core chips.
+ * Text kept VERBATIM, with its references as chat-core chips.
  *
  * For the injected-context dump, which is a payload rather than prose: its
  * indentation, blank lines and bullet glyphs are what the model will actually
@@ -152,9 +174,9 @@ export function OrchestratorMarkdown({ text, className }: OrchestratorMarkdownPr
  * markdown) and every character between the references survives to the DOM.
  * Renders inline, so the caller decides the block — a `<pre>`, usually.
  *
- * ⚠️ Same `<ChatProvider>` requirement as {@link OrchestratorMarkdown}.
+ * ⚠️ Same `<ChatProvider>` requirement as {@link ReferenceMarkdown}.
  */
-export function OrchestratorTextWithReferenceChips({ text }: { text: string }): JSX.Element {
+export function TextWithReferenceChips({ text }: { text: string }): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
   const resolvableIdPatterns = useResolvableIdPatterns()
   const segments = useMemo(() => parseRefChips(text, { resolvableIdPatterns }), [text, resolvableIdPatterns])
@@ -168,6 +190,7 @@ export function OrchestratorTextWithReferenceChips({ text }: { text: string }): 
             key={i}
             kind={segment.kind}
             refId={segment.refId}
+            serverId={segment.serverId}
             onActivate={segment.kind === 'session' ? onOpenSession : undefined}
           />
         ),
@@ -181,14 +204,14 @@ export function OrchestratorTextWithReferenceChips({ text }: { text: string }): 
 // ---------------------------------------------------------------------------
 
 /**
- * Orchestrator text kept verbatim, with its references as routes-aware links.
+ * Text kept verbatim, with its references as routes-aware links.
  *
  * The presentation for a surface that cannot promise a `ChatProvider` above it
  * (see this file's header). A reference whose target page this host does not
  * mount renders as a plain span, never as a link to a route that would 404 or
  * silently reload the current page.
  */
-export function OrchestratorTextWithReferenceLinks({ text }: { text: string }): ReactNode {
+export function TextWithReferenceLinks({ text }: { text: string }): ReactNode {
   const { routes } = useBridgeConfig()
   const segments = useMemo(() => parseRefChips(text), [text])
   return (
@@ -220,4 +243,16 @@ export function OrchestratorTextWithReferenceLinks({ text }: { text: string }): 
       })}
     </>
   )
+}
+
+/** The id a markdown link to `ref:<id>` names, or null for any other link. */
+function refIdOfLink(href: string | undefined): string | null {
+  if (!href?.startsWith('ref:')) return null
+  const refId = href.slice('ref:'.length)
+  return refId === '' ? null : refId
+}
+
+/** react-markdown drops a link whose scheme it does not know; `ref:` is ours. */
+function keepReferenceLinks(url: string): string {
+  return url.startsWith('ref:') ? url : defaultUrlTransform(url)
 }

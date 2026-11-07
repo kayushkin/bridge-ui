@@ -28,6 +28,9 @@ const CONNECTIONS_POLL_MS = 30_000
 export interface ConnectedServersValue {
   /** This server's own name, or null while unset or not yet read. */
   thisServerName: string | null
+  /** This server's own `server_…` id, or null until read. A reference that
+   *  names it is this server's own. */
+  thisServerId: string | null
   /** Why this server's name could not be read, or null. */
   thisServerNameError: string | null
   servers: ConnectedServerListing[]
@@ -78,6 +81,7 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
   const [connectionsError, setConnectionsError] = useState<string | null>(null)
   const [connectionsLoaded, setConnectionsLoaded] = useState(false)
   const [thisServerName, setThisServerName] = useState<string | null>(null)
+  const [thisServerId, setThisServerId] = useState<string | null>(null)
   const [thisServerNameError, setThisServerNameError] = useState<string | null>(null)
   const [stores, setStores] = useState<ReadonlyMap<string, ChatContextValue>>(new Map())
 
@@ -93,6 +97,7 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
         if (!res.ok) { setThisServerNameError(await peerRouteErrorText(res, `GET ${THIS_SERVER_PATH}`)); return }
         const body = (await res.json()) as ServerDescription
         setThisServerName(body.name?.trim() || null)
+        setThisServerId(body.id || null)
       } catch (err) {
         if (!canceled) setThisServerNameError(`GET ${THIS_SERVER_PATH}: ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -160,13 +165,14 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
 
   const value = useMemo<ConnectedServersValue>(() => ({
     thisServerName,
+    thisServerId,
     thisServerNameError,
     servers,
     connectionsLoaded,
     connectionsError,
     storeOf: (connectionId: string) => stores.get(connectionId),
     configOf: (connectionId: string) => configs.get(connectionId) ?? peerConnectionBridgeConfig(config, connectionId),
-  }), [thisServerName, thisServerNameError, servers, connectionsLoaded, connectionsError, stores, configs, config])
+  }), [thisServerName, thisServerId, thisServerNameError, servers, connectionsLoaded, connectionsError, stores, configs, config])
 
   const chatFetch = useMemo(() => chatFetchOver(fetchFn), [fetchFn])
 
@@ -180,6 +186,7 @@ export function ConnectedServersProvider({ children }: { children: ReactNode }) 
             <ChatProvider
               fetch={chatFetch}
               basePath={peerConfig.basePath}
+              referenceStoreBasePath={peerConfig.referenceStoreBasePath}
               cache={false}
               keepDraftsAndFiltersInBrowser={false}
             >

@@ -34,12 +34,19 @@ export function useRefChipServer(): RefChipServer | null {
 /** How a chip of `kind` draws under `server`:
  *  - `local`: this server's own chip, as before;
  *  - `remote-session`: a session chip that loads through the connected server;
- *  - `remote-neutral`: the id, said to be from that server, looked up nowhere. */
-export type RefChipRoute = 'local' | 'remote-session' | 'remote-neutral'
+ *  - `remote-lookup`: a record id, looked up by the connected server's own
+ *    reference-store (its gateway, through the connection), under its access;
+ *  - `remote-neutral`: the id, said to be from that server, looked up nowhere:
+ *    a file or a button, which belong to that server's session. */
+export type RefChipRoute = 'local' | 'remote-session' | 'remote-lookup' | 'remote-neutral'
+
+/** The kinds whose id names a record a reference-store can look up. */
+const RECORD_KINDS: ReadonlySet<string> = new Set(['uuid', 'registered', 'note', 'todo'])
 
 export function refChipRoute(kind: string, server: RefChipServer | null): RefChipRoute {
   if (!server) return 'local'
-  return kind === 'session' ? 'remote-session' : 'remote-neutral'
+  if (kind === 'session') return 'remote-session'
+  return RECORD_KINDS.has(kind) ? 'remote-lookup' : 'remote-neutral'
 }
 
 /** Opens a connected server's session in the chat, for a chip in one of this

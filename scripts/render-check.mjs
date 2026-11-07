@@ -27,7 +27,7 @@ import { RefChip } from '../src/components/chat/RefChip.tsx'
 import { RefChipServerContext } from '../src/components/chat/refChipServer.ts'
 import { ConnectedServerThread } from '../src/components/chat/ConnectedServerThread.tsx'
 import { peerConnectionBridgeConfig, CONNECTED_SERVER_PATH_SOURCES } from '../src/peers.ts'
-import { OrchestratorTextWithReferenceLinks } from '../src/components/chat/orchestratorReferences.tsx'
+import { TextWithReferenceLinks } from '../src/components/chat/ReferenceText.tsx'
 import { kanbanPollWouldFetch, preserveUnchangedKanbanPayload } from '../src/useKanban.ts'
 import { indexPrincipalsByID, pickablePrincipals, principalInitials, principalIsDisabled } from '../src/usePrincipals.ts'
 import { CardDetail } from '../src/components/BridgeKanban.tsx'
@@ -1367,7 +1367,7 @@ function orchestratorReferenceChecks() {
           basePath: '/api/bridge',
           routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
         },
-      }, h(OrchestratorTextWithReferenceLinks, { text }))))
+      }, h(TextWithReferenceLinks, { text }))))
 
   const mounted = mount({ chat: '/', notes: '/notes' })
   check('a session reference links to the host\'s own chat route',

@@ -23,9 +23,12 @@ describe('which chip a reference draws', () => {
     }
   })
 
-  it('loads a session through the connected server, and draws every other kind as that server’s', () => {
+  it('loads a session through the connected server, looks a record up on that server, and draws the rest as that server’s', () => {
     expect(refChipRoute('session', laptop)).toBe('remote-session')
-    for (const kind of ['uuid', 'registered', 'note', 'todo', 'rank', 'workspace', 'file', 'action', 'image']) {
+    for (const kind of ['uuid', 'registered', 'note', 'todo']) {
+      expect(refChipRoute(kind, laptop)).toBe('remote-lookup')
+    }
+    for (const kind of ['rank', 'workspace', 'file', 'action', 'image']) {
       expect(refChipRoute(kind, laptop)).toBe('remote-neutral')
     }
   })
@@ -59,7 +62,7 @@ describe('a connected server’s id that this server cannot look up', () => {
     ['uuid', '8637db10-0000-4000-8000-000000000000'],
     ['todo', '8637db10-0000-4000-8000-000000000001'],
   ]) {
-    it(`draws ${kind} ${refId} as from the connected server, asking nothing here`, () => {
+    it(`draws ${kind} ${refId} as from the connected server until that server answers, asking nothing here`, () => {
       const html = inLaptopThread(kind, refId)
       expect(html).toContain('ref-chip-remote')
       expect(html).toContain(`data-ref-id="${refId}"`)

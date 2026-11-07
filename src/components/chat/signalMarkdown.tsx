@@ -1,6 +1,7 @@
 import { memo, type ComponentProps, type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ReferenceMarkdown } from './ReferenceText';
 
 // Markdown for the text on a signal card. Agents write their questions in
 // markdown, and the cards showed it raw — `**Roughly how many?**` with the
@@ -12,12 +13,6 @@ import remarkGfm from 'remark-gfm';
 // which is react-markdown's default, and so are `javascript:` links.
 
 type MarkdownComponents = ComponentProps<typeof ReactMarkdown>['components'];
-
-/** Links leave the app in a new tab. A card is often one of many being worked
- *  through, and a link that replaced the page would lose the rest. */
-const BLOCK_COMPONENTS: MarkdownComponents = {
-  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-};
 
 /** What inline text may keep. No links, and nothing that makes a block: this
  *  text sits inside an option's button or on a one-line title, where a nested
@@ -35,13 +30,8 @@ const INLINE_COMPONENTS: MarkdownComponents = {
  *  form below: parsing is the costly part of drawing a card, and a card re-renders
  *  far more often than its text changes. */
 export const SignalBodyMarkdown = memo(function SignalBodyMarkdown({ text }: { text: string }): JSX.Element {
-  return (
-    <div className="signal-body bc-turns-md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={BLOCK_COMPONENTS}>
-        {text}
-      </ReactMarkdown>
-    </div>
-  );
+  // The shared reader, so an id in a card is the same chip it is in the chat.
+  return <ReferenceMarkdown text={text} className="signal-body bc-turns-md" />;
 });
 
 /** A title or an option description: emphasis and code only. Any other

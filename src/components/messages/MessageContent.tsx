@@ -1,7 +1,10 @@
 import { createElement, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { remarkRefChips, useResolvableIdPatterns } from '@kayushkin/chat-core'
 import { useBridgeConfig } from '../../context'
+import { RefChip, type RefChipProps } from '../chat/RefChip'
+import { TextWithReferenceChips } from '../chat/ReferenceText'
 import { remarkDiscordInline, remarkDiscordSubtext } from '../../discordMarkdown'
 import {
   MESSAGE_IMAGE_THUMBNAIL, isImageMedia, mediaPathOfMxc, messageBodyKind, sanitizeMatrixHtml,
@@ -46,7 +49,7 @@ export function MessageContent({ message, messageType, discordNames }: {
     case 'discord-markdown':
       return <DiscordMarkdown text={message.body} discordNames={discordNames} />
     case 'plain':
-      return <div className={styles.plainText}>{message.body}</div>
+      return <div className={styles.plainText}><TextWithReferenceChips text={message.body} /></div>
   }
 }
 
@@ -135,16 +138,21 @@ type MarkdownPlugins = ComponentProps<typeof ReactMarkdown>['remarkPlugins']
 
 /** Links leave for a new tab; raw HTML is dropped (react-markdown's default),
  *  and so are `javascript:` links. */
-const DISCORD_MARKDOWN_COMPONENTS: MarkdownComponents = {
-  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-}
+const DISCORD_MARKDOWN_COMPONENTS = {
+  a: ({ node: _node, ...props }: ComponentProps<'a'> & { node?: unknown }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  // An id in a message is the same chip it is in the chat. Only an id that
+  // matches a pattern on reference-store's list is looked up at all.
+  'ref-chip': (props: RefChipProps) => <RefChip {...props} />,
+} as unknown as MarkdownComponents
 
 function DiscordMarkdown({ text, discordNames }: { text: string; discordNames: DiscordNames }) {
+  const resolvableIdPatterns = useResolvableIdPatterns()
   const plugins = useMemo(() => [
     remarkGfm,
+    [remarkRefChips, { resolvableIdPatterns }],
     [remarkDiscordInline, { names: discordNames, emojiClassName: styles.inlineEmoji, mentionClassName: styles.mention }],
     [remarkDiscordSubtext, { subtextClassName: styles.discordSubtext }],
-  ] as unknown as MarkdownPlugins, [discordNames])
+  ] as unknown as MarkdownPlugins, [discordNames, resolvableIdPatterns])
   return (
     <div className={styles.richText}>
       <ReactMarkdown remarkPlugins={plugins} components={DISCORD_MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>

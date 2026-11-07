@@ -12,6 +12,17 @@ import {
   type SignalWire,
 } from '@kayushkin/chat-core'
 import { SignalCard, SignalRequestCard } from '../src/components/chat/SignalCard'
+import { ChatContext } from '@kayushkin/chat-core'
+import { BridgeContext, DEFAULT_BRIDGE_ROUTES } from '../src/context'
+import { MemoryRouter } from 'react-router-dom'
+
+/** A card's body is drawn by the shared reference reader, which reads the
+ *  page's config and the chat's lookups, as every page under <Bridge> has. */
+function withPage(element: ReactElement): ReactElement {
+  return createElement(MemoryRouter, null,
+    createElement(BridgeContext.Provider, { value: { routes: DEFAULT_BRIDGE_ROUTES } as never },
+      createElement(ChatContext.Provider, { value: { resolve: null, references: null } as never }, element)))
+}
 import { SignalRequestList } from '../src/components/chat/SessionSignals'
 import { escapeBlockMarkers } from '../src/components/chat/signalMarkdown'
 
@@ -412,7 +423,7 @@ describe('a card renders its text as markdown', () => {
     const signal = question({
       body: '**Roughly how many?**\n\n- one\n- two\n\nSee [the doc](https://example.com).',
     });
-    const html = renderToStaticMarkup(createElement(SignalCard, { signal }));
+    const html = renderToStaticMarkup(withPage(createElement(SignalCard, { signal })));
     expect(html).toContain('<strong>Roughly how many?</strong>');
     expect(html).toContain('<li>one</li>');
     expect(html).not.toContain('**');
@@ -421,7 +432,7 @@ describe('a card renders its text as markdown', () => {
 
   it('drops raw HTML and script links from the body', () => {
     const signal = question({ body: '<img src=x onerror=alert(1)> [x](javascript:alert(1))' });
-    const html = renderToStaticMarkup(createElement(SignalCard, { signal }));
+    const html = renderToStaticMarkup(withPage(createElement(SignalCard, { signal })));
     expect(html).not.toContain('<img');
     expect(html).not.toContain('javascript:');
   });
