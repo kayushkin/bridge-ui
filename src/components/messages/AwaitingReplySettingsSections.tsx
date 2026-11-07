@@ -28,13 +28,19 @@ function WhoCountsSection() {
   const [tags, setTags] = useState<MultichatTag[] | null>(null)
   const [tagsError, setTagsError] = useState<string | null>(null)
   const [draft, setDraft] = useState<AwaitingReplySettings | null>(null)
+  const [anySizeTagsText, setAnySizeTagsText] = useState('')
   const save = useSectionSave()
   const stored = overview?.settings ?? null
 
   useEffect(() => {
     read<MultichatTag[] | null>('/tags').then(next => setTags(next ?? [])).catch(err => setTagsError(errorText(err)))
   }, [read])
-  useEffect(() => { if (stored && !draft) setDraft(stored) }, [stored, draft])
+  useEffect(() => {
+    if (stored && !draft) {
+      setDraft(stored)
+      setAnySizeTagsText(stored.any_size_person_tags.join(', '))
+    }
+  }, [stored, draft])
 
   if (!draft || !stored) return null
   const dirty = JSON.stringify(settingsWriteBody(draft)) !== JSON.stringify(settingsWriteBody(stored))
@@ -43,7 +49,7 @@ function WhoCountsSection() {
 
   return (
     <SettingsSection id="awaiting-reply-who-counts" title="Who counts and what clears it" scope="global" storedBy="multichat · awaiting_reply_settings"
-      help="A person counts when any of their accounts carries one of these tags, and then a message from any of their accounts counts. A room carrying one counts everyone in it."
+      help="In a direct message or a small group, a person counts when you count everyone people-store knows, or when any of their accounts carries one of these tags; then a message from any of their accounts counts. In a bigger group only people with one of the people-store tags below count. A room carrying a tag counts everyone in it."
       save={{ dirty, state: save, onSave: () => void save.run(() => saveSettings(draft)) }}>
       <div className={styles.awaitingSettingsRow}>
         <span className={styles.awaitingSettingsLabel}>Tags</span>
@@ -54,11 +60,22 @@ function WhoCountsSection() {
           </label>
         ))}
       </div>
+      <label className={styles.check}>
+        <input type="checkbox" checked={draft.count_every_known_person} onChange={e => setDraft({ ...draft, count_every_known_person: e.target.checked })} />
+        Count everyone in people-store, tagged or not. Accounts no person owns (short codes, unknown numbers, bots) still need a tag.
+      </label>
       <label className={styles.awaitingSettingsRow}>
         <span className={styles.awaitingSettingsLabel}>Groups up to</span>
         <input className={`${styles.input} ${styles.thresholdInput}`} type="number" min={2} value={draft.max_group_member_count}
           onChange={e => setDraft({ ...draft, max_group_member_count: Number(e.target.value) })} />
         <span className={styles.muted}>people, you included. Discord server channels never count, unless you tag the room.</span>
+      </label>
+      <label className={styles.awaitingSettingsRow}>
+        <span className={styles.awaitingSettingsLabel}>Any size for people tagged</span>
+        <input className={styles.input} type="text" value={anySizeTagsText} placeholder="work"
+          onChange={e => setAnySizeTagsText(e.target.value)}
+          onBlur={() => setDraft({ ...draft, any_size_person_tags: personTagsFromText(anySizeTagsText) })} />
+        <span className={styles.muted}>people-store tags, comma-separated. Their messages count in a group of any size.</span>
       </label>
       <label className={styles.awaitingSettingsRow}>
         <span className={styles.awaitingSettingsLabel}>Ignore messages older than</span>
@@ -76,6 +93,11 @@ function WhoCountsSection() {
       </label>
     </SettingsSection>
   )
+}
+
+/** People-store tags typed as "work, ge": trimmed, blanks dropped. */
+function personTagsFromText(text: string): string[] {
+  return text.split(',').map(tag => tag.trim()).filter(tag => tag !== '')
 }
 
 function BrowserAlertsSection() {

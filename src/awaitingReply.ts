@@ -117,8 +117,8 @@ export function waitingAgeLabel(sentAt: string, now: Date): string {
 /** What PUT /awaiting-reply/settings takes: the whole object, without the
  *  `updated_at` multichat sets. */
 export function settingsWriteBody(settings: AwaitingReplySettings) {
-  const { tag_ids, max_group_member_count, max_message_age_days, clear_when_opened, clear_when_replied } = settings
-  return { tag_ids, max_group_member_count, max_message_age_days, clear_when_opened, clear_when_replied }
+  const { tag_ids, count_every_known_person, max_group_member_count, any_size_person_tags, max_message_age_days, clear_when_opened, clear_when_replied } = settings
+  return { tag_ids, count_every_known_person, max_group_member_count, any_size_person_tags, max_message_age_days, clear_when_opened, clear_when_replied }
 }
 
 // --------------------------------------------------------------- this browser
