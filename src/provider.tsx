@@ -35,6 +35,8 @@ export interface BridgeProviderProps {
   /** The host's reference-resolver endpoint (dash: "/api/resolve"). If
    * omitted, bare-uuid reference chips stay plain text. */
   resolveEndpoint?: string
+  /** reference-store through the bridge, e.g. "/api/bridge/reference-store". */
+  referenceStoreBasePath?: string
   /** Base path for llm-bridge-adapter API. If omitted, bus_session links can't
    * resolve to a bridge_id and the chat button on those cards stays disabled. */
   bridgeAdapterBasePath?: string
@@ -137,6 +139,7 @@ export function BridgeProvider({
   dayPagePath = '',
   noteboardBasePath = '',
   resolveEndpoint = '',
+  referenceStoreBasePath = '',
   bridgeAdapterBasePath = '',
   orchestratorBasePath = '',
   usageStoreBasePath = '',
@@ -184,6 +187,7 @@ export function BridgeProvider({
     dayPagePath,
     noteboardBasePath,
     resolveEndpoint,
+    referenceStoreBasePath,
     bridgeAdapterBasePath,
     orchestratorBasePath,
     usageStoreBasePath,
@@ -201,7 +205,7 @@ export function BridgeProvider({
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, possessionStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, possessionStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
 
   return (
     <BridgeContext value={config}>

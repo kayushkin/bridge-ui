@@ -5232,6 +5232,62 @@
   background: transparent;
 }
 
+/* A record the signed-in person may not see: the id and a lock, nothing more. */
+.ref-chip.ref-chip-refused {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* The generic record page, /ref/<id>. */
+.bc-reference-page {
+  padding: 16px 24px;
+  max-width: 880px;
+}
+.bc-reference-page-id {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.1rem;
+  color: var(--text-muted);
+}
+.bc-reference-record {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.bc-reference-record-type {
+  color: var(--text-muted);
+  margin-top: -4px;
+}
+.bc-reference-record-summary > div {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 8px;
+  padding: 2px 0;
+}
+.bc-reference-record-summary dt {
+  color: var(--text-muted);
+}
+.bc-reference-record-summary dd {
+  margin: 0;
+}
+.bc-reference-record-fields table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.bc-reference-record-fields th {
+  text-align: left;
+  font-weight: normal;
+  color: var(--text-muted);
+  padding: 2px 12px 2px 0;
+  vertical-align: top;
+}
+.bc-reference-record-fields td {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* The connected server a chip's record lives on, after its label: on the
    neutral chip and on a session chip that loads through that server. */
 .ref-chip-server {

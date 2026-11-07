@@ -15,6 +15,7 @@ import type { Photo } from '@kayushkin/photo-store-types';
 import { photoChipLabel, photoDateSourceLabel, photoMapUrl, photoThumbnailUrl } from '../../photoRefs';
 import type { Place, Trip, Visit } from '@kayushkin/location-store-types';
 import { PossessionStoreRefChip } from './PossessionRefChips';
+import { GenericReferenceChip, RefusedReferenceChip } from './GenericReferenceChip';
 import {
   distanceLabel,
   durationLabel,
@@ -1008,6 +1009,9 @@ function UnclassifiedRefChip({
   }
   if (matches.length === 1) {
     const match = matches[0] as ResolvedRefMatch;
+    if (match.refused) {
+      return <RefusedReferenceChip refId={refId} match={match} />;
+    }
     if (match.type === 'session') {
       return <SessionRefChip refId={refId} className={className} onActivate={onActivate} />;
     }
@@ -1070,6 +1074,9 @@ function UnclassifiedRefChip({
         />
       );
     }
+    // Any other type, or one whose chip did not recognize the answer: drawn
+    // from its row in reference-store's list.
+    return <GenericReferenceChip refId={refId} match={match} className={className} />;
   }
   return <MultiMatchRefChip refId={refId} matches={matches} className={className} />;
 }

@@ -68,7 +68,7 @@ export function Bridge({ notesPath = '', showConformance, showServiceInventory, 
 /** chat-core's provider, fed from the same `BridgeConfig` every page reads, so
  *  the chat reaches noteboard and the resolver through whatever the host proxies. */
 function ChatStore({ children }: { children: React.ReactNode }): JSX.Element {
-  const { fetch: fetchFn, basePath, noteboardBasePath, resolveEndpoint } = useBridgeConfig()
+  const { fetch: fetchFn, basePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath } = useBridgeConfig()
   const chatFetch = useMemo(() => chatFetchOver(fetchFn), [fetchFn])
   return (
     <ChatProvider
@@ -76,6 +76,7 @@ function ChatStore({ children }: { children: React.ReactNode }): JSX.Element {
       basePath={basePath}
       noteboardBasePath={noteboardBasePath}
       resolveEndpoint={resolveEndpoint}
+      referenceStoreBasePath={referenceStoreBasePath}
     >
       {children}
     </ChatProvider>

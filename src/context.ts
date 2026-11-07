@@ -62,6 +62,9 @@ export interface BridgeRoutes {
   orchestrator: string
   /** The single-card page. The card id is appended as a path segment. */
   card: string
+  /** The generic record page, `/ref/<id>`: any record reference-store can
+   *  look up, for a chip whose type has no page of its own. */
+  reference: string
   /** Every ticket that came from an email, and the email it came from. */
   emailTickets: string
   /** multichat's conversations, one open to read and answer (`?room=<room_id>`).
@@ -125,6 +128,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   hooks: '/hooks',
   orchestrator: '/orchestrator',
   card: '/card',
+  reference: '/ref',
   emailTickets: '/email-tickets',
   messageConversations: '/messages',
   messageWaiting: '/messages/waiting',
@@ -179,6 +183,11 @@ export interface BridgeConfig {
    * registry. If empty, bare-uuid ref chips render as plain text — with no
    * resolver there is no honest way to say what an unclassified id names. */
   resolveEndpoint: string
+  /** reference-store through the bridge (dash: "/api/bridge/reference-store"):
+   * the one list of reference types and lookups for the signed-in person.
+   * When set, chips use it instead of `resolveEndpoint`; the generic chip and
+   * the record page (`routes.reference`) need it. */
+  referenceStoreBasePath: string
   /** Base path for llm-bridge-adapter API (e.g. "/api/llm-bridge-adapter"). No
    * trailing slash. Used to resolve bus_session_id → bridge_id when a kanban
    * card is linked by entity_type=bus_session. If empty, those cards' chat

@@ -23,6 +23,7 @@ import { BridgeKanban } from './components/BridgeKanban'
 import { BridgeKanbanSettings } from './components/BridgeKanbanSettings'
 import { BridgeEmailTickets } from './components/BridgeEmailTickets'
 import { BridgeCardPage } from './components/BridgeCardPage'
+import { BridgeReferencePage } from './components/BridgeReferencePage'
 import { BridgePrincipals } from './components/BridgePrincipals'
 import { BridgeGrants } from './components/BridgeGrants'
 import { BridgeBundles } from './components/BridgeBundles'
@@ -104,6 +105,7 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   { route: 'kanban', label: 'Kanban', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath, component: BridgeKanban },
   { route: 'kanbanSettings', label: 'Board settings', group: 'work', listed: false, component: BridgeKanbanSettings },
   { route: 'card', label: 'Card', group: 'work', listed: false, routeSuffix: '/:cardId', component: BridgeCardPage },
+  { route: 'reference', label: 'Record', group: 'work', listed: false, routeSuffix: '/:refId', available: c => !!c.referenceStoreBasePath, component: BridgeReferencePage },
   // Each email ticket beside the message it came from. Needs mail as well as
   // kanban, since the log is half emails.
   { route: 'emailTickets', label: 'Email tickets', group: 'work', listed: true, available: c => !!c.kanbanStoreBasePath && !!c.mailBasePath, component: BridgeEmailTickets },

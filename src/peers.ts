@@ -295,6 +295,9 @@ export async function peerRouteErrorText(res: Response, verb: string): Promise<s
  *    `/kanban-store/` gateway, which forwards `<rest>` to kanban-store's
  *    `/<rest>` unchanged, as this host's kanban path does. (Its `/kanban/`
  *    gateway adds `/api/` itself, which this library adds too.)
+ *  - `reference-store-gateway`: reference-store through the other server's
+ *    `/reference-store/` gateway, so its chips are looked up by the server
+ *    that owns them, as the person mapped there.
  *  - `not-there`: a path to one of THIS host's own stores or pages, or one whose
  *    shape the other server's gateways do not match. Left empty, which is the
  *    library's "not configured here": the feature behind it is hidden. Ids are
@@ -307,18 +310,22 @@ type BridgeConfigPathField = {
   [K in keyof BridgeConfig]: BridgeConfig[K] extends string ? K : never
 }[keyof BridgeConfig]
 
-export type ConnectedServerPathSource = 'bridge' | 'grant-store-gateway' | 'kanban-store-gateway' | 'not-there'
+export type ConnectedServerPathSource = 'bridge' | 'grant-store-gateway' | 'kanban-store-gateway' | 'reference-store-gateway' | 'not-there'
 
 /** Where each gateway source sits under the connection's proxy. */
-const GATEWAY_PATH_UNDER_PROXY: Readonly<Record<'grant-store-gateway' | 'kanban-store-gateway', string>> = {
+const GATEWAY_PATH_UNDER_PROXY: Readonly<Record<'grant-store-gateway' | 'kanban-store-gateway' | 'reference-store-gateway', string>> = {
   'grant-store-gateway': '/grant-store',
   'kanban-store-gateway': '/kanban-store',
+  'reference-store-gateway': '/reference-store',
 }
 
 export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathField, ConnectedServerPathSource>> = {
   basePath: 'bridge',
   grantStoreBasePath: 'grant-store-gateway',
   kanbanStoreBasePath: 'kanban-store-gateway',
+  // The other server's own reference-store, which looks its ids up under its
+  // own access rules.
+  referenceStoreBasePath: 'reference-store-gateway',
   // llm-bridge-server has no principal-store gateway.
   principalStoreBasePath: 'not-there',
   // The other server's mailstack gateway, if it has a mailstack, is not this
@@ -370,6 +377,7 @@ export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathFiel
 const ROUTES_THAT_TAKE_THIS_HOSTS_IDS: readonly (keyof BridgeRoutes)[] = [
   'effectiveConfig',
   'card',
+  'reference',
   'previews',
   'orchestrator',
   'notes',
