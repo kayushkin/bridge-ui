@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useBridgeConfig } from '../context'
@@ -71,7 +72,11 @@ function PrincipalsPage({ fetchFn, base, grantStoreBase }: { fetchFn: FetchFn; b
   const [kinds, setKinds] = useState<PrincipalKind[]>([])
   const [kindsError, setKindsError] = useState<string | null>(null)
 
-  const [selectedID, setSelectedID] = useState<string | null>(null)
+  // `?id=<principal id>`: the principal a reference chip opened.
+  const [searchParams] = useSearchParams()
+  const linkedID = searchParams.get('id')
+  const [selectedID, setSelectedID] = useState<string | null>(linkedID)
+  useEffect(() => { if (linkedID) setSelectedID(linkedID) }, [linkedID])
   const [detail, setDetail] = useState<PrincipalDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
