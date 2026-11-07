@@ -242,7 +242,7 @@ function OutfitRefChip({ refId, outfit, className }: { refId: string; outfit: Ou
       <RefRow label="Status" value={outfit.status} />
       {outfit.occasion && <RefRow label="Occasion" value={outfit.occasion} />}
       {outfit.weather && <RefRow label="Weather" value={outfit.weather} />}
-      <IdRow label="Garments" ids={outfit.garment_ids} />
+      <IdRow label="Wearing" ids={outfit.possession_ids} />
       {outfit.worn_on.length > 0 && <RefRow label="Worn" value={outfit.worn_on.join(', ')} />}
       {outfit.reasoning && <div className="ref-chip-panel-body">{outfit.reasoning}</div>}
     </PossessionChip>

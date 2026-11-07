@@ -74,7 +74,7 @@ export interface Outfit {
   created_at: number
   updated_at: number
   deleted_at: number
-  garment_ids: string[]
+  possession_ids: string[]
   worn_on: string[]
 }
 
