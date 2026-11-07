@@ -116,9 +116,11 @@ export interface ReferenceMarkdownProps {
   text: string
   className?: string
   /** Extra markdown parts a page draws its own way, such as the journal's
-   *  checklist line with its "make todo" button. `ref-chip` and `a` are this
-   *  reader's and cannot be replaced. */
-  components?: MarkdownComponents
+   *  checklist line with its "make todo" button: element name to component,
+   *  as react-markdown takes them. Typed loosely on purpose, because a host
+   *  carries its own copy of react-markdown's types, which ours cannot name.
+   *  `ref-chip` and `a` are this reader's and cannot be replaced. */
+  components?: Readonly<Record<string, unknown>>
 }
 
 /**
