@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { answerTextOf, signalFromWire, type Signal } from '@kayushkin/chat-core'
 import { answersWithComposerText } from '../src/signalComposerText'
 
-function question(id: string): Signal {
+function question(id: string, options: string[] = ['x', 'y']): Signal {
   return signalFromWire({
+    options: options.map((value) => ({ label: value, value })),
     id,
     session_id: 'br_a',
     kind: 'question',
@@ -55,5 +56,25 @@ describe('answersWithComposerText', () => {
     const one = question('sig-1')
     const answers = { 'sig-1': { pickedOptionValues: ['a'] } }
     expect(answersWithComposerText([one], answers, '   ')).toEqual(answers)
+  })
+
+  it('answers the one question without options, even when it is not the last', () => {
+    const browser = question('sig-1', [])
+    const selfCheck = question('sig-2')
+    const composed = answersWithComposerText(
+      [browser, selfCheck],
+      { 'sig-2': { pickedOptionValues: ['yes'] } },
+      'Windows, Chrome',
+    )
+    expect(answerTextOf(composed['sig-1'])).toBe('Windows, Chrome')
+    expect(answerTextOf(composed['sig-2'])).toBe('yes')
+  })
+
+  it('joins the last question when more than one question has no options', () => {
+    const first = question('sig-1', [])
+    const last = question('sig-2', [])
+    const composed = answersWithComposerText([first, last], {}, 'typed')
+    expect(composed['sig-1']).toBeUndefined()
+    expect(answerTextOf(composed['sig-2'])).toBe('typed')
   })
 })
