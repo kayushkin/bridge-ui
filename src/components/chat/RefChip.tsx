@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { RefKind } from '@kayushkin/chat-core';
 import type { ManagedSessionDetail, SignalRequest, TurnModel } from '@kayushkin/chat-core';
@@ -44,7 +44,7 @@ import {
   dayPageHref,
   otherParticipantNames,
 } from '../../messageStoreRefs';
-import { useBridgeConfig } from '../../context';
+import { BridgeContext, useBridgeConfig } from '../../context';
 import { githubCommitUrl, shortSha, workGraphChatHref, type WorkGraphCommitAnswer } from '../../workGraph';
 import {
   isSessionAwaitingOperator,
@@ -1073,6 +1073,8 @@ function UnclassifiedRefChip({
   onActivate?: (kind: string, refId: string) => void;
 }): JSX.Element {
   const { data: matches, error, loading } = useResolvedRef(refId);
+  // Optional: a chip drawn with no BridgeProvider above it has no host chips.
+  const renderReferenceChip = useContext(BridgeContext)?.renderReferenceChip ?? null;
 
   if (loading || matches === null || matches.length === 0) {
     return (
@@ -1086,6 +1088,9 @@ function UnclassifiedRefChip({
     if (match.refused) {
       return <RefusedReferenceChip refId={refId} match={match} />;
     }
+    // The host's own chip first, for a record of one of its stores.
+    const hostChip = renderReferenceChip?.({ refId, match, className });
+    if (hostChip) return <>{hostChip}</>;
     if (match.type === 'session') {
       return <SessionRefChip refId={refId} className={className} onActivate={onActivate} />;
     }

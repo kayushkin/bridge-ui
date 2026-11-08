@@ -1,6 +1,17 @@
+import type { ResolvedRefMatch } from '@kayushkin/chat-core'
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import type { FetchFn } from './types'
+
+/** What a host's chip is given: the id as written and the one record
+ *  reference-store found for it. */
+export interface ReferenceChipRendererProps {
+  refId: string
+  match: ResolvedRefMatch
+  className?: string
+}
+
+export type ReferenceChipRenderer = (props: ReferenceChipRendererProps) => ReactNode | null
 
 export interface BridgeRoutes {
   // Where each page this library ships is mounted. `<Bridge>` owns its host's
@@ -326,6 +337,13 @@ export interface BridgeConfig {
    * use this to inject harness-specific configuration UI keyed on harness
    * name. Return null for harnesses without an extension. */
   renderHarnessExtension: ((harnessName: string) => ReactNode) | null
+  /** The host's chips, for records of the host's own stores (a journal
+   * entry, a photo, a possession…): called with each record a chip resolved
+   * to, before this library's own chips. Return null to let this library draw
+   * it (its own chip for the bridge's records, or the generic chip). It is
+   * never called on a connected server's records, which this host's chips
+   * would look up in its own stores with another server's ids. */
+  renderReferenceChip: ReferenceChipRenderer | null
   /** Route paths for navigation between bridge pages. */
   routes: BridgeRoutes
 }

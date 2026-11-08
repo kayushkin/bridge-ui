@@ -402,5 +402,8 @@ export function peerConnectionBridgeConfig(config: BridgeConfig, connectionID: s
     ...paths,
     routes,
     renderHarnessExtension: null,
+    // This host's chips read this host's stores; a connected server's
+    // records are drawn by this library alone.
+    renderReferenceChip: null,
   }
 }

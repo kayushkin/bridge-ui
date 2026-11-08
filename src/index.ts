@@ -40,7 +40,7 @@ export { TRANSPORT_LABEL } from './constants'
 
 // Context & Provider
 export { BridgeContext, useBridgeConfig, DEFAULT_BRIDGE_ROUTES } from './context'
-export type { BridgeConfig, BridgeRoutes } from './context'
+export type { BridgeConfig, BridgeRoutes, ReferenceChipRenderer, ReferenceChipRendererProps } from './context'
 export { BridgeProvider } from './provider'
 
 // Hooks
@@ -276,7 +276,8 @@ export { SignalCard, SignalRequestCard } from './components/chat/SignalCard'
 export type { SignalCardProps, SignalRequestCardProps } from './components/chat/SignalCard'
 export { SessionSignals, SignalRequestList } from './components/chat/SessionSignals'
 export type { SessionSignalsProps, SignalRequestListProps } from './components/chat/SessionSignals'
-export { RefChip } from './components/chat/RefChip'
+export { RefChip, AnchoredPanel, useAnchoredPanel, RefRow, truncate, idTail, MultiMatchRefChip } from './components/chat/RefChip'
+export { GenericReferenceChip, RefusedReferenceChip } from './components/chat/GenericReferenceChip'
 export { ReferenceMarkdown, TextWithReferenceChips, TextWithReferenceLinks } from './components/chat/ReferenceText'
 export type { ReferenceMarkdownProps } from './components/chat/ReferenceText'
 export { EmailRefChip } from './components/chat/EmailRefChip'

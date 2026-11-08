@@ -273,3 +273,10 @@ describe('people from connected servers', () => {
     expect(text).toContain('(peer_user_not_mapped)')
   })
 })
+
+describe('a connected server and the host’s chips', () => {
+  it('never draws a connected server’s records with this host’s chips', () => {
+    const host = { renderReferenceChip: () => null, renderHarnessExtension: null, routes: DEFAULT_BRIDGE_ROUTES, basePath: '/api/bridge' } as unknown as BridgeConfig
+    expect(peerConnectionBridgeConfig(host, 'peer_connection_000001').renderReferenceChip).toBeNull()
+  })
+})

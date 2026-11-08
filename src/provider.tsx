@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
 import { BridgeContext, DEFAULT_BRIDGE_ROUTES, type BridgeConfig, type BridgeRoutes } from './context'
+import type { ReferenceChipRenderer } from './context'
 import type { FetchFn } from './types'
 import { MinimalChromeProvider } from './components/minimal/MinimalChromeContext'
 
@@ -104,6 +105,8 @@ export interface BridgeProviderProps {
   /** Optional render hook for per-harness Settings-tab extensions. Return null
    * for harnesses that don't need a custom panel. */
   renderHarnessExtension?: (harnessName: string) => ReactNode
+  /** The host's chips for its own stores' records (see BridgeConfig). */
+  renderReferenceChip?: ReferenceChipRenderer
   /** Route overrides. Any unspecified routes fall back to DEFAULT_BRIDGE_ROUTES,
    * which means `notes` and `orchestrator` — pages this library doesn't ship —
    * stay empty and their links aren't rendered until a host names them. */
@@ -156,6 +159,7 @@ export function BridgeProvider({
   projectStoreBasePath = '',
   modelStoreBasePath = '',
   renderHarnessExtension,
+  renderReferenceChip,
   routes,
   children,
 }: BridgeProviderProps) {
@@ -204,8 +208,9 @@ export function BridgeProvider({
     projectStoreBasePath,
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
+    renderReferenceChip: renderReferenceChip ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, possessionStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, possessionStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
 
   return (
     <BridgeContext value={config}>
