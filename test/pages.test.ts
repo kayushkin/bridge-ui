@@ -7,7 +7,7 @@ const config = (overrides: Partial<BridgeConfig> = {}): BridgeConfig => ({
   basePath: '/api/bridge',
   skillStoreBasePath: '', toolStoreBasePath: '', permissionStoreBasePath: '', kanbanStoreBasePath: '',
   principalStoreBasePath: '', grantStoreBasePath: '', bundleStoreBasePath: '', repoStoreBasePath: '',
-  mailBasePath: '', mailPagePath: '', noteboardBasePath: '', resolveEndpoint: '', bridgeAdapterBasePath: '',
+  mailBasePath: '', mailPagePath: '', noteboardBasePath: '', bridgeAdapterBasePath: '',
   orchestratorBasePath: '', usageStoreBasePath: '',
   schedulerBasePath: '', logStoreBasePath: '', jobStoreBasePath: '', quoteStoreBasePath: '',
   predictionStoreBasePath: '', eventStoreBasePath: '', authStoreBasePath: '', hostBasePath: '', previewsBasePath: '', workGraphStoreBasePath: '', projectStoreBasePath: '', modelStoreBasePath: '',

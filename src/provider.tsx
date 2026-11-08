@@ -33,9 +33,6 @@ export interface BridgeProviderProps {
   /** Base path for the noteboard API. If omitted, chat todo chips can't resolve
    * an item's title/status and say so. */
   noteboardBasePath?: string
-  /** The host's reference-resolver endpoint (dash: "/api/resolve"). If
-   * omitted, bare-uuid reference chips stay plain text. */
-  resolveEndpoint?: string
   /** reference-store through the bridge, e.g. "/api/bridge/reference-store". */
   referenceStoreBasePath?: string
   /** Base path for llm-bridge-adapter API. If omitted, bus_session links can't
@@ -133,7 +130,6 @@ export function BridgeProvider({
   messageStoreBasePath = '',
   messageAccountsBasePath = '',
   noteboardBasePath = '',
-  resolveEndpoint = '',
   referenceStoreBasePath = '',
   bridgeAdapterBasePath = '',
   orchestratorBasePath = '',
@@ -178,7 +174,6 @@ export function BridgeProvider({
     messageStoreBasePath,
     messageAccountsBasePath,
     noteboardBasePath,
-    resolveEndpoint,
     referenceStoreBasePath,
     bridgeAdapterBasePath,
     orchestratorBasePath,
@@ -198,7 +193,7 @@ export function BridgeProvider({
     renderHarnessExtension: renderHarnessExtension ?? null,
     renderReferenceChip: renderReferenceChip ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, messageStoreBasePath, messageAccountsBasePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, messageStoreBasePath, messageAccountsBasePath, noteboardBasePath, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
 
   return (
     <BridgeContext value={config}>

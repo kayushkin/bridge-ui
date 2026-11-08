@@ -339,7 +339,6 @@ export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathFiel
   bundleStoreBasePath: 'not-there',
   repoStoreBasePath: 'not-there',
   noteboardBasePath: 'not-there',
-  resolveEndpoint: 'not-there',
   bridgeAdapterBasePath: 'not-there',
   orchestratorBasePath: 'not-there',
   usageStoreBasePath: 'not-there',

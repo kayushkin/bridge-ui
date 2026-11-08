@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from './context'
-import type { Board, BoardView, CardLink, ColumnView, EntityCardView, EntityTypeInfo, EntityTag } from '@kayushkin/kanban-store-types'
+import type { Board, BoardView, CardLink, ColumnView, EntityCardView, EntityTag } from '@kayushkin/kanban-store-types'
+import type { ReferenceType } from '@kayushkin/chat-core'
 
 // kanbanPollWouldFetch reports whether the 15-second refresh has anything to
 // ask for. It mirrors the guards at the top of fetchBoards and fetchView, which
@@ -96,7 +97,7 @@ export function useKanban(boardID: string | null, options: UseKanbanOptions = {}
 
   const [boards, setBoards] = useState<Board[]>([])
   const [view, setView] = useState<BoardView | null>(null)
-  const [entityTypes, setEntityTypes] = useState<EntityTypeInfo[]>([])
+  const [entityTypes, setEntityTypes] = useState<ReferenceType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const lastViewJSON = useRef('')

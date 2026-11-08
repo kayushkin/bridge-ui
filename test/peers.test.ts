@@ -180,7 +180,7 @@ describe('peerConnectionBridgeConfig', () => {
     basePath: '/api/bridge',
     kanbanStoreBasePath: '/api/kanban',
     noteboardBasePath: '/api/noteboard',
-    resolveEndpoint: '/api/resolve',
+    referenceStoreBasePath: '/api/bridge/reference-store',
     photoStoreBasePath: '/api/photos',
     renderHarnessExtension: () => null,
     routes: DEFAULT_BRIDGE_ROUTES,
@@ -190,7 +190,7 @@ describe('peerConnectionBridgeConfig', () => {
     const peer = peerConnectionBridgeConfig(local, 'peer_connection_000001')
     expect(peer.basePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy')
     expect(peer.noteboardBasePath).toBe('')
-    expect(peer.resolveEndpoint).toBe('')
+    expect(peer.referenceStoreBasePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy/reference-store')
     expect(peer.photoStoreBasePath).toBe('')
     expect(peer.renderHarnessExtension).toBeNull()
   })

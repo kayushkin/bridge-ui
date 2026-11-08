@@ -93,7 +93,7 @@ export {
 export type { ResourceOption, DispatchInstanceChoice, DispatchInstanceChoices } from './grantResources'
 export { fetchSessionRunsOn, useSessionRunsOn } from './sessionRunsOn'
 export type { SessionRunsOn } from './sessionRunsOn'
-export type { Board, Column, Placement, CardLink, CardAssignment, EntityTag, CardView, ColumnView, BoardView, EntityTypeInfo, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline, Ticket, TicketView, TicketList, TicketLogEntry, EntityCardView } from '@kayushkin/kanban-store-types'
+export type { Board, Column, Placement, CardLink, CardAssignment, EntityTag, CardView, ColumnView, BoardView, TagCount, ClockState, BusinessHours, BoardPriorityLevel, PriorityLadder, CardEvent, CardNote, CardTimeSummary, TimelineEntry, CardTimeline, Ticket, TicketView, TicketList, TicketLogEntry, EntityCardView } from '@kayushkin/kanban-store-types'
 export type { Item as NoteboardItem } from '@kayushkin/noteboard-types'
 export { CardBudgetBadge, CardTimelinePanel, describeCardTime, hasClockData } from './components/CardTime'
 export { useStickyBottomScroll } from './useStickyBottomScroll'
