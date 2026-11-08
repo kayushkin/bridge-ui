@@ -68,12 +68,8 @@ export interface BridgeProviderProps {
   peopleStoreBasePath?: string
   journalStoreBasePath?: string
   photoStoreBasePath?: string
-  possessionStoreBasePath?: string
   messageStoreBasePath?: string
   messageAccountsBasePath?: string
-  peoplePagePath?: string
-  journalPagePath?: string
-  dayPagePath?: string
   /** Base path for usage-store API. If omitted, spend/limits sections of the
    * Usage tab are hidden and only per-session aggregates are shown. */
   usageStoreBasePath?: string
@@ -134,12 +130,8 @@ export function BridgeProvider({
   peopleStoreBasePath = '',
   journalStoreBasePath = '',
   photoStoreBasePath = '',
-  possessionStoreBasePath = '',
   messageStoreBasePath = '',
   messageAccountsBasePath = '',
-  peoplePagePath = '',
-  journalPagePath = '',
-  dayPagePath = '',
   noteboardBasePath = '',
   resolveEndpoint = '',
   referenceStoreBasePath = '',
@@ -183,12 +175,8 @@ export function BridgeProvider({
     peopleStoreBasePath,
     journalStoreBasePath,
     photoStoreBasePath,
-    possessionStoreBasePath,
     messageStoreBasePath,
     messageAccountsBasePath,
-    peoplePagePath,
-    journalPagePath,
-    dayPagePath,
     noteboardBasePath,
     resolveEndpoint,
     referenceStoreBasePath,
@@ -210,7 +198,7 @@ export function BridgeProvider({
     renderHarnessExtension: renderHarnessExtension ?? null,
     renderReferenceChip: renderReferenceChip ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, possessionStoreBasePath, messageStoreBasePath, messageAccountsBasePath, peoplePagePath, journalPagePath, dayPagePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, discordSignupBasePath, shortNameStoreBasePath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, messageStoreBasePath, messageAccountsBasePath, noteboardBasePath, resolveEndpoint, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
 
   return (
     <BridgeContext value={config}>

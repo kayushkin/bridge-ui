@@ -302,14 +302,6 @@ export interface BridgeConfig {
    * thumbnail from `{base}/photos/{id}/thumbnail`. Empty means the host does
    * not carry it, and a photo chip shows no picture. */
   photoStoreBasePath: string
-  /** Base path for possession-store as the host proxies it (dash:
-   *  "/api/possessions"): the things the operator owns, `possession_000001`
-   *  and the ids it mints beside it. A possession, sighting or question chip
-   *  draws its cut-out picture from `{base}/{route}/{id}/image`, and a
-   *  question chip answers through `{base}/owner-questions/{id}/answer`.
-   *  Empty means the host does not carry it: no pictures, and a question
-   *  chip offers no answer. */
-  possessionStoreBasePath: string
   /** Base path for message-store as the host proxies it (dash:
    * "/api/message-store"): every chat message the operator sent or received,
    * kept apart from the chat apps. A person's page on Conversations shows
@@ -321,18 +313,6 @@ export interface BridgeConfig {
    * `/{account}/conversations/{conversation}/messages`). A bot's view on
    * Conversations draws a composer only when it is set. */
   messageAccountsBasePath: string
-  /** Path to the HOST's own people page (dash: "/people"), which a person chip
-   * opens as `{path}?id=person_000001`. A plain path for the same reason as
-   * `mailPagePath`. Empty hides the chip's "Open person" link. */
-  peoplePagePath: string
-  /** Path to the HOST's own journal page (dash: "/journal"), which an entry
-   * chip opens as `{path}?id=entry_000001`. Empty hides the chip's "Open
-   * entry" link. */
-  journalPagePath: string
-  /** Path to the HOST's own day page (dash: "/day"), which a message-store
-   * chip (`conversation_…`, `chat_message_…`, `conversation_day_…`) opens as
-   * `{path}/YYYY-MM-DD?conversation=<id>#<focused id>`. Empty hides the link. */
-  dayPagePath: string
   /** Optional render hook called per harness in the Settings tab. Hosts can
    * use this to inject harness-specific configuration UI keyed on harness
    * name. Return null for harnesses without an extension. */

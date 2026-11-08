@@ -181,7 +181,7 @@ describe('peerConnectionBridgeConfig', () => {
     kanbanStoreBasePath: '/api/kanban',
     noteboardBasePath: '/api/noteboard',
     resolveEndpoint: '/api/resolve',
-    journalPagePath: '/journal',
+    photoStoreBasePath: '/api/photos',
     renderHarnessExtension: () => null,
     routes: DEFAULT_BRIDGE_ROUTES,
   } as unknown as BridgeConfig
@@ -191,7 +191,7 @@ describe('peerConnectionBridgeConfig', () => {
     expect(peer.basePath).toBe('/api/bridge/peer-connections/peer_connection_000001/proxy')
     expect(peer.noteboardBasePath).toBe('')
     expect(peer.resolveEndpoint).toBe('')
-    expect(peer.journalPagePath).toBe('')
+    expect(peer.photoStoreBasePath).toBe('')
     expect(peer.renderHarnessExtension).toBeNull()
   })
 
