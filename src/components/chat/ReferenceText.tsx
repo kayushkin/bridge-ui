@@ -4,7 +4,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useNavigate } from 'react-router-dom'
 import { parseRefChips, remarkRefChips, useResolvableIdPatterns } from '@kayushkin/chat-core'
+import type { RefSegment } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
+import { splitReferenceLinks } from '../../referenceChips'
 import type { RefChipProps } from './RefChip'
 import { defaultUrlTransform } from 'react-markdown'
 import { useBridgeConfig } from '../../context'
@@ -181,7 +183,15 @@ export function ReferenceMarkdown({ text, className, components: pageComponents 
 export function TextWithReferenceChips({ text }: { text: string }): JSX.Element {
   const onOpenSession = useOpenReferencedSession()
   const resolvableIdPatterns = useResolvableIdPatterns()
-  const segments = useMemo(() => parseRefChips(text, { resolvableIdPatterns }), [text, resolvableIdPatterns])
+  const segments = useMemo(
+    () =>
+      splitReferenceLinks(text).flatMap((piece): RefSegment[] =>
+        typeof piece === 'string'
+          ? parseRefChips(piece, { resolvableIdPatterns })
+          : [{ type: 'chip', kind: 'registered', refId: piece.refId }],
+      ),
+    [text, resolvableIdPatterns],
+  )
   return (
     <>
       {segments.map((segment, i) =>

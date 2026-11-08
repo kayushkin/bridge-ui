@@ -114,3 +114,22 @@ export function referenceRecordFields(data: unknown): Array<{ field: string; tex
   }
   return fields
 }
+
+// A markdown link to `ref:<id>`, the journal's mention form, in text that is
+// not read as markdown: a note a model wrote, a photo's description.
+const REFERENCE_LINK = /\[[^\]\n]*\]\(ref:([^)\s]+)\)/g
+
+/** `text` cut at each `[label](ref:<id>)`: the text between, and each link's
+ *  id. The label is dropped, as `ReferenceMarkdown` drops it: the chip names
+ *  the record. */
+export function splitReferenceLinks(text: string): Array<string | { refId: string }> {
+  const pieces: Array<string | { refId: string }> = []
+  let last = 0
+  for (const found of text.matchAll(REFERENCE_LINK)) {
+    if (found.index > last) pieces.push(text.slice(last, found.index))
+    pieces.push({ refId: found[1] ?? '' })
+    last = found.index + found[0].length
+  }
+  if (last < text.length) pieces.push(text.slice(last))
+  return pieces
+}

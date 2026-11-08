@@ -8,6 +8,7 @@ import {
   referenceRecordFields,
   referenceSummaryRows,
   referenceValueText,
+  splitReferenceLinks,
 } from '../src/referenceChips'
 
 const prediction: ReferenceType = {
@@ -78,5 +79,22 @@ describe('referenceRecordFields', () => {
       { field: 'count', text: '2' },
       { field: 'ok', text: 'true' },
     ])
+  })
+})
+
+describe('splitReferenceLinks', () => {
+  it('cuts text at each [label](ref:<id>) and keeps the id', () => {
+    expect(splitReferenceLinks('in [a face group](ref:face_group_000054), twice')).toEqual([
+      'in ',
+      { refId: 'face_group_000054' },
+      ', twice',
+    ])
+  })
+
+  it('leaves other links and text alone', () => {
+    expect(splitReferenceLinks('[site](https://example.com) and photo_000001')).toEqual([
+      '[site](https://example.com) and photo_000001',
+    ])
+    expect(splitReferenceLinks('')).toEqual([])
   })
 })
