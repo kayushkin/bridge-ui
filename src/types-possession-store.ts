@@ -42,6 +42,11 @@ export interface Possession {
   acquired_at: number
   acquired_how: string
   purchase_line_id: string | null
+  /** The product it is (`product_…`), and that product's listing read with it. */
+  product_id?: string | null
+  product?: PossessionProduct | null
+  /** The budget-store transaction that paid for it (`transaction_…`). */
+  budget_transaction_id?: string | null
   price_cents: number | null
   price_currency: string
   disposed_at: number
@@ -168,6 +173,10 @@ export interface Resolution {
   proposal?: Proposal
   possession_id?: string
   sighting_id?: string
+  /** order_line_link and order_line_not_this: the budget-store order line,
+   *  and the transaction its order was paid by when asked. */
+  marketplace_order_line_id?: string
+  budget_transaction_id?: string
   explanation?: string
 }
 
@@ -192,4 +201,34 @@ export interface OwnerQuestion {
   answered_by: string
   asked_at: number
   answered_at: number
+}
+
+/** A product as a possession read carries it. */
+export interface PossessionProduct {
+  id: string
+  brand: string
+  model_number: string
+  name: string
+  listing_url: string
+  /** manufacturer, retailer, marketplace or review */
+  listing_source: string
+  listing_publisher: string
+  /** article-store's copy of the listing page */
+  article_id: string
+  description: string
+  list_price_cents: number | null
+  list_price_currency: string
+}
+
+/** A product (`product_…`): a make and model as its listing describes it. */
+export interface Product extends PossessionProduct {
+  found_by: string
+  specs: { name: string; value: string }[]
+  extracted_by: string
+  extraction_cost_usd: number
+  created_by: string
+  created_at: number
+  updated_at: number
+  deleted_at: number
+  possession_ids: string[]
 }

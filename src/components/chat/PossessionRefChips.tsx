@@ -18,6 +18,7 @@ import {
   possessionLinkedIds,
   possessionMakeLabel,
   possessionStoreImageUrl,
+  productListingLabel,
   purchaseChipLabel,
   questionChipLabel,
   resolutionSummary,
@@ -27,6 +28,8 @@ import type {
   Outfit,
   PhotoReview,
   Possession,
+  PossessionProduct,
+  Product,
   Purchase,
   Sighting,
 } from '../../types-possession-store';
@@ -55,6 +58,8 @@ export function PossessionStoreRefChip({
       return <SightingRefChip refId={refId} sighting={match.data as Sighting} className={className} />;
     case 'possession_question':
       return <QuestionRefChip refId={refId} initial={match.data as OwnerQuestion} className={className} />;
+    case 'product':
+      return <ProductRefChip refId={refId} product={match.data as Product} className={className} />;
   }
   if (isPossessionView(match.data)) {
     return <PossessionRefChip refId={refId} possession={match.data} className={className} />;
@@ -205,6 +210,8 @@ function PossessionRefChip({
       {possession.serial_number && <RefRow label="Serial" value={possession.serial_number} />}
       {possession.spot && <RefRow label="Kept" value={possession.spot} />}
       {possession.place_id && <IdRow label="Place" ids={[possession.place_id]} />}
+      {possession.product && <ProductListing product={possession.product} />}
+      {possession.budget_transaction_id && <IdRow label="Paid by" ids={[possession.budget_transaction_id]} />}
       {price && <RefRow label="Price" value={price} />}
       <RefRow label="Status" value={possession.status} />
       {possession.condition && <RefRow label="Condition" value={possession.condition} />}
@@ -220,6 +227,58 @@ function PossessionRefChip({
         <IdRow key={linked.label} label={linked.label} ids={linked.ids} />
       ))}
       {possession.description && <div className="ref-chip-panel-body">{possession.description}</div>}
+    </PossessionChip>
+  );
+}
+
+/** A product's listing: its name, a link to the page with who publishes it,
+ *  and the listing's own description. */
+function ProductListing({ product }: { product: PossessionProduct }): JSX.Element {
+  const listPrice = moneyLabel(product.list_price_cents, product.list_price_currency);
+  return (
+    <div className="ref-chip-panel-section" data-product={product.id}>
+      <div className="ref-chip-panel-row">
+        <span className="ref-chip-panel-label">Product</span>
+        <span className="ref-chip-panel-value">
+          <RefChip kind="uuid" refId={product.id} />
+        </span>
+      </div>
+      <div className="ref-chip-panel-row">
+        <span className="ref-chip-panel-label">Listing</span>
+        <span className="ref-chip-panel-value">
+          <a href={product.listing_url} target="_blank" rel="noopener noreferrer">
+            {productListingLabel(product)}
+          </a>
+        </span>
+      </div>
+      {listPrice && <RefRow label="List price" value={listPrice} />}
+      {product.description && <div className="ref-chip-panel-body">{product.description}</div>}
+    </div>
+  );
+}
+
+function ProductRefChip({ refId, product, className }: { refId: string; product: Product; className?: string }): JSX.Element {
+  const label = [product.brand, product.model_number].filter((part) => part !== '').join(' ') || product.name;
+  return (
+    <PossessionChip
+      refId={refId}
+      refKind="product"
+      label={label}
+      glyph="🏷"
+      image=""
+      badge={product.deleted_at !== 0 ? 'deleted' : undefined}
+      className={className}
+      panelLabel="Product details"
+    >
+      <div className="ref-chip-panel-title">{product.name}</div>
+      <RefRow label="Id" value={refId} />
+      <ProductListing product={product} />
+      {product.specs.map((spec) => (
+        <RefRow key={spec.name} label={spec.name} value={spec.value} />
+      ))}
+      <IdRow label="Page saved" ids={product.article_id ? [product.article_id] : []} />
+      <IdRow label="Owned" ids={product.possession_ids} />
+      {product.found_by && <div className="ref-chip-panel-body">{product.found_by}</div>}
     </PossessionChip>
   );
 }

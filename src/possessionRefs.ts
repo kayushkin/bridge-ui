@@ -6,7 +6,7 @@
 // `possessionStoreBasePath` (dash: /api/possessions).
 
 import type { FetchFn } from './types'
-import type { OwnerQuestion, Possession, Purchase, Resolution } from './types-possession-store'
+import type { OwnerQuestion, Possession, PossessionProduct, Purchase, Resolution } from './types-possession-store'
 
 /** The cut-out picture of a possession, a sighting or a question's sighting,
  *  through the host, or '' when the host does not carry possession-store.
@@ -142,9 +142,28 @@ export function resolutionSummary(resolution: Resolution): { text: string; id: s
       return { text: 'Left as recorded', id: '' }
     case 'amend':
       return { text: 'Amended the possession', id: '' }
+    case 'order_line_link':
+      return { text: 'Came from the order', id: resolution.budget_transaction_id || resolution.marketplace_order_line_id || '' }
+    case 'order_line_not_this':
+      return { text: 'Not from that order', id: resolution.marketplace_order_line_id ?? '' }
+    case 'withdrawn':
+      return { text: 'Withdrawn', id: '' }
     default:
       return { text: resolution.action, id: '' }
   }
+}
+
+/** The link text for a product's listing: whose page it is, and what kind
+ *  of source, when it is not the maker's own. */
+export function productListingLabel(product: Pick<PossessionProduct, 'listing_url' | 'listing_source' | 'listing_publisher'>): string {
+  let host = product.listing_url
+  try {
+    host = new URL(product.listing_url).host
+  } catch {
+    // Not a URL the browser parses: show it as stored.
+  }
+  const who = product.listing_publisher || host
+  return product.listing_source === 'manufacturer' ? `${who} (official)` : `${who} (${product.listing_source})`
 }
 
 /** A purchase's name on a chip: who sold it and the order, or the seller. */

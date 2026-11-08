@@ -15,6 +15,8 @@ import type { Photo } from '@kayushkin/photo-store-types';
 import { photoChipLabel, photoDateSourceLabel, photoMapUrl, photoThumbnailUrl } from '../../photoRefs';
 import type { Place, Trip, Visit } from '@kayushkin/location-store-types';
 import { PossessionStoreRefChip } from './PossessionRefChips';
+import { BudgetTransactionRefChip, MarketplaceOrderRefChip } from './BudgetRefChips';
+import type { BudgetTransaction, MarketplaceOrder } from '../../types-budget-store';
 import { GenericReferenceChip, RefusedReferenceChip } from './GenericReferenceChip';
 import {
   distanceLabel,
@@ -1107,6 +1109,12 @@ function UnclassifiedRefChip({
     }
     if (match.service === 'possession-store') {
       return <PossessionStoreRefChip refId={refId} match={match} className={className} />;
+    }
+    if (match.type === 'budget_transaction') {
+      return <BudgetTransactionRefChip refId={refId} transaction={match.data as BudgetTransaction} className={className} />;
+    }
+    if (match.type === 'budget_marketplace_order') {
+      return <MarketplaceOrderRefChip refId={refId} order={match.data as MarketplaceOrder} className={className} />;
     }
     if (match.type === 'place') {
       return <PlaceRefChip refId={refId} place={match.data as Place} className={className} />;

@@ -5419,6 +5419,14 @@
 }
 
 /* A cited message's text, in a message chip's panel. */
+/* A record inside a chip's panel: a product's listing, an order a
+   transaction paid for. */
+.ref-chip-panel-section {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+}
+
 .ref-chip-panel-body {
   margin: 6px 0 2px;
   max-height: 12rem;
