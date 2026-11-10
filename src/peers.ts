@@ -344,8 +344,6 @@ export const CONNECTED_SERVER_PATH_SOURCES: Readonly<Record<BridgeConfigPathFiel
   usageStoreBasePath: 'not-there',
   multichatBasePath: 'not-there',
   libraryInvitationsPath: 'not-there',
-  discordSignupBasePath: 'not-there',
-  shortNameStoreBasePath: 'not-there',
   schedulerBasePath: 'not-there',
   logStoreBasePath: 'not-there',
   jobStoreBasePath: 'not-there',

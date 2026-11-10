@@ -29,13 +29,18 @@ describe('labels', () => {
 })
 
 describe('the Auto-reactions page', () => {
-  it('shows when the host proxies multichat, with or without discord-signup-store', () => {
+  it('shows when the host proxies multichat', () => {
     const page = BRIDGE_PAGES.find(p => p.route === 'autoReactions')
     expect(page?.group).toBe('messages')
     const available = (c: Partial<BridgeConfig>) => page?.available?.(c as BridgeConfig, {} as never)
-    expect(available({ discordSignupBasePath: '', multichatBasePath: '/api/multichat' })).toBe(true)
-    expect(available({ discordSignupBasePath: '/api/discord-signup', multichatBasePath: '' })).toBe(false)
-    expect(available({ discordSignupBasePath: '/api/discord-signup', multichatBasePath: '/api/multichat' })).toBe(true)
+    expect(available({ multichatBasePath: '/api/multichat' })).toBe(true)
+    expect(available({ multichatBasePath: '' })).toBe(false)
+  })
+
+  it("reaches the bot's rules through multichat, on the routes the host must forward", async () => {
+    const { MULTICHAT_ROUTES_CALLED } = await import('../src/multichatMessages')
+    expect(MULTICHAT_ROUTES_CALLED).toContain('GET /discord-signup-store/auto-reactions')
+    expect(MULTICHAT_ROUTES_CALLED).toContain('GET /discord-signup-store/guilds/{guildID}/members/search')
   })
 })
 

@@ -3,7 +3,8 @@
 // (`AccountAutoReaction`, its "/auto-reactions" at `multichatBasePath`) and
 // reacts through the bridge, so people see the operator react. From the
 // Event-Manager Discord bot: discord-signup-store owns those (its
-// CONTRACT.md, "/api/auto-reactions", proxied at `discordSignupBasePath`).
+// CONTRACT.md, "/api/auto-reactions"), reached through multichat at
+// `multichatBasePath` + `DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT`.
 // No React here, so the bodies are pinned by tests without a DOM.
 
 import type { AutoReaction as AccountAutoReaction } from '@kayushkin/multichat-types'
@@ -51,8 +52,13 @@ export interface CreateAutoReactionBody {
   enabled: boolean
 }
 
-/** Every route the page calls, relative to `discordSignupBasePath`; dash's
- *  `discordSignupProxiedRoutes` must carry each. */
+/** Where multichat carries discord-signup-store's routes for the bot's
+ *  rules, under the host's multichat base path (multichat's
+ *  internal/api/discord_signup_store.go). */
+export const DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT = '/discord-signup-store'
+
+/** Every discord-signup-store route the page calls, relative to
+ *  `DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT`; multichat carries each. */
 export const AUTO_REACTION_ROUTES_CALLED = [
   'GET /auto-reactions',
   'POST /auto-reactions',

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useBridgeConfig } from '../../context'
 import {
-  accountAutoReactionPlaceLabel, accountReactionKeyOf, autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath,
+  DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT, accountAutoReactionPlaceLabel, accountReactionKeyOf, autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath,
   type AccountAutoReaction, type AutoReaction, type CreateAccountAutoReactionBody, type CreateAutoReactionBody,
   type DiscordSignupGuild, type DiscordSignupMember,
 } from '../../autoReactions'
@@ -12,19 +12,19 @@ import { MultichatNotConfigured } from './messagesShared'
 import { useMultichat } from './useMultichat'
 import styles from './Messages.module.css'
 
-/** Requests to discord-signup-store through the host's proxy. They throw the
+/** Requests to discord-signup-store through multichat. They throw the
  *  store's refusal in its own words, so the page can show it. */
 function useDiscordSignup() {
-  const { fetch: apiFetch, discordSignupBasePath } = useBridgeConfig()
+  const { fetch: apiFetch, multichatBasePath } = useBridgeConfig()
   return useCallback(async <T,>(method: string, path: string, body?: unknown): Promise<T> => {
-    const res = await apiFetch(`${discordSignupBasePath}${path}`, {
+    const res = await apiFetch(`${multichatBasePath}${DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT}${path}`, {
       method,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
     if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${(await res.text()).trim()}`)
     return (res.status === 204 ? undefined : await res.json()) as T
-  }, [apiFetch, discordSignupBasePath])
+  }, [apiFetch, multichatBasePath])
 }
 
 /** The same over multichat's proxy, for the account rules. */
@@ -352,11 +352,10 @@ function BotAutoReactions() {
 /**
  * Auto-reactions: an emoji on every message one person sends. Rules that react
  * from the operator's own account live in multichat; rules for the
- * Event-Manager Discord bot live in discord-signup-store, and show only when
- * the host proxies it.
+ * Event-Manager Discord bot live in discord-signup-store, reached through
+ * multichat.
  */
 export function BridgeAutoReactions() {
-  const { discordSignupBasePath } = useBridgeConfig()
   const { configured } = useMultichat()
   if (!configured) return <MultichatNotConfigured page="Auto-reactions" />
   return (
@@ -366,7 +365,7 @@ export function BridgeAutoReactions() {
         <span className={styles.muted}>An emoji on every message one person sends.</span>
       </header>
       <AccountAutoReactions />
-      {discordSignupBasePath && <BotAutoReactions />}
+      <BotAutoReactions />
     </div>
   )
 }

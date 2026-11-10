@@ -38,10 +38,10 @@ import { filesFromPaste } from '../../sessionFileAttachments'
 import styles from './Messages.module.css'
 import {
   conversationAddress, messagesAddressOf, MESSAGES_SHORT_NAME_NAMESPACE, MULTICHAT_ROOM_ENTITY_TYPE, roomShortNames,
-  shortNameRenameBodyOf, type RoomShortName,
+  type RoomShortName,
 } from '../../messageShortNames'
 import type { ShortName } from '../../types-short-name-store'
-import { useShortNameStore } from './useShortNameStore'
+import { useRoomShortNames } from './useRoomShortNames'
 import { ConversationPerson, useUnifiedContacts } from './PersonLinks'
 import type { Account, Conversation as StoreConversation, MessagePage as StoreMessagePage } from '@kayushkin/message-store-types'
 import { BridgeMessageAccountView, MessageAccountPicker, useMessageStoreAccounts } from './BridgeMessageAccountView'
@@ -143,8 +143,8 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
   const navigate = useNavigate()
   const { search } = useLocation()
   const { routes } = useBridgeConfig()
-  const shortNameStore = useShortNameStore()
-  const { listRoomNames, resolve: resolveShortName } = shortNameStore
+  const roomShortNameRoutes = useRoomShortNames()
+  const { listRoomNames, resolve: resolveShortName } = roomShortNameRoutes
   const { contacts, error: contactsError } = useUnifiedContacts()
   const roomParameter = searchParams.get('room') ?? ''
   const splat = useParams()['*'] ?? ''
@@ -251,8 +251,8 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
   }, [listRoomNames])
 
   useEffect(() => {
-    if (configured && shortNameStore.configured) void reloadShortNames()
-  }, [configured, shortNameStore.configured, reloadShortNames])
+    if (configured && roomShortNameRoutes.configured) void reloadShortNames()
+  }, [configured, roomShortNameRoutes.configured, reloadShortNames])
 
   const roomNames = useMemo(() => roomShortNames(shortNames ?? [], links), [shortNames, links])
   /** Current path → the room that holds it, from the list already loaded. */
@@ -267,7 +267,7 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
   // loaded, or not a name at all — is asked of the store. A superseded name
   // is replaced in the URL by the room's current one.
   useEffect(() => {
-    if (!addressedPath || roomParameter || pathKnown || !shortNameStore.configured) return
+    if (!addressedPath || roomParameter || pathKnown || !roomShortNameRoutes.configured) return
     let canceled = false
     setLookup({ path: addressedPath, state: 'loading' })
     resolveShortName(addressedPath).then(answer => {
@@ -285,7 +285,7 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
       setLookup({ path: addressedPath, state: 'found', roomID: current.entity_id })
     }).catch(err => { if (!canceled) setLookup({ path: addressedPath, state: 'error', error: errorText(err) }) })
     return () => { canceled = true }
-  }, [addressedPath, roomParameter, pathKnown, shortNameStore.configured, resolveShortName, navigate, routes.messageConversations, search])
+  }, [addressedPath, roomParameter, pathKnown, roomShortNameRoutes.configured, resolveShortName, navigate, routes.messageConversations, search])
 
   const currentLookup = lookup && lookup.path === addressedPath && !pathKnown && !roomParameter ? lookup : null
   const roomID = roomParameter || roomOfOwnPath.get(addressedPath) || (currentLookup?.state === 'found' ? currentLookup.roomID : '')
@@ -436,12 +436,12 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
   const addressNotice = (() => {
     if (address.kind === 'too-long') return `No chat is called ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path}: a short name has at most three parts.`
     if (address.kind !== 'path' || roomID) return null
-    if (!shortNameStore.configured) return `This host does not carry short-name-store, so ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path} cannot be looked up.`
+    if (!roomShortNameRoutes.configured) return `This host does not carry multichat, so ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path} cannot be looked up.`
     if (currentLookup?.state === 'missing') return `No chat is called ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path}.`
     if (currentLookup?.state === 'error') return `Could not look up ${MESSAGES_SHORT_NAME_NAMESPACE}/${address.path}: ${currentLookup.error}`
     return null
   })()
-  const lookingUp = address.kind === 'path' && !roomID && (!currentLookup || currentLookup.state === 'loading') && shortNameStore.configured
+  const lookingUp = address.kind === 'path' && !roomID && (!currentLookup || currentLookup.state === 'loading') && roomShortNameRoutes.configured
 
   if (!configured) return <MultichatNotConfigured page="Conversations" />
 
@@ -547,7 +547,7 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
                 storedBehind={storedBehind}
                 openSendRoom={openPickedHistory}
                 onSent={sentRoomID => { void afterSend(sentRoomID) }}
-                shortName={shortNameStore.configured
+                shortName={roomShortNameRoutes.configured
                   ? <ConversationShortName key={picked.room_id} roomID={picked.room_id} shown={roomNames.get(picked.room_id) ?? null} onRenamed={() => renamed(picked.room_id)} />
                   : null}
                 tagEditor={merged || pickedHistory ? null : (
@@ -609,17 +609,15 @@ function ConversationShortName({ roomID, shown, onRenamed }: {
   shown: RoomShortName | null
   onRenamed: () => Promise<void>
 }) {
-  const { create } = useShortNameStore()
+  const { rename } = useRoomShortNames()
   const [editing, setEditing] = useState(false)
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const borrowed = shown !== null && shown.namedRoomID !== roomID
   const save = async () => {
-    const result = shortNameRenameBodyOf(roomID, typed)
-    if (!result.ok) { setError(result.error); return }
     setBusy(true)
-    const written = await create(result.body)
+    const written = await rename(roomID, typed)
     setBusy(false)
     if (!written.ok) { setError(written.error); return }
     setError(null)

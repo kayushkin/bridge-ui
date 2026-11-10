@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationLink } from '@kayushkin/multichat-types'
 import {
-  conversationAddress, messagesAddressOf, roomShortNames, shortNameRenameBodyOf, shortNameResolvePath, shortNamesPageIsLast,
-  shortNamesPagePath, shortNameStoreRefusal, SHORT_NAME_PAGE_SIZE,
+  conversationAddress, messagesAddressOf, roomShortNamePath, roomShortNames, ROOM_SHORT_NAME_ROUTES_CALLED, shortNameRefusal, shortNameResolvePath,
 } from '../src/messageShortNames'
 import type { ShortName } from '../src/types-short-name-store'
 
@@ -29,14 +28,11 @@ describe('messagesAddressOf', () => {
 
 describe('the requests', () => {
   it('lists current room names in namespace messages a full page at a time', () => {
-    expect(shortNamesPagePath(0)).toBe('/short-names?namespace=messages&entity_type=multichat_room&limit=1000&offset=0')
-    expect(shortNamesPagePath(2000)).toContain('offset=2000')
-    expect(shortNamesPageIsLast(new Array(SHORT_NAME_PAGE_SIZE).fill(name('!a', 'a')))).toBe(false)
-    expect(shortNamesPageIsLast([])).toBe(true)
+    expect(roomShortNamePath('!kat:x')).toBe('/conversations/!kat%3Ax/short-name')
   })
 
   it('escapes the slash of a nested path in the resolve query', () => {
-    expect(shortNameResolvePath('20s30s/general')).toBe('/short-names/resolve?namespace=messages&path=20s30s%2Fgeneral')
+    expect(shortNameResolvePath('20s30s/general')).toBe('/conversations/short-names/resolve?path=20s30s%2Fgeneral')
   })
 })
 
@@ -98,34 +94,19 @@ describe('conversationAddress', () => {
   })
 })
 
-describe('shortNameRenameBodyOf', () => {
-  it('posts the typed path for the room, leaving created_by to the host', () => {
-    const result = shortNameRenameBodyOf('!kat:x', '  kat-moreno ')
-    expect(result).toEqual({ ok: true, body: {
-      namespace: 'messages', path: 'kat-moreno', entity_type: 'multichat_room', entity_id: '!kat:x', reason: 'renamed by the operator in dash',
-    } })
-    expect(result.ok && 'created_by' in result.body).toBe(false)
-  })
-
-  it('takes the messages/ the header shows', () => {
-    const result = shortNameRenameBodyOf('!r', 'messages/20s30s/general')
-    expect(result.ok && result.body.path).toBe('20s30s/general')
-    const slashed = shortNameRenameBodyOf('!r', '/messages/kat')
-    expect(slashed.ok && slashed.body.path).toBe('kat')
-  })
-
-  it('refuses an empty name before asking the store', () => {
-    expect(shortNameRenameBodyOf('!r', '  ').ok).toBe(false)
-    expect(shortNameRenameBodyOf('!r', 'messages/').ok).toBe(false)
+describe('the name routes', () => {
+  it('are on the list the host proxy must forward', async () => {
+    const { MULTICHAT_ROUTES_CALLED } = await import('../src/multichatMessages')
+    for (const route of ROOM_SHORT_NAME_ROUTES_CALLED) expect(MULTICHAT_ROUTES_CALLED).toContain(route)
   })
 })
 
-describe('shortNameStoreRefusal', () => {
+describe('shortNameRefusal', () => {
   it('shows the store\'s error as it gave it', () => {
-    expect(shortNameStoreRefusal(409, '{"error":"messages/kat belongs to another record"}')).toBe('409: messages/kat belongs to another record')
+    expect(shortNameRefusal(409, '{"error":"messages/kat belongs to another record"}')).toBe('409: messages/kat belongs to another record')
   })
   it('shows a body that is not the store\'s shape whole', () => {
-    expect(shortNameStoreRefusal(502, 'short-name-store unavailable\n')).toBe('502: short-name-store unavailable')
-    expect(shortNameStoreRefusal(400, '{"message":"x"}')).toBe('400: {"message":"x"}')
+    expect(shortNameRefusal(502, 'short-name-store unavailable\n')).toBe('502: short-name-store unavailable')
+    expect(shortNameRefusal(400, '{"message":"x"}')).toBe('400: {"message":"x"}')
   })
 })

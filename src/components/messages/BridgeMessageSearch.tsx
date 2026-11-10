@@ -5,7 +5,7 @@ import { highlightSegments, messageTimeLabel, orderedSearchGroups, searchPath } 
 import type { MultichatSearchAnswer } from '../../types-multichat'
 import type { ConversationLink } from '@kayushkin/multichat-types'
 import { conversationAddress, roomShortNames, type RoomShortName } from '../../messageShortNames'
-import { useShortNameStore } from './useShortNameStore'
+import { useRoomShortNames } from './useRoomShortNames'
 import { errorText, useMultichat } from './useMultichat'
 import { MultichatNotConfigured } from './messagesShared'
 import styles from './Messages.module.css'
@@ -27,7 +27,7 @@ export function BridgeMessageSearch() {
   const [answerFor, setAnswerFor] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { listRoomNames, configured: shortNamesConfigured } = useShortNameStore()
+  const { listRoomNames, configured: shortNamesConfigured } = useRoomShortNames()
   const [roomNames, setRoomNames] = useState<ReadonlyMap<string, RoomShortName>>(new Map())
   const [roomNamesError, setRoomNamesError] = useState<string | null>(null)
 

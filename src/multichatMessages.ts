@@ -15,6 +15,8 @@ import type { ConversationLink, ConversationVisibilitySettings } from '@kayushki
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
 import { AWAITING_REPLY_ROUTES_CALLED } from './awaitingReply'
 import { MESSAGE_STORE_ROUTES_CALLED } from './messageAccounts'
+import { ROOM_SHORT_NAME_ROUTES_CALLED } from './messageShortNames'
+import { AUTO_REACTION_ROUTES_CALLED, DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT } from './autoReactions'
 
 /** How many messages one page asks for. multichat takes 1–200. */
 export const MESSAGE_PAGE_SIZE = 50
@@ -64,6 +66,10 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   ...AWAITING_REPLY_ROUTES_CALLED,
   // The bot accounts' conversations, a person's stored chats, and sending as a bot.
   ...MESSAGE_STORE_ROUTES_CALLED,
+  // The rooms' typeable names, and renaming one.
+  ...ROOM_SHORT_NAME_ROUTES_CALLED,
+  // The Event-Manager bot's own reaction rules, from discord-signup-store.
+  ...AUTO_REACTION_ROUTES_CALLED.map(route => route.replace(' /', ` ${DISCORD_SIGNUP_STORE_THROUGH_MULTICHAT}/`)),
 ]
 
 const roomSegment = (roomID: string) => encodeURIComponent(roomID)

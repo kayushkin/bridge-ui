@@ -99,8 +99,8 @@ export interface BridgeRoutes {
    *  Discord. Needs `multichatBasePath`. */
   emoji: string
   /** Auto-reactions: an emoji on every message one person sends, from the
-   *  operator's own account (multichat) and, when `discordSignupBasePath` is
-   *  set, from the Event-Manager Discord bot. Needs `multichatBasePath`. */
+   *  operator's own account and from the Event-Manager Discord bot, both
+   *  through multichat. Needs `multichatBasePath`. */
   autoReactions: string
 
   // Pages the HOST owns and this library does not provide. No sensible default
@@ -224,18 +224,6 @@ export interface BridgeConfig {
    *  expires_at, display_name}`). A one-to-one conversation then posts the link
    *  to the person. If empty, no Invite button is drawn. */
   libraryInvitationsPath: string
-  /** Base path for discord-signup-store's API as the host proxies it (dash:
-   * "/api/discord-signup", which forwards only the routes
-   * `AUTO_REACTION_ROUTES_CALLED` in `src/autoReactions.ts` lists). If empty,
-   * the Auto-reactions page shows only the rules from the operator's account. */
-  discordSignupBasePath: string
-  /** Base path for short-name-store as the host proxies it (dash:
-   * "/api/short-names", which forwards only the routes
-   * `SHORT_NAME_STORE_ROUTES_CALLED` in `src/messageShortNames.ts` lists, and
-   * sets who chose a name itself). The Conversations page reads namespace
-   * `messages` to address a chat as `/messages/kat` and renames one there. If
-   * empty, chats are addressed only as `?room=<room id>`. */
-  shortNameStoreBasePath: string
   /** Base paths the host proxies seven more services at, read only by the
    * service settings page, which asks `{base}/settings`. dash: scheduler
    * "/api/scheduler", log-store "/api/log-store", job-store "/api/jobs",
