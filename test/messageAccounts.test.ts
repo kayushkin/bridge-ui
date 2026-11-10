@@ -137,9 +137,17 @@ describe('threads, mentions, counts and sending', () => {
   })
 
   it('sends to the route under the account and conversation, and refuses an empty or too long draft', () => {
-    expect(accountSendPath('message_account_000002', 'conversation_000010')).toBe('/message_account_000002/conversations/conversation_000010/messages')
+    expect(accountSendPath('message_account_000002', 'conversation_000010')).toBe('/message-store/accounts/message_account_000002/conversations/conversation_000010/messages')
     expect(accountDraftProblem('   ')).not.toBeNull()
     expect(accountDraftProblem('a'.repeat(DISCORD_MESSAGE_LIMIT))).toBeNull()
     expect(accountDraftProblem('a'.repeat(DISCORD_MESSAGE_LIMIT + 1))).toContain(String(DISCORD_MESSAGE_LIMIT + 1))
+  })
+})
+
+describe('the routes the bot views call through multichat', () => {
+  it('are on the list the host proxy must forward', async () => {
+    const { MULTICHAT_ROUTES_CALLED } = await import('../src/multichatMessages')
+    const { MESSAGE_STORE_ROUTES_CALLED } = await import('../src/messageAccounts')
+    for (const route of MESSAGE_STORE_ROUTES_CALLED) expect(MULTICHAT_ROUTES_CALLED).toContain(route)
   })
 })

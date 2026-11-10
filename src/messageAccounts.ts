@@ -18,6 +18,20 @@ export const ACCOUNT_MESSAGES_PAGE_SIZE = 50
 
 export const ACCOUNTS_PATH = '/accounts'
 
+/** Where multichat carries message-store's records, under the host's
+ *  multichat base path (multichat's internal/api/message_store.go): the paths
+ *  below are message-store's own, read there unchanged. */
+export const MESSAGE_STORE_THROUGH_MULTICHAT = '/message-store'
+
+/** The multichat routes the bot views and a person's stored chats call, as
+ *  `METHOD path`, for the host's proxy allowlist. */
+export const MESSAGE_STORE_ROUTES_CALLED: readonly string[] = [
+  'GET /message-store/accounts',
+  'GET /message-store/conversations',
+  'GET /message-store/messages',
+  'POST /message-store/accounts/{account_id}/conversations/{conversation_id}/messages',
+]
+
 /** The conversations an account takes part in, newest activity first. */
 export function accountConversationsPath(accountID: string): string {
   const query = new URLSearchParams({ account: accountID, limit: String(ACCOUNT_CONVERSATIONS_LIMIT) })
@@ -162,10 +176,10 @@ export const DISCORD_MESSAGE_LIMIT = 2000
 /** How close to the limit the composer starts showing the count. */
 export const MESSAGE_LIMIT_WARNING_AT = 1800
 
-/** The host's route that sends as an account into one of its conversations
- *  (dash: server/api_message_account_send.go), under `messageAccountsBasePath`. */
+/** multichat's route that sends as a bot account into one of its
+ *  conversations, under the host's multichat base path. */
 export function accountSendPath(accountID: string, conversationID: string): string {
-  return `/${encodeURIComponent(accountID)}/conversations/${encodeURIComponent(conversationID)}/messages`
+  return `${MESSAGE_STORE_THROUGH_MULTICHAT}${ACCOUNTS_PATH}/${encodeURIComponent(accountID)}/conversations/${encodeURIComponent(conversationID)}/messages`
 }
 
 /** Why a draft cannot be sent as it is, or null when it can. */

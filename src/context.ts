@@ -297,16 +297,11 @@ export interface BridgeConfig {
    * not carry it, and a photo chip shows no picture. */
   photoStoreBasePath: string
   /** Base path for message-store as the host proxies it (dash:
-   * "/api/message-store"): every chat message the operator sent or received,
-   * kept apart from the chat apps. A person's page on Conversations shows
-   * their one-to-one chats it holds that no live room carries, read only.
-   * Empty means the host does not carry it, and those tabs are not drawn. */
+   * "/api/message-store"), read only by `/service-settings`. The Messages
+   * pages reach message-store's records through multichat instead
+   * (`multichatBasePath` + `/message-store`), so the host's front end calls
+   * multichat alone for messages. */
   messageStoreBasePath: string
-  /** Base path of the host's route that sends as one of the operator's
-   * accounts in message-store (dash: "/api/message-accounts", taking
-   * `/{account}/conversations/{conversation}/messages`). A bot's view on
-   * Conversations draws a composer only when it is set. */
-  messageAccountsBasePath: string
   /** Optional render hook called per harness in the Settings tab. Hosts can
    * use this to inject harness-specific configuration UI keyed on harness
    * name. Return null for harnesses without an extension. */

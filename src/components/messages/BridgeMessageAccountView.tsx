@@ -5,37 +5,37 @@ import { type DiscordNames } from '../../messageBody'
 import { messageTimeLabel } from '../../multichatMessages'
 import {
   ACCOUNTS_PATH, DISCORD_MESSAGE_LIMIT, MESSAGE_LIMIT_WARNING_AT, accountConversationKind, accountConversationMessagesPath, accountConversationName,
-  accountConversationsPath, accountDiscordNames, accountDraftProblem, accountSendPath, attachmentNamesOf, buttonChipOf, countLabel, embedHasContent,
+  MESSAGE_STORE_THROUGH_MULTICHAT, accountConversationsPath, accountDiscordNames, accountDraftProblem, accountSendPath, attachmentNamesOf, buttonChipOf, countLabel, embedHasContent,
   messageSentByAccount, pickableBotAccounts, safeWebAddress, storedMessageFormat, storedMessageIsEmpty,
 } from '../../messageAccounts'
 import { errorText } from './useMultichat'
 import { MessageContent } from './MessageContent'
 import styles from './Messages.module.css'
 
-/** One GET from message-store through the host's proxy; a refusal throws in the store's words. */
+/** One GET of message-store's records through multichat; a refusal throws in its words. */
 function useMessageStoreRead() {
-  const { fetch: hostFetch, messageStoreBasePath } = useBridgeConfig()
+  const { fetch: hostFetch, multichatBasePath } = useBridgeConfig()
   return useCallback(async <T,>(path: string): Promise<T> => {
-    const res = await hostFetch(`${messageStoreBasePath}${path}`)
+    const res = await hostFetch(`${multichatBasePath}${MESSAGE_STORE_THROUGH_MULTICHAT}${path}`)
     if (!res.ok) throw new Error(`message-store GET ${path} → ${res.status}: ${(await res.text()).trim()}`)
     return await res.json() as T
-  }, [hostFetch, messageStoreBasePath])
+  }, [hostFetch, multichatBasePath])
 }
 
-/** message-store's accounts, read once; `configured` is false on a host with no message-store. */
+/** message-store's accounts through multichat, read once; `configured` is false on a host with no multichat. */
 export function useMessageStoreAccounts(): { configured: boolean; accounts: Account[] | null; error: string | null } {
-  const { messageStoreBasePath } = useBridgeConfig()
+  const { multichatBasePath } = useBridgeConfig()
   const readMessageStore = useMessageStoreRead()
   const [answer, setAnswer] = useState<{ accounts: Account[] | null; error: string | null }>({ accounts: null, error: null })
   useEffect(() => {
-    if (!messageStoreBasePath) return
+    if (!multichatBasePath) return
     let canceled = false
     readMessageStore<Account[] | null>(ACCOUNTS_PATH)
       .then(accounts => { if (!canceled) setAnswer({ accounts: accounts ?? [], error: null }) })
       .catch(err => { if (!canceled) setAnswer({ accounts: null, error: errorText(err) }) })
     return () => { canceled = true }
-  }, [messageStoreBasePath, readMessageStore])
-  return { configured: !!messageStoreBasePath, ...answer }
+  }, [multichatBasePath, readMessageStore])
+  return { configured: !!multichatBasePath, ...answer }
 }
 
 /** "Me" and one entry per bot account; the picked one is pressed. */
@@ -159,7 +159,6 @@ function AccountConversationThread({ account, conversation, conversations }: {
   conversations: readonly Conversation[]
 }) {
   const readMessageStore = useMessageStoreRead()
-  const { messageAccountsBasePath } = useBridgeConfig()
   const discordNames = useMemo(() => accountDiscordNames(conversation, conversations), [conversation, conversations])
   /** Loaded messages, oldest first. */
   const [messages, setMessages] = useState<Message[] | null>(null)
@@ -220,7 +219,7 @@ function AccountConversationThread({ account, conversation, conversations }: {
       <div className={styles.threadBar}>
         <span className={styles.name} title={`${name}\n${conversation.id}`}>{name}</span>
         <span className={styles.platform}>{accountConversationKind(conversation)}</span>
-        <span className={styles.muted}>{countLabel(conversation.message_count, 'message', 'messages')}{messageAccountsBasePath ? '' : ' · read only'}</span>
+        <span className={styles.muted}>{countLabel(conversation.message_count, 'message', 'messages')}</span>
       </div>
       {error && <pre className={styles.error}>{error}</pre>}
       <div className={styles.messages} ref={scroller}>
@@ -235,16 +234,16 @@ function AccountConversationThread({ account, conversation, conversations }: {
           ))
         )}
       </div>
-      {messageAccountsBasePath && <AccountComposer account={account} conversation={conversation} onSent={appendSent} />}
+      <AccountComposer account={account} conversation={conversation} onSent={appendSent} />
     </div>
   )
 }
 
-/** Sends as the account into the open conversation through the host's route.
+/** Sends as the account into the open conversation through multichat.
  *  A refusal shows in the route's words and the draft stays; a send adds the
  *  stored row to the thread. */
 function AccountComposer({ account, conversation, onSent }: { account: Account; conversation: Conversation; onSent: (message: Message) => void }) {
-  const { fetch: hostFetch, messageAccountsBasePath } = useBridgeConfig()
+  const { fetch: hostFetch, multichatBasePath } = useBridgeConfig()
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -255,7 +254,7 @@ function AccountComposer({ account, conversation, onSent }: { account: Account; 
     setSending(true)
     setError(null)
     try {
-      const res = await hostFetch(`${messageAccountsBasePath}${accountSendPath(account.id, conversation.id)}`, {
+      const res = await hostFetch(`${multichatBasePath}${accountSendPath(account.id, conversation.id)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: draft }),
       })
       const text = await res.text()

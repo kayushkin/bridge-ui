@@ -46,7 +46,7 @@ import { ConversationPerson, useUnifiedContacts } from './PersonLinks'
 import type { Account, Conversation as StoreConversation, MessagePage as StoreMessagePage } from '@kayushkin/message-store-types'
 import { BridgeMessageAccountView, MessageAccountPicker, useMessageStoreAccounts } from './BridgeMessageAccountView'
 import {
-  ACCOUNT_CONVERSATION_PARAMETER, ACCOUNT_PARAMETER, accountConversationParameters, accountPickParameters, pickableBotAccounts, pickedBotAccount,
+  ACCOUNT_CONVERSATION_PARAMETER, ACCOUNT_PARAMETER, MESSAGE_STORE_THROUGH_MULTICHAT, accountConversationParameters, accountPickParameters, pickableBotAccounts, pickedBotAccount,
 } from '../../messageAccounts'
 
 /** A thread with no stored chats beside its rooms. */
@@ -574,15 +574,15 @@ function OwnConversations({ accountPicker, messageStoreAccounts, messageStoreAcc
   )
 }
 
-/** One person's chats in message-store, read when their page opens. Empty
- *  when the host carries no message-store or the row has no person id. */
+/** One person's chats in message-store, read through multichat when their
+ *  page opens. Empty when the row has no person id. */
 function usePersonStoredChats(personID: string): { conversations: StoreConversation[] | null; error: string | null } {
-  const { fetch: hostFetch, messageStoreBasePath } = useBridgeConfig()
+  const { fetch: hostFetch, multichatBasePath } = useBridgeConfig()
   const [answer, setAnswer] = useState<{ personID: string; conversations: StoreConversation[] | null; error: string | null }>({ personID: '', conversations: null, error: null })
   useEffect(() => {
-    if (!personID || !messageStoreBasePath) return
+    if (!personID || !multichatBasePath) return
     let canceled = false
-    hostFetch(`${messageStoreBasePath}${personHistoryConversationsPath(personID)}`)
+    hostFetch(`${multichatBasePath}${MESSAGE_STORE_THROUGH_MULTICHAT}${personHistoryConversationsPath(personID)}`)
       .then(async res => {
         if (!res.ok) throw new Error(`message-store: ${res.status} ${(await res.text()).trim()}`)
         return await res.json() as StoreConversation[] | null
@@ -590,7 +590,7 @@ function usePersonStoredChats(personID: string): { conversations: StoreConversat
       .then(conversations => { if (!canceled) setAnswer({ personID, conversations: conversations ?? [], error: null }) })
       .catch(err => { if (!canceled) setAnswer({ personID, conversations: null, error: errorText(err) }) })
     return () => { canceled = true }
-  }, [personID, messageStoreBasePath, hostFetch])
+  }, [personID, multichatBasePath, hostFetch])
   return answer.personID === personID ? answer : { conversations: null, error: null }
 }
 
@@ -693,7 +693,7 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, st
   tagEditor: ReactNode
 }) {
   const { read, write, writeForm } = useMultichat()
-  const { fetch: hostFetch, messageStoreBasePath } = useBridgeConfig()
+  const { fetch: hostFetch, multichatBasePath } = useBridgeConfig()
   const merged = conversations.length + histories.length > 1
   /** Every source's key: a room's id, or a stored conversation's id. */
   const roomIDs = useMemo(
@@ -718,11 +718,11 @@ export function ConversationThread({ conversations, histories = NO_HISTORIES, st
       const page = await read<MultichatMessagePage>(conversationMessagesPath(sourceID, from))
       return { messages: pageMessages(page), olderFrom: page.end ?? null, hasOlder: page.has_more && !!page.end }
     }
-    const res = await hostFetch(`${messageStoreBasePath}${historyMessagesPath(sourceID, from)}`)
+    const res = await hostFetch(`${multichatBasePath}${MESSAGE_STORE_THROUGH_MULTICHAT}${historyMessagesPath(sourceID, from)}`)
     if (!res.ok) throw new Error(`message-store ${sourceID}: ${res.status} ${(await res.text()).trim()}`)
     const page = await res.json() as StoreMessagePage
     return { messages: (page.messages ?? []).map(historyMessageShown).reverse(), olderFrom: page.next || null, hasOlder: !!page.next }
-  }, [read, hostFetch, messageStoreBasePath, historyByID])
+  }, [read, hostFetch, multichatBasePath, historyByID])
   const roomKey = roomIDs.join(' ')
   /** Files waiting in the composer, sent with the next Send. */
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])

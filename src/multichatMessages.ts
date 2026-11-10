@@ -14,6 +14,7 @@ import type {
 import type { ConversationLink, ConversationVisibilitySettings } from '@kayushkin/multichat-types'
 import { EMOJI_ROUTES_CALLED } from './emojiCatalog'
 import { AWAITING_REPLY_ROUTES_CALLED } from './awaitingReply'
+import { MESSAGE_STORE_ROUTES_CALLED } from './messageAccounts'
 
 /** How many messages one page asks for. multichat takes 1–200. */
 export const MESSAGE_PAGE_SIZE = 50
@@ -61,6 +62,8 @@ export const MULTICHAT_ROUTES_CALLED: readonly string[] = [
   ...EMOJI_ROUTES_CALLED,
   // Who is waiting on a reply, its settings, and opening or dismissing a room.
   ...AWAITING_REPLY_ROUTES_CALLED,
+  // The bot accounts' conversations, a person's stored chats, and sending as a bot.
+  ...MESSAGE_STORE_ROUTES_CALLED,
 ]
 
 const roomSegment = (roomID: string) => encodeURIComponent(roomID)
