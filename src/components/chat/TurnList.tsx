@@ -34,6 +34,8 @@ import SessionStatusLine, {
   type ComposerStatus,
 } from './SessionStatusLine'
 import styles from './Chat.module.css'
+import { bridgeBriefKindLabel, parseBridgeBrief, type BridgeBrief, type BridgeBriefQuote } from '../../bridgeBrief'
+import { UntrustedText } from '../PeerMessageCards'
 import { useBeforePaintEffect } from '../../useBeforePaintEffect'
 import { SharedFileCard, SharedImageGrid, ToolResultImageStrip, galleryImageOfSharedFile, galleryImageOfToolResult } from './SharedFiles'
 import { SessionImagesProvider, useSessionImages, type GalleryImage } from './ImageGallery'
@@ -491,7 +493,13 @@ export default function TurnList({
             flushSpan()
             seg = null
             out.push(
-              <UserTurnRow key={it.key} item={it} sourceNames={sourceNamesForEntries(it.entryIds)} />,
+              <UserTurnRow
+                key={it.key}
+                item={it}
+                sourceNames={sourceNamesForEntries(it.entryIds)}
+                markdown={markdown}
+                onActivateSessionRef={onActivateSessionRef}
+              />,
             )
             continue
           }
@@ -835,6 +843,9 @@ type RenderItem =
        *  its `message_held_for_restart` event until the message is sent. Absent
        *  `failedBecause` means it is still waiting. */
       held?: { failedBecause?: string }
+      /** Set when a service, not the person, wrote the message: a bridge brief
+       *  (llm-bridge msg.BridgeBrief), drawn as a card. */
+      brief?: BridgeBrief
     }
   | { kind: 'marker'; key: string; ts: string }
   /** A HIDDEN harness task-notification that opened this turn. Not a user row —
@@ -971,7 +982,7 @@ function buildTurnItems(
         out.push({ kind: 'notification', key: id, ts: e.ts, text: e.text })
         continue
       }
-      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text, entryIds: [id] })
+      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text, entryIds: [id], brief: parseBridgeBrief(e.text) ?? undefined })
       continue
     }
     // Assistant conversation content — everything else (tool_result, meta, non-compact
@@ -1385,18 +1396,24 @@ function rowMarks(latest: boolean, arriving: boolean) {
 const UserTurnRow = memo(function UserTurnRow({
   item,
   sourceNames,
+  markdown,
+  onActivateSessionRef,
   latest = false,
 }: {
   item: Extract<RenderItem, { kind: 'user' }>
   sourceNames: string[]
+  markdown: boolean
+  onActivateSessionRef: (kind: string, refId: string) => void
   latest?: boolean
 }) {
   const arriving = useArrivingRow(item.key, latest)
+  // The plain-text toggle shows a brief exactly as the agent got it.
+  const brief = markdown ? item.brief : undefined
   return (
-    <div className={`bc-turns-item bc-turns-user ${styles.vrow}`}
+    <div className={`bc-turns-item bc-turns-user ${brief ? 'bc-turns-brief' : ''} ${styles.vrow}`}
       data-entry-ids={item.entryIds.join(' ')} {...rowMarks(latest, arriving)}>
       <div className="bc-turns-meta">
-        <span className="bc-turns-actor">You</span>
+        <span className="bc-turns-actor">{brief ? brief.from || 'a service' : 'You'}</span>
         <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
         <SourcesTag names={sourceNames} />
         {item.held && (
@@ -1407,10 +1424,74 @@ const UserTurnRow = memo(function UserTurnRow({
           </span>
         )}
       </div>
-      <div className="bc-turns-text">{item.text}</div>
+      {brief ? (
+        <BridgeBriefCard brief={brief} nested={false} onActivateSessionRef={onActivateSessionRef} writtenAt={item.ts} />
+      ) : (
+        <div className="bc-turns-text">{item.text}</div>
+      )}
     </div>
   )
 })
+
+/** A message a service wrote, as a card: what it is and its title as the
+ *  heading, the service's own markdown, and the text it quotes in a box of its
+ *  own. A brief quoted inside another (the orchestrator's placement quoting a
+ *  session's first message) is drawn as a card too, folded. */
+function BridgeBriefCard({
+  brief,
+  nested,
+  onActivateSessionRef,
+  writtenAt,
+}: {
+  brief: BridgeBrief
+  nested: boolean
+  onActivateSessionRef: (kind: string, refId: string) => void
+  writtenAt: string
+}) {
+  const prose = (text: string) =>
+    text.trim() ? <ProseBody text={text} markdown onActivateSessionRef={onActivateSessionRef} writtenAt={writtenAt} /> : null
+  return (
+    <details className={`bc-brief ${styles.brief}`} data-brief-kind={brief.kind} open={!nested}>
+      <summary className={styles.briefSummary}>
+        <span className={styles.briefKind}>{bridgeBriefKindLabel(brief.kind)}</span>
+        {brief.title && <span className={styles.briefTitle}>{brief.title}</span>}
+      </summary>
+      {prose(brief.lead)}
+      {brief.quote && (
+        <BridgeBriefQuoteBox quote={brief.quote} onActivateSessionRef={onActivateSessionRef} writtenAt={writtenAt} />
+      )}
+      {prose(brief.trailer)}
+    </details>
+  )
+}
+
+/** The text a brief quotes. A whole brief is drawn as a card; anything else
+ *  came from someone other than the service, so it is drawn as plain text,
+ *  never as markdown. */
+function BridgeBriefQuoteBox({
+  quote,
+  onActivateSessionRef,
+  writtenAt,
+}: {
+  quote: BridgeBriefQuote
+  onActivateSessionRef: (kind: string, refId: string) => void
+  writtenAt: string
+}) {
+  const inner = parseBridgeBrief(quote.text)
+  return (
+    <figure className={`bc-brief-quote ${styles.briefQuote}`}>
+      <figcaption className={styles.briefQuoteCaption}>
+        {quote.caption.charAt(0).toUpperCase() + quote.caption.slice(1)}
+        {!inner && <span className={styles.briefQuoteNote}> · not written by this server, shown as plain text</span>}
+      </figcaption>
+      {inner ? (
+        <BridgeBriefCard brief={inner} nested onActivateSessionRef={onActivateSessionRef} writtenAt={writtenAt} />
+      ) : (
+        <UntrustedText text={quote.text} className={styles.briefQuoteText} />
+      )}
+    </figure>
+  )
+}
 
 /** A file the user shared, on the user's side of the conversation like their messages. */
 function UserFileRow({ item, latest = false }: { item: Extract<RenderItem, { kind: 'file' }>; latest?: boolean }) {

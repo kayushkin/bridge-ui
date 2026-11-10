@@ -2024,3 +2024,48 @@
   white-space: nowrap;
   color: var(--error);
 }
+
+/* A bridge brief (TurnList BridgeBriefCard): a message a service wrote into the
+   session, drawn as a card with the text it quotes in a box of its own. */
+.brief {
+  min-width: 0;
+}
+.briefSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25em 0.6em;
+  cursor: pointer;
+  padding: 2px 0 4px;
+}
+.briefKind {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim, #8a8f98);
+}
+.briefTitle {
+  font-weight: 600;
+}
+.briefQuote {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid color-mix(in srgb, var(--text, #e6e6e6) 35%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text, #e6e6e6) 5%, transparent);
+}
+.briefQuoteCaption {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim, #8a8f98);
+  margin-bottom: 4px;
+}
+.briefQuoteNote {
+  font-weight: 400;
+}
+.briefQuoteText {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}

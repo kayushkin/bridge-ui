@@ -3338,6 +3338,8 @@
     color-mix(in srgb, var(--accent) 6%, var(--bc-surface-thin)));
   border-color: color-mix(in srgb, var(--accent) 30%, var(--bc-surface-thin));
 }
+/* A brief is a page of a service's text, not a chat bubble: let it take the row. */
+.bc-turns-user.bc-turns-brief { width: auto; max-width: min(94%, 920px); }
 .bc-turns-error { border: 1px solid color-mix(in srgb, #ef4444 30%, transparent); }
 .bc-turns-actor { font-size: 0.62rem; letter-spacing: 0.16em; font-weight: 700; }
 .bc-turns-text { line-height: 1.6; font-size: 0.9em; }
