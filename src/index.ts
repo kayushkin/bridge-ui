@@ -348,3 +348,26 @@ export {
   initialSessionDeeplinkState,
 } from './sessionDeeplink'
 export type { SessionDeeplinkState } from './sessionDeeplink'
+
+// The host shell: the theme switch, the top bar's brand and controls, a
+// sign-in card, and a sign-in gate for a host that signs people in to
+// llm-bridge-server itself (the standalone app). dash draws its own sign-in in
+// the same card and uses the rest as they are.
+export { BridgeThemeProvider, useBridgeTheme, BRIDGE_THEMES } from './shell/theme'
+export type { BridgeTheme, BridgeThemeProviderProps } from './shell/theme'
+export { ShellBrand, ShellControls } from './shell/ShellBar'
+export type { ShellBrandProps, ShellControlsProps } from './shell/ShellBar'
+export { SignInCard, signInCardClassNames } from './shell/SignInCard'
+export type { SignInCardProps } from './shell/SignInCard'
+export { BridgeSignInGate } from './shell/BridgeSignInGate'
+export type { BridgeSignInGateProps, SignedInToBridge } from './shell/BridgeSignInGate'
+export {
+  bridgeSignInPaths,
+  methodNeedsCsrfToken,
+  bridgeRefusalText,
+  fetchWithBridgeCsrfToken,
+  readBridgeSignIn,
+  signInWithDemoLogin,
+  logOutOfBridge,
+} from './bridgeSignIn'
+export type { BridgeSignIn } from './bridgeSignIn'

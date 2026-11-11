@@ -4,7 +4,9 @@
 
 A React and TypeScript library, not a service: no port, no database, no deploy of its own. `@kayushkin/bridge-ui` is the whole user interface over an llm-bridge-server backend as one component — `<Bridge>` routes every page, draws the navigation, and mounts both providers: `BridgeProvider` for config and chat-core's `ChatProvider` for the session store, held above the router so switching tabs does not drop it. It is published source-only (`main` is `dist/index.js`, `files` ships `dist`, `styles.css`, `theme.css`, `zine.css` and `zine/`) and consumed through a `file:` link; dash is the host that mounts it. `README.md` is the mounting guide: the props, the two stylesheets, and what a host wires.
 
-llm-bridge-server contains no `go:embed` and does not serve this library; dash is the only surface that serves it today.
+llm-bridge-server contains no `go:embed` and does not serve this library. Two surfaces serve it: dash, and the **standalone app** in `standalone/`, which a host with no server of its own (a connected server such as a laptop) builds and serves behind a proxy that forwards `/api/bridge` to the bridge. The standalone app signs people in to llm-bridge-server itself (`BridgeSignInGate`), reaches kanban-store, grant-store and reference-store through the bridge's gateway, and reaches the other stores at `/api/<store>` only in the dev server or when a build sets `VITE_HOST_PROXIES_STORES=true`.
+
+**The host shell is this library's** (`src/shell/`, since 2026-11-11): `BridgeThemeProvider` and `useBridgeTheme` (the zine, light and dark switch, remembered under a key each host names), `ShellBrand` and `ShellControls` for `<Bridge navStart navEnd>`, `SignInCard` (the sign-in page's frame, which dash's token form uses too) and `BridgeSignInGate`, with its pure rules in `src/bridgeSignIn.ts` (the CSRF token on every write, the bridge's refusal text). A host adds only its own sign-in and pages; it does not copy the shell.
 
 ## Where this prompt lives
 
@@ -69,7 +71,7 @@ The emoji pickers (`EmojiPicker.tsx`) read two sources. Unicode emoji come from 
 
 ## Generated store types, never hand copies
 
-**Every store wire type comes from that store's own generated package**, all `file:` links to the store's main clone: `@kayushkin/kanban-store-types`, `noteboard-types`, `principal-store-types`, `grant-store-types`, `bundle-store-types`, `tool-store-types`, `repo-store-types`, `work-graph-store-types`, `project-store-types`, `photo-store-types`, `multichat-types` and `llm-bridge-types`, plus `@kayushkin/chat-core` itself. Do not restate a store's record as a local interface; if a field is missing, fix the Go struct and re-run that repo's `./generate-ts.sh`.
+**Every store wire type comes from that store's own generated package**, all `file:` links to the store's main clone: `@kayushkin/kanban-store-types`, `noteboard-types`, `principal-store-types`, `grant-store-types`, `bundle-store-types`, `tool-store-types`, `repo-store-types`, `work-graph-store-types`, `project-store-types`, `multichat-types` and `llm-bridge-types`, plus `@kayushkin/chat-core` itself. Do not restate a store's record as a local interface; if a field is missing, fix the Go struct and re-run that repo's `./generate-ts.sh`.
 
 A vocabulary the store serves is **derived from the record field**, not written out as a union: `GrantResourceType = Grant['resource_type']`, `PrincipalKind` the same way.
 
