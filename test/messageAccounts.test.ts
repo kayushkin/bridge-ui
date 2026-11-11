@@ -4,8 +4,9 @@ import {
   accountConversationMessagesPath, accountConversationName, accountConversationParameters, accountConversationsPath, accountPickParameters,
   attachmentNamesOf, buttonChipOf, embedHasContent, messageSentByAccount, pickableBotAccounts, pickedBotAccount, safeWebAddress,
   storedMessageFormat, storedMessageIsEmpty, accountConversationKind, accountDiscordNames, accountDraftProblem, accountSendPath, countLabel,
-  DISCORD_MESSAGE_LIMIT,
+  DISCORD_MESSAGE_LIMIT, MESSAGE_STORE_ROUTES_CALLED,
 } from '../src/messageAccounts'
+import { MULTICHAT_ROUTES_CALLED } from '../src/multichatMessages'
 
 const account = (id: string, handle: string, kind: string, display_name = handle): Account =>
   ({ id, platform: 'discord', handle, display_name, kind, credential_id: '', created_at: 1, updated_at: 1 })
@@ -145,9 +146,7 @@ describe('threads, mentions, counts and sending', () => {
 })
 
 describe('the routes the bot views call through multichat', () => {
-  it('are on the list the host proxy must forward', async () => {
-    const { MULTICHAT_ROUTES_CALLED } = await import('../src/multichatMessages')
-    const { MESSAGE_STORE_ROUTES_CALLED } = await import('../src/messageAccounts')
+  it('are on the list the host proxy must forward', () => {
     for (const route of MESSAGE_STORE_ROUTES_CALLED) expect(MULTICHAT_ROUTES_CALLED).toContain(route)
   })
 })

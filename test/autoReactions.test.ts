@@ -4,6 +4,7 @@ import type { BridgeConfig } from '../src/context'
 import { BRIDGE_PAGES } from '../src/pages'
 import { emojiPanelBox } from '../src/components/messages/BridgeAutoReactions'
 import { accountAutoReactionPlaceLabel, accountReactionKeyOf, autoReactionEmojiLabel, autoReactionEmojiOf, autoReactionPersonLabel, memberSearchPath, type AccountAutoReaction, type AutoReaction } from '../src/autoReactions'
+import { MULTICHAT_ROUTES_CALLED } from '../src/multichatMessages'
 
 describe('autoReactionEmojiOf', () => {
   it('sends a unicode emoji as itself and a custom one as name:id', () => {
@@ -37,8 +38,7 @@ describe('the Auto-reactions page', () => {
     expect(available({ multichatBasePath: '' })).toBe(false)
   })
 
-  it("reaches the bot's rules through multichat, on the routes the host must forward", async () => {
-    const { MULTICHAT_ROUTES_CALLED } = await import('../src/multichatMessages')
+  it("reaches the bot's rules through multichat, on the routes the host must forward", () => {
     expect(MULTICHAT_ROUTES_CALLED).toContain('GET /discord-signup-store/auto-reactions')
     expect(MULTICHAT_ROUTES_CALLED).toContain('GET /discord-signup-store/guilds/{guildID}/members/search')
   })

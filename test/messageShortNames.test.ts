@@ -3,6 +3,7 @@ import type { ConversationLink } from '@kayushkin/multichat-types'
 import {
   conversationAddress, messagesAddressOf, roomShortNamePath, roomShortNames, ROOM_SHORT_NAME_ROUTES_CALLED, shortNameRefusal, shortNameResolvePath,
 } from '../src/messageShortNames'
+import { MULTICHAT_ROUTES_CALLED } from '../src/multichatMessages'
 import type { ShortName } from '../src/types-short-name-store'
 
 const name = (entity_id: string, path: string, overrides: Partial<ShortName> = {}): ShortName => ({
@@ -95,8 +96,7 @@ describe('conversationAddress', () => {
 })
 
 describe('the name routes', () => {
-  it('are on the list the host proxy must forward', async () => {
-    const { MULTICHAT_ROUTES_CALLED } = await import('../src/multichatMessages')
+  it('are on the list the host proxy must forward', () => {
     for (const route of ROOM_SHORT_NAME_ROUTES_CALLED) expect(MULTICHAT_ROUTES_CALLED).toContain(route)
   })
 })
