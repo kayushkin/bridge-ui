@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionSummary } from '@kayushkin/chat-core'
-import type { Link, Project, Rollup } from '@kayushkin/project-store-types'
+import type { Link, Project, Rollup, SessionFiling } from '@kayushkin/project-store-types'
 import {
+  acceptSessionFilingBody,
+  proposedSessionFilingsPath,
+  sessionFilingDecisionPath,
+  sessionFilingOdds,
+  sessionFilingsToDecide,
   NOT_FILED_LABEL,
   cardsByWorkState,
   entityTypeHeading,
@@ -318,5 +323,62 @@ describe('commits and activity by local day', () => {
     const days = activityByDay([event(now), event(now - 60), event(now - 86_400)])
     expect(days.map((d) => d.events.length)).toEqual([2, 1])
     expect(days[0].dayStart).toBe(localDayStart(now))
+  })
+})
+
+describe('session filings — what the filer left for a person', () => {
+  const filing = (id: string, projectId: string, confidence: number, createdAt: number): SessionFiling => ({
+    id,
+    session_id: `br_${id}`,
+    session_label: id,
+    evidence: 'brief',
+    goal: '',
+    repo_store_ids: [],
+    project_id: projectId,
+    confidence,
+    why: '',
+    model: 'model-test',
+    status: 'proposed',
+    link_id: 0,
+    filed_project_id: '',
+    created_by: 'project-store session filer',
+    created_at: createdAt,
+    decided_by: '',
+    decided_at: 0,
+  })
+
+  it('asks project-store for the proposed filings and names the decision routes', () => {
+    expect(proposedSessionFilingsPath('/api/projects')).toBe('/api/projects/session-filings?status=proposed')
+    expect(sessionFilingDecisionPath('/api/projects', 'session_filing_000007', 'accept')).toBe(
+      '/api/projects/session-filings/session_filing_000007/accept',
+    )
+    expect(sessionFilingDecisionPath('/api/projects', 'session_filing_000007', 'dismiss')).toBe(
+      '/api/projects/session-filings/session_filing_000007/dismiss',
+    )
+  })
+
+  it('names a project in an accept only when the person picked one', () => {
+    expect(JSON.parse(acceptSessionFilingBody('bridge-ui projects page', null))).toEqual({ decided_by: 'bridge-ui projects page' })
+    expect(JSON.parse(acceptSessionFilingBody('bridge-ui projects page', 'project_000002'))).toEqual({
+      decided_by: 'bridge-ui projects page',
+      project_id: 'project_000002',
+    })
+  })
+
+  it('shows odds only for a filing that proposes a project', () => {
+    expect(sessionFilingOdds(filing('a', 'project_000001', 0.7, 1))).toBe('70%')
+    expect(sessionFilingOdds(filing('b', 'project_000001', 0.825, 1))).toBe('83%')
+    expect(sessionFilingOdds(filing('c', '', 0, 1))).toBeNull()
+  })
+
+  it('puts the likeliest proposals first and the ones with no project last', () => {
+    const order = sessionFilingsToDecide([
+      filing('none-old', '', 0, 10),
+      filing('weak', 'project_000001', 0.3, 30),
+      filing('none-new', '', 0, 40),
+      filing('strong', 'project_000002', 0.8, 20),
+      filing('strong-newer', 'project_000002', 0.8, 25),
+    ]).map((f) => f.id)
+    expect(order).toEqual(['strong-newer', 'strong', 'weak', 'none-new', 'none-old'])
   })
 })

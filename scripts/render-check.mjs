@@ -64,6 +64,7 @@ import { groupSignalsByRequest, ChatContext, ChatProvider } from '@kayushkin/cha
 import { SessionActionEntry, SessionActionInText, SessionActionsContext } from '../src/components/chat/SessionActions.tsx'
 import { BridgeMachines, HistoryCharts, MachineStrip } from '../src/components/machines/BridgeMachines.tsx'
 import { machineStatsOverviewPoll, peerConnectionsPoll, serverDescriptionPoll } from '../src/useMachineStats.ts'
+import { SessionsToFileList } from '../src/components/chat/SessionsToFile.tsx'
 import { machineStatsFixtureFetch, machineStatsFixtureHistory, machineStatsFixtureOverview } from '../test/fixtures/machineStatsFixture.ts'
 
 let failures = 0
@@ -2387,6 +2388,36 @@ async function machinesChecks() {
       windowsCharts.includes('WSL CPU in use') && windowsCharts.includes('WSL memory in use') && windowsCharts.includes('<th>WSL CPU</th>'),
     windowsCharts.slice(0, 1500))
   check('history offers the same numbers as a table', charts.includes('Show as a table') && charts.includes('<table'), charts.slice(-600))
+}
+
+console.log('SessionsToFileList — the chats the session filer left for a person')
+{
+  const project = (id, name, parentId = '') => ({
+    id, name, kind: 'project', parent_id: parentId, goal: '', done_when: '', stage: 'building', spend_target_share: null,
+    created_by: '', created_at: 1, updated_at: 1, archived_at: 0,
+  })
+  const filing = (id, projectId, confidence, goal) => ({
+    id, session_id: `br_${id}`, session_label: `chat ${id}`, evidence: goal ? 'brief' : 'name', goal, repo_store_ids: [],
+    project_id: projectId, confidence, why: `why ${id}`, model: 'model-test', status: 'proposed', link_id: 0, filed_project_id: '',
+    created_by: 'project-store session filer', created_at: 1, decided_by: '', decided_at: 0,
+  })
+  const props = {
+    projects: [project('project_000001', 'Bridge'), project('project_000002', 'Sidebar', 'project_000001')],
+    filings: [filing('session_filing_000001', 'project_000002', 0.7, 'Fix the sidebar counts.'), filing('session_filing_000002', '', 0, '')],
+    busyFilingId: null, error: null, onSelectSession: () => {}, onFile: () => {}, onLeaveUnfiled: () => {},
+  }
+  const html = renderToStaticMarkup(h(SessionsToFileList, props))
+  const rows = html.split('data-session-filing-id=').slice(1)
+  check('the heading counts the waiting chats', html.includes('Sessions to file') && />2</.test(html), html.slice(0, 400))
+  check('a filing that proposes a project offers it by its full name with the odds, and another project',
+    rows[0].includes('File under Bridge › Sidebar (70%)') && rows[0].includes('Another project…') && rows[0].includes('Fix the sidebar counts.') &&
+      rows[0].includes('why session_filing_000001') && rows[0].includes('br_session_filing_000001 · session_filing_000001 · model-test'), rows[0])
+  check('a filing that proposes none offers only the picker, and says it was judged from a name',
+    !rows[1].includes('File under Bridge') && rows[1].includes('File under project…') && rows[1].includes('judged from its name'), rows[1])
+  check('every row can be left unfiled', rows.every(row => row.includes('Leave unfiled')), html)
+  const waiting = renderToStaticMarkup(h(SessionsToFileList, { ...props, busyFilingId: 'session_filing_000001', error: 'project-store said no' }))
+  check('while a decision is sent every button waits, and a refusal is shown word for word',
+    !/<button(?![^>]*disabled)[^>]*class="bc-ctrl-btn"/.test(waiting) && waiting.includes('project-store said no'), waiting)
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(peerMessageCardChecks).then(machinesChecks).then(

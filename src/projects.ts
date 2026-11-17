@@ -18,6 +18,7 @@ import type {
   Project,
   RepoRollup,
   Rollup,
+  SessionFiling,
   Suggestion,
 } from '@kayushkin/project-store-types'
 
@@ -29,6 +30,17 @@ export interface ProjectListAnswer {
 /** `GET /links` and `GET /projects/{id}/links` */
 export interface LinkListAnswer {
   links: Link[]
+}
+
+/** `GET /session-filings` */
+export interface SessionFilingListAnswer {
+  session_filings: SessionFiling[]
+}
+
+/** `POST /session-filings/{id}/accept` */
+export interface AcceptedSessionFilingAnswer {
+  session_filing: SessionFiling
+  link: Link
 }
 
 /** `GET /vocabulary` */
@@ -108,6 +120,42 @@ export function projectSuggestionsPath(base: string, projectId: string): string 
 
 export function suggestionDecisionPath(base: string, suggestionId: string, decision: 'accept' | 'dismiss'): string {
   return `${base}/suggestions/${encodeURIComponent(suggestionId)}/${decision}`
+}
+
+/** The filings of the session filer that wait for a person: chats it was not
+ *  sure enough of to file by itself. `proposed` is project-store's status. */
+export function proposedSessionFilingsPath(base: string): string {
+  return `${base}/session-filings?status=proposed`
+}
+
+export function sessionFilingDecisionPath(base: string, filingId: string, decision: 'accept' | 'dismiss'): string {
+  return `${base}/session-filings/${encodeURIComponent(filingId)}/${decision}`
+}
+
+/** The body of an accept: who decided, and the project when the person picks
+ *  one other than the filing proposes (project-store uses the proposed one
+ *  when the body names none). */
+export function acceptSessionFilingBody(decidedBy: string, projectId: string | null): string {
+  return JSON.stringify(projectId ? { decided_by: decidedBy, project_id: projectId } : { decided_by: decidedBy })
+}
+
+/** The filer's odds for the project it proposes, as "70%"; null when it
+ *  proposes none. */
+export function sessionFilingOdds(filing: Pick<SessionFiling, 'project_id' | 'confidence'>): string | null {
+  return filing.project_id ? `${Math.round(filing.confidence * 100)}%` : null
+}
+
+/** The waiting filings in the order to decide them: those that propose a
+ *  project first, the likeliest first, then those that propose none; within
+ *  each, the newest judgment first. */
+export function sessionFilingsToDecide(filings: readonly SessionFiling[]): SessionFiling[] {
+  return [...filings].sort(
+    (a, b) =>
+      Number(b.project_id !== '') - Number(a.project_id !== '') ||
+      b.confidence - a.confidence ||
+      b.created_at - a.created_at ||
+      b.id.localeCompare(a.id),
+  )
 }
 
 /** noteboard's route for one item, under the host's noteboard base path. */

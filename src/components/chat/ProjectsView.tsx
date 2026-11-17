@@ -38,6 +38,7 @@ import {
 import { ProjectPage, StageChip, type ProjectQuestions, type RollupSlot } from './ProjectPage'
 import { EffortChart, ProjectTimeline, StageBoard, StepProgressBar } from './ProjectsLandingViews'
 import { RefChip } from './RefChip'
+import { SessionsToFile } from './SessionsToFile'
 import styles from './ProjectsView.module.css'
 
 // The projects, opened in the chat's workspace in place of the thread, as the
@@ -237,7 +238,9 @@ export function ProjectsView({ projectId, onOpenProject, onSelectSession, onClos
             vocabulary={vocabulary}
             questionsByProject={questionsByProject}
             onOpenProject={onOpenProject}
+            onSelectSession={onSelectSession}
             onChanged={reload}
+            reloadSignal={reloadSignal}
           />
         )}
       </div>
@@ -292,7 +295,9 @@ function Landing({
   vocabulary,
   questionsByProject,
   onOpenProject,
+  onSelectSession,
   onChanged,
+  reloadSignal,
 }: {
   projects: Project[]
   rollups: ReadonlyMap<string, RollupSlot>
@@ -301,7 +306,9 @@ function Landing({
   vocabulary: ProjectVocabulary | null
   questionsByProject: ReadonlyMap<string, ProjectQuestions>
   onOpenProject: (projectId: string) => void
+  onSelectSession: (sessionId: string) => void
   onChanged: () => void
+  reloadSignal: number
 }): JSX.Element {
   const sections = useMemo(() => projectSections(projects), [projects])
   const [view, setView] = useState<LandingView>(() => parseLandingView(localStorage.getItem(LANDING_VIEW_STORAGE_KEY)))
@@ -363,6 +370,7 @@ function Landing({
           </ul>
         </section>
       )}
+      <SessionsToFile projects={projects} onSelectSession={onSelectSession} onChanged={onChanged} reloadSignal={reloadSignal} />
       {view === 'timeline' && <ProjectTimeline projects={projects} onOpenProject={onOpenProject} />}
       {view === 'stages' && (
         <StageBoard projects={projects} stages={vocabulary?.stages ?? null} rollups={rollups} attentionOf={attentionOf}

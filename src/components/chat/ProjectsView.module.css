@@ -125,6 +125,15 @@
 .suggestionTitle { font-weight: 600; }
 .suggestionButtons { display: flex; gap: 6px; flex: 0 0 auto; }
 
+.toFile > summary { cursor: pointer; }
+.toFileSummary { display: flex; align-items: baseline; gap: 8px; }
+.toFileSummary .sectionTitle { display: inline; }
+.toFileCount {
+  font-size: 0.8em; font-weight: 700; padding: 0 7px; border-radius: 999px;
+  color: var(--accent); border: 1px solid var(--accent);
+}
+.toFileButtons { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; align-items: stretch; max-width: 260px; }
+
 .issueRow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 
 .segmented { display: inline-flex; gap: 2px; }
