@@ -16,7 +16,7 @@ import remarkGfm from 'remark-gfm'
 import { useTurns, remarkRefChips, useResolvableIdPatterns, useActiveSession, usePendingSession, toolIdOf, useFullEntry, newestSessionActions, sessionActionIdsPlacedInProse, useChatContext } from '@kayushkin/chat-core'
 import { RefChip } from './RefChip'
 import { FileMentionPlaceContext } from './FileRefChip'
-import type { Entry, SessionAction, SessionFile, Turn } from '@kayushkin/chat-core'
+import type { Entry, SessionFile, Turn } from '@kayushkin/chat-core'
 import { CappedText, ShortenedPayloadBar, ToolContext, ToolItem, useToolContext } from '../tools'
 import { isToolRunning, toToolEvent } from './toolEvents'
 
@@ -42,6 +42,7 @@ import { SessionImagesProvider, useSessionImages, type GalleryImage } from './Im
 import { mayDrawAsImage } from '../../sessionFileAttachments'
 import { SessionActionEntry, SessionActionsContext } from './SessionActions'
 import { heldMessageOutcomes, heldMessageRow, type HeldMessageOutcome } from '../../heldMessages'
+import { transcriptRows, type RenderItem, type SpanSegment } from '../../transcriptRows'
 
 // react-markdown types `components` over intrinsic elements only; `ref-chip` is the
 // custom hast element remarkRefChips emits, so we cast the map like bridge-ui does.
@@ -438,93 +439,47 @@ export default function TurnList({
       // and 40x on a subagent session whose entire 170-event transcript is one
       // turn — i.e. one absolutely-positioned child ~40 rows tall, sized by
       // guess. Flattening first is what makes that change safe to make at all.
-      const out: React.ReactNode[] = []
+      //
+      // Which items are rows, and each row's key, is `transcriptRows`' rule
+      // (src/transcriptRows.ts), where it has a test: no two rows may share a key.
       const lastTurnIdx = turns.length - 1
-
-      // SPAN assembly. A turn opened by a HIDDEN task-notification (or by no user
-      // message at all — a wire fragment) CONTINUES the previous span: the model
-      // yielded, a background task finished, the harness re-prompted it. The
-      // whole span renders as ONE message row (owner: "they are still 5 separate
-      // messages" — they must not be): one header, then each segment in order —
-      // its notification as a formatted auto-collapsed chip at the seam it
-      // explains, narration collapsed, its answer at full prose weight. A bridge
-      // report (a button's outcome, a deploy's) opens a segment the same way.
-      // A real user message always ends the span.
-      let span: SpanSegment[] = []
-      let spanStreaming = false
-      const flushSpan = () => {
-        if (span.length === 0) return
-        out.push(
+      const rows = transcriptRows(
+        turns.map((turn, t) => ({
+          turnId: turn.id,
+          items: buildTurnItems(
+            entries,
+            visibleEntryIds(turn.id),
+            streaming && provisionalWindowOpen && t === lastTurnIdx,
+          ),
+        })),
+        streaming,
+      )
+      const out: React.ReactNode[] = rows.map((row) => {
+        if (row.kind === 'user') {
+          return (
+            <UserTurnRow
+              key={row.key}
+              item={row.item}
+              sourceNames={sourceNamesForEntries(row.item.entryIds)}
+              markdown={markdown}
+              onActivateSessionRef={onActivateSessionRef}
+            />
+          )
+        }
+        if (row.kind === 'file') return <UserFileRow key={row.key} item={row.item} />
+        return (
           <SpanRow
-            key={`span:${span[0]!.turnId}`}
-            segments={span}
+            key={row.key}
+            rowKey={row.key}
+            segments={row.segments}
             agentName={agentName}
-            streaming={spanStreaming}
+            streaming={row.streaming}
             markdown={markdown}
             sourceNamesForEntries={sourceNamesForEntries}
             onActivateSessionRef={onActivateSessionRef}
-          />,
+          />
         )
-        span = []
-        spanStreaming = false
-      }
-
-      for (let t = 0; t < turns.length; t++) {
-        const turn = turns[t]
-        const ids = visibleEntryIds(turn.id)
-        const built = buildTurnItems(
-          entries,
-          ids,
-          streaming && provisionalWindowOpen && t === lastTurnIdx,
-        )
-        let lastAssistantItem: RenderItem | null = null
-        for (let i = built.length - 1; i >= 0; i--) {
-          if (built[i]!.kind === 'assistant') { lastAssistantItem = built[i]!; break }
-        }
-
-        // Does this turn CONTINUE the span? Opened by a notification, or by
-        // nothing at all. A real user opener breaks it below, item by item.
-        const opener = built.find((it) => it.kind === 'user' || it.kind === 'notification')
-        if (t === 0 || (opener && opener.kind === 'user')) flushSpan()
-
-        let seg: SpanSegment | null = null
-        for (const it of built) {
-          if (it.kind === 'user') {
-            flushSpan()
-            seg = null
-            out.push(
-              <UserTurnRow
-                key={it.key}
-                item={it}
-                sourceNames={sourceNamesForEntries(it.entryIds)}
-                markdown={markdown}
-                onActivateSessionRef={onActivateSessionRef}
-              />,
-            )
-            continue
-          }
-          if (it.kind === 'file' && !it.sharedByAgent) {
-            flushSpan()
-            seg = null
-            out.push(<UserFileRow key={it.key} item={it} />)
-            continue
-          }
-          if (it.kind === 'notification') {
-            seg = { turnId: turn.id, notification: it.text, ts: it.ts, items: [] }
-            span.push(seg)
-            continue
-          }
-          if (!seg) {
-            seg = { turnId: turn.id, notification: null, ts: it.ts, items: [] }
-            span.push(seg)
-          }
-          seg.items.push(it)
-          if (it.kind === 'assistant' && streaming && t === lastTurnIdx && it === lastAssistantItem) {
-            spanStreaming = true
-          }
-        }
-      }
-      flushSpan()
+      })
       // The newest row is told so, for themes that mark or animate it. CSS cannot
       // find it with `:last-child`: virtua mounts only the rows near the viewport,
       // so while the user is scrolled up the last MOUNTED row is some older one.
@@ -844,56 +799,6 @@ function userActorLabelOfTurn(turnEntries: (Entry | undefined)[]): string {
   const first = turnEntries.find((e) => e?.role === 'user')
   return first ? userActorLabel(first) : 'User'
 }
-
-/** One rendered row derived from a turn's CONTENT (not from turn.role). A chat-core turn
- *  is opened by the user prompt (turn.role === 'user') but carries the assistant's whole
- *  reply, so a single turn yields a user item, a separate assistant item, and any compact
- *  markers — exactly like bridge-ui's rowsToTurns emits a `user` item for the prompt and a
- *  distinct `assistant` item for the turn's assistant content. */
-type RenderItem =
-  | {
-      kind: 'user'
-      key: string
-      ts: string
-      text: string
-      entryIds: string[]
-      /** Set on a message the server held while it waited to restart, drawn from
-       *  its `message_held_for_restart` event until the message is sent. Absent
-       *  `failedBecause` means it is still waiting. */
-      held?: { failedBecause?: string }
-      /** Set when a service, not the person, wrote the message: a bridge brief
-       *  (llm-bridge msg.BridgeBrief), drawn as a card. */
-      brief?: BridgeBrief
-      /** Who wrote it, as the row's label (`userActorLabel`). */
-      actor: string
-    }
-  | { kind: 'marker'; key: string; ts: string }
-  /** A HIDDEN harness task-notification that opened this turn. Not a user row —
-   *  the reader never wrote it — but the span renderer surfaces it as a
-   *  formatted, auto-collapsed chip at the seam it explains. */
-  | { kind: 'notification'; key: string; ts: string; text: string }
-  /** A file shared into the session. One the user shared stands as its own row, on
-   *  the user's side; one the agent shared sits in the agent's reply. */
-  | { kind: 'file'; key: string; ts: string; file: SessionFile; sharedByAgent: boolean; actor: string }
-  /** A session action: the button where the agent offered it, and a line for each
-   *  later step of its run. */
-  | { kind: 'action'; key: string; ts: string; action: SessionAction }
-  | {
-      kind: 'assistant'
-      key: string
-      ts: string
-      prose: string
-      narration: string
-      thinking: string
-      errors: Entry[]
-      usage?: Entry['usage']
-      /** How many narration MESSAGES fed the narration dropdown — its "N steps"
-       *  label. Presentation metadata only; the classification stays per message. */
-      narrationCount?: number
-      /** Every entry that fed this item, so the sources badge can state which
-       *  sources reported the content actually on screen. */
-      entryIds: string[]
-    }
 
 /** Split one turn's visible entries into content-derived render items. The unit is the
  *  MESSAGE (dash docs/chat-turns-per-message.md):
@@ -1528,15 +1433,6 @@ function UserFileRow({ item, latest = false }: { item: Extract<RenderItem, { kin
   )
 }
 
-/** One TURN's worth of a span: the hidden notification that opened it (when one
- *  did), and its assistant/marker items in order. */
-interface SpanSegment {
-  turnId: string
-  notification: string | null
-  ts: string
-  items: RenderItem[]
-}
-
 /** The salvageable meaning of a notification: a task-notification's human summary
  *  when the harness provided one; a bridge report's first sentence, without its
  *  `[session action]`, `[deploy-gate]` or `[llm-bridge]` tag; else the text stripped of its tags. */
@@ -1697,6 +1593,7 @@ function isStatusLine(prose: string): boolean {
  *  39 of them the first reply to the person's own message. So every segment's
  *  answer shows, as Claude Code's own terminal shows every turn's text. */
 function SpanRow({
+  rowKey,
   segments,
   agentName,
   streaming,
@@ -1705,6 +1602,8 @@ function SpanRow({
   onActivateSessionRef,
   latest = false,
 }: {
+  /** The key this row is drawn under (`transcriptRows`). */
+  rowKey: string
   segments: SpanSegment[]
   agentName: string
   streaming: boolean
@@ -1713,7 +1612,7 @@ function SpanRow({
   onActivateSessionRef: (kind: string, refId: string) => void
   latest?: boolean
 }) {
-  const arriving = useArrivingRow(`span:${segments[0]!.turnId}`, latest)
+  const arriving = useArrivingRow(rowKey, latest)
   const final = segments[segments.length - 1]!
   const finalLast = [...final.items].reverse().find((it) => it.kind === 'assistant')
   const lastAssistant = finalLast && finalLast.kind === 'assistant' ? finalLast : null
