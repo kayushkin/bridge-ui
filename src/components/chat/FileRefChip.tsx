@@ -4,6 +4,7 @@ import {
   filesMatchingMention,
   useFileNamedByToolsContent,
   useFilesNamedByTools,
+  useChatContext,
   type FileNamedByTools,
 } from '@kayushkin/chat-core';
 import { AnchoredPanel, timeAgo, useAnchoredPanel } from './RefChip';
@@ -129,16 +130,35 @@ function FileRefChipFromTools({
     () => (files.data && mention ? filesMatchingMention(files.data, mention.path) : []),
     [files.data, mention?.path],
   );
+  const { api } = useChatContext();
+  // The server says how it serves each file (`served_as`): text opens in the panel,
+  // an image as a picture, and anything else — another kind, or too large — is left as
+  // the plain code it was written as, since no route would open it.
+  const texts = matches.filter((match) => match.served_as === 'text');
+  const images = matches.filter((match) => match.served_as === 'image');
+  const toolImage = useMemo((): GalleryImage | null => {
+    const first = images[0];
+    if (!first || !place) return null;
+    const src = api.fileNamedByToolsImageUrl(place.sessionId, first.path);
+    return { key: `files-named-by-tools:${first.path}`, src, name: first.path.split('/').pop() || first.path, sizeBytes: first.size, downloadHref: src };
+  }, [images[0]?.path, images[0]?.size, place?.sessionId, api]);
   if (!place || !mention || matches.length === 0) {
     return (
       <code title={files.error ? `could not list this session's files: ${files.error}` : undefined}>{mentionText}</code>
     );
   }
+  if (texts.length === 0 && toolImage) {
+    return <ImageRefChip mentionText={mentionText} image={toolImage} className={className} />;
+  }
+  if (texts.length === 0) {
+    const kinds = [...new Set(matches.map((match) => match.media_type))].join(', ');
+    return <code title={`the chat cannot open this file (${kinds}, ${formatBytes(matches[0]!.size)})`}>{mentionText}</code>;
+  }
   return (
     <FileRefChipWithMatches
       mentionText={mentionText}
       line={mention.line}
-      matches={matches}
+      matches={texts}
       place={place}
       className={className}
     />

@@ -11,8 +11,10 @@ import {
   useSubagentSessions,
   isRunningState,
   ARCHIVE_FOLDER,
+  useSessionPrincipals,
 } from '@kayushkin/chat-core'
 import type { SessionSummary } from '@kayushkin/chat-core'
+import { sessionStarterOf, starterChipLabel, type SessionStarter } from '../../sessionStarters'
 import { useBridgeConfig } from '../../context'
 import { useBridgeHarnesses } from '../../useBridgeHarnesses'
 import { useBridgeInstances } from '../../useBridgeInstances'
@@ -63,11 +65,15 @@ import { mergeSessionsNewestFirst, sessionDayHeading, shownServerTab, type Merge
 import type { HarnessInfo } from '../../types'
 import styles from './Chat.module.css'
 
-/** The six multi-select axes chat-core's FilterState now supports. Each axis is a
+/** The seven multi-select axes chat-core's FilterState supports. Each axis is a
  *  `string[]` (empty = no filter); `machine` matches SessionSummary.instanceId and is
  *  resolved to a machine display name/emoji for the label only (the filter value stays
- *  the instanceId). */
-const AXES = ['harness', 'status', 'type', 'purpose', 'mode', 'machine'] as const
+ *  the instanceId). `principal` matches who the session was started as, named from the
+ *  server's GET /sessions/principals; '' is a session started as no person. */
+const AXES = ['harness', 'status', 'type', 'purpose', 'mode', 'machine', 'principal'] as const
+
+/** What a chip row is called above its chips, where the axis name alone would not say. */
+const AXIS_LABELS: Partial<Record<Axis, string>> = { principal: 'started by' }
 type Axis = (typeof AXES)[number]
 
 /** One selectable chip on a filter axis.
@@ -526,6 +532,16 @@ export default function Sidebar({
   // instanceId → machine display {name, emoji}, resolved through the instance's
   // machine_id. Used for the machine chip labels and the per-row emoji. The FILTER
   // value stays the instanceId — this is presentation only.
+  // Who each session was started as, named by the server. A row shows its starter only
+  // when this caller can see sessions from more than one: a person who sees only their
+  // own would read the same initials on every row.
+  const sessionPrincipals = useSessionPrincipals()
+  const starters = useMemo(() => {
+    const principals = sessionPrincipals.data ?? []
+    if (principals.length < 2) return null
+    return new Map(principals.map((p) => [p.principalId, sessionStarterOf(p)]))
+  }, [sessionPrincipals.data])
+
   const machineDisplay = useCallback(
     (instanceId: string | undefined): { name: string; emoji?: string } | undefined => {
       if (!instanceId) return undefined
@@ -544,6 +560,17 @@ export default function Sidebar({
   const axisOptions = useMemo(() => {
     const out = {} as Record<Axis, ChipOption[]>
     for (const axis of AXES) {
+      if (axis === 'principal') {
+        // Every starter the server knows of, with its count over ALL the caller's
+        // sessions, not just the loaded window: a person whose sessions are all older
+        // than the first page is still a choice, and picking them asks the server.
+        const counts = new Map((sessionPrincipals.data ?? []).map((p) => [p.principalId, p]))
+        for (const sel of filter.principal) if (!counts.has(sel)) counts.set(sel, { principalId: sel, displayName: '', sessionCount: 0 })
+        out.principal = [...counts.values()]
+          .map((p): ChipOption => ({ value: p.principalId, count: p.sessionCount, label: starterChipLabel(p) }))
+          .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+        continue
+      }
       const counts: Record<string, number> = { ...facets[axis] }
       for (const sel of filter[axis]) if (!(sel in counts)) counts[sel] = 0
       const opts = Object.entries(counts).map(([value, count]): ChipOption => {
@@ -576,7 +603,7 @@ export default function Sidebar({
     // `harnessMap` arrives from a poll, so it is empty on the first render and fills in
     // a moment later. Left out of these deps the chips keep the raw ids until something
     // unrelated re-renders them, which is indistinguishable from the bug being unfixed.
-  }, [facets, filter, machineDisplay, harnessMap])
+  }, [facets, filter, machineDisplay, harnessMap, sessionPrincipals.data])
 
   const activeFilterCount = AXES.reduce((n, a) => n + filter[a].length, 0)
   // The Filters badge also counts "hide archived", which hides rows like a chip does.
@@ -699,6 +726,7 @@ export default function Sidebar({
           session={s}
           harnessInfo={harnessMap.get(s.harness)}
           basePath={basePath}
+          starter={starters ? starters.get(s.principalId) ?? sessionStarterOf({ principalId: s.principalId, displayName: '' }) : undefined}
           displayState={s.state}
           hasOpenOperatorQuestion={sessionsWithOpenOperatorQuestion.has(s.sessionId)}
           active={!workGraphOpen && !projectsOpen && !openConnectedServerSession && s.sessionId === activeId}
@@ -948,6 +976,7 @@ export default function Sidebar({
     machineDisplay,
     harnessMap,
     basePath,
+    starters,
     collapsedFolders,
     select,
     prefetch,
@@ -1234,7 +1263,7 @@ export default function Sidebar({
               return show ? (
                 <ChipRow
                   key={axis}
-                  label={axis}
+                  label={AXIS_LABELS[axis] ?? axis}
                   options={opts}
                   selected={filter[axis]}
                   basePath={basePath}
@@ -1251,7 +1280,7 @@ export default function Sidebar({
               <button
                 className="bc-inst-filter-clear"
                 onClick={() =>
-                  set({ harness: [], status: [], type: [], purpose: [], mode: [], machine: [] })
+                  set({ harness: [], status: [], type: [], purpose: [], mode: [], machine: [], principal: [] })
                 }
               >
                 show all
@@ -1561,6 +1590,9 @@ interface SessionRowProps {
   harnessInfo?: HarnessInfo
   /** Resolves `harnessInfo.image` (a server-relative path) to a full URL. */
   basePath: string
+  /** Who started the session, drawn as initials after its name. Absent when the
+   *  caller sees only one starter's sessions. */
+  starter?: SessionStarter
   displayState: string
   /** Whether an open QUESTION signal the operator is to answer is recorded against this
    *  session, regardless of what the session is doing now. Always false for a background
@@ -1600,6 +1632,7 @@ const SessionRow = memo(function SessionRow({
   session,
   harnessInfo,
   basePath,
+  starter,
   displayState,
   hasOpenOperatorQuestion,
   active,
@@ -1714,6 +1747,11 @@ const SessionRow = memo(function SessionRow({
           onSave={(next) => onRename(session.sessionId, next)}
           className="bc-session-label"
         />
+        {starter && (
+          <span className="bc-session-starter" title={starter.title} aria-label={starter.title} data-principal-id={starter.principalId}>
+            {starter.initials}
+          </span>
+        )}
       </button>
       {/* The subagent toggle, at the right-hand end of the row where it moves nothing.
           Outside `bc-session-item-main` because buttons do not nest. Its slot is empty

@@ -827,6 +827,24 @@ function isHarnessNotification(text: string): boolean {
   )
 }
 
+/** The label over a person's message or shared file: who wrote it, by the name the
+ *  server recorded beside their principal id when it was written. "You" for the row
+ *  this browser just sent and the server has not confirmed (it is the viewer's own),
+ *  and "User" when no sender was recorded — a script or agent sent it, or it was
+ *  written before senders were recorded — rather than claiming it was the viewer. */
+export function userActorLabel(entry: Pick<Entry, 'senderDisplayName' | 'senderPrincipalId' | 'raw'>): string {
+  if (entry.senderDisplayName) return entry.senderDisplayName
+  if (entry.senderPrincipalId) return entry.senderPrincipalId
+  if ((entry.raw as { optimistic?: boolean } | undefined)?.optimistic) return 'You'
+  return 'User'
+}
+
+/** `userActorLabel` for a whole turn in the raw view: its first user entry's sender. */
+function userActorLabelOfTurn(turnEntries: (Entry | undefined)[]): string {
+  const first = turnEntries.find((e) => e?.role === 'user')
+  return first ? userActorLabel(first) : 'User'
+}
+
 /** One rendered row derived from a turn's CONTENT (not from turn.role). A chat-core turn
  *  is opened by the user prompt (turn.role === 'user') but carries the assistant's whole
  *  reply, so a single turn yields a user item, a separate assistant item, and any compact
@@ -846,6 +864,8 @@ type RenderItem =
       /** Set when a service, not the person, wrote the message: a bridge brief
        *  (llm-bridge msg.BridgeBrief), drawn as a card. */
       brief?: BridgeBrief
+      /** Who wrote it, as the row's label (`userActorLabel`). */
+      actor: string
     }
   | { kind: 'marker'; key: string; ts: string }
   /** A HIDDEN harness task-notification that opened this turn. Not a user row —
@@ -854,7 +874,7 @@ type RenderItem =
   | { kind: 'notification'; key: string; ts: string; text: string }
   /** A file shared into the session. One the user shared stands as its own row, on
    *  the user's side; one the agent shared sits in the agent's reply. */
-  | { kind: 'file'; key: string; ts: string; file: SessionFile; sharedByAgent: boolean }
+  | { kind: 'file'; key: string; ts: string; file: SessionFile; sharedByAgent: boolean; actor: string }
   /** A session action: the button where the agent offered it, and a line for each
    *  later step of its run. */
   | { kind: 'action'; key: string; ts: string; action: SessionAction }
@@ -966,11 +986,11 @@ function buildTurnItems(
     const held = heldMessageRow(e, outcomesOfHeldMessages)
     if (held === 'hidden') continue
     if (held) {
-      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text ?? '', entryIds: [id], held })
+      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text ?? '', entryIds: [id], held, actor: userActorLabel(e) })
       continue
     }
     if (e.kind === 'file' && e.sessionFile) {
-      out.push({ kind: 'file', key: id, ts: e.ts, file: e.sessionFile, sharedByAgent: e.sessionFile.shared_by === 'agent' })
+      out.push({ kind: 'file', key: id, ts: e.ts, file: e.sessionFile, sharedByAgent: e.sessionFile.shared_by === 'agent', actor: userActorLabel(e) })
       continue
     }
     if (e.kind === 'action' && e.sessionAction) {
@@ -982,7 +1002,7 @@ function buildTurnItems(
         out.push({ kind: 'notification', key: id, ts: e.ts, text: e.text })
         continue
       }
-      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text, entryIds: [id], brief: parseBridgeBrief(e.text) ?? undefined })
+      out.push({ kind: 'user', key: id, ts: e.ts, text: e.text, entryIds: [id], brief: parseBridgeBrief(e.text) ?? undefined, actor: userActorLabel(e) })
       continue
     }
     // Assistant conversation content — everything else (tool_result, meta, non-compact
@@ -1156,7 +1176,7 @@ const TurnItem = memo(function TurnItem({
   return (
     <div className={`bc-turns-item ${roleClass} ${streaming ? 'bc-turns-streaming' : ''} ${styles.vrow}`}>
       <div className="bc-turns-meta">
-        <span className="bc-turns-actor">{turn.role === 'user' ? 'You' : turn.role}</span>
+        <span className="bc-turns-actor">{turn.role === 'user' ? userActorLabelOfTurn(entryIds.map((id) => entries[id])) : turn.role}</span>
         <span className="bc-turns-ts">{formatHMS(turn.ts)}</span>
         {streaming && <span className="bc-turns-streaming-tag">streaming…</span>}
       </div>
@@ -1413,7 +1433,7 @@ const UserTurnRow = memo(function UserTurnRow({
     <div className={`bc-turns-item bc-turns-user ${brief ? 'bc-turns-brief' : ''} ${styles.vrow}`}
       data-entry-ids={item.entryIds.join(' ')} {...rowMarks(latest, arriving)}>
       <div className="bc-turns-meta">
-        <span className="bc-turns-actor">{brief ? brief.from || 'a service' : 'You'}</span>
+        <span className="bc-turns-actor">{brief ? brief.from || 'a service' : item.actor}</span>
         <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
         <SourcesTag names={sourceNames} />
         {item.held && (
@@ -1500,7 +1520,7 @@ function UserFileRow({ item, latest = false }: { item: Extract<RenderItem, { kin
     <div className={`bc-turns-item bc-turns-user ${styles.vrow}`} data-file-id={item.file.file_id}
       {...rowMarks(latest, arriving)}>
       <div className="bc-turns-meta">
-        <span className="bc-turns-actor">You</span>
+        <span className="bc-turns-actor">{item.actor}</span>
         <span className="bc-turns-ts">{formatHMS(item.ts)}</span>
       </div>
       <SharedFileCard file={item.file} />
