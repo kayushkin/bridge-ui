@@ -68,10 +68,20 @@ export const PAGE_GROUPS: readonly PageGroup[] = [
   { key: 'personal', label: 'Personal' },
 ]
 
-/** The two shell switches a host can turn off. */
+/** The shell switches a host can set. */
 export interface ShellFlags {
   showConformance: boolean
   showServiceInventory: boolean
+  /** Only these of this library's pages are routed and listed. Absent means
+   *  every page. A host gives a person who is not an administrator the pages
+   *  their own principal can use, such as the chat and their sessions. */
+  onlyBridgePages?: readonly (keyof BridgeRoutes)[]
+}
+
+/** This library's pages a host shows: all of them, or only those named. */
+export function bridgePagesShown(onlyBridgePages?: readonly (keyof BridgeRoutes)[]): readonly BridgePage[] {
+  if (!onlyBridgePages) return BRIDGE_PAGES
+  return BRIDGE_PAGES.filter(p => onlyBridgePages.includes(p.route))
 }
 
 /** One page this library ships. `routes[route]` is where it is mounted. */
@@ -202,7 +212,7 @@ export interface NavEntry {
 /** The navigation for this host: every listed page that is available, in
  *  registry order, then the host's pages in the order given. */
 export function navEntriesFor(config: BridgeConfig, flags: ShellFlags, hostPages: readonly HostPage[] = []): NavEntry[] {
-  const own: NavEntry[] = BRIDGE_PAGES
+  const own: NavEntry[] = bridgePagesShown(flags.onlyBridgePages)
     .filter(p => p.listed && (p.available ? p.available(config, flags) : true))
     .map(p => ({ to: config.routes[p.route], label: p.label, group: p.group, end: p.end ?? false, ...(p.badge ? { badge: p.badge } : {}) }))
   const host: NavEntry[] = hostPages.filter(p => p.listed !== false).map(p => ({ to: p.path, label: p.label, group: p.group, end: p.end ?? false }))

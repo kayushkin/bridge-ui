@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useBridgeConfig } from '../context'
+import type { BridgeRoutes } from '../context'
 import { PAGE_GROUPS, activeNavEntry, groupForPath, navEntriesFor, type HostPage, type NavEntry, type PageGroupKey } from '../pages'
 import { useMinimalChrome } from './minimal/MinimalChromeContext'
 import { ShellNavigationContext } from './shellNavigation'
@@ -14,6 +15,8 @@ interface BridgeLayoutProps {
   showServiceInventory?: boolean
   /** Pages the host brings into this navigation. */
   hostPages?: readonly HostPage[]
+  /** Only these of this library's pages are listed. Absent means every page. */
+  onlyBridgePages?: readonly (keyof BridgeRoutes)[]
   /** What the host puts at the start of the top bar: its brand. */
   navStart?: ReactNode
   /** What the host puts at the end of the top bar: its own controls (theme,
@@ -33,7 +36,7 @@ interface BridgeLayoutProps {
  *  second row, and a tab removed mid-drag never gets its `dragend` (measured:
  *  `dragstart`, then nothing). While the browser believes a drag is on, the
  *  cursor is pinned and the page takes no clicks. A tab has no use for a drag. */
-export function BridgeLayout({ showConformance = true, showServiceInventory = true, hostPages = [], navStart, navEnd }: BridgeLayoutProps) {
+export function BridgeLayout({ showConformance = true, showServiceInventory = true, hostPages = [], onlyBridgePages, navStart, navEnd }: BridgeLayoutProps) {
   const config = useBridgeConfig()
   const { pathname } = useLocation()
   // Gated on the chrome being DRAWN, not on the viewport being narrow. These rows
@@ -44,7 +47,7 @@ export function BridgeLayout({ showConformance = true, showServiceInventory = tr
   const { minimal, minimalChromeMounted } = useMinimalChrome()
   const chromeTakenOver = minimal && minimalChromeMounted
 
-  const entries = navEntriesFor(config, { showConformance, showServiceInventory }, hostPages)
+  const entries = navEntriesFor(config, { showConformance, showServiceInventory, onlyBridgePages }, hostPages)
   const groups = PAGE_GROUPS.filter(g => entries.some(e => e.group === g.key))
   const matched = groupForPath(pathname, config.routes, hostPages)
   const activeGroup: PageGroupKey | null = matched && groups.some(g => g.key === matched) ? matched : (groups[0]?.key ?? null)

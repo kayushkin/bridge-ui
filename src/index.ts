@@ -134,7 +134,7 @@ export { hookWireBodyOf, hookDraftOf, emptyHookDraft, shadowedHookIDs, type Hook
 export { effectiveConfigQuery, effectiveConfigInputsFromParams, type EffectiveConfigInputs } from './effectiveConfigQuery'
 export { SettingsSection, useSectionSave, saveResultOf, SETTINGS_SCOPE_LABEL, SETTINGS_SCOPE_INDEX } from './components/settings/SettingsSection'
 export type { SettingsScope, SettingsSectionProps, SaveResult, SectionSave } from './components/settings/SettingsSection'
-export { PAGE_GROUPS, BRIDGE_PAGES, navEntriesFor, groupForPath } from './pages'
+export { PAGE_GROUPS, BRIDGE_PAGES, bridgePagesShown, navEntriesFor, groupForPath } from './pages'
 export type { PageGroupKey, PageGroup, BridgePage, HostPage, NavEntry, ShellFlags } from './pages'
 export { BridgeChat } from './components/chat/BridgeChat'
 export { BridgeSessions } from './components/BridgeSessions'

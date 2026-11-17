@@ -2,10 +2,10 @@ import { createElement, useMemo, type JSX } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { ChatProvider } from '@kayushkin/chat-core'
 import { BridgeProvider, type BridgeProviderProps } from '../provider'
-import { DEFAULT_BRIDGE_ROUTES, useBridgeConfig } from '../context'
+import { DEFAULT_BRIDGE_ROUTES, useBridgeConfig, type BridgeRoutes } from '../context'
 import { chatFetchOver } from '../chatFetch'
 import { BridgeLayout } from './BridgeLayout'
-import { BRIDGE_PAGES, type HostPage } from '../pages'
+import { bridgePagesShown, type HostPage } from '../pages'
 
 export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'routes'> {
   /** The host's notes page, for `[todo:<id>]` references. Empty means the host has
@@ -20,6 +20,9 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
    *  and listed in the group each names. Paths are absolute from the root this
    *  component is mounted at. */
   hostPages?: readonly HostPage[]
+  /** Only these of this library's pages are routed and listed; absent means
+   *  every page. A path to a page left out matches no route. */
+  onlyBridgePages?: readonly (keyof BridgeRoutes)[]
   /** The host's brand, drawn at the start of the top bar, before the groups. */
   navStart?: React.ReactNode
   /** The host's own controls (theme, logout), drawn at the end of the top bar.
@@ -42,14 +45,14 @@ export interface BridgeProps extends Omit<BridgeProviderProps, 'children' | 'rou
  *  store and sync engine, and holding it here rather than inside the chat page
  *  means the store survives a switch to Instances or Kanban and back — and that
  *  every page can render a reference chip, which throws without it. */
-export function Bridge({ notesPath = '', showConformance, showServiceInventory, hostPages = [], navStart, navEnd, ...provider }: BridgeProps): JSX.Element {
+export function Bridge({ notesPath = '', showConformance, showServiceInventory, hostPages = [], onlyBridgePages, navStart, navEnd, ...provider }: BridgeProps): JSX.Element {
   const routes = useMemo(() => ({ notes: notesPath }), [notesPath])
   return (
     <BridgeProvider {...provider} routes={routes}>
       <ChatStore>
         <Routes>
-          <Route element={<BridgeLayout showConformance={showConformance} showServiceInventory={showServiceInventory} hostPages={hostPages} navStart={navStart} navEnd={navEnd} />}>
-            {BRIDGE_PAGES.map(p => {
+          <Route element={<BridgeLayout showConformance={showConformance} showServiceInventory={showServiceInventory} hostPages={hostPages} onlyBridgePages={onlyBridgePages} navStart={navStart} navEnd={navEnd} />}>
+            {bridgePagesShown(onlyBridgePages).map(p => {
               const path = p.route === 'chat' ? '' : DEFAULT_BRIDGE_ROUTES[p.route].replace(/^\//, '') + (p.routeSuffix ?? '')
               return p.route === 'chat'
                 ? <Route key={p.route} index element={createElement(p.component)} />

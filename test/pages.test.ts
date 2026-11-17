@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BRIDGE_ROUTES, type BridgeConfig } from '../src/context'
-import { BRIDGE_PAGES, PAGE_GROUPS, groupForPath, navEntriesFor, type HostPage } from '../src/pages'
+import { BRIDGE_PAGES, PAGE_GROUPS, bridgePagesShown, groupForPath, navEntriesFor, type HostPage } from '../src/pages'
 
 const config = (overrides: Partial<BridgeConfig> = {}): BridgeConfig => ({
   fetch: async () => new Response(),
@@ -59,6 +59,18 @@ describe('navEntriesFor', () => {
     const entries = navEntriesFor(config(), flags, host)
     expect(entries.slice(-2).map(e => e.to)).toEqual(['/calendar', '/services'])
     expect(entries.find(e => e.to === '/services')?.group).toBe('system')
+  })
+})
+
+describe('onlyBridgePages', () => {
+  it('lists only the named pages, beside the host pages', () => {
+    const host: HostPage[] = [{ path: '/raid', label: 'Raid', group: 'work', element: null }]
+    const labels = navEntriesFor(config({ kanbanStoreBasePath: '/api/kanban' }), { ...flags, onlyBridgePages: ['chat', 'sessions'] }, host).map(e => e.label)
+    expect(labels).toEqual(['Chat', 'Sessions', 'Raid'])
+  })
+  it('routes only the named pages, and every page when none are named', () => {
+    expect(bridgePagesShown(['chat', 'card']).map(p => p.route)).toEqual(['chat', 'card'])
+    expect(bridgePagesShown()).toBe(BRIDGE_PAGES)
   })
 })
 
