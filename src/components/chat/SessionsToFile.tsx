@@ -139,7 +139,7 @@ export function SessionsToFileList({ filings, projects, busyFilingId, error, onS
             const odds = sessionFilingOdds(filing)
             const name = filing.session_label || filing.session_id
             return (
-              <li key={filing.id} className={styles.suggestion} data-session-filing-id={filing.id}>
+              <li key={filing.id} className={`${styles.suggestion} ${styles.toFileRow}`} data-session-filing-id={filing.id}>
                 <div className={styles.suggestionText}>
                   <button type="button" className={styles.cardName} onClick={() => onSelectSession(filing.session_id)} title="Open this chat">
                     {name}
