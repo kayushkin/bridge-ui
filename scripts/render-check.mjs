@@ -25,6 +25,8 @@ import NewSessionMenu from '../src/components/chat/NewSessionMenu.tsx'
 import { ConnectedServersContext } from '../src/components/chat/ConnectedServers.tsx'
 import { RefChip } from '../src/components/chat/RefChip.tsx'
 import { RefChipServerContext } from '../src/components/chat/refChipServer.ts'
+import { SharedFileCard, SharedImageGrid } from '../src/components/chat/SharedFiles.tsx'
+import { SessionFilesContext } from '../src/components/chat/SessionFileChip.tsx'
 import { ConnectedServerThread } from '../src/components/chat/ConnectedServerThread.tsx'
 import { peerConnectionBridgeConfig, CONNECTED_SERVER_PATH_SOURCES } from '../src/peers.ts'
 import { TextWithReferenceLinks } from '../src/components/chat/ReferenceText.tsx'
@@ -2418,6 +2420,50 @@ console.log('SessionsToFileList — the chats the session filer left for a perso
   const waiting = renderToStaticMarkup(h(SessionsToFileList, { ...props, busyFilingId: 'session_filing_000001', error: 'project-store said no' }))
   check('while a decision is sent every button waits, and a refusal is shown word for word',
     !/<button(?![^>]*disabled)[^>]*class="bc-ctrl-btn"/.test(waiting) && waiting.includes('project-store said no'), waiting)
+}
+
+console.log('Every file shared into a chat carries its reference chip')
+{
+  const api = {
+    sessionFileContentUrl: (sessionId, fileId, opts) => `/api/bridge/sessions/${sessionId}/files/${fileId}/content${opts?.inline ? '?inline=true' : ''}`,
+  }
+  const chat = { api, noteboard: { getItem: () => { throw new Error('noteboard asked about a file') } }, resolve: { resolve: () => { throw new Error('resolver asked about a file of this session') } } }
+  const fileOf = (number, filename, mediaType) => ({
+    file_id: `file_00000${number}`, session_id: 'br_1700000000000000001', filename, media_type: mediaType, size_bytes: 2048,
+    shared_by: 'agent', path: `/srv/session-files/file_00000${number}/${filename}`, created_at: '2026-11-17T23:12:28Z',
+  })
+  const picture = fileOf(1, 'hood.png', 'image/png')
+  const video = fileOf(2, 'turntable.mp4', 'video/mp4')
+  const archive = fileOf(3, 'models.zip', 'application/zip')
+  const inSession = new Map([picture, video, archive].map(file => [file.file_id, { file, personName: null }]))
+  const inChat = element => renderToStaticMarkup(h(ChatContext.Provider, { value: chat }, h(SessionFilesContext.Provider, { value: inSession }, element)))
+
+  const pictureCard = inChat(h(SharedFileCard, { file: picture }))
+  check('a shared picture is drawn under a chip that names it and shows its id',
+    pictureCard.includes('data-ref-kind="session-file"') && pictureCard.includes('data-ref-id="file_000001"') &&
+      pictureCard.includes('hood.png') && pictureCard.includes('>file_000001<') && pictureCard.includes('bc-image-thumb'), pictureCard)
+  check('a shared picture can be folded away', pictureCard.includes('bc-file-fold') && pictureCard.includes('aria-label="Fold hood.png away"'), pictureCard)
+
+  const videoCard = inChat(h(SharedFileCard, { file: video }))
+  check('a shared video is played under its chip and can be folded away',
+    videoCard.includes('data-ref-id="file_000002"') && videoCard.includes('<video') && videoCard.includes('bc-file-fold'), videoCard)
+
+  const archiveCard = inChat(h(SharedFileCard, { file: archive }))
+  check('any other shared file still carries its chip, and has nothing to fold',
+    archiveCard.includes('data-ref-id="file_000003"') && !archiveCard.includes('bc-file-fold'), archiveCard)
+
+  const inProse = inChat(h('p', null, h(SharedFileCard, { file: picture, inProse: true, caption: 'The hood from the front' })))
+  check('a picture an agent pasted into its reply is built from inline elements, with the agent’s words under it',
+    !/<div/.test(inProse) && inProse.includes('The hood from the front') && inProse.includes('data-ref-id="file_000001"'), inProse)
+
+  const grid = inChat(h(SharedImageGrid, { files: [picture, fileOf(4, 'cape.png', 'image/png')] }))
+  check('pictures shared together are one group that folds, each tile with its own chip',
+    grid.includes('2 images') && grid.includes('aria-label="Fold 2 images away"') &&
+      grid.includes('data-ref-id="file_000001"') && grid.includes('data-ref-id="file_000004"'), grid)
+
+  const idInProse = inChat(h(RefChip, { kind: 'registered', refId: 'file_000002' }))
+  check('a shared file’s id written in prose is that file’s chip, video or not, with its name',
+    idInProse.includes('data-ref-kind="session-file"') && idInProse.includes('turntable.mp4'), idInProse)
 }
 
 agentDispatchChecks().then(sharedPollChecks).then(bridgePrefsChecks).then(peerMessageCardChecks).then(machinesChecks).then(

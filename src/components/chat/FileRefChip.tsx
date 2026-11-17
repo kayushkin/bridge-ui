@@ -8,8 +8,10 @@ import {
   type FileNamedByTools,
 } from '@kayushkin/chat-core';
 import { AnchoredPanel, timeAgo, useAnchoredPanel } from './RefChip';
-import { useOpenImage, useSessionImages, type GalleryImage } from './ImageGallery';
+import { useOpenImage, type GalleryImage } from './ImageGallery';
+import { SessionFileChip, SessionFilesContext, type SessionFileShown } from './SessionFileChip';
 import { imageNamedByMention } from '../../sessionImageMentions';
+import { sessionFileKind } from '../../sessionFileReferences';
 import { formatBytes } from '../../toolPayloadPreview';
 
 /**
@@ -39,22 +41,39 @@ export const FileMentionPlaceContext = createContext<FileMentionPlace | null>(nu
 export function FileRefChip({ mentionText, className }: { mentionText: string; className?: string }): JSX.Element {
   const place = useContext(FileMentionPlaceContext);
   const mention = fileMentionOf(mentionText);
-  // An image shared into the session wins: its chip shows the picture, where the
-  // files-named-by-tools chip would show the bytes as text.
-  const sessionImages = useSessionImages();
-  const image = useMemo(
-    () => (sessionImages && mention ? imageNamedByMention(sessionImages.images, mention.path, place?.writtenAt ?? null) : null),
-    [sessionImages, mention?.path, place?.writtenAt],
+  // A picture or video shared into the session wins: its chip shows it and says where
+  // it came from, where the files-named-by-tools chip would show the bytes as text.
+  const sessionFiles = useContext(SessionFilesContext);
+  const shared = useMemo(
+    () => (sessionFiles && mention ? sharedMediaNamedByMention(sessionFiles, mention.path, place?.writtenAt ?? null) : null),
+    [sessionFiles, mention?.path, place?.writtenAt],
   );
-  if (image) return <ImageRefChip mentionText={mentionText} image={image} className={className} />;
+  if (shared) {
+    return <SessionFileChip file={shared.file} personName={shared.personName} label={mentionText} className={className} />;
+  }
   return <FileRefChipFromTools mentionText={mentionText} className={className} place={place} mention={mention} />;
 }
 
+/** The shared picture or video a mention names, by the rule in
+ *  `sessionImageMentions.ts`. Any other kind of shared file is left to the
+ *  files-named-by-tools chip, which opens a text file as it is on disk now. */
+function sharedMediaNamedByMention(
+  sessionFiles: ReadonlyMap<string, SessionFileShown>,
+  mentionPath: string,
+  writtenAt: string | null,
+): SessionFileShown | null {
+  const media = [...sessionFiles.values()]
+    .filter((shown) => sessionFileKind(shown.file.media_type) !== 'file')
+    .map((shown) => ({ key: shown.file.file_id, name: shown.file.filename, sharedAt: shown.file.created_at }));
+  const named = imageNamedByMention(media, mentionPath, writtenAt);
+  return named ? sessionFiles.get(named.key) ?? null : null;
+}
+
 /**
- * A mention of an image shared into the session — its name in a code span, or its
- * file id — as a small thumbnail and the name. It
- * opens a panel with the picture; the picture, or View, opens the viewer at it, among
- * the session's other images.
+ * A mention of an image that is not a session file record — one the session's tools
+ * named, read from disk — as a small thumbnail and the name. It opens a panel with
+ * the picture; the picture, or View, opens the viewer at it. An image shared into the
+ * session draws as `SessionFileChip` instead, which also says where it came from.
  */
 export function ImageRefChip({
   mentionText,

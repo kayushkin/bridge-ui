@@ -3,6 +3,7 @@ import { Fragment,
   isValidElement,
   memo,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -38,7 +39,9 @@ import { bridgeBriefKindLabel, parseBridgeBrief, type BridgeBrief, type BridgeBr
 import { UntrustedText } from '../PeerMessageCards'
 import { useBeforePaintEffect } from '../../useBeforePaintEffect'
 import { SharedFileCard, SharedImageGrid, ToolResultImageStrip, galleryImageOfSharedFile, galleryImageOfToolResult } from './SharedFiles'
-import { SessionImagesProvider, useSessionImages, type GalleryImage } from './ImageGallery'
+import { SessionImagesProvider, type GalleryImage } from './ImageGallery'
+import { SessionFileChip, SessionFilesContext, useSessionFileShown, type SessionFileShown } from './SessionFileChip'
+import { sessionFileAddressOf } from '../../sessionFileReferences'
 import { mayDrawAsImage } from '../../sessionFileAttachments'
 import { SessionActionEntry, SessionActionsContext } from './SessionActions'
 import { heldMessageOutcomes, heldMessageRow, type HeldMessageOutcome } from '../../heldMessages'
@@ -73,14 +76,14 @@ const REMARK_PLUGINS = [remarkGfm, remarkRefChips, remarkVibes] as unknown as Md
 // per patterns array: chat-core hands every reader the same array, so every row shares
 // one plugins identity and ReactMarkdown re-parses a row only when the patterns arrive.
 //
-// The session's shared-image ids (`file_000305`) ride along as patterns of their own: an
-// id written in prose then becomes a chip that RefChip draws as the picture. The ids are
-// the session's own, read from its transcript, so nothing here knows file-store's id
-// shape. Cached by the list's contents, so every row shares one plugins identity.
+// The session's shared-file ids (`file_000305`) ride along as patterns of their own: an
+// id written in prose then becomes a chip that RefChip draws as the file's own chip. The
+// ids are the session's own, read from its transcript, so nothing here knows file-store's
+// id shape. Cached by the list's contents, so every row shares one plugins identity.
 const remarkPluginsByPatterns = new Map<string, MdPlugins>()
-function remarkPluginsFor(patterns: readonly string[] | null, imageFileIds: readonly string[]): MdPlugins {
-  if (!patterns && imageFileIds.length === 0) return REMARK_PLUGINS
-  const all = [...(patterns ?? []), ...imageFileIds.map(escapeRegExp)]
+function remarkPluginsFor(patterns: readonly string[] | null, sessionFileIds: readonly string[]): MdPlugins {
+  if (!patterns && sessionFileIds.length === 0) return REMARK_PLUGINS
+  const all = [...(patterns ?? []), ...sessionFileIds.map(escapeRegExp)]
   const key = all.join('\u0000')
   let plugins = remarkPluginsByPatterns.get(key)
   if (!plugins) {
@@ -92,6 +95,55 @@ function remarkPluginsFor(patterns: readonly string[] | null, imageFileIds: read
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Whether two rows of the session's file list say the same thing. The file record
+ *  never changes once shared, so its id and the sharer's name are all that can. */
+function sameSessionFileShown(a: SessionFileShown | undefined, b: SessionFileShown): boolean {
+  return !!a && a.file.file_id === b.file.file_id && a.personName === b.personName
+}
+
+/** The session file of the loaded transcript that a pasted address names, or null:
+ *  the address must name this file in the session that holds it. */
+function useSessionFileAtAddress(address: string): SessionFileShown | null {
+  const named = sessionFileAddressOf(address)
+  const shown = useSessionFileShown(named?.fileId ?? '')
+  return named && shown && shown.file.session_id === named.sessionId ? shown : null
+}
+
+/** A markdown image in a reply. One that points at a file shared into this session is
+ *  that file's card, chip and fold included; any other is the plain picture. */
+function ProseImage({ src, alt }: { src: string; alt: string }) {
+  const shown = useSessionFileAtAddress(src)
+  if (shown) return <SharedFileCard file={shown.file} inProse caption={alt} />
+  return <img src={src} alt={alt} loading="lazy" />
+}
+
+/** A markdown link in a reply. One that points at a file shared into this session is
+ *  that file's chip, reading as the link did; any other is the plain link. */
+function ProseLink({
+  href,
+  anchorProps,
+  children,
+}: {
+  href: string | undefined
+  anchorProps: Record<string, unknown>
+  children: ReactNode
+}) {
+  const shown = useSessionFileAtAddress(href ?? '')
+  if (shown) {
+    const words = plainTextOf(children).trim()
+    return <SessionFileChip file={shown.file} personName={shown.personName} label={words || shown.file.filename} className={styles.refChip} />
+  }
+  return <a href={href} {...anchorProps}>{children}</a>
+}
+
+/** The words inside a rendered markdown node, without their markup. */
+function plainTextOf(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(plainTextOf).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return plainTextOf(node.props.children)
+  return ''
 }
 
 /** How long the provisional-narration guess may stand after the transcript last
@@ -356,6 +408,25 @@ export default function TurnList({
     previousGalleryImages.current = out
     return out
   }, [turns, entries, visibleEntryIds, view, api, sessionId])
+  // Every file shared into the loaded transcript, by id, for the chips: a card, a
+  // pasted address or a mention in prose all draw the same record from here.
+  const previousSessionFiles = useRef<ReadonlyMap<string, SessionFileShown>>(new Map())
+  const sessionFiles = useMemo(() => {
+    const out = new Map<string, SessionFileShown>()
+    for (const entry of Object.values(entries)) {
+      if (entry.kind !== 'file' || !entry.sessionFile) continue
+      const file = entry.sessionFile
+      out.set(file.file_id, { file, personName: file.shared_by === 'agent' ? null : userActorLabel(entry) })
+    }
+    // The same map while nothing in it changed, for the reason the gallery keeps its
+    // array: `entries` changes on every streamed token.
+    const previous = previousSessionFiles.current
+    if (previous.size === out.size && [...out].every(([id, shown]) => sameSessionFileShown(previous.get(id), shown))) {
+      return previous
+    }
+    previousSessionFiles.current = out
+    return out
+  }, [entries])
   // A session action's button sits where the agent wrote its id, or at its offer when
   // it wrote none, and reads its state from the newest of its records, which arrive as
   // later entries.
@@ -682,6 +753,7 @@ export default function TurnList({
       <ToolContext.Provider value={toolContextValue}>
       <SessionActionsContext.Provider value={sessionActions}>
       <SessionImagesProvider images={galleryImages}>
+      <SessionFilesContext.Provider value={sessionFiles}>
       <VList ref={listRef} className="bc-turns-body" onScroll={onScroll} shift={itemEdges.rowsWereAddedAbove}>
         {more ? (
           <button key="__older__" className={styles.loadOlder} onClick={loadOlder}>
@@ -690,6 +762,7 @@ export default function TurnList({
         ) : null}
         {items}
       </VList>
+      </SessionFilesContext.Provider>
       </SessionImagesProvider>
       </SessionActionsContext.Provider>
       </ToolContext.Provider>
@@ -1689,15 +1762,20 @@ const ProseBody = memo(function ProseBody({
         'ref-chip': (props: RefChipProps) => (
           <RefChip {...props} className={styles.refChip} onActivate={onActivateSessionRef} />
         ),
+        // An agent that pastes a shared file's content address as a picture or a link
+        // has named a record: draw the record's chip, not a bare picture or address.
+        img: ({ src, alt }: { src?: unknown; alt?: string }) => (
+          <ProseImage src={typeof src === 'string' ? src : ''} alt={alt ?? ''} />
+        ),
+        a: ({ node: _node, href, children, ...rest }: { node?: unknown; href?: string; children?: ReactNode }) => (
+          <ProseLink href={href} anchorProps={rest}>{children}</ProseLink>
+        ),
       }) as unknown as MdComponents,
     [onActivateSessionRef],
   )
-  const sessionImages = useSessionImages()
-  const imageFileIds = useMemo(
-    () => (sessionImages?.images ?? []).flatMap((image) => (image.fileId ? [image.fileId] : [])),
-    [sessionImages],
-  )
-  const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns(), imageFileIds)
+  const sessionFiles = useContext(SessionFilesContext)
+  const sessionFileIds = useMemo(() => [...(sessionFiles?.keys() ?? [])], [sessionFiles])
+  const remarkPlugins = remarkPluginsFor(useResolvableIdPatterns(), sessionFileIds)
   // The plain-text toggle wins, and it takes the vibes with it: TXT is the "show me
   // exactly what the model sent" mode, and a rail drawn beside unparsed source would be
   // claiming a structure the user just asked not to have interpreted.

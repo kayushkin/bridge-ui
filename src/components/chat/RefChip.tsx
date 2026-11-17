@@ -24,8 +24,8 @@ import { SignalRequestList } from './SessionSignals';
 import { SessionChipOpenQuestions } from './SessionChipOpenQuestions';
 import { useOpenSignalRequestsOfSession } from './sessionsWithOpenQuestion';
 import { SessionActionInText } from './SessionActions';
-import { FileRefChip, ImageRefChip } from './FileRefChip';
-import { sharedFileGalleryKey, useSessionImages } from './ImageGallery';
+import { FileRefChip } from './FileRefChip';
+import { SessionFileChip, useSessionFileShown } from './SessionFileChip';
 import {
   RefChipServerContext,
   refChipRoute,
@@ -137,8 +137,8 @@ export function RefChip(props: RefChipProps): JSX.Element {
     return <SessionActionInText actionId={refId} />;
   }
   if (kind === 'registered') {
-    // The session's own shared-image ids are registered patterns too (TurnList adds
-    // them); one of those draws as the picture, anything else goes to the resolver.
+    // The session's own shared-file ids are registered patterns too (TurnList adds
+    // them); one of those draws as the file's chip, anything else goes to the resolver.
     return <RegisteredRefChip refId={refId} className={props.className} onActivate={props.onActivate} />;
   }
   if (kind === 'uuid') {
@@ -160,10 +160,12 @@ function RegisteredRefChip({
   className?: string;
   onActivate?: (kind: string, refId: string) => void;
 }): JSX.Element {
-  const sessionImages = useSessionImages();
-  const key = sharedFileGalleryKey(refId);
-  const image = sessionImages?.images.find((candidate) => candidate.key === key);
-  if (image) return <ImageRefChip mentionText={image.name} image={image} className={className} />;
+  // A file shared into the session on screen: its own chip, with the file's name
+  // beside the id that was written.
+  const shown = useSessionFileShown(refId);
+  if (shown) {
+    return <SessionFileChip file={shown.file} personName={shown.personName} label={shown.file.filename} className={className} />;
+  }
   return <UnclassifiedRefChip refId={refId} className={className} onActivate={onActivate} />;
 }
 

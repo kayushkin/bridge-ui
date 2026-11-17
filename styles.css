@@ -6347,13 +6347,31 @@
 .bc-attach-error { flex-basis: 100%; color: var(--error, #e57373); font-size: 0.8em; }
 
 .bc-shared-file { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 4px 0; }
-.bc-shared-file-link {
-  display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%;
-  color: var(--text); text-decoration: none; font-size: 0.85em;
-}
-.bc-shared-file-link:hover .bc-shared-file-name { text-decoration: underline; }
-.bc-shared-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The card where an agent pasted the file's address as a markdown image: it sits
+   inside a paragraph, so it is inline elements laid out as a block. */
+.bc-shared-file-in-prose { margin: 6px 0; }
+.bc-shared-file-in-prose > .bc-image-thumb { display: block; }
+/* The card's heading: the fold button, the file's reference chip
+   (src/components/chat/SessionFileChip.tsx) and its size. */
+.bc-shared-file-head { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 0.85em; }
 .bc-shared-file-size { color: var(--text-muted); white-space: nowrap; }
+.bc-shared-file-caption { color: var(--text-muted); font-size: 0.8em; max-width: min(640px, 100%); }
+.bc-file-fold {
+  flex: none; width: 1.5em; height: 1.5em; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: var(--text-muted); font: inherit; line-height: 1; cursor: pointer;
+}
+.bc-file-fold:hover { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
+/* A shared file's chip: its name, then its id in a quieter tone. */
+.ref-chip-session-file { max-width: 100%; }
+.ref-chip-session-file .ref-chip-label { overflow: hidden; text-overflow: ellipsis; }
+.ref-chip-file-id { opacity: 0.7; white-space: nowrap; }
+.ref-chip-file-id::before { content: '· '; }
+.ref-chip-panel-session-file { display: flex; flex-direction: column; gap: 2px; }
+.ref-chip-panel-session-file > .ref-chip-image-preview,
+.ref-chip-panel-session-file > .ref-chip-file-video { margin-bottom: 6px; }
+.ref-chip-panel-session-file > .ref-chip-image-meta { margin-top: 6px; }
+.ref-chip-file-video { display: block; width: 100%; max-height: 300px; border-radius: 4px; background: #000; }
+.ref-chip-file-fact-code { font-family: monospace; font-size: 0.95em; overflow-wrap: anywhere; }
 .bc-shared-file-preview { align-self: stretch; font-size: 0.85em; }
 .bc-shared-file-preview > summary { cursor: pointer; color: var(--text-muted); user-select: none; }
 .bc-shared-file-preview[open] > summary { margin-bottom: 4px; }
@@ -6454,10 +6472,14 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 .bc-tool-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .bc-tool-images .bc-image-thumb img { max-width: 200px; max-height: 140px; }
 
-/* Several images shared together: one grid of tiles, each name under its tile. */
+/* Several images shared together: a heading with the fold button, then one grid of
+   tiles with each image's chip under its tile, or — folded — the chips alone. */
+.bc-image-group { margin: 6px 0; }
+.bc-image-group-head { display: flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text-muted); }
+.bc-image-group-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; font-size: 0.85em; }
 .bc-image-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px;
-  max-width: 760px; margin: 6px 0;
+  max-width: 760px; margin: 4px 0 0;
 }
 .bc-image-grid-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; margin: 0; }
 .bc-image-grid-tile {
@@ -6468,11 +6490,9 @@ pre.bc-shared-file-preview-body { white-space: pre-wrap; overflow-wrap: anywhere
 }
 .bc-image-grid-tile:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 3px 12px rgb(0 0 0 / 25%); }
 .bc-image-grid-tile img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.bc-image-grid-caption {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75em;
-}
-.bc-image-grid-caption a { color: var(--text-muted); text-decoration: none; }
-.bc-image-grid-caption a:hover { color: var(--text); text-decoration: underline; }
+.bc-image-grid-caption { min-width: 0; font-size: 0.75em; }
+.bc-image-grid-caption .ref-chip-wrap { display: flex; min-width: 0; }
+.bc-image-grid-caption .ref-chip-session-file { min-width: 0; }
 
 /* The image viewer (src/components/chat/ImageGallery.tsx): a bar of controls, the
    stage with one pane or two side by side, and a strip of thumbnails. */

@@ -4,12 +4,27 @@ import remarkGfm from 'remark-gfm'
 import { useChatContext, type ApiClient, type SessionFile, type ToolResultImage } from '@kayushkin/chat-core'
 import { formatBytes } from '../../toolPayloadPreview'
 import { mayDrawAsImage, mayPlayAsVideo, textPreviewKind, type TextPreviewKind } from '../../sessionFileAttachments'
-import { sharedFileGalleryKey, toolImageGalleryKey, useOpenImage, type GalleryImage } from './ImageGallery'
+import { toolImageGalleryKey, useOpenImage, type GalleryImage } from './ImageGallery'
+import {
+  FoldToggle,
+  SessionFileChip,
+  galleryImageOfSharedFile,
+  useFoldedSessionFile,
+  useSessionFileShown,
+} from './SessionFileChip'
+import { imageGroupFoldKey, sessionFileFoldKey } from '../../foldedSessionFiles'
+import { imageGroupLabel } from '../../sessionFileReferences'
+
+export { galleryImageOfSharedFile }
 
 /**
  * Images, videos and files in the chat: a card for a file shared into the session, a
  * compact grid for several images shared together, and the strip of images a tool
  * result carried. Each image opens the viewer in `ImageGallery.tsx`.
+ *
+ * Every shared file carries its reference chip (`SessionFileChip.tsx`): the chip's
+ * panel holds the file's id, who shared it and where it came from. A picture, a video
+ * or a whole group folds away behind its chip, and stays folded in this browser.
  *
  * Every byte comes from the bridge through the host's proxy — a shared file from
  * file-store (`ApiClient.sessionFileContentUrl`), a settled tool image from log-store
@@ -44,19 +59,6 @@ function ImageThumbnail({
       {viewer}
     </>
   )
-}
-
-/** A shared file as the viewer shows it. */
-export function galleryImageOfSharedFile(api: { sessionFileContentUrl: ApiClient['sessionFileContentUrl'] }, file: SessionFile): GalleryImage {
-  return {
-    key: sharedFileGalleryKey(file.file_id),
-    fileId: file.file_id,
-    src: api.sessionFileContentUrl(file.session_id, file.file_id, { inline: true }),
-    name: file.filename,
-    downloadHref: api.sessionFileContentUrl(file.session_id, file.file_id),
-    sizeBytes: file.size_bytes,
-    sharedAt: file.created_at,
-  }
 }
 
 /** An image a tool result carried, as the viewer shows it; null when its bytes are
@@ -139,67 +141,105 @@ function TextFilePreview({ file, kind }: { file: SessionFile; kind: TextPreviewK
   )
 }
 
-/** One file shared into the session: drawn when it is an image the server serves
- *  inline, played when it is such a video, and always its name and size as a download
- *  link, with a preview to unfold when it is text. */
-export function SharedFileCard({ file }: { file: SessionFile }) {
+/**
+ * One file shared into the session: its reference chip, then the picture when it is an
+ * image the server serves inline, the player when it is such a video, and a preview to
+ * unfold when it is text. The fold button puts the picture or video away and leaves
+ * the chip, whose panel still shows it.
+ *
+ * `inProse` is the card where an agent pasted the file's address as a markdown image:
+ * it is built from inline elements only, since it sits inside a paragraph, and it
+ * shows the agent's own words for the picture under it.
+ */
+export function SharedFileCard({
+  file,
+  inProse = false,
+  caption,
+}: {
+  file: SessionFile
+  inProse?: boolean
+  /** The agent's description of the picture, from the markdown image's alt text. */
+  caption?: string
+}) {
   const { api } = useChatContext()
   const [undrawable, setUndrawable] = useState(false)
+  const shown = useSessionFileShown(file.file_id)
+  const { folded, setFolded } = useFoldedSessionFile(sessionFileFoldKey(file.file_id))
   const image = galleryImageOfSharedFile(api, file)
-  const inlineSrc = image.src
-  const downloadHref = image.downloadHref
   const drawn = mayDrawAsImage(file.media_type) && !undrawable
   const played = mayPlayAsVideo(file.media_type) && !undrawable
-  const previewKind = textPreviewKind(file)
+  const previewKind = inProse ? null : textPreviewKind(file)
+  const foldable = drawn || played
+  const Block = inProse ? 'span' : 'div'
   return (
-    <div className="bc-shared-file" data-file-id={file.file_id}>
-      {drawn ? (
+    <Block className={`bc-shared-file${inProse ? ' bc-shared-file-in-prose' : ''}`} data-file-id={file.file_id}>
+      <span className="bc-shared-file-head">
+        {foldable && <FoldToggle folded={folded} onToggle={() => setFolded(!folded)} what={file.filename} />}
+        <SessionFileChip file={file} personName={shown?.personName ?? null} showThumbnail={folded} />
+        <span className="bc-shared-file-size">{formatBytes(file.size_bytes)}</span>
+      </span>
+      {drawn && !folded ? (
         <ImageThumbnail image={image} onUndrawable={() => setUndrawable(true)} />
       ) : null}
-      {played ? (
+      {played && !folded ? (
         <video
           className="bc-shared-file-video"
-          src={inlineSrc}
+          src={image.src}
           controls
           preload="metadata"
           aria-label={file.filename}
           onError={() => setUndrawable(true)}
         />
       ) : null}
-      <a className="bc-shared-file-link" href={downloadHref} download={file.filename} title={file.path}>
-        <span aria-hidden>{drawn ? '🖼' : played ? '🎬' : '📄'}</span>
-        <span className="bc-shared-file-name">{file.filename}</span>
-        <span className="bc-shared-file-size">{formatBytes(file.size_bytes)}</span>
-      </a>
+      {caption && !folded ? <span className="bc-shared-file-caption">{caption}</span> : null}
       {previewKind && <TextFilePreview file={file} kind={previewKind} />}
-    </div>
+    </Block>
   )
 }
 
 /**
- * Several images shared one after another, as one grid of tiles with each name under
- * its tile, rather than a full-size card each down the page. A tile opens the viewer;
- * the name downloads the original.
+ * Several images shared one after another, as one grid of tiles with each image's
+ * chip under its tile, rather than a full-size card each down the page. A tile opens
+ * the viewer; the chip says where the image came from. Folded, the group is its
+ * heading and the row of chips.
  */
 export function SharedImageGrid({ files }: { files: readonly SessionFile[] }) {
   const { api } = useChatContext()
+  const { folded, setFolded } = useFoldedSessionFile(imageGroupFoldKey(files[0]!.file_id))
+  const label = imageGroupLabel(files.length)
   return (
-    <div className="bc-image-grid" role="group" aria-label={`${files.length} images`}>
-      {files.map((file) => {
-        const image = galleryImageOfSharedFile(api, file)
-        return (
-          <figure key={file.file_id} className="bc-image-grid-item" data-file-id={file.file_id}>
-            <ImageThumbnail image={image} className="bc-image-grid-tile" />
-            <figcaption className="bc-image-grid-caption">
-              <a href={image.downloadHref} download={file.filename} title={`Download ${file.filename} (${formatBytes(file.size_bytes)})`}>
-                {file.filename}
-              </a>
-            </figcaption>
-          </figure>
-        )
-      })}
+    <div className="bc-image-group" data-folded={folded ? 'true' : 'false'}>
+      <div className="bc-image-group-head">
+        <FoldToggle folded={folded} onToggle={() => setFolded(!folded)} what={label} />
+        <span className="bc-image-group-label">{label}</span>
+      </div>
+      {folded ? (
+        <div className="bc-image-group-chips" role="group" aria-label={label}>
+          {files.map((file) => (
+            <GridFileChip key={file.file_id} file={file} showThumbnail />
+          ))}
+        </div>
+      ) : (
+        <div className="bc-image-grid" role="group" aria-label={label}>
+          {files.map((file) => (
+            <figure key={file.file_id} className="bc-image-grid-item" data-file-id={file.file_id}>
+              <ImageThumbnail image={galleryImageOfSharedFile(api, file)} className="bc-image-grid-tile" />
+              <figcaption className="bc-image-grid-caption">
+                <GridFileChip file={file} showThumbnail={false} />
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
     </div>
   )
+}
+
+/** One image's chip in a group: its name alone, since a tile is narrow; the id is on
+ *  the chip's title and in its panel. */
+function GridFileChip({ file, showThumbnail }: { file: SessionFile; showThumbnail: boolean }) {
+  const shown = useSessionFileShown(file.file_id)
+  return <SessionFileChip file={file} personName={shown?.personName ?? null} showThumbnail={showThumbnail} showId={false} />
 }
 
 /** The images a tool result carried — a screenshot, an image file the agent read. */
