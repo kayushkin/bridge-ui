@@ -52,7 +52,9 @@ export interface NewSessionTarget {
  *    2. else an enabled instance of the recorded last harness (`last_harness`),
  *       preferring one that has actually been used (it has a `last_session` entry), so
  *       the harness shown is the user's real last one rather than an invented pick;
- *    3. else undefined — nothing is recorded, so nothing is targeted.
+ *    3. else the one enabled instance, when the server lists exactly one — a person
+ *       held to their grants has no prefs record and only that place to go;
+ *    4. else undefined — nothing is recorded, so nothing is targeted.
  *
  *  Onto whichever instance that ladder finds, the harness's saved defaults are merged
  *  (`prefs.defaults[harness]` — the record the Settings page writes and the original
@@ -112,6 +114,11 @@ export function useNewSessionTarget(): NewSessionTarget {
       const inst = used ?? ofHarness[0]
       if (inst) return optsFor(inst.id, inst.harness_type)
     }
+    // Nothing recorded, but the server lists exactly one enabled instance: it is
+    // the only place this caller may start a session (a person held to their
+    // grants, who has no prefs record), so it is the answer, not a guess.
+    const enabled = instances.filter((i) => i.enabled)
+    if (enabled.length === 1) return optsFor(enabled[0].id, enabled[0].harness_type)
     return undefined
   }, [prefs, instances, instanceMap, optsFor])
 

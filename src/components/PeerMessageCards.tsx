@@ -63,6 +63,15 @@ async function peerMessageErrorText(res: Response, verb: string): Promise<string
   }
 }
 
+/** The `error.code` of a refusal, or '' when the body carries none. */
+async function refusalCodeOf(res: Response): Promise<string> {
+  try {
+    return ((await res.json()) as { error?: { code?: string } }).error?.code ?? ''
+  } catch {
+    return ''
+  }
+}
+
 interface PeerMessageList {
   /** False when this server answers 404: it has no message routes, which is
    *  not "no messages". */
@@ -79,6 +88,11 @@ async function loadPeerMessages(fetchFn: FetchFn, url: string): Promise<LoadResu
   }
   try {
     if (res.status === 404) return { ok: true, value: { available: false, messages: [] } }
+    // A person who is not an administrator is refused the route as an operator
+    // route: the messages are not theirs to see, which is not a failure.
+    if (res.status === 403 && (await refusalCodeOf(res.clone())) === 'operator_route') {
+      return { ok: true, value: { available: false, messages: [] } }
+    }
     if (!res.ok) {
       return {
         ok: false,
