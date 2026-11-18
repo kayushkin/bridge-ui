@@ -39,6 +39,7 @@
     "@kayushkin/grant-store-types": "file:../grant-store/ts",
     "@kayushkin/kanban-store-types": "file:../kanban-store/ts",
     "@kayushkin/llm-bridge-types": "file:../llm-bridge/ts",
+    "@kayushkin/message-store-types": "file:../message-store/ts",
     "@kayushkin/multichat-types": "file:../multichat/ts",
     "@kayushkin/noteboard-types": "file:../noteboard/ts",
     "@kayushkin/principal-store-types": "file:../principal-store/ts",
@@ -51,9 +52,9 @@
     "diff": "^7.0.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0",
+    "three": "^0.187.0",
     "unist-util-visit": "^5.0.0",
-    "virtua": "^0.44.3",
-    "@kayushkin/message-store-types": "file:../message-store/ts"
+    "virtua": "^0.44.3"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -65,6 +66,7 @@
     "@types/mdast": "^4.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.25.12",
     "linkedom": "^0.18.13",

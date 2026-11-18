@@ -84,6 +84,9 @@ export interface BridgeProviderProps {
   /** The host's list of agents' dev servers (dash: "/api/previews"). If
    * omitted, the Previews page is hidden and Bash calls show no View button. */
   previewsBasePath?: string
+  /** The host's list of .glb files agents make (dash: "/api/3d-models"). If
+   * omitted, the 3D models page is hidden. */
+  threeDimensionalModelsBasePath?: string
   /** Base path for work-graph-store (dash: "/api/work-graph"). If omitted,
    * the chat's work-graph view says it is not configured and nothing links to
    * it. */
@@ -137,6 +140,7 @@ export function BridgeProvider({
   authStoreBasePath = '',
   hostBasePath = '',
   previewsBasePath = '',
+  threeDimensionalModelsBasePath = '',
   workGraphStoreBasePath = '',
   projectStoreBasePath = '',
   modelStoreBasePath = '',
@@ -178,13 +182,14 @@ export function BridgeProvider({
     authStoreBasePath,
     hostBasePath,
     previewsBasePath,
+    threeDimensionalModelsBasePath,
     workGraphStoreBasePath,
     projectStoreBasePath,
     modelStoreBasePath,
     renderHarnessExtension: renderHarnessExtension ?? null,
     renderReferenceChip: renderReferenceChip ?? null,
     routes: { ...DEFAULT_BRIDGE_ROUTES, ...routes },
-  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, messageStoreBasePath, noteboardBasePath, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
+  }), [fetchFn, basePath, skillStoreBasePath, toolStoreBasePath, permissionStoreBasePath, kanbanStoreBasePath, principalStoreBasePath, grantStoreBasePath, bundleStoreBasePath, repoStoreBasePath, mailBasePath, multichatBasePath, libraryInvitationsPath, mailPagePath, peopleStoreBasePath, journalStoreBasePath, photoStoreBasePath, messageStoreBasePath, noteboardBasePath, referenceStoreBasePath, bridgeAdapterBasePath, orchestratorBasePath, usageStoreBasePath, schedulerBasePath, logStoreBasePath, jobStoreBasePath, quoteStoreBasePath, predictionStoreBasePath, eventStoreBasePath, authStoreBasePath, hostBasePath, previewsBasePath, threeDimensionalModelsBasePath, workGraphStoreBasePath, projectStoreBasePath, modelStoreBasePath, renderHarnessExtension, renderReferenceChip, routes])
 
   return (
     <BridgeContext value={config}>

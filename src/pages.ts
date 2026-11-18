@@ -36,6 +36,7 @@ import { BridgeServiceSettings } from './components/BridgeServiceSettings'
 import { BridgeModels } from './components/BridgeModels'
 import { BridgeHooks } from './components/BridgeHooks'
 import { BridgePreviews } from './components/BridgePreviews'
+import { BridgeThreeDimensionalModels } from './components/BridgeThreeDimensionalModels'
 import { BridgeDiscord } from './components/BridgeDiscord'
 import { BridgeEmoji } from './components/messages/BridgeEmoji'
 import { BridgeAutoReactions } from './components/messages/BridgeAutoReactions'
@@ -124,6 +125,9 @@ export const BRIDGE_PAGES: readonly BridgePage[] = [
   // The dev servers agents are running. Only the host can see a machine's
   // listening ports, so a host that lists none gets no page.
   { route: 'previews', label: 'Previews', group: 'work', listed: true, available: c => !!c.previewsBasePath, component: BridgePreviews },
+  // The 3D models agents are making, found by the host from their tool calls
+  // and the folders they work in.
+  { route: 'threeDimensionalModels', label: '3D models', group: 'work', listed: true, available: c => !!c.threeDimensionalModelsBasePath, component: BridgeThreeDimensionalModels },
   // Waiting on you comes first, so the Messages tab opens it: who wrote and
   // is waiting on a reply.
   { route: 'messageWaiting', label: 'Waiting on you', group: 'messages', listed: true, available: c => !!c.multichatBasePath, component: BridgeMessagesWaiting, badge: AwaitingReplyCount },

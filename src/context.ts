@@ -90,6 +90,10 @@ export interface BridgeRoutes {
   /** The dev servers agents are running, each shown in a frame. `?port=<n>`
    *  opens the one listening on that port. Needs `previewsBasePath`. */
   previews: string
+  /** The 3D models agents are making and have made, with the renders they
+   *  opened. `?session=<id>` or `?repository=<folder>`, and `&model=<path>`.
+   *  Needs `threeDimensionalModelsBasePath`. */
+  threeDimensionalModels: string
   /** Discord through multichat: the message log with deleted messages kept,
    *  and the bridge's status. `?tab=deleted|status`. Needs `multichatBasePath`. */
   discord: string
@@ -146,6 +150,7 @@ export const DEFAULT_BRIDGE_ROUTES: BridgeRoutes = {
   messageSearch: '/messages/search',
   messageContacts: '/messages/contacts',
   previews: '/previews',
+  threeDimensionalModels: '/3d-models',
   discord: '/messages/discord',
   emoji: '/messages/emoji',
   autoReactions: '/messages/auto-reactions',
@@ -241,6 +246,10 @@ export interface BridgeConfig {
    * public port that shows it (dash: "/api/previews"). If empty, the Previews
    * page is hidden and Bash calls show no View button. */
   previewsBasePath: string
+  /** The HOST's list of .glb files agents are making and the renders they
+   * opened, with `/file?path=` serving each one it listed (dash:
+   * "/api/3d-models"). If empty, the 3D models page is hidden. */
+  threeDimensionalModelsBasePath: string
   /** Base path for work-graph-store as the host proxies it (dash:
    * "/api/work-graph"): which agent session moved which git ref, drawn as
    * each repo's commit graph by the chat's `?view=work-graph`. If empty, the
