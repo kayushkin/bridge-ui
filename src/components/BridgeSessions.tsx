@@ -4,22 +4,47 @@ import { useFilters, useSessionList, type SessionSummary } from '@kayushkin/chat
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import { useBridgeHarnesses } from '../useBridgeHarnesses'
+import type { SessionAggregate } from '@kayushkin/llm-bridge-types'
 import { formatTokens, timeAgo } from '../utils'
+import {
+  allTokens,
+  emptySessionTokenUsage,
+  sessionTokenUsageOf,
+  tokenCountsText,
+  tokenUsageRecordNote,
+  wholeSessionTokenCounts,
+  type SessionTokenUsage,
+} from '../sessionTokenUsage'
 
 const STATE_COLORS: Record<string, string> = {
   running: '#22c55e', idle: '#60a5fa', completed: '#888',
   error: '#ef4444', aborted: '#ef4444', waiting_on_approval: '#f59e0b',
 }
 
-interface SessionTokens { input: number; output: number }
+// The token column reads GET /sessions/aggregates — log-store's per-session
+// totals, the same source BridgeUsage reads — through sessionTokenUsageOf, so
+// a session's cache tokens and its subagents' calls are in the number here as
+// they are there.
 
-// One row of GET /sessions/aggregates — log-store's per-session projection of
-// the result events, the same source BridgeUsage reads. Only the token totals
-// are used here; the rest of the row is ignored.
-interface SessionAggregate {
-  session_id: string
-  input_tokens: number
-  output_tokens: number
+/** The token column of one row: input and output together, then the cache
+ *  tokens, which on a long session are a thousand times the first number. The
+ *  title splits both between the main conversation and its subagents. */
+function SessionTokensCell({ tokens }: { tokens: SessionTokenUsage | undefined }) {
+  if (!tokens) return <span className="bs-row-tokens" />
+  const whole = wholeSessionTokenCounts(tokens)
+  if (allTokens(whole) === 0) return <span className="bs-row-tokens" />
+  const cache = whole.cacheRead + whole.cacheWrite
+  const title = [
+    `main: ${tokenCountsText(tokens.mainConversation)}`,
+    ...(tokens.subagentCalls > 0 ? [`subagents: ${tokenCountsText(tokens.subagents)}`] : []),
+    tokenUsageRecordNote(tokens.countedFrom),
+  ].join('\n')
+  return (
+    <span className="bs-row-tokens" title={title}>
+      {formatTokens(whole.input + whole.output)} tok
+      {cache > 0 && <span className="bs-row-tokens-cache"> + {formatTokens(cache)} cache</span>}
+    </span>
+  )
 }
 
 /** A session the token column can show a number for. `empty` sessions never
@@ -30,7 +55,7 @@ type TokenColumnSession = { sessionId: string; state: string }
  *  makes the page ask the server for the aggregate. */
 export function sessionTokenTotalsAreMissing(
   sessions: TokenColumnSession[],
-  known: Map<string, SessionTokens>,
+  known: Map<string, SessionTokenUsage>,
 ): boolean {
   return sessions.some(s => s.state !== 'empty' && !known.has(s.sessionId))
 }
@@ -44,17 +69,17 @@ export function sessionTokenTotalsAreMissing(
  * page would re-fetch the whole aggregate on every render.
  */
 export function applySessionAggregates(
-  known: Map<string, SessionTokens>,
+  known: Map<string, SessionTokenUsage>,
   aggregates: SessionAggregate[],
   onScreen: TokenColumnSession[],
-): Map<string, SessionTokens> {
+): Map<string, SessionTokenUsage> {
   const next = new Map(known)
   for (const a of aggregates) {
-    next.set(a.session_id, { input: a.input_tokens || 0, output: a.output_tokens || 0 })
+    next.set(a.session_id, sessionTokenUsageOf(a))
   }
   for (const s of onScreen) {
     if (s.state !== 'empty' && !next.has(s.sessionId)) {
-      next.set(s.sessionId, { input: 0, output: 0 })
+      next.set(s.sessionId, emptySessionTokenUsage())
     }
   }
   return next
@@ -74,7 +99,7 @@ export function BridgeSessions() {
   const { fetch: apiFetch, basePath, routes } = useBridgeConfig()
   const { groups, loading, facets, moreSessions, loadingOlderSessions, loadOlderSessions } = useSessionList()
   const { filter, set, contentSearchReach, searching, searchError } = useFilters()
-  const [tokensMap, setTokensMap] = useState<Map<string, SessionTokens>>(new Map())
+  const [tokensMap, setTokensMap] = useState<Map<string, SessionTokenUsage>>(new Map())
   const inst = useBridgeInstances()
   const { harnessMap } = useBridgeHarnesses()
   const navigate = useNavigate()
@@ -208,7 +233,6 @@ export function BridgeSessions() {
             const instance = s.instanceId ? inst.instanceMap.get(s.instanceId) : undefined
             const hinfo = harnessMap.get(s.harness)
             const tokens = tokensMap.get(s.sessionId)
-            const totalTokens = tokens ? tokens.input + tokens.output : undefined
             const state = s.state
             return (
               <li key={s.sessionId}>
@@ -221,9 +245,7 @@ export function BridgeSessions() {
                   <span className="bs-state-dot" style={{ background: STATE_COLORS[state] || '#888' }} />
                   <span className="bs-row-name">{s.displayName || s.sessionId.slice(0, 16)}</span>
                   {instance && <span className="bs-row-instance">{instance.name}</span>}
-                  <span className="bs-row-tokens">
-                    {totalTokens !== undefined && totalTokens > 0 ? `${formatTokens(totalTokens)} tok` : ''}
-                  </span>
+                  <SessionTokensCell tokens={tokens} />
                   <span className="bs-row-time">{timeAgo(s.updatedAt)}</span>
                 </button>
               </li>

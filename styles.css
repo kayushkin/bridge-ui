@@ -1783,6 +1783,7 @@
 .bs-row-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bs-row-instance { font-size: 0.8em; color: var(--text-dim); white-space: nowrap; }
 .bs-row-tokens { font-size: 0.8em; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
+.bs-row-tokens-cache { color: var(--text-dim); }
 .bs-row-time { font-size: 0.8em; color: var(--text-dim); white-space: nowrap; min-width: 64px; text-align: right; }
 
 /* ===== BridgeAuth ===== */
@@ -1833,6 +1834,8 @@
 }
 .bu-total-label { font-size: 0.75em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .bu-total-value { font-size: 1.2em; font-weight: 600; }
+.bu-total-part { font-size: 0.72em; color: var(--text-dim); }
+.bu-pies-note { flex-basis: 100%; margin: 0; font-size: 0.8em; color: var(--text-dim); }
 .bu-loading-small { color: var(--text-dim); font-size: 0.85em; margin-bottom: 12px; }
 .bu-harness-section { margin-bottom: 24px; }
 .bu-harness-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -1841,12 +1844,22 @@
 .bu-token-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 12px; background: var(--border); }
 .bu-token-bar-in { background: #60a5fa; }
 .bu-token-bar-out { background: #f59e0b; }
+.bu-token-bar-cache-read { background: #34d399; }
+.bu-token-bar-cache-write { background: #a78bfa; }
 .bu-session-list { display: flex; flex-direction: column; gap: 2px; }
 .bu-session-row {
   display: flex; align-items: center; gap: 12px; padding: 6px 12px;
   font-size: 0.8em; color: var(--text-muted); border-radius: 6px;
 }
-.bu-session-row:hover { background: rgba(99, 102, 241, 0.05); }
+.bu-session:hover { background: rgba(99, 102, 241, 0.05); border-radius: 6px; }
+.bu-session-tokens {
+  display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 2px;
+  padding: 0 12px 6px 12px; font-size: 0.8em; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.bu-session-tokens-part { color: var(--text-dim); }
+.bu-session-tokens-uncounted { color: var(--text-dim); font-style: italic; }
+.bu-source-subagents { color: var(--text-dim); }
 .bu-session-id { font-family: monospace; font-size: 0.9em; min-width: 130px; }
 .bu-instance-label { padding: 1px 6px; border-radius: 4px; background: #1a1a2a; font-size: 0.9em; }
 .bu-session-model { color: var(--text-dim); min-width: 80px; }

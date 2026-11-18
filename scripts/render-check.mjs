@@ -532,7 +532,13 @@ async function sharedPollChecks() {
     ]
     const aggregates = [
       { session_id: 'a', input_tokens: 5503, output_tokens: 8535 },
-      { session_id: 'b', input_tokens: 7, output_tokens: 159 },
+      {
+        session_id: 'b', input_tokens: 7, output_tokens: 159,
+        api_call_usage: [
+          { query_source: 'sdk', calls: 2, input_tokens: 7, output_tokens: 159, cache_read_tokens: 90000, cache_write_tokens: 400 },
+          { query_source: 'agent:builtin:general-purpose', calls: 30, input_tokens: 60, output_tokens: 5000, cache_read_tokens: 4000000, cache_write_tokens: 70000 },
+        ],
+      },
       { session_id: 'unrelated', input_tokens: 1, output_tokens: 1 },
     ]
     check('an empty map with rows on screen asks the server',
@@ -542,12 +548,22 @@ async function sharedPollChecks() {
 
     const settled = applySessionAggregates(new Map(), aggregates, rows)
     check('a row takes both totals from its aggregate',
-      settled.get('a')?.input === 5503 && settled.get('a')?.output === 8535,
+      settled.get('a')?.mainConversation.input === 5503 && settled.get('a')?.mainConversation.output === 8535,
       JSON.stringify(settled.get('a')))
+    // A session whose harness reports each model call is read from those
+    // calls, so its cache tokens and its subagents' calls are in the row.
+    check('a row with per-call usage keeps its subagents apart from its main conversation',
+      settled.get('b')?.countedFrom === 'api-calls'
+        && settled.get('b')?.mainConversation.cacheRead === 90000
+        && settled.get('b')?.subagents.output === 5000
+        && settled.get('b')?.subagents.cacheRead === 4000000
+        && settled.get('b')?.subagentCalls === 30,
+      JSON.stringify(settled.get('b')))
     // log-store omits sessions with no usage. Left absent they read as missing
     // forever, and the page re-fetches the whole aggregate on every render.
     check('a row the aggregate omits settles at zero',
-      settled.get('gone')?.input === 0 && settled.get('gone')?.output === 0,
+      settled.get('gone')?.mainConversation.input === 0 && settled.get('gone')?.mainConversation.output === 0
+        && settled.get('gone')?.subagents.output === 0,
       JSON.stringify(settled.get('gone')))
     check('one response answers every row on screen',
       !sessionTokenTotalsAreMissing(rows, settled))

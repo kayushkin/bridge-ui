@@ -1,4 +1,7 @@
 export function formatTokens(n: number): string {
+  // Cache reads run to billions on a long session: 2,055,182,536 must not
+  // read as "2055.2M".
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
   return `${n}`

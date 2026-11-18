@@ -1,31 +1,77 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
+import type { SessionAggregate } from '@kayushkin/llm-bridge-types'
 import { formatTokens, formatDuration } from '../utils'
 import { listSessionSummariesUpdatedSince, type SessionSummaryRow } from '../sessionSummaryPages'
+import {
+  addTokenUsage,
+  allTokens,
+  allTokensOfUsage,
+  emptySessionTokenUsage,
+  emptyTokenUsageTotals,
+  modelCallsText,
+  sessionTokenUsageOf,
+  sumOfTokenCounts,
+  tokenCountsText,
+  tokenUsageRecordNote,
+  type SessionTokenUsage,
+  type TokenCounts,
+  type TokenUsageTotals,
+} from '../sessionTokenUsage'
 
+// One session's row on this page. `tokens` is read from the session's row of
+// GET /sessions/aggregates (msg.SessionAggregate) by sessionTokenUsageOf: the
+// main conversation and its subagents apart, each in the four kinds a model
+// call is counted in. The aggregate carries no cost: a session's cost is the
+// summary row's spendUsd.
 interface SessionUsage {
   sessionId: string
   harness: string
   instanceId: string
-  inputTokens: number
-  outputTokens: number
+  tokens: SessionTokenUsage
   cost: number
   durationMs: number
   model: string
   turns: number
 }
 
-// Server-side per-session token totals from GET /sessions/aggregates.
-// Mirrors msg.SessionAggregate. Summed from result events in log-store.
-// It carries no cost: a session's cost is the summary row's spendUsd.
-interface SessionAggregate {
-  session_id: string
-  turns: number
-  input_tokens: number
-  output_tokens: number
-  duration_ms: number
-  model?: string
+/** One token kind's total on a card: the whole number, and under it how much
+ *  of it subagents used, when they used any. */
+function TokenKindCard({ label, kind, totals }: { label: string; kind: keyof TokenCounts; totals: TokenUsageTotals }) {
+  const subagents = totals.subagents[kind]
+  return (
+    <div className="bu-total-card">
+      <span className="bu-total-label">{label}</span>
+      <span className="bu-total-value">{formatTokens(totals.mainConversation[kind] + subagents)}</span>
+      {subagents > 0 && <span className="bu-total-part">subagents {formatTokens(subagents)}</span>}
+    </div>
+  )
+}
+
+/** A bar split by token kind. Each segment's title names its kind and count,
+ *  because cache reads are most of a long session and leave the other three
+ *  too thin to tell apart by eye. */
+function TokenKindBar({ counts }: { counts: TokenCounts }) {
+  const all = allTokens(counts) || 1
+  const segments: Array<[keyof TokenCounts, string, string]> = [
+    ['input', 'bu-token-bar-in', 'input'],
+    ['output', 'bu-token-bar-out', 'output'],
+    ['cacheRead', 'bu-token-bar-cache-read', 'cache read'],
+    ['cacheWrite', 'bu-token-bar-cache-write', 'cache write'],
+  ]
+  return (
+    <div className="bu-token-bar">
+      {segments.map(([kind, className, name]) => (
+        <div
+          key={kind}
+          className={className}
+          style={{ width: `${(counts[kind] / all) * 100}%` }}
+          title={`${formatTokens(counts[kind])} ${name}`}
+        />
+      ))}
+    </div>
+  )
 }
 
 interface LimitWindow {
@@ -388,13 +434,13 @@ export function BridgeUsage() {
     return sessions.filter(s => s.createdAt >= cutoff)
   }, [sessions, period])
 
-  type Totals = { input: number; output: number; cost: number; duration: number; turns: number }
+  type Totals = { tokens: TokenUsageTotals; cost: number; duration: number; turns: number }
   type SourceGroup = { source: string; sessions: SessionUsage[]; totals: Totals }
   type HarnessGroup = { harness: string; sources: Map<string, SourceGroup>; totals: Totals; sessionCount: number }
 
-  const emptyTotals = (): Totals => ({ input: 0, output: 0, cost: 0, duration: 0, turns: 0 })
+  const emptyTotals = (): Totals => ({ tokens: emptyTokenUsageTotals(), cost: 0, duration: 0, turns: 0 })
   const addTotals = (t: Totals, u: SessionUsage) => {
-    t.input += u.inputTokens; t.output += u.outputTokens
+    addTokenUsage(t.tokens, u.tokens)
     t.cost += u.cost; t.duration += u.durationMs; t.turns += u.turns
   }
 
@@ -410,8 +456,7 @@ export function BridgeUsage() {
         sessionId: s.sessionId,
         harness: s.harness,
         instanceId: s.instanceId,
-        inputTokens: agg?.input_tokens ?? 0,
-        outputTokens: agg?.output_tokens ?? 0,
+        tokens: agg ? sessionTokenUsageOf(agg) : emptySessionTokenUsage(),
         cost: s.spendUsd,
         durationMs: agg?.duration_ms ?? 0,
         model: agg?.model ?? '',
@@ -431,12 +476,13 @@ export function BridgeUsage() {
   }, [periodSessions, aggregates])
 
   const totals = useMemo(() => {
-    let input = 0, output = 0, cost = 0, duration = 0, count = 0
+    const tokens = emptyTokenUsageTotals()
+    let cost = 0, duration = 0, count = 0
     for (const [, g] of harnessGroups) {
-      input += g.totals.input; output += g.totals.output; cost += g.totals.cost
+      addTokenUsage(tokens, g.totals.tokens); cost += g.totals.cost
       duration += g.totals.duration; count += g.sessionCount
     }
-    return { input, output, cost, duration, count }
+    return { tokens, cost, duration, count }
   }, [harnessGroups])
 
   const harnessSlices = useMemo<PieSlice[]>(() => {
@@ -444,7 +490,7 @@ export function BridgeUsage() {
       .map((h, i) => ({
         key: h.harness,
         label: h.harness,
-        value: h.totals.input + h.totals.output,
+        value: allTokensOfUsage(h.totals.tokens),
         color: colorFor(i),
       }))
       .filter(s => s.value > 0)
@@ -457,7 +503,7 @@ export function BridgeUsage() {
     for (const [, h] of harnessGroups) {
       for (const [, src] of h.sources) {
         const key = src.source
-        sums.set(key, (sums.get(key) ?? 0) + src.totals.input + src.totals.output)
+        sums.set(key, (sums.get(key) ?? 0) + allTokensOfUsage(src.totals.tokens))
       }
     }
     return Array.from(sums.entries())
@@ -672,8 +718,10 @@ export function BridgeUsage() {
         <>
           <div className="bu-totals-row">
             <div className="bu-total-card"><span className="bu-total-label">Sessions</span><span className="bu-total-value">{totals.count}</span></div>
-            <div className="bu-total-card"><span className="bu-total-label">Input</span><span className="bu-total-value">{formatTokens(totals.input)}</span></div>
-            <div className="bu-total-card"><span className="bu-total-label">Output</span><span className="bu-total-value">{formatTokens(totals.output)}</span></div>
+            <TokenKindCard label="Input" kind="input" totals={totals.tokens} />
+            <TokenKindCard label="Output" kind="output" totals={totals.tokens} />
+            <TokenKindCard label="Cache read" kind="cacheRead" totals={totals.tokens} />
+            <TokenKindCard label="Cache write" kind="cacheWrite" totals={totals.tokens} />
             {totals.cost > 0 && <div className="bu-total-card"><span className="bu-total-label">Cost</span><span className="bu-total-value">${totals.cost.toFixed(2)}</span></div>}
             <div className="bu-total-card"><span className="bu-total-label">Time</span><span className="bu-total-value">{formatDuration(totals.duration)}</span></div>
           </div>
@@ -682,6 +730,10 @@ export function BridgeUsage() {
             <div className="bu-pies-row">
               <PieChart title="By harness" slices={harnessSlices} valueFmt={formatTokens} />
               <PieChart title="By source" slices={sourceSlices} valueFmt={formatTokens} />
+              <p className="bu-pies-note">
+                Shares of all tokens: input, output, cache read and cache write, subagents included.
+                Input counts only tokens not read from the prompt cache, so on a long session nearly all of it is cache read.
+              </p>
             </div>
           )}
 
@@ -689,26 +741,24 @@ export function BridgeUsage() {
 
           {Array.from(harnessGroups.entries()).map(([harness, group]) => {
             const sources = Array.from(group.sources.values())
-              .sort((a, b) => (b.totals.input + b.totals.output) - (a.totals.input + a.totals.output))
-            const totalTok = group.totals.input + group.totals.output || 1
+              .sort((a, b) => allTokensOfUsage(b.totals.tokens) - allTokensOfUsage(a.totals.tokens))
+            const groupTokens = sumOfTokenCounts(group.totals.tokens.mainConversation, group.totals.tokens.subagents)
             return (
               <div key={harness} className="bu-harness-section">
                 <div className="bu-harness-header">
                   <span className="bu-harness-name">{harness}</span>
                   <span className="bu-harness-summary">
-                    {group.sessionCount} sessions &middot; {formatTokens(group.totals.input + group.totals.output)} tokens
+                    {group.sessionCount} sessions &middot; {tokenCountsText(groupTokens)}
                     {group.totals.cost > 0 && ` \u00B7 $${group.totals.cost.toFixed(2)}`}
                   </span>
                 </div>
-                <div className="bu-token-bar">
-                  <div className="bu-token-bar-in" style={{ width: `${(group.totals.input / totalTok) * 100}%` }} />
-                  <div className="bu-token-bar-out" style={{ width: `${(group.totals.output / totalTok) * 100}%` }} />
-                </div>
+                <TokenKindBar counts={groupTokens} />
                 <div className="bu-source-list">
                   {sources.map(src => {
                     const k = `${harness}::${src.source}`
                     const open = !!expandedSources[k]
                     const label = sourceLabel(src.source)
+                    const sourceSubagentTokens = allTokens(src.totals.tokens.subagents)
                     return (
                       <div key={k} className="bu-source-group">
                         <button
@@ -720,7 +770,14 @@ export function BridgeUsage() {
                           <span className="bu-source-toggle">{open ? '\u25BC' : '\u25B6'}</span>
                           <span className="bu-source-label">{label}</span>
                           <span className="bu-source-count">{src.sessions.length} session{src.sessions.length === 1 ? '' : 's'}</span>
-                          <span className="bu-source-tokens">{formatTokens(src.totals.input)} in &middot; {formatTokens(src.totals.output)} out</span>
+                          <span className="bu-source-tokens">
+                            {tokenCountsText(sumOfTokenCounts(src.totals.tokens.mainConversation, src.totals.tokens.subagents))}
+                            {sourceSubagentTokens > 0 && (
+                              <span className="bu-source-subagents" title={tokenCountsText(src.totals.tokens.subagents)}>
+                                {' '}&middot; subagents {formatTokens(sourceSubagentTokens)} of it
+                              </span>
+                            )}
+                          </span>
                           {src.totals.cost > 0 && <span className="bu-source-cost">${src.totals.cost.toFixed(2)}</span>}
                           {src.totals.duration > 0 && <span className="bu-source-duration">{formatDuration(src.totals.duration)}</span>}
                         </button>
@@ -729,15 +786,31 @@ export function BridgeUsage() {
                             {src.sessions.slice().sort((a, b) => b.cost - a.cost).map(u => {
                               const instance = inst.instanceMap.get(u.instanceId)
                               return (
-                                <div key={u.sessionId} className="bu-session-row">
-                                  <span className="bu-session-id">{u.sessionId.slice(0, 16)}</span>
-                                  {instance && <span className="bu-instance-label">{instance.name}</span>}
-                                  <span className="bu-session-model">{u.model?.replace(/^claude-/, '').replace(/\[.*$/, '')}</span>
-                                  <span>{u.turns} turns</span>
-                                  <span>{formatTokens(u.inputTokens)} in</span>
-                                  <span>{formatTokens(u.outputTokens)} out</span>
-                                  {u.cost > 0 && <span>${u.cost.toFixed(3)}</span>}
-                                  {u.durationMs > 0 && <span>{formatDuration(u.durationMs)}</span>}
+                                <div key={u.sessionId} className="bu-session">
+                                  <div className="bu-session-row">
+                                    <span className="bu-session-id">{u.sessionId.slice(0, 16)}</span>
+                                    {instance && <span className="bu-instance-label">{instance.name}</span>}
+                                    <span className="bu-session-model">{u.model?.replace(/^claude-/, '').replace(/\[.*$/, '')}</span>
+                                    <span>{u.turns} turns</span>
+                                    {u.cost > 0 && <span>${u.cost.toFixed(3)}</span>}
+                                    {u.durationMs > 0 && <span>{formatDuration(u.durationMs)}</span>}
+                                  </div>
+                                  <div className="bu-session-tokens" title={tokenUsageRecordNote(u.tokens.countedFrom)}>
+                                    <span className="bu-session-tokens-part">main</span>
+                                    <span>
+                                      {tokenCountsText(u.tokens.mainConversation)}
+                                      {u.tokens.mainConversationCalls > 0 && ` \u00B7 ${modelCallsText(u.tokens.mainConversationCalls)}`}
+                                      {u.tokens.countedFrom === 'turn-results' && (
+                                        <span className="bu-session-tokens-uncounted"> &middot; finished turns only</span>
+                                      )}
+                                    </span>
+                                    {u.tokens.subagentCalls > 0 && (
+                                      <>
+                                        <span className="bu-session-tokens-part">subagents</span>
+                                        <span>{tokenCountsText(u.tokens.subagents)} &middot; {modelCallsText(u.tokens.subagentCalls)}</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               )
                             })}
