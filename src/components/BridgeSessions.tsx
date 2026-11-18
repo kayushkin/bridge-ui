@@ -143,23 +143,33 @@ export function BridgeSessions() {
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
 
+  // Only leaving the page drops an answer. This effect's cleanup also runs each
+  // time `sessions` changes, and it used to mark the request canceled there:
+  // on a server where sessions change every second, the answer was thrown away
+  // each time it landed, the guard above had already skipped the re-run, and
+  // the column stayed blank until a download happened to finish between two
+  // changes.
+  const pageIsMounted = useRef(true)
+  useEffect(() => {
+    pageIsMounted.current = true
+    return () => { pageIsMounted.current = false }
+  }, [])
+
   useEffect(() => {
     if (aggregatesInFlight.current) return
     if (!sessionTokenTotalsAreMissing(sessions, tokensMapRef.current)) return
 
-    let canceled = false
     aggregatesInFlight.current = true
     ;(async () => {
       try {
         const res = await apiFetch(`${basePath}/sessions/aggregates`)
         if (!res.ok) return
         const aggregates: SessionAggregate[] = await res.json() ?? []
-        if (canceled) return
+        if (!pageIsMounted.current) return
         setTokensMap(applySessionAggregates(tokensMapRef.current, aggregates, sessionsRef.current))
       } catch { /* leave the column blank */ }
       finally { aggregatesInFlight.current = false }
     })()
-    return () => { canceled = true }
   }, [sessions, apiFetch, basePath])
 
   // The chat opens a session from its `?session=` deep link. This used to pass the id

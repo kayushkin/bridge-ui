@@ -761,7 +761,11 @@ export function BridgeUsage() {
           {loadingUsage && <div className="bu-loading-small">Loading session details...</div>}
           {usageError && <div className="bu-usage-error" role="alert">{usageError}</div>}
 
-          {Array.from(harnessGroups.entries()).map(([harness, group]) => {
+          {Array.from(harnessGroups.entries())
+            // Biggest first. The groups are built in the order the aggregate
+            // lists sessions, which is by session id and means nothing here.
+            .sort(([, a], [, b]) => allTokensOfUsage(b.totals.tokens) - allTokensOfUsage(a.totals.tokens))
+            .map(([harness, group]) => {
             const sources = Array.from(group.sources.values())
               .sort((a, b) => allTokensOfUsage(b.totals.tokens) - allTokensOfUsage(a.totals.tokens))
             const groupTokens = sumOfTokenCounts(group.totals.tokens.mainConversation, group.totals.tokens.subagents)
