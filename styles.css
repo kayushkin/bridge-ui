@@ -1835,6 +1835,8 @@
 .bu-total-label { font-size: 0.75em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .bu-total-value { font-size: 1.2em; font-weight: 600; }
 .bu-total-part { font-size: 0.72em; color: var(--text-dim); }
+.bu-period-note { margin: -12px 0 20px; font-size: 0.8em; color: var(--text-dim); }
+.bu-usage-error { margin-bottom: 12px; font-size: 0.85em; color: #ef4444; }
 .bu-pies-note { flex-basis: 100%; margin: 0; font-size: 0.8em; color: var(--text-dim); }
 .bu-loading-small { color: var(--text-dim); font-size: 0.85em; margin-bottom: 12px; }
 .bu-harness-section { margin-bottom: 24px; }

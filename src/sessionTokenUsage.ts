@@ -179,3 +179,75 @@ export function tokenUsageRecordNote(record: TokenUsageRecord): string {
     ? 'Counted from every model call the harness reported, subagents included.'
     : 'Counted from finished turns only. This harness reports no per-call usage, so subagent calls and unfinished turns are not in these numbers.'
 }
+
+// ── A window of time ────────────────────────────────────────────────────────
+//
+// The Usage page's tabs are windows: the last 24 hours, 7 days, 30 days. The
+// aggregate route answers a window with `?since=`: only the sessions that used
+// anything from then on, each with what it did from then on and how much its
+// cost grew (session_cost_usd). A session started last week that worked all
+// of today is in today's window with today's numbers. The page used to list
+// the sessions *started* in the window with their whole-life totals, which
+// left that session out of today and showed all of its work on the day it
+// began.
+
+export type UsagePeriod = 'day' | 'week' | 'month'
+
+const USAGE_PERIOD_MILLISECONDS: Record<UsagePeriod, number> = {
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+}
+
+/** When a period's window began, counted back from `now`. */
+export function usagePeriodStart(period: UsagePeriod, now: Date): Date {
+  return new Date(now.getTime() - USAGE_PERIOD_MILLISECONDS[period])
+}
+
+/** The aggregate route for what every session did from `since` on. The server
+ *  counts in whole clock hours and includes the hour holding `since`. */
+export function sessionAggregatesSincePath(basePath: string, since: Date): string {
+  return `${basePath}/sessions/aggregates?since=${encodeURIComponent(since.toISOString())}`
+}
+
+/** What the page needs from the bridge's session list to place a session's
+ *  usage under its harness and source. */
+export interface SessionPlacement {
+  sessionId: string
+  harness: string
+  instanceId: string
+  purpose: string
+}
+
+/** One session's usage inside a window. */
+export interface SessionUsageInWindow {
+  sessionId: string
+  /** The session's row in the bridge's session list. Absent when that list
+   *  does not hold a session log-store counted; its usage is still shown,
+   *  apart, because leaving it out would make the totals wrong. */
+  placement?: SessionPlacement
+  tokens: SessionTokenUsage
+  /** How much the session's cost estimate grew inside the window. */
+  costUsd: number
+  durationMs: number
+  model: string
+  turns: number
+}
+
+/** Joins a windowed aggregate with the session list, by session id. */
+export function sessionUsageInWindow(
+  aggregates: SessionAggregate[],
+  placements: SessionPlacement[],
+): SessionUsageInWindow[] {
+  const placementById = new Map<string, SessionPlacement>()
+  for (const p of placements) placementById.set(p.sessionId, p)
+  return aggregates.map(a => ({
+    sessionId: a.session_id,
+    placement: placementById.get(a.session_id),
+    tokens: sessionTokenUsageOf(a),
+    costUsd: a.session_cost_usd ?? 0,
+    durationMs: a.duration_ms,
+    model: a.model ?? '',
+    turns: a.turns,
+  }))
+}

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBridgeConfig } from '../context'
 import { useBridgeInstances } from '../useBridgeInstances'
 import type { SessionAggregate } from '@kayushkin/llm-bridge-types'
@@ -8,23 +8,25 @@ import {
   addTokenUsage,
   allTokens,
   allTokensOfUsage,
-  emptySessionTokenUsage,
   emptyTokenUsageTotals,
   modelCallsText,
-  sessionTokenUsageOf,
+  sessionAggregatesSincePath,
+  sessionUsageInWindow,
   sumOfTokenCounts,
   tokenCountsText,
   tokenUsageRecordNote,
+  usagePeriodStart,
   type SessionTokenUsage,
   type TokenCounts,
   type TokenUsageTotals,
+  type UsagePeriod,
 } from '../sessionTokenUsage'
 
-// One session's row on this page. `tokens` is read from the session's row of
-// GET /sessions/aggregates (msg.SessionAggregate) by sessionTokenUsageOf: the
-// main conversation and its subagents apart, each in the four kinds a model
-// call is counted in. The aggregate carries no cost: a session's cost is the
-// summary row's spendUsd.
+// One session's row on this page: what it did inside the chosen window, from
+// its row of GET /sessions/aggregates?since= (msg.SessionAggregate). `tokens`
+// is read by sessionTokenUsageOf: the main conversation and its subagents
+// apart, each in the four kinds a model call is counted in. `cost` is how
+// much the session's cost estimate grew inside the window.
 interface SessionUsage {
   sessionId: string
   harness: string
@@ -131,7 +133,18 @@ interface SpendKeysResponse {
   openai: ProviderAccount
 }
 
-type Period = 'day' | 'week' | 'month'
+type Period = UsagePeriod
+
+// The harness heading for a session log-store counted that the bridge's
+// session list does not hold. Its usage is shown under this heading, not left
+// out, so the totals stay whole.
+const SESSIONS_NOT_IN_THE_LIST = 'not in the session list'
+
+const PERIOD_WORDS: Record<Period, string> = {
+  day: 'the last 24 hours',
+  week: 'the last 7 days',
+  month: 'the last 30 days',
+}
 
 function sourceLabel(source: string): string {
   return source || 'Interactive'
@@ -266,15 +279,11 @@ function LimitBar({ label, win }: { label: string; win: LimitWindow }) {
   )
 }
 
-function periodCutoff(period: Period): string {
-  const ms = period === 'day' ? 86400000 : period === 'week' ? 604800000 : 2592000000
-  return new Date(Date.now() - ms).toISOString()
-}
 
 export function BridgeUsage() {
   const { fetch: apiFetch, basePath, usageStoreBasePath } = useBridgeConfig()
   const [sessions, setSessions] = useState<SessionSummaryRow[]>([])
-  const [aggregates, setAggregates] = useState<Map<string, SessionAggregate>>(new Map())
+  const [aggregates, setAggregates] = useState<SessionAggregate[]>([])
   const [limits, setLimits] = useState<LimitsResponse | null>(null)
   const [spend, setSpend] = useState<SpendKeysResponse | null>(null)
   const [expandedRaw, setExpandedRaw] = useState<Record<string, string | 'loading' | 'error' | undefined>>({})
@@ -286,12 +295,14 @@ export function BridgeUsage() {
   const [period, setPeriod] = useState<Period>('day')
   const inst = useBridgeInstances()
 
-  // The longest period shown is a month, so only sessions updated in the last month
-  // can hold a session created in one. This used to fetch GET /sessions — the whole
-  // session table with info blobs, 64 MB — to keep that month.
+  // The session list says which harness, instance and source each session is.
+  // The longest period shown is a month, and a session that used anything in
+  // a window was updated in it, so the sessions updated in the last month are
+  // enough. This used to fetch GET /sessions — the whole session table with
+  // info blobs, 64 MB — to keep that month.
   const fetchSessions = useCallback(async () => {
     try {
-      const since = new Date(periodCutoff('month'))
+      const since = usagePeriodStart('month', new Date())
       setSessions(await listSessionSummariesUpdatedSince(apiFetch, basePath, since))
     } catch (err) {
       console.error('usage: loading sessions failed', err)
@@ -299,21 +310,38 @@ export function BridgeUsage() {
     finally { setLoading(false) }
   }, [apiFetch, basePath])
 
-  // Pull all per-session token/cost totals in one shot from log-store
-  // (proxied via bridge-server). Replaces the prior per-session messages
-  // fan-out that summed input/output/cost/duration in the browser.
+  // What every session did inside the chosen window, in one request to
+  // log-store (proxied by the bridge): tokens, turns, duration and how much
+  // each session's cost grew. A session started before the window is in it
+  // when it worked inside it, with only that work.
+  //
+  // A tab pressed while another tab's answer is on its way must not be
+  // overwritten by that answer when it lands; `newestAggregatesRequest` lets
+  // only the newest request set the rows.
+  const newestAggregatesRequest = useRef(0)
+  const [usageError, setUsageError] = useState<string | null>(null)
   const fetchAggregates = useCallback(async () => {
+    const request = ++newestAggregatesRequest.current
     setLoadingUsage(true)
     try {
-      const res = await apiFetch(`${basePath}/sessions/aggregates`)
-      if (!res.ok) return
+      const res = await apiFetch(sessionAggregatesSincePath(basePath, usagePeriodStart(period, new Date())))
+      if (request !== newestAggregatesRequest.current) return
+      if (!res.ok) {
+        setUsageError(`Reading usage failed: the server answered ${res.status}.`)
+        return
+      }
       const rows: SessionAggregate[] = await res.json() ?? []
-      const map = new Map<string, SessionAggregate>()
-      for (const r of rows) map.set(r.session_id, r)
-      setAggregates(map)
-    } catch { /* ignore */ }
-    finally { setLoadingUsage(false) }
-  }, [apiFetch, basePath])
+      if (request !== newestAggregatesRequest.current) return
+      setAggregates(rows)
+      setUsageError(null)
+    } catch (err) {
+      if (request !== newestAggregatesRequest.current) return
+      setUsageError(`Reading usage failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    finally {
+      if (request === newestAggregatesRequest.current) setLoadingUsage(false)
+    }
+  }, [apiFetch, basePath, period])
 
   // Subscription limits live on usage-store. Skipped entirely when no
   // usageStoreBasePath is configured.
@@ -429,11 +457,6 @@ export function BridgeUsage() {
     return () => clearInterval(t)
   }, [fetchSpend, usageStoreBasePath])
 
-  const periodSessions = useMemo(() => {
-    const cutoff = periodCutoff(period)
-    return sessions.filter(s => s.createdAt >= cutoff)
-  }, [sessions, period])
-
   type Totals = { tokens: TokenUsageTotals; cost: number; duration: number; turns: number }
   type SourceGroup = { source: string; sessions: SessionUsage[]; totals: Totals }
   type HarnessGroup = { harness: string; sources: Map<string, SourceGroup>; totals: Totals; sessionCount: number }
@@ -446,25 +469,20 @@ export function BridgeUsage() {
 
   const harnessGroups = useMemo(() => {
     const groups = new Map<string, HarnessGroup>()
-    for (const s of periodSessions) {
-      // Cost is the bridge's estimate on the summary row; tokens, duration and
-      // turns are log-store's sums. A session counts if it has either — one that
-      // spent money without a token total (an interrupted turn) still cost it.
-      const agg = aggregates.get(s.sessionId)
-      if (!agg && s.spendUsd <= 0) continue
+    for (const u of sessionUsageInWindow(aggregates, sessions)) {
       const usage: SessionUsage = {
-        sessionId: s.sessionId,
-        harness: s.harness,
-        instanceId: s.instanceId,
-        tokens: agg ? sessionTokenUsageOf(agg) : emptySessionTokenUsage(),
-        cost: s.spendUsd,
-        durationMs: agg?.duration_ms ?? 0,
-        model: agg?.model ?? '',
-        turns: agg?.turns ?? 0,
+        sessionId: u.sessionId,
+        harness: u.placement?.harness ?? SESSIONS_NOT_IN_THE_LIST,
+        instanceId: u.placement?.instanceId ?? '',
+        tokens: u.tokens,
+        cost: u.costUsd,
+        durationMs: u.durationMs,
+        model: u.model,
+        turns: u.turns,
       }
-      let h = groups.get(s.harness)
-      if (!h) { h = { harness: s.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(s.harness, h) }
-      const srcKey = s.purpose
+      let h = groups.get(usage.harness)
+      if (!h) { h = { harness: usage.harness, sources: new Map(), totals: emptyTotals(), sessionCount: 0 }; groups.set(usage.harness, h) }
+      const srcKey = u.placement?.purpose ?? ''
       let src = h.sources.get(srcKey)
       if (!src) { src = { source: srcKey, sessions: [], totals: emptyTotals() }; h.sources.set(srcKey, src) }
       src.sessions.push(usage)
@@ -473,7 +491,7 @@ export function BridgeUsage() {
       h.sessionCount++
     }
     return groups
-  }, [periodSessions, aggregates])
+  }, [sessions, aggregates])
 
   const totals = useMemo(() => {
     const tokens = emptyTokenUsageTotals()
@@ -535,6 +553,9 @@ export function BridgeUsage() {
           ))}
         </div>
       </div>
+      <p className="bu-period-note">
+        Tokens and cost used in {PERIOD_WORDS[period]}, by every session that worked in it, counted in whole clock hours.
+      </p>
 
       {spend && (
         <div className="bu-spend-section">
@@ -738,6 +759,7 @@ export function BridgeUsage() {
           )}
 
           {loadingUsage && <div className="bu-loading-small">Loading session details...</div>}
+          {usageError && <div className="bu-usage-error" role="alert">{usageError}</div>}
 
           {Array.from(harnessGroups.entries()).map(([harness, group]) => {
             const sources = Array.from(group.sources.values())
