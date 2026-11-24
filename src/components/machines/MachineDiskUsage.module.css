@@ -74,3 +74,6 @@
 .confirmLabel { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
 .input { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text); }
 .dialogButtons { display: flex; justify-content: flex-end; gap: 8px; }
+
+.wslDisks { display: flex; flex-direction: column; gap: 6px; }
+.sectionTitle { margin: 6px 0 0; font-size: 0.95em; }

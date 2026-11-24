@@ -9,6 +9,8 @@ import type {
   DiskUsageDeletion,
   DiskUsageDeletionCheck,
   DiskUsageDeletionState,
+  DiskUsageDrive,
+  DiskUsageWSLDisk,
   DiskUsageEntry,
   DiskUsageScan,
   DiskUsageStatus,
@@ -63,8 +65,20 @@ export function diskUsageIsBusy(status: DiskUsageStatus | undefined): boolean {
   return status.scans.some(scan => scan.state === 'running') || status.deletion?.state === 'running'
 }
 
-/** A drive root's path, as the runner names it: `C:` → `C:\`. */
-export const driveRootPath = (drive: string) => `${drive}\\`
+/** A drive's name on its button: a Windows drive by letter and label
+ *  ("C: Data"), the WSL file system by its label ("Ubuntu-22.04 (WSL)"). */
+export function driveButtonName(drive: DiskUsageDrive): string {
+  if (drive.kind === 'wsl') return drive.label || drive.drive
+  return drive.label ? `${drive.drive} ${drive.label}` : drive.drive
+}
+
+/** What compacting a WSL disk file would give back to Windows: the file's
+ *  size less what Linux uses inside it, or null when the use inside was not
+ *  measured (another distribution than the runner's). */
+export function wslDiskReclaimableBytes(disk: DiskUsageWSLDisk): number | null {
+  if (!disk.runner_runs_in_it || !disk.filesystem_used_bytes) return null
+  return Math.max(0, disk.disk_file_bytes - disk.filesystem_used_bytes)
+}
 
 /** The entry's share of its parent, 0–100. */
 export function shareOfParent(entry: DiskUsageEntry, parentSizeBytes: number): number {

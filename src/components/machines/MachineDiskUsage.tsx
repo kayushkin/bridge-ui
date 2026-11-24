@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DiskUsageChildren, DiskUsageDeletionCheck, DiskUsageEntry, DiskUsageScan } from '@kayushkin/llm-bridge-types'
+import type { DiskUsageChildren, DiskUsageDeletionCheck, DiskUsageEntry, DiskUsageScan, DiskUsageWSLDisk } from '@kayushkin/llm-bridge-types'
 import type { BridgeConfig } from '../../context'
 import { formatBytes, formatPercent, percentOf } from '../../machineStats'
 import {
@@ -12,12 +12,13 @@ import {
   diskUsageErrorText,
   diskUsageIsBusy,
   diskUsagePath,
-  driveRootPath,
+  driveButtonName,
   entryContentsText,
   entryDisplayName,
   entryOffersDeletion,
   scanOfDrive,
   shareOfParent,
+  wslDiskReclaimableBytes,
   type MachineDiskDeletionAnswer,
   type MachineDiskDeletionRecord,
   type MachineDiskUsageView,
@@ -114,6 +115,7 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
     )
   }
 
+  const selectedDrive = drives.find(item => item.drive === drive)
   const scan = drive ? scanOfDrive(view.status, drive) : undefined
   const scannedAt = browsableScanTime(scan)
   const deletion = view.status?.deletion
@@ -133,7 +135,7 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
               aria-pressed={item.drive === drive}
               onClick={() => setDrive(item.drive)}
             >
-              <span className={styles.driveName}>{item.drive}{item.label ? ` ${item.label}` : ''}</span>
+              <span className={styles.driveName}>{driveButtonName(item)}</span>
               <span className={styles.track}><span className={styles.fill} style={{ width: `${percentOf(used, item.total_bytes) ?? 0}%` }} /></span>
               <span className={styles.muted}>{formatBytes(item.free_bytes)} free of {formatBytes(item.total_bytes)}</span>
               <span className={styles.muted}>{scanStateText(itemScan)}</span>
@@ -167,7 +169,13 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
         </p>
       ) : null}
 
-      {drive && scannedAt ? (
+      {selectedDrive?.kind === 'wsl' ? (
+        <p className={styles.muted}>
+          Inside WSL the scan counts the space files take on disk, each hard-linked file once, and stays on WSL's own file system:
+          Windows' drives under /mnt are shown but not entered. Only things in your home folder and the temporary folders can be deleted here.
+        </p>
+      ) : null}
+      {drive && scannedAt && selectedDrive ? (
         <div className={styles.tree} role="tree" aria-label={`What fills ${drive}`}>
           <div className={styles.treeHeading} aria-hidden="true">
             <span>Name</span><span>Size</span><span>Share of folder</span><span>Contents</span><span />
@@ -175,7 +183,7 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
           <TreeFolder
             serverConfig={serverConfig}
             machineID={machineID}
-            path={driveRootPath(drive)}
+            path={selectedDrive?.root_path ?? ''}
             depth={0}
             parentSizeBytes={0}
             treeRevision={treeRevision}
@@ -187,6 +195,8 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
         <p className={styles.notice}>{drive} has not been scanned since the runner started. A scan reads every folder on the drive; on a full 4 TB drive it took about two minutes.</p>
       ) : null}
 
+      {(view.status?.errors ?? []).map(text => <p key={text} className={styles.error}>{text}</p>)}
+      <WSLDisks disks={view.status?.wsl_disks ?? []} />
       <DeletionRecords deletions={view.deletions} />
 
       {deleting ? (
@@ -313,6 +323,7 @@ function EntryRow({ entry, depth, parentSizeBytes, open, onToggle, onDelete, del
   const share = shareOfParent(entry, parentSizeBytes)
   const notes = [
     entry.kind === 'link' ? 'link, not followed' : '',
+    entry.kind === 'mount_point' ? 'another file system, not scanned' : '',
     entry.unreadable_directory_count ? `${entry.unreadable_directory_count.toLocaleString()} unreadable` : '',
     entry.cloud_only_file_count ? `${entry.cloud_only_file_count.toLocaleString()} cloud-only` : '',
     entry.partly_deleted ? 'partly deleted' : '',
@@ -325,7 +336,7 @@ function EntryRow({ entry, depth, parentSizeBytes, open, onToggle, onDelete, del
             {open ? '▾' : '▸'}
           </button>
         ) : <span className={styles.expandSpace} />}
-        <span className={styles.kind} aria-hidden="true">{entry.kind === 'directory' ? '📁' : entry.kind === 'link' ? '🔗' : entry.kind === 'smaller_items' ? '⋯' : '📄'}</span>
+        <span className={styles.kind} aria-hidden="true">{entry.kind === 'directory' ? '📁' : entry.kind === 'link' ? '🔗' : entry.kind === 'smaller_items' ? '⋯' : entry.kind === 'mount_point' ? '💽' : '📄'}</span>
         <span className={entry.kind === 'smaller_items' ? styles.muted : undefined} title={entry.path || undefined}>{entryDisplayName(entry)}</span>
         {notes.length ? <span className={styles.note}>{notes.join(' · ')}</span> : null}
       </span>
@@ -453,6 +464,36 @@ function DeleteDialog({ entry, check, remove, onClose }: {
         </div>
       </div>
     </div>
+  )
+}
+
+/** The WSL distributions' disk files: how big each file is on Windows, how
+ *  much of it Linux uses, and what compacting would give back. */
+function WSLDisks({ disks }: { disks: DiskUsageWSLDisk[] }) {
+  if (disks.length === 0) return null
+  return (
+    <section className={styles.wslDisks} aria-label="WSL disks">
+      <h5 className={styles.sectionTitle}>WSL disks</h5>
+      <table className={styles.recordTable}>
+        <thead><tr><th>Distribution</th><th>Disk file on Windows</th><th>Used inside Linux</th><th>Compacting would free</th></tr></thead>
+        <tbody>
+          {disks.map(disk => {
+            const reclaimable = wslDiskReclaimableBytes(disk)
+            return (
+              <tr key={disk.disk_file_path}>
+                <td>{disk.distribution}{disk.runner_runs_in_it ? <span className={styles.muted}> (the runner runs here)</span> : null}</td>
+                <td><span title={disk.disk_file_path}>{formatBytes(disk.disk_file_bytes)}</span></td>
+                <td>{disk.filesystem_used_bytes ? `${formatBytes(disk.filesystem_used_bytes)} of ${formatBytes(disk.filesystem_total_bytes ?? 0)}` : 'not measured'}</td>
+                <td>{reclaimable === null ? '—' : `about ${formatBytes(reclaimable)}`}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className={styles.muted}>
+        A WSL disk file grows as Linux writes and never shrinks by itself: space freed inside Linux stays in the file until it is compacted.
+      </p>
+    </section>
   )
 }
 

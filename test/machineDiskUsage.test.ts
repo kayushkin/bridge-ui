@@ -6,11 +6,12 @@ import {
   diskUsageEntriesPath,
   diskUsageErrorText,
   diskUsageIsBusy,
-  driveRootPath,
+  driveButtonName,
   entryContentsText,
   entryDisplayName,
   entryOffersDeletion,
   shareOfParent,
+  wslDiskReclaimableBytes,
 } from '../src/machineDiskUsage'
 
 const entry = (fields: Partial<DiskUsageEntry>): DiskUsageEntry => ({
@@ -70,7 +71,16 @@ describe('disk usage rules', () => {
     expect(entryContentsText(entry({ kind: 'file' }))).toBe('')
     expect(shareOfParent(entry({ size_bytes: 250 }), 1000)).toBe(25)
     expect(shareOfParent(entry({}), 0)).toBe(0)
-    expect(driveRootPath('C:')).toBe('C:\\')
     expect(diskUsageEntriesPath('m_pc', 'C:\\Program Files')).toBe('/machines/m_pc/disk-usage/entries?path=C%3A%5CProgram+Files')
+  })
+
+  it('names drives and says what compacting a WSL disk would give back', () => {
+    expect(driveButtonName({ drive: 'C:', kind: 'windows', root_path: 'C:\\', label: 'Data', total_bytes: 1, free_bytes: 0 })).toBe('C: Data')
+    expect(driveButtonName({ drive: 'D:', kind: 'windows', root_path: 'D:\\', total_bytes: 1, free_bytes: 0 })).toBe('D:')
+    expect(driveButtonName({ drive: 'WSL', kind: 'wsl', root_path: '/', label: 'Ubuntu-22.04 (WSL)', total_bytes: 1, free_bytes: 0 })).toBe('Ubuntu-22.04 (WSL)')
+    const disk = { distribution: 'Ubuntu-22.04', disk_file_path: 'C:\\x\\ext4.vhdx', disk_file_bytes: 1000 }
+    expect(wslDiskReclaimableBytes({ ...disk, runner_runs_in_it: true, filesystem_used_bytes: 600, filesystem_total_bytes: 2000 })).toBe(400)
+    expect(wslDiskReclaimableBytes({ ...disk, runner_runs_in_it: true, filesystem_used_bytes: 1200 })).toBe(0)
+    expect(wslDiskReclaimableBytes(disk)).toBeNull()
   })
 })
