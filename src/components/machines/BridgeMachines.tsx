@@ -63,6 +63,7 @@ import {
   useMachineStatsServers,
 } from '../../useMachineStats'
 import { timeAgo } from '../../utils'
+import { MachineDiskUsage } from './MachineDiskUsage'
 import { MachineStatsChart } from './MachineStatsChart'
 import {
   Bar,
@@ -267,6 +268,7 @@ export function MachineStrip({ overview, now, open, onToggle, serverConfig }: {
             {parts.map(part => <PartDetails key={part.key} part={part} showTitle={parts.length > 1} now={now} fresh={fresh} />)}
           </div>
           <MachineHistory serverConfig={serverConfig} machineID={machine.id} />
+          {machine.transport === 'runner' ? <DiskUsageSection serverConfig={serverConfig} machineID={machine.id} /> : null}
         </div>
       ) : null}
     </article>
@@ -576,6 +578,23 @@ function BatteryFacts({ battery }: { battery: MachineBattery }) {
     battery.cycle_count !== undefined ? `${battery.cycle_count} cycles` : '',
   ].filter(Boolean)
   return <><dt>{battery.name}</dt><dd>{words.join(' · ')}</dd></>
+}
+
+/** Disk usage, opened on request: asking reads the runner's drives, and a
+ *  scan reads every folder on one, so neither happens just because the strip
+ *  is open. */
+function DiskUsageSection({ serverConfig, machineID }: { serverConfig: BridgeConfig; machineID: string }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <section className={styles.historyBody} aria-label="Disk usage">
+      <div className={styles.rangeRow}>
+        <button type="button" className={`${styles.button} bc-machine-button`} aria-expanded={shown} onClick={() => setShown(value => !value)}>
+          {shown ? 'Hide disk usage' : 'Disk usage: what fills the drives'}
+        </button>
+      </div>
+      {shown ? <MachineDiskUsage serverConfig={serverConfig} machineID={machineID} /> : null}
+    </section>
+  )
 }
 
 function MachineHistory({ serverConfig, machineID }: { serverConfig: BridgeConfig; machineID: string }) {

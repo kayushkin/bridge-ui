@@ -1,0 +1,76 @@
+/* Disk usage inside a machine's open strip on the Machines page. Theme
+   variables only, so light and dark draw it without rules of their own; the
+   zine skin can restyle it through .bc-disk-usage. */
+
+.body { display: flex; flex-direction: column; gap: 10px; font-size: 0.9em; }
+.muted { color: var(--text-muted); font-size: 0.85em; }
+.strong { margin: 0; font-weight: 600; }
+.error {
+  margin: 0; padding: 8px 10px; font-size: 0.85em; white-space: pre-wrap;
+  color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px;
+}
+.warning {
+  margin: 0; padding: 8px 10px; font-size: 0.85em;
+  color: var(--text); background: var(--warning-bg, var(--bg-surface)); border: 1px solid var(--warning); border-radius: 6px;
+}
+.notice {
+  margin: 0; padding: 8px 10px; font-size: 0.85em;
+  color: var(--text-muted); background: var(--bg-surface); border: 1px dashed var(--border); border-radius: 6px;
+}
+.button, .deleteButton, .dangerButton {
+  font: inherit; font-size: 0.85em; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+}
+.button:hover { border-color: var(--accent); }
+.deleteButton { font-size: 0.78em; padding: 1px 8px; color: var(--error); }
+.deleteButton:hover:not(:disabled) { border-color: var(--error); }
+.dangerButton { background: var(--error); color: var(--bg); border-color: var(--error); font-weight: 600; }
+.deleteButton:disabled, .dangerButton:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.drives { display: flex; flex-wrap: wrap; gap: 8px; }
+.drive {
+  font: inherit; text-align: left; cursor: pointer; min-width: 200px;
+  display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+}
+.driveSelected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.driveName { font-weight: 600; }
+.track { display: inline-block; position: relative; height: 6px; width: 100%; min-width: 60px; border-radius: 3px; background: color-mix(in oklab, var(--text) 13%, var(--bg-surface)); overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 3px; }
+
+.scanRow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+.tree { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.treeHeading, .row {
+  display: grid; grid-template-columns: minmax(240px, 1fr) 90px 150px minmax(120px, 200px) 70px;
+  align-items: center; gap: 10px; padding: 3px 10px;
+}
+.treeHeading { font-size: 0.78em; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+.row:hover { background: var(--bg-surface); }
+.rootSummary { padding: 6px 10px; font-size: 0.85em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.name { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.expand { font: inherit; width: 18px; padding: 0; border: none; background: none; color: var(--text-muted); cursor: pointer; }
+.expandSpace { display: inline-block; width: 18px; flex: none; }
+.kind { flex: none; }
+.note { margin-left: 6px; font-size: 0.75em; color: var(--text-muted); }
+.size { text-align: right; font-variant-numeric: tabular-nums; }
+.share { display: flex; align-items: center; gap: 6px; }
+
+.records summary { cursor: pointer; color: var(--text-muted); }
+.recordTable { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 6px; }
+.recordTable th, .recordTable td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.path { font-family: var(--font-mono, monospace); word-break: break-all; margin: 0; }
+
+.dialogBackdrop {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, black 45%, transparent);
+}
+.dialog {
+  width: min(560px, 92vw); max-height: 88vh; overflow: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 16px 18px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+}
+.dialogTitle { margin: 0; font-size: 1.05em; }
+.confirmLabel { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; }
+.input { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text); }
+.dialogButtons { display: flex; justify-content: flex-end; gap: 8px; }
