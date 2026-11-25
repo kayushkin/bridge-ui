@@ -11,6 +11,8 @@ import {
   entryDisplayName,
   entryOffersDeletion,
   shareOfParent,
+  wslCompactionFreedBytes,
+  wslCompactionOffer,
   wslDiskReclaimableBytes,
 } from '../src/machineDiskUsage'
 
@@ -82,5 +84,29 @@ describe('disk usage rules', () => {
     expect(wslDiskReclaimableBytes({ ...disk, runner_runs_in_it: true, filesystem_used_bytes: 600, filesystem_total_bytes: 2000 })).toBe(400)
     expect(wslDiskReclaimableBytes({ ...disk, runner_runs_in_it: true, filesystem_used_bytes: 1200 })).toBe(0)
     expect(wslDiskReclaimableBytes(disk)).toBeNull()
+  })
+
+  it('offers to set compaction up, waits on the prompt, then offers to compact', () => {
+    const now = new Date('2026-11-25T18:00:00Z')
+    expect(wslCompactionOffer({ set_up: false, not_set_up_reason: 'the compact script is not installed' }, now))
+      .toEqual({ kind: 'set up', reason: 'the compact script is not installed', error: undefined })
+    expect(wslCompactionOffer({ set_up: false, set_up_prompt_shown_at: '2026-11-25T17:58:00Z' }, now))
+      .toEqual({ kind: 'waiting on prompt', shownAt: '2026-11-25T17:58:00Z' })
+    expect(wslCompactionOffer({ set_up: false, set_up_prompt_shown_at: '2026-11-25T17:30:00Z', not_set_up_reason: 'x' }, now).kind).toBe('set up')
+    expect(wslCompactionOffer({ set_up: false, set_up_prompt_shown_at: '2026-11-25T17:58:00Z', set_up_error: 'the UAC prompt was declined at the PC', not_set_up_reason: 'x' }, now))
+      .toEqual({ kind: 'set up', reason: 'x', error: 'the UAC prompt was declined at the PC' })
+    expect(wslCompactionOffer({ set_up: true }, now)).toEqual({ kind: 'compact' })
+    expect(wslCompactionOffer({ set_up: true, last_run: { state: 'running', step: 'compacting Ubuntu-22.04', started_at: '2026-11-25T17:59:00Z', restarted_wsl: false } }, now))
+      .toEqual({ kind: 'running', step: 'compacting Ubuntu-22.04' })
+  })
+
+  it('counts what a compaction freed over the disks it compacted', () => {
+    expect(wslCompactionFreedBytes({
+      state: 'finished', started_at: '', restarted_wsl: true,
+      disks: [
+        { distribution: 'a', disk_file_path: 'A', bytes_before: 1000, bytes_after: 600, compacted: true },
+        { distribution: 'b', disk_file_path: 'B', bytes_before: 500, compacted: false },
+      ],
+    })).toBe(400)
   })
 })

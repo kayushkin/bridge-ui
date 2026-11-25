@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DiskUsageChildren, DiskUsageDeletionCheck, DiskUsageEntry, DiskUsageScan, DiskUsageWSLDisk } from '@kayushkin/llm-bridge-types'
+import type { DiskUsageChildren, DiskUsageDeletionCheck, DiskUsageEntry, DiskUsageScan, DiskUsageWSLCompaction, DiskUsageWSLCompactionRun, DiskUsageWSLDisk } from '@kayushkin/llm-bridge-types'
 import type { BridgeConfig } from '../../context'
 import { formatBytes, formatPercent, percentOf } from '../../machineStats'
 import {
@@ -18,6 +18,8 @@ import {
   entryOffersDeletion,
   scanOfDrive,
   shareOfParent,
+  wslCompactionFreedBytes,
+  wslCompactionOffer,
   wslDiskReclaimableBytes,
   type MachineDiskDeletionAnswer,
   type MachineDiskDeletionRecord,
@@ -86,15 +88,20 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
     if (drive === null && drives.length > 0) setDrive(drives[0].drive)
   }, [drive, drives])
 
-  const post = async (path: string, body: unknown, verb: string): Promise<{ ok: boolean; status: number; text: string }> => {
+  // postAndKeep leaves showing a refusal to the caller; post also shows one
+  // that is not a 409 beside the scan buttons.
+  const postAndKeep = async (path: string, body: unknown): Promise<{ ok: boolean; status: number; text: string }> => {
     const res = await fetchFn(`${basePath}${diskUsagePath(machineID)}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const text = await res.text()
-    if (!res.ok && res.status !== 409) setActionError(diskUsageErrorText(res.status, text, verb))
-    return { ok: res.ok, status: res.status, text }
+    return { ok: res.ok, status: res.status, text: await res.text() }
+  }
+  const post = async (path: string, body: unknown, verb: string): Promise<{ ok: boolean; status: number; text: string }> => {
+    const answer = await postAndKeep(path, body)
+    if (!answer.ok && answer.status !== 409) setActionError(diskUsageErrorText(answer.status, answer.text, verb))
+    return answer
   }
 
   const startScan = async (driveToScan: string) => {
@@ -196,7 +203,12 @@ export function MachineDiskUsage({ serverConfig, machineID }: { serverConfig: Br
       ) : null}
 
       {(view.status?.errors ?? []).map(text => <p key={text} className={styles.error}>{text}</p>)}
-      <WSLDisks disks={view.status?.wsl_disks ?? []} />
+      <WSLDisks
+        disks={view.status?.wsl_disks ?? []}
+        compaction={view.status?.wsl_compaction}
+        post={(path, body) => postAndKeep(path, body)}
+        onChanged={() => void load()}
+      />
       <DeletionRecords deletions={view.deletions} />
 
       {deleting ? (
@@ -469,7 +481,14 @@ function DeleteDialog({ entry, check, remove, onClose }: {
 
 /** The WSL distributions' disk files: how big each file is on Windows, how
  *  much of it Linux uses, and what compacting would give back. */
-function WSLDisks({ disks }: { disks: DiskUsageWSLDisk[] }) {
+type PostAnswer = { ok: boolean; status: number; text: string }
+
+function WSLDisks({ disks, compaction, post, onChanged }: {
+  disks: DiskUsageWSLDisk[]
+  compaction?: DiskUsageWSLCompaction
+  post: (path: string, body: unknown, verb: string) => Promise<PostAnswer>
+  onChanged: () => void
+}) {
   if (disks.length === 0) return null
   return (
     <section className={styles.wslDisks} aria-label="WSL disks">
@@ -493,7 +512,115 @@ function WSLDisks({ disks }: { disks: DiskUsageWSLDisk[] }) {
       <p className={styles.muted}>
         A WSL disk file grows as Linux writes and never shrinks by itself: space freed inside Linux stays in the file until it is compacted.
       </p>
+      {compaction ? <WSLCompaction compaction={compaction} post={post} onChanged={onChanged} /> : null}
     </section>
+  )
+}
+
+/** Compacting the WSL disk files: set up once through a UAC prompt at the
+ *  PC, then a confirmed run that shuts WSL down for a few minutes. */
+function WSLCompaction({ compaction, post, onChanged }: {
+  compaction: DiskUsageWSLCompaction
+  post: (path: string, body: unknown, verb: string) => Promise<PostAnswer>
+  onChanged: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const [understood, setUnderstood] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [started, setStarted] = useState(false)
+  const offer = wslCompactionOffer(compaction, new Date())
+
+  const send = async (path: string, body: unknown, verb: string) => {
+    setSending(true)
+    setError(null)
+    const answer = await post(path, body, verb)
+    setSending(false)
+    if (!answer.ok) {
+      setError(diskUsageErrorText(answer.status, answer.text, verb))
+      return false
+    }
+    onChanged()
+    return true
+  }
+
+  return (
+    <div className={styles.compaction}>
+      <h5 className={styles.sectionTitle}>Compact</h5>
+      {offer.kind === 'set up' ? (
+        <>
+          <p className={styles.muted}>
+            Compacting needs administrator rights, which the runner does not have. Set it up once: the PC shows one UAC prompt, and approving it
+            installs a scheduled task that runs a fixed compact script with administrator rights. After that, Compact works from here with no prompt.
+            {' '}Not set up: {offer.reason}.
+          </p>
+          {offer.error ? <p className={styles.error}>The last setup did not finish: {offer.error}</p> : null}
+          <div>
+            <button type="button" className={styles.button} disabled={sending} onClick={() => void send('/wsl-compaction/set-up', {}, 'set up compacting')}>
+              Set up compacting (approve the prompt on the PC)
+            </button>
+          </div>
+        </>
+      ) : null}
+      {offer.kind === 'waiting on prompt' ? (
+        <p className={styles.notice}>A UAC prompt is waiting on the PC's screen (shown {timeAgo(offer.shownAt)}). Approve it there; this page shows when setup is done.</p>
+      ) : null}
+      {offer.kind === 'running' ? (
+        <p className={styles.notice}>Compacting{offer.step ? `: ${offer.step}` : ''}. WSL and the runner are away until it finishes.</p>
+      ) : null}
+      {offer.kind === 'compact' && !started ? (
+        confirming ? (
+          <div className={styles.compactConfirm}>
+            <p className={styles.strong}>Compacting shuts WSL down on the PC for a few minutes. Until it is back:</p>
+            <ul>
+              <li>the runner is offline, so this page and every session on the PC stop answering;</li>
+              <li>anything running in WSL stops: builds, servers, <code>ssh ssdawn-wsl</code>;</li>
+              <li>it is refused while a session on the PC is working.</li>
+            </ul>
+            <p className={styles.muted}>The script starts WSL again when it is done, and the result shows here once the runner is back.</p>
+            <label className={styles.checkLabel}>
+              <input type="checkbox" checked={understood} onChange={event => setUnderstood(event.target.checked)} />
+              Shut WSL down and compact its disks
+            </label>
+            <div className={styles.dialogButtons}>
+              <button type="button" className={styles.button} onClick={() => { setConfirming(false); setUnderstood(false) }}>Cancel</button>
+              <button
+                type="button"
+                className={styles.dangerButton}
+                disabled={!understood || sending}
+                onClick={() => void send('/wsl-compaction/runs', { confirm_shutdown: true }, 'compact WSL').then(ok => { if (ok) { setStarted(true); setConfirming(false) } })}
+              >
+                {sending ? 'Starting…' : 'Compact now'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div><button type="button" className={styles.button} onClick={() => setConfirming(true)}>Compact the WSL disks…</button></div>
+        )
+      ) : null}
+      {started ? <p className={styles.notice}>Compaction started. WSL shuts down in about ten seconds; the runner comes back when it is done.</p> : null}
+      {error ? <p className={styles.error}>{error}</p> : null}
+      {compaction.last_run ? <WSLCompactionRun run={compaction.last_run} /> : null}
+    </div>
+  )
+}
+
+function WSLCompactionRun({ run }: { run: DiskUsageWSLCompactionRun }) {
+  const freed = wslCompactionFreedBytes(run)
+  return (
+    <div className={styles.muted}>
+      Last compaction {run.state === 'running' ? 'started' : run.state} {timeAgo(run.started_at)}
+      {run.state === 'finished' ? `, freeing ${formatBytes(freed)} on Windows` : ''}.
+      {(run.disks ?? []).map(disk => (
+        <div key={disk.disk_file_path}>
+          {disk.distribution}: {formatBytes(disk.bytes_before)}{disk.compacted ? ` → ${formatBytes(disk.bytes_after ?? 0)}` : ' (not compacted)'}
+        </div>
+      ))}
+      {run.error ? <p className={styles.error}>{run.error}</p> : null}
+      {run.state !== 'running' && !run.restarted_wsl ? (
+        <p className={styles.error}>The script could not start WSL again. Start it at the PC (open Ubuntu, or sign out and in).</p>
+      ) : null}
+    </div>
   )
 }
 

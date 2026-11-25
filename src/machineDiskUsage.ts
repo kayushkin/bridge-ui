@@ -11,6 +11,8 @@ import type {
   DiskUsageDeletionState,
   DiskUsageDrive,
   DiskUsageWSLDisk,
+  DiskUsageWSLCompaction,
+  DiskUsageWSLCompactionRun,
   DiskUsageEntry,
   DiskUsageScan,
   DiskUsageStatus,
@@ -168,4 +170,33 @@ export function diskUsageErrorText(status: number, body: string, verb: string): 
     return body.trim()
   }
   return `${verb}: HTTP ${status}`
+}
+
+/** What the WSL disks section offers for compaction, from the runner's
+ *  status: set it up (one UAC prompt at the PC), wait on that prompt, or
+ *  compact. */
+export type WSLCompactionOffer =
+  | { kind: 'set up'; reason: string; error?: string }
+  | { kind: 'waiting on prompt'; shownAt: string }
+  | { kind: 'compact' }
+  | { kind: 'running'; step: string }
+
+/** How long after showing the UAC prompt the panel says it waits on it; the
+ *  runner gives up on it after 15 minutes. */
+export const WSL_COMPACTION_PROMPT_WAIT_MS = 15 * 60_000
+
+export function wslCompactionOffer(compaction: DiskUsageWSLCompaction, now: Date): WSLCompactionOffer {
+  if (compaction.last_run?.state === 'running') return { kind: 'running', step: compaction.last_run.step ?? '' }
+  if (compaction.set_up) return { kind: 'compact' }
+  const shownAt = compaction.set_up_prompt_shown_at
+  if (shownAt && !compaction.set_up_error && now.getTime() - new Date(shownAt).getTime() < WSL_COMPACTION_PROMPT_WAIT_MS) {
+    return { kind: 'waiting on prompt', shownAt }
+  }
+  return { kind: 'set up', reason: compaction.not_set_up_reason ?? 'not set up', error: compaction.set_up_error || undefined }
+}
+
+/** What a compaction freed: the disk files' size before less after, over
+ *  the disks it compacted. */
+export function wslCompactionFreedBytes(run: DiskUsageWSLCompactionRun): number {
+  return (run.disks ?? []).reduce((total, disk) => total + (disk.compacted ? Math.max(0, disk.bytes_before - (disk.bytes_after ?? 0)) : 0), 0)
 }
